@@ -1,0 +1,1561 @@
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/theme/app_theme.dart';
+import '../providers/results_provider.dart';
+import '../widgets/results/grading_config_dialog.dart';
+import '../widgets/results/bulk_grade_entry_dialog.dart';
+import '../widgets/results/single_student_grade_entry.dart';
+import '../widgets/admin_sidebar.dart';
+import '../widgets/user_avatar.dart';
+
+/// View mode for the results screen
+enum ResultsViewState {
+  overview, // Show students/class overview
+  gradeEntry, // Grade entry mode for selected student
+  bulkGradeEntry, // Grade entry mode for multiple selected students
+}
+
+/// Modern Results Management Screen
+class ResultsScreen extends StatefulWidget {
+  const ResultsScreen({super.key});
+
+  @override
+  State<ResultsScreen> createState() => _ResultsScreenState();
+}
+
+class _ResultsScreenState extends State<ResultsScreen> {
+  final _searchController = TextEditingController();
+  bool _showFilterDrawer = false;
+  ResultsViewState _viewState = ResultsViewState.overview;
+  
+  /// Selected students for bulk action
+  final Set<String> _selectedStudentsForBulk = {};
+
+  /// Currently selected student for grade entry
+  Map<String, dynamic>? _selectedStudentForGradeEntry;
+
+  /// Students selected for bulk grade entry (full enrollment objects)
+  List<Map<String, dynamic>> _bulkStudentObjects = [];
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _toggleFilters() {
+    setState(() {
+      _showFilterDrawer = !_showFilterDrawer;
+    });
+  }
+
+  void _selectStudentForGradeEntry(Map<String, dynamic> student) {
+    setState(() {
+      _selectedStudentForGradeEntry = student;
+      _viewState = ResultsViewState.gradeEntry;
+    });
+  }
+
+  void _backToOverview() {
+    setState(() {
+      _selectedStudentForGradeEntry = null;
+      _bulkStudentObjects = [];
+      _selectedStudentsForBulk.clear();
+      _viewState = ResultsViewState.overview;
+    });
+  }
+
+  bool get _hasActiveFilters => false;
+
+  ResultsProvider? providerRef;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) {
+        final provider = ResultsProvider(Supabase.instance.client);
+        provider.initialize();
+        return provider;
+      },
+      child: Consumer<ResultsProvider>(
+        builder: (context, provider, _) {
+          providerRef = provider;
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            body: Stack(
+              children: [
+                Row(
+                  children: [
+                    const AdminSidebar(currentRoute: '/results'),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildHeader(context, provider),
+                          _buildTabBar(context, provider),
+                          Expanded(
+                            child: _buildMainContent(context, provider),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                // Filter drawer overlay — full-app blur
+                if (_showFilterDrawer) ...[
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: _toggleFilters,
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                        child: Container(color: Colors.black.withOpacity(0.28)),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 370,
+                    child: _buildFilterDrawer(context, provider),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // HEADER
+  // ═══════════════════════════════════════════════════
+  Widget _buildHeader(BuildContext context, ResultsProvider provider) {
+    final className = _getSelectedClassName(provider);
+    final isSearching = provider.searchQuery.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (provider.selectedClassId != null) ...[
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.arrow_back, size: 18, color: Color(0xFF4B5563)),
+                onPressed: () {
+                  setState(() {
+                    provider.setClass(null);
+                    _selectedStudentForGradeEntry = null;
+                    _viewState = ResultsViewState.overview;
+                  });
+                },
+              ),
+            ),
+          ],
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Résultats',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                className.isNotEmpty ? 'Classe : $className' : 'Sélectionnez une classe pour commencer',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+          const Spacer(),
+          // Toolbar: pinned far right
+          SizedBox(
+            width: 320,
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              onChanged: provider.setSearchQuery,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un élève...',
+                hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textTertiary),
+                suffixIcon: !isSearching
+                    ? Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.slate50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Text('⌘K', style: TextStyle(fontSize: 10, color: AppColors.textTertiary, fontFamily: 'monospace')),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () {
+                          _searchController.clear();
+                          provider.setSearchQuery('');
+                        },
+                      ),
+                filled: true,
+                fillColor: AppColors.slate50,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: const Color(0xFF655DD5).withOpacity(0.4), width: 1.5),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          _buildHeaderIconButton(
+            icon: Icons.filter_list_rounded,
+            tooltip: 'Filtres',
+            isActive: _showFilterDrawer || _hasActiveFilters,
+            onPressed: _toggleFilters,
+          ),
+          const SizedBox(width: 8),
+          _buildHeaderIconButton(
+            icon: Icons.file_download_outlined,
+            tooltip: 'Exporter',
+            onPressed: () {},
+          ),
+
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderIconButton({
+    required IconData icon,
+    required String tooltip,
+    VoidCallback? onPressed,
+    bool isActive = false,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      color: isActive ? const Color(0xFF655DD5) : AppColors.textTertiary,
+      style: IconButton.styleFrom(
+        backgroundColor: isActive ? const Color(0xFFF5F3FF) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: isActive ? const Color(0xFF655DD5).withOpacity(0.2) : Colors.transparent),
+        ),
+      ),
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // TAB BAR
+  // ═══════════════════════════════════════════════════
+  Widget _buildTabBar(BuildContext context, ResultsProvider provider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
+      ),
+      padding: const EdgeInsets.only(left: 24, top: 4),
+      child: Row(
+        children: [
+          _buildTab(
+            icon: Icons.visibility,
+            label: 'Aperçu',
+            isActive: _viewState == ResultsViewState.overview,
+            onTap: () {
+              _searchController.clear();
+              provider.setSearchQuery('');
+              setState(() => _viewState = ResultsViewState.overview);
+            },
+            activeColor: const Color(0xFF655DD5),
+          ),
+          const SizedBox(width: 24),
+          _buildTab(
+            icon: Icons.edit_note,
+            label: 'Saisie',
+            isActive: _viewState == ResultsViewState.gradeEntry ||
+                _viewState == ResultsViewState.bulkGradeEntry,
+            onTap: (provider.selectedClassId != null && provider.selectedSemesterId != null) ? () {
+              _searchController.clear();
+              provider.setSearchQuery('');
+              setState(() => _viewState = ResultsViewState.gradeEntry);
+            } : () {
+               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez sélectionner une classe et un semestre pour saisir des notes')));
+            },
+            activeColor: const Color(0xFF655DD5),
+          ),
+
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTab({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+    required Color activeColor,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.only(bottom: 12, top: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? activeColor : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? activeColor : AppColors.textTertiary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                color: isActive ? activeColor : AppColors.textTertiary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // FILTER DRAWER (right side)
+  // ═══════════════════════════════════════════════════
+  Widget _buildFilterDrawer(BuildContext context, ResultsProvider provider) {
+    return Material(
+      elevation: 16,
+      color: Colors.white,
+      child: SizedBox(
+        width: 340,
+        height: double.infinity,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
+              ),
+              child: Row(
+                children: [
+                  const Text('Filtres', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: _toggleFilters,
+                    color: AppColors.textTertiary,
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFilterLabel('NIVEAU'),
+                    const SizedBox(height: 8),
+                    _buildFilterDropdown<String?>(
+                      value: provider.selectedNiveauId,
+                      hint: 'Tous les niveaux',
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Tous les niveaux')),
+                        ...provider.niveaux.map((n) => DropdownMenuItem(value: n['id'].toString(), child: Text(n['name']))),
+                      ],
+                      onChanged: (v) => provider.setNiveau(v),
+                    ),
+                    const SizedBox(height: 20),
+
+                    if (provider.selectedNiveauHasSections) ...[
+                      _buildFilterLabel('FILIÈRE'),
+                      const SizedBox(height: 8),
+                      _buildFilterDropdown<String?>(
+                        value: provider.selectedSectionId,
+                        hint: 'Toutes les filières',
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Toutes les filières')),
+                          ...provider.filteredSections.map((s) => DropdownMenuItem(value: s['id'].toString(), child: Text(s['name']))),
+                        ],
+                        onChanged: (v) => provider.setSection(v),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    _buildFilterLabel('CLASSE'),
+                    const SizedBox(height: 8),
+                    _buildFilterDropdown<String?>(
+                      value: provider.selectedClassId,
+                      hint: 'Toutes les classes',
+                      items: provider.filteredClasses.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
+                      onChanged: (v) => provider.setClass(v),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Bottom buttons
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFAFAFB),
+                border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () {},
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF374151),
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Réinitialiser', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6D4CF6),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF6D4CF6).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => setState(() => _showFilterDrawer = false),
+                          borderRadius: BorderRadius.circular(12),
+                          child: const Center(
+                            child: Text('Appliquer', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textTertiary, letterSpacing: 1.0),
+    );
+  }
+
+  Widget _buildFilterDropdown<T>({
+    required T value,
+    required String hint,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    // Prevent rendering error if value is not in items list
+    final values = items.map((e) => e.value).toList();
+    final safeValue = values.contains(value) ? value : null;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.slate50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: safeValue,
+          hint: Text(hint, style: const TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+          isExpanded: true,
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          items: items,
+          onChanged: onChanged,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          borderRadius: BorderRadius.circular(8),
+          dropdownColor: Colors.white,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
+        ),
+      ),
+    );
+  }
+
+  /// Direct navigation to grade entry for any student
+  void _navigateToStudentGradeEntry(ResultsProvider provider, Map<String, dynamic> student) {
+    final classId = student['class_id'] as String? ?? student['classes']?['id'] as String?;
+    if (classId != null) {
+      provider.setClass(classId);
+    }
+    provider.setSearchQuery('');
+    _searchController.clear();
+    _selectStudentForGradeEntry(student);
+  }
+
+  /// Build search results view — searches ALL enrolled students globally
+  Widget _buildSearchResults(BuildContext context, ResultsProvider provider) {
+    final query = provider.searchQuery.toLowerCase();
+    final all = provider.allEnrolledStudents;
+    final students = query.isEmpty
+        ? all
+        : all.where((s) {
+            final user = s['users'] as Map<String, dynamic>? ?? {};
+            final name = (user['full_name'] ?? '').toString().toLowerCase();
+            final code = (s['student_code'] ?? user['student_code'] ?? '').toString().toLowerCase();
+            return name.contains(query) || code.contains(query);
+          }).toList();
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Text(
+              'Résultats pour "${provider.searchQuery}" (${students.length})',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            ),
+          ),
+          Expanded(
+            child: students.isEmpty
+                ? _buildEmptyState('Aucun élève trouvé', Icons.search_off)
+                : _buildStudentDataTable(context, provider, students),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Main content area
+  Widget _buildMainContent(BuildContext context, ResultsProvider provider) {
+    if (provider.isLoading) return _buildLoadingState();
+
+    if (provider.searchQuery.isNotEmpty) {
+      return _buildSearchResults(context, provider);
+    }
+
+    if (provider.selectedClassId == null) {
+      return _buildNiveauxCardsView(context, provider);
+    }
+
+    switch (_viewState) {
+      case ResultsViewState.gradeEntry:
+        return _buildGradeEntryView(context, provider);
+      case ResultsViewState.bulkGradeEntry:
+        return _buildBulkGradeEntryView(context, provider);
+      case ResultsViewState.overview:
+        return _buildOverviewView(context, provider);
+    }
+  }
+
+  /// Bulk grade entry view — for multiple selected students
+  Widget _buildBulkGradeEntryView(BuildContext context, ResultsProvider provider) {
+    if (provider.selectedSemesterId == null) {
+      return _buildEmptyState(
+        'Sélectionnez un semestre',
+        Icons.warning_amber,
+        subtitle: 'Choisissez un semestre dans le panneau de filtres pour accéder à la saisie',
+      );
+    }
+
+    return BulkGradeEntryDialog(
+      selectedStudents: _bulkStudentObjects,
+      subjectOfferings: provider.subjectOfferings,
+      levelId: provider.selectedNiveauId,
+      semesterId: provider.selectedSemesterId,
+      onBack: () {
+        setState(() {
+          _bulkStudentObjects = [];
+          _selectedStudentsForBulk.clear();
+          _viewState = ResultsViewState.overview;
+        });
+      },
+      onRefresh: () => provider.loadSubjectOfferings(),
+    );
+  }
+
+  /// Grade entry view - For a single selected student
+  Widget _buildGradeEntryView(BuildContext context, ResultsProvider provider) {
+    if (provider.selectedSemesterId == null) {
+      return _buildEmptyState(
+        'Sélectionnez un semestre',
+        Icons.warning_amber,
+        subtitle: 'Choisissez un semestre dans le panneau de filtres pour accéder à la saisie',
+      );
+    }
+
+    if (_selectedStudentForGradeEntry == null) {
+      return _buildStudentSelectionForGrades(context, provider);
+    }
+
+    return SingleStudentGradeEntry(
+      student: _selectedStudentForGradeEntry!,
+      subjectOfferings: provider.subjectOfferings,
+      levelId: provider.selectedNiveauId,
+      semesterId: provider.selectedSemesterId,
+      onSaveGrades: (grades) async {
+        for (final grade in grades) {
+          await provider.saveGrade(
+            enrollmentId: grade['enrollment_id'],
+            studentId: grade['student_id'],
+            subjectOfferingId: grade['subject_offering_id'],
+            componentId: grade['component_id'],
+            value: grade['grade_value'],
+            status: grade['status'] ?? 'OK',
+          );
+        }
+      },
+      onBack: _backToOverview,
+      onRefresh: () => provider.loadSubjectOfferings(),
+    );
+  }
+
+  /// Build student selection list for grade entry
+  Widget _buildStudentSelectionForGrades(BuildContext context, ResultsProvider provider) {
+    final students = provider.enrolledStudents;
+
+    if (students.isEmpty) {
+      return _buildEmptyState('Aucun élève trouvé', Icons.people_outline, subtitle: 'Sélectionnez une classe pour voir les élèves');
+    }
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Sélectionner un élève', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                Text('Cliquez sur un élève pour saisir ses notes', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _buildStudentDataTable(context, provider, students),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Overview view — click student row to go directly to grade entry
+  Widget _buildOverviewView(BuildContext context, ResultsProvider provider) {
+    final students = provider.enrolledStudents;
+
+    if (students.isEmpty) {
+      return _buildEmptyState('Aucun élève inscrit', Icons.people_outline, subtitle: 'Cette classe n\'a pas encore d\'élèves inscrits');
+    }
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+            child: Text(
+              'Élèves de la classe (${students.length}) — Cliquez sur un élève pour saisir ses notes',
+              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: _buildStudentDataTable(context, provider, students),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Shared student table — every row navigates directly to grade entry
+  Widget _buildStudentDataTable(BuildContext context, ResultsProvider provider, List<Map<String, dynamic>> students) {
+    final allSelected = students.isNotEmpty && _selectedStudentsForBulk.length == students.length;
+    
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8).copyWith(bottom: 100),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 320 - 64),
+                  child: DataTable(
+                    showCheckboxColumn: false,
+                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                    dataRowMinHeight: 60,
+                    dataRowMaxHeight: 60,
+                    horizontalMargin: 24,
+                    columnSpacing: 24,
+                    dividerThickness: 1,
+                    border: TableBorder(horizontalInside: BorderSide(color: AppColors.border.withOpacity(0.5))),
+                    columns: [
+                      DataColumn(
+                        label: Checkbox(
+                          value: allSelected,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedStudentsForBulk.addAll(students.map((s) => s['id'].toString()));
+                              } else {
+                                _selectedStudentsForBulk.clear();
+                              }
+                            });
+                          },
+                          activeColor: const Color(0xFF6D4CF6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        ),
+                      ),
+                      const DataColumn(label: Text('#', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
+                      const DataColumn(label: Text('NOM COMPLET', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
+                      const DataColumn(label: Text('MATRICULE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
+                      const DataColumn(label: Text('CLASSE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
+                      const DataColumn(label: Text('', style: TextStyle())),
+                    ],
+                    rows: List.generate(students.length, (index) {
+                      final student = students[index];
+                      final studentId = student['id'].toString();
+                      final isSelected = _selectedStudentsForBulk.contains(studentId);
+                      final user = student['users'] as Map<String, dynamic>? ?? {};
+                      final fullName = user['full_name']?.toString() ?? 'Nom inconnu';
+                      final code = (student['student_code'] ?? user['student_code'] ?? '—').toString();
+                      final className = student['classes']?['name']?.toString() ?? _getSelectedClassName(provider);
+
+                      return DataRow(
+                        color: WidgetStateProperty.resolveWith<Color?>((states) {
+                          if (isSelected) return const Color(0xFF6D4CF6).withOpacity(0.04);
+                          if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                          return null;
+                        }),
+                        cells: [
+                          DataCell(
+                            Checkbox(
+                              value: isSelected,
+                              onChanged: (val) {
+                                setState(() {
+                                  if (val == true) {
+                                    _selectedStudentsForBulk.add(studentId);
+                                  } else {
+                                    _selectedStudentsForBulk.remove(studentId);
+                                  }
+                                });
+                              },
+                              activeColor: const Color(0xFF6D4CF6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              side: const BorderSide(color: Color(0xFFD1D5DB)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () => _navigateToStudentGradeEntry(provider, student),
+                              child: Text('${index + 1}', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () => _navigateToStudentGradeEntry(provider, student),
+                              child: Row(
+                                children: [
+                                  UserAvatar(name: fullName, photoUrl: user['photo_url']?.toString(), radius: 16),
+                                  const SizedBox(width: 12),
+                                  Text(fullName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () => _navigateToStudentGradeEntry(provider, student),
+                              child: Text(code, style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () => _navigateToStudentGradeEntry(provider, student),
+                              child: Text(className, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () => _navigateToStudentGradeEntry(provider, student),
+                              child: Icon(Icons.arrow_forward_ios, size: 13, color: AppColors.textTertiary),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        
+        // ── Floating Action Bar (matches users page exactly) ── //
+        if (_selectedStudentsForBulk.isNotEmpty)
+          Positioned(
+            left: 0, right: 0, bottom: 24,
+            child: Center(
+              child: Material(
+                elevation: 12,
+                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFF111827),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Count badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          border: Border(right: BorderSide(color: Colors.white.withOpacity(0.15))),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 22, height: 22,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF655DD5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Center(
+                                child: Text('${_selectedStudentsForBulk.length}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('Sélectionnés', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                      // Action: Saisie groupée
+                      InkWell(
+                        onTap: () {
+                           if (provider.subjectOfferings.isEmpty) {
+                             ScaffoldMessenger.of(context).showSnackBar(
+                               const SnackBar(content: Text('Aucune matière pour cette classe.')),
+                             );
+                             return;
+                           }
+                           if (provider.selectedSemesterId == null) {
+                             ScaffoldMessenger.of(context).showSnackBar(
+                               const SnackBar(content: Text('Veuillez sélectionner un semestre.')),
+                             );
+                             return;
+                           }
+                           // Collect full student objects for selected IDs
+                           final selectedObjs = provider.enrolledStudents
+                               .where((s) => _selectedStudentsForBulk.contains(s['id'].toString()))
+                               .toList();
+                           setState(() {
+                             _bulkStudentObjects = selectedObjs;
+                             _viewState = ResultsViewState.bulkGradeEntry;
+                           });
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.edit_note, size: 16, color: Colors.white70),
+                              const SizedBox(width: 6),
+                              const Text('Saisie groupée', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white70)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Close button
+                      Container(
+                        margin: const EdgeInsets.only(left: 4),
+                        decoration: BoxDecoration(
+                          border: Border(left: BorderSide(color: Colors.white.withOpacity(0.15))),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                          onPressed: () => setState(() => _selectedStudentsForBulk.clear()),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(String title, IconData icon, {String? subtitle}) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: AppColors.textTertiary.withOpacity(0.5)),
+          const SizedBox(height: 16),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  // ═══════════════════════════════════════════════════
+  // NIVEAUX BROWSE VIEW — exact grade_levels design
+  // ═══════════════════════════════════════════════════
+  Widget _buildNiveauxCardsView(BuildContext context, ResultsProvider provider) {
+    if (provider.isLoading) return _buildLoadingState();
+    if (provider.niveaux.isEmpty) {
+      return _buildEmptyState('Aucun niveau trouvé', Icons.school_outlined,
+          subtitle: 'Configurez vos niveaux dans la section Niveaux & Filières');
+    }
+
+    final semLabel = provider.selectedSemesterId != null
+        ? provider.semesters
+            .where((s) => s['id'] == provider.selectedSemesterId)
+            .map((s) => s['name']?.toString() ?? '—')
+            .firstOrNull
+        : null;
+
+    return Container(
+      color: const Color(0xFFF6F6F8),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Info row — semester badge
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                children: [
+                  const Text('Choisissez une classe',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A))),
+                  const Spacer(),
+                  if (semLabel != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.slate200,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        semLabel.toUpperCase(),
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.slate600, letterSpacing: 0.5),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Cycle card wrapper
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.slate200),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFF655DD5).withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 4)),
+                  BoxShadow(color: const Color(0xFF655DD5).withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 2)),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  // Card header — matches _buildCycleCard header exactly
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      border: Border(bottom: BorderSide(color: AppColors.slate200)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF655DD5).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Center(child: Icon(Icons.school, color: Color(0xFF655DD5), size: 20)),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('Niveaux', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A))),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: AppColors.slate200, borderRadius: BorderRadius.circular(999)),
+                          child: Text(
+                            '${provider.niveaux.length} NIVEAUX',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.slate600, letterSpacing: 0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Niveau rows — exact _HoverableGradeRow pattern
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: provider.niveaux.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final niveau = entry.value;
+                        final niveauClasses = provider.classes
+                            .where((c) => c['niveau_id'] == niveau['id'])
+                            .toList();
+                        return Column(
+                          children: [
+                            _HoverableNiveauRow(
+                              niveau: niveau,
+                              classes: niveauClasses,
+                              onClassTap: (classId) {
+                                provider.setClass(classId);
+                                provider.setSearchQuery('');
+                                _searchController.clear();
+                                setState(() => _viewState = ResultsViewState.overview);
+                              },
+                            ),
+                            if (idx < provider.niveaux.length - 1) const SizedBox(height: 16),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // STUDENT SEARCH DIALOG
+  // ═══════════════════════════════════════════════════
+  void _showStudentSearchDialog(BuildContext context, ResultsProvider provider) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.45),
+      builder: (ctx) => _StudentSearchDialog(
+        provider: provider,
+        onStudentSelected: (student) {
+          final classId = student['class_id'] as String?;
+          if (classId != null) {
+            provider.setClass(classId);
+            _selectStudentForGradeEntry(student);
+            Navigator.pop(ctx);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: Color(0xFF3B82F6)),
+          SizedBox(height: 24),
+          Text(
+            'Calcul des résultats...',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper methods
+  String _getSelectedClassName(ResultsProvider provider) {
+    final cls = provider.classes
+        .where((c) => c['id'] == provider.selectedClassId)
+        .firstOrNull;
+    return cls?['name'] ?? '';
+  }
+
+  void _showSettingsDialog(BuildContext context, ResultsProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => ChangeNotifierProvider.value(
+        value: provider,
+        child: GradingConfigDialog(
+          initialConfig: provider.gradingConfig,
+          onSave: (config) {
+            provider.saveGradingConfig(config);
+          },
+        ),
+      ),
+    );
+  }
+
+}
+
+// ═══════════════════════════════════════════════════
+// HOVERABLE NIVEAU ROW — exact _HoverableGradeRow pattern from grade_levels
+// ═══════════════════════════════════════════════════
+class _HoverableNiveauRow extends StatefulWidget {
+  final Map<String, dynamic> niveau;
+  final List<Map<String, dynamic>> classes;
+  final void Function(String classId) onClassTap;
+
+  const _HoverableNiveauRow({
+    super.key,
+    required this.niveau,
+    required this.classes,
+    required this.onClassTap,
+  });
+
+  @override
+  State<_HoverableNiveauRow> createState() => _HoverableNiveauRowState();
+}
+
+class _HoverableNiveauRowState extends State<_HoverableNiveauRow> {
+  bool _isHovered = false;
+  String? _selectedSectionId;
+
+  @override
+  Widget build(BuildContext context) {
+    final niveau = widget.niveau;
+    final hasSections = niveau['has_sections'] == true;
+
+    // Derive sections from classes (each class may have cls['sections'] nested)
+    final Map<String, String> sectionMap = {}; // sectionId -> sectionName
+    for (final cls in widget.classes) {
+      final sectionId = cls['section_id'] as String?;
+      final sectionName = cls['sections']?['name']?.toString();
+      if (sectionId != null && sectionName != null) {
+        sectionMap[sectionId] = sectionName;
+      }
+    }
+
+    // Filter by selected section
+    final displayedClasses = _selectedSectionId != null
+        ? widget.classes.where((c) => c['section_id'] == _selectedSectionId).toList()
+        : widget.classes;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: _isHovered ? AppColors.slate200 : AppColors.slate100),
+          borderRadius: BorderRadius.circular(12),
+          color: _isHovered ? AppColors.slate50.withOpacity(0.5) : Colors.transparent,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title row — same as _HoverableGradeRow
+            Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Text(
+                        niveau['name']?.toString() ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                      ),
+                      Text(
+                        '• ${widget.classes.length} classe${widget.classes.length != 1 ? 's' : ''}',
+                        style: TextStyle(fontSize: 12, color: AppColors.slate400),
+                      ),
+                    ],
+                  ),
+                ),
+                if (niveau['code'] != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      niveau['code'].toString(),
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF655DD5)),
+                    ),
+                  ),
+              ],
+            ),
+            // Filières filter — same as _HoverableGradeRow sections row
+            if (hasSections && sectionMap.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    'FILIÈRES',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.slate400, letterSpacing: 0.5),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: sectionMap.entries.map((entry) {
+                        final isSelected = _selectedSectionId == entry.key;
+                        return InkWell(
+                          onTap: () => setState(() {
+                            _selectedSectionId = isSelected ? null : entry.key;
+                          }),
+                          borderRadius: BorderRadius.circular(4),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF655DD5).withOpacity(0.12) : AppColors.slate100,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF655DD5).withOpacity(0.4) : AppColors.slate200,
+                              ),
+                            ),
+                            child: Text(
+                              entry.value,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? const Color(0xFF655DD5) : AppColors.slate500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            // Class pills — exact _classPill design from grade_levels
+            const SizedBox(height: 12),
+            displayedClasses.isEmpty
+                ? Text('Aucune classe', style: TextStyle(fontSize: 12, color: AppColors.slate400))
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: displayedClasses.map((cls) {
+                      return InkWell(
+                        onTap: () => widget.onClassTap(cls['id'] as String),
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: AppColors.slate200),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 2, offset: const Offset(0, 1))],
+                          ),
+                          child: Text(
+                            cls['name']?.toString() ?? '',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.slate600),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// STUDENT SEARCH DIALOG WIDGET
+// ═══════════════════════════════════════════════════
+class _StudentSearchDialog extends StatefulWidget {
+  final ResultsProvider provider;
+  final void Function(Map<String, dynamic>) onStudentSelected;
+
+  const _StudentSearchDialog({
+    required this.provider,
+    required this.onStudentSelected,
+  });
+
+  @override
+  State<_StudentSearchDialog> createState() => _StudentSearchDialogState();
+}
+
+class _StudentSearchDialogState extends State<_StudentSearchDialog> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _filtered {
+    final all = widget.provider.enrolledStudents;
+    if (_query.isEmpty) return all;
+    final q = _query.toLowerCase();
+    return all.where((s) {
+      final user = s['users'] as Map<String, dynamic>? ?? {};
+      final name = (user['full_name'] ?? '').toString().toLowerCase();
+      final code = (s['student_code'] ?? user['student_code'] ?? '').toString().toLowerCase();
+      return name.contains(q) || code.contains(q);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final filtered = _filtered;
+
+    return Dialog(
+      child: Container(
+        width: 520,
+        height: 600,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header — matches BulkGradeEntryDialog / GradingConfigDialog pattern
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.person_search, color: colorScheme.onPrimaryContainer),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Ajouter une note', style: theme.textTheme.headlineSmall),
+                      Text(
+                        'Cherchez un élève pour saisir ses notes',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Search field — matches users_screen search bar pattern
+            TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              onChanged: (v) => setState(() => _query = v),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Rechercher par nom ou matricule...',
+                hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textTertiary),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () { _searchCtrl.clear(); setState(() => _query = ''); },
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppColors.slate50,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.4), width: 1.5),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Results header row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 48),
+                  Expanded(child: Text('Élève', style: theme.textTheme.titleSmall)),
+                  Text('Classe', style: theme.textTheme.titleSmall),
+                  const SizedBox(width: 24),
+                ],
+              ),
+            ),
+
+            // Results list
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _query.isEmpty ? Icons.person_search_outlined : Icons.search_off,
+                            size: 48,
+                            color: colorScheme.outlineVariant,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _query.isEmpty ? 'Commencez à taper un nom...' : 'Aucun élève trouvé',
+                            style: TextStyle(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filtered.length,
+                      padding: EdgeInsets.zero,
+                      itemBuilder: (ctx, i) {
+                        final student = filtered[i];
+                        final user = student['users'] as Map<String, dynamic>? ?? {};
+                        final name = user['full_name']?.toString() ?? 'Nom inconnu';
+                        final code = (student['student_code'] ?? user['student_code'] ?? '—').toString();
+                        final className = student['classes']?['name']?.toString() ?? '—';
+                        return InkWell(
+                          onTap: () => widget.onStudentSelected(student),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(color: AppColors.border.withOpacity(0.5)),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                UserAvatar(name: name, photoUrl: user['photo_url']?.toString(), radius: 16),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(name,
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                          overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 2),
+                                      Text(code,
+                                          style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                                          overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                                Text(className,
+                                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.textTertiary),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,488 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+
+import '../../data/models/user_model.dart';
+import '../../data/models/enrollment_model.dart';
+import '../../data/models/school_model.dart';
+import '../../core/config/supabase_config.dart';
+import '../providers/auth_provider.dart';
+
+class StudentCard extends ConsumerStatefulWidget {
+  final UserModel user;
+  final EnrollmentModel? enrollment;
+  final SchoolModel? school;
+  final VoidCallback onMenuTap;
+  final VoidCallback? onTap;
+
+  const StudentCard({
+    super.key,
+    required this.user,
+    this.enrollment,
+    this.school,
+    required this.onMenuTap,
+    this.onTap,
+  });
+
+  @override
+  ConsumerState<StudentCard> createState() => _StudentCardState();
+}
+
+class _StudentCardState extends ConsumerState<StudentCard> {
+  static const double _baseW = 720;
+  static const double _baseH = 480;
+
+  bool _uploadingPhoto = false;
+
+  Future<void> _pickAndUploadPhoto() async {
+    if (_uploadingPhoto) return;
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+    if (image == null) return;
+
+    setState(() => _uploadingPhoto = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final bytes = await image.readAsBytes();
+      final ext = _extensionFromFile(image);
+      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final storagePath = 'avatars/$fileName';
+      final mimeType = image.mimeType ?? 'image/jpeg';
+
+      await supabase.storage
+          .from(SupabaseConfig.profileBucket)
+          .uploadBinary(storagePath, bytes,
+              fileOptions: FileOptions(contentType: mimeType));
+
+      final publicUrl = supabase.storage
+          .from(SupabaseConfig.profileBucket)
+          .getPublicUrl(storagePath);
+
+      await supabase
+          .from('users')
+          .update({'photo_url': publicUrl})
+          .eq('id', userId);
+
+      if (mounted) {
+        ref.read(authProvider.notifier).refreshUserData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
+  String _extensionFromFile(XFile file) {
+    final path = file.path;
+    final mimeType = file.mimeType;
+    if (path.contains('.')) {
+      final dotExt = path.split('.').last;
+      if (!dotExt.contains('/')) return dotExt;
+    }
+    if (mimeType != null && mimeType.contains('/')) {
+      return mimeType.split('/').last;
+    }
+    return 'jpg';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.user;
+    final enrollment = widget.enrollment;
+
+    final classInfo = enrollment?.classInfo;
+    final groupInfo = enrollment?.groupInfo;
+    final classText = classInfo != null
+        ? '${classInfo.name}${groupInfo != null ? ' - ${groupInfo.name}' : ''}'
+        : '—';
+
+    final dobText = user.dateOfBirth != null
+        ? DateFormat('dd MMMM yyyy', 'fr_FR').format(user.dateOfBirth!)
+        : '—';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Center(
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _baseW),
+            child: AspectRatio(
+              aspectRatio: _baseW / _baseH,
+              child: _CardContent(
+                user: user,
+                school: widget.school,
+                classText: classText,
+                dobText: dobText,
+                uploadingPhoto: _uploadingPhoto,
+                onPhotoTap: _pickAndUploadPhoto,
+                onMenuTap: widget.onMenuTap,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CardContent extends StatelessWidget {
+  final UserModel user;
+  final SchoolModel? school;
+  final String classText;
+  final String dobText;
+  final bool uploadingPhoto;
+  final VoidCallback onPhotoTap;
+  final VoidCallback onMenuTap;
+
+  const _CardContent({
+    required this.user,
+    this.school,
+    required this.classText,
+    required this.dobText,
+    required this.uploadingPhoto,
+    required this.onPhotoTap,
+    required this.onMenuTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = constraints.maxWidth / 720;
+        double s(double value) => value * scale;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F7FB),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0x5A3A1022),
+                blurRadius: s(60),
+                offset: Offset(0, s(25)),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _WavePainter(
+                    color: const Color(0xFFFF85B0),
+                    strokeWidth: s(1.2),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: -s(60),
+                height: s(220),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(s(150)),
+                    bottomRight: Radius.circular(s(150)),
+                  ),
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            stops: [0.0, 0.45, 1.0],
+                            colors: [
+                              Color(0xFFFF85B0),
+                              Color(0xFF54172D),
+                              Color(0xFFFF2D78),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: -s(80),
+                        top: -s(80),
+                        child: Container(
+                          width: s(400),
+                          height: s(400),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: [
+                                Color(0x35FFFFFF),
+                                Color(0x00FFFFFF),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: s(60),
+                left: s(300),
+                child: Text(
+                  "CARTE\nD'ÉTUDIANT",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: s(54),
+                    height: 0.95,
+                    letterSpacing: 1,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: s(95),
+                left: s(60),
+                child: GestureDetector(
+                  onTap: onPhotoTap,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: s(180),
+                        height: s(180),
+                        padding: EdgeInsets.all(s(8)),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0x664A1223),
+                              blurRadius: s(18),
+                              offset: Offset(0, s(10)),
+                            ),
+                          ],
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFFFF85B0),
+                              Color(0xFF54172D),
+                            ],
+                          ),
+                        ),
+                        child: ClipOval(
+                          child: _buildPhotoContent(s),
+                        ),
+                      ),
+                      if (uploadingPhoto)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.black26,
+                            ),
+                            child: Center(
+                              child: SizedBox(
+                                width: s(24),
+                                height: s(24),
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: s(300),
+                top: s(250),
+                width: s(380),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _detailRow('Nom', user.fullName, s),
+                    _detailRow('CI', classText, s),
+                    _detailRow('D.D.N', dobText, s),
+                    _detailRow('Adresse', user.address ?? '—', s),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: 0,
+                width: s(300),
+                top: s(340),
+                child: Center(
+                  child: Text(
+                    user.studentCode ?? '—',
+                    style: TextStyle(
+                      fontSize: s(22),
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                      color: const Color(0xFF2F242A),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: s(32),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Color(0xFF822B4A),
+                        Color(0xFFD6316D),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value, double Function(double) s) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: s(16)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: s(96),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: s(18),
+                color: const Color(0xFF3B2A32),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: s(24),
+            child: Text(
+              ':',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: s(18),
+                color: const Color(0xFF3B2A32),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: s(18),
+                color: const Color(0xFF3B2A32),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoContent(double Function(double) s) {
+    if (user.photoUrl != null && user.photoUrl!.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: user.photoUrl!,
+        fit: BoxFit.cover,
+        width: s(164),
+        height: s(164),
+        errorWidget: (_, __, ___) => _buildInitials(s),
+      );
+    }
+    return _buildInitials(s);
+  }
+
+  Widget _buildInitials(double Function(double) s) {
+    final initials = user.fullName
+        .split(' ')
+        .take(2)
+        .map((e) => e.isNotEmpty ? e[0].toUpperCase() : '')
+        .join();
+    return Container(
+      color: const Color(0xFFD0D5DB),
+      alignment: Alignment.center,
+      child: initials.isNotEmpty
+          ? Text(
+              initials,
+              style: TextStyle(
+                fontSize: s(48),
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            )
+          : Icon(
+              Icons.person,
+              size: s(64),
+              color: const Color(0xFF8A949E),
+            ),
+    );
+  }
+
+}
+
+class _WavePainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+
+  _WavePainter({required this.color, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final scale = size.width / 720;
+    final baseY = size.height * 0.65;
+    final gapStart = 2.5 * scale;
+    final gapMid = 9.0 * scale;
+    final gapEnd = 15.0 * scale;
+
+    for (var i = 0; i < 14; i++) {
+      final startY = baseY + gapStart * i;
+      final controlY1 = baseY + 140 * scale + gapMid * i;
+      final controlY2 = baseY - 50 * scale + gapEnd * i;
+      final endY = baseY - 60 * scale + gapEnd * i;
+
+      final path = Path()
+        ..moveTo(-20 * scale, startY)
+        ..cubicTo(
+          240 * scale, controlY1,
+          480 * scale, controlY2,
+          760 * scale, endY,
+        );
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
