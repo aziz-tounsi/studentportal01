@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../presentation/widgets/ios_loader.dart';
 import '../../../../models/announcement_model.dart';
 import '../../../../repositories/announcement_repository.dart';
 import 'student_preview_cards.dart';
@@ -674,10 +675,9 @@ class _AnnouncementComposerDialogState
                     FilledButton.icon(
                       onPressed: _isLoading ? null : _save,
                       icon: _isLoading
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          ? const IosLoader(
+                              size: 16,
+                              color: AppColors.textOnPrimary,
                             )
                           : const Icon(Icons.save),
                       label: Text(isEditing ? 'Enregistrer' : 'Publier'),

@@ -14,6 +14,8 @@ class TimetableSlotModel {
   final String? subjectName;
   final String? subjectCode;
 
+  final String? teacherPhotoUrl;
+
   TimetableSlotModel({
     required this.id,
     required this.subjectOfferingId,
@@ -23,6 +25,7 @@ class TimetableSlotModel {
     required this.endTime,
     this.room,
     this.teacherName,
+    this.teacherPhotoUrl,
     required this.sessionType,
     required this.createdAt,
     this.subjectName,
@@ -52,6 +55,7 @@ class TimetableSlotModel {
       endTime: json['end_time'] as String,
       room: json['room'] as String?,
       teacherName: json['teacher_name'] as String?,
+      teacherPhotoUrl: json['teacher_photo_url'] as String?,
       sessionType: json['session_type'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
       subjectName: subjectName,

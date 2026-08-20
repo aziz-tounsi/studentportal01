@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../../data/models/dashboard_models.dart';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -40,14 +41,7 @@ class DashboardScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: AppShadows.card,
                         ),
-                        child: const SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation(AppColors.primary),
-                          ),
-                        ),
+                        child: const IosLoader(size: 36, color: AppColors.primary),
                       ),
                     ),
                     error: (e, _) => Center(

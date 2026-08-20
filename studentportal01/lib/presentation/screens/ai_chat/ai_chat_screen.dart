@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -826,11 +827,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                                 : null,
                           ),
                           child: _isTyping
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
+                              ? const IosLoader.small(size: 18, color: Colors.white)
                               : const Icon(Icons.send, size: 18, color: Colors.white),
                         ),
                       ),

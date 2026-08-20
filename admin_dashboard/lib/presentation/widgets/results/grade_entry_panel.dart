@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../presentation/widgets/ios_loader.dart';
 
 /// A panel for entering grades by subject and exam type
 /// Workflow: Select Subject → Select Exam Type → Enter grades for all students
@@ -831,13 +832,9 @@ class _GradeEntryPanelState extends State<GradeEntryPanel> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             ),
             icon: _isSaving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textOnPrimary,
-                    ),
+                ? const IosLoader(
+                    size: 18,
+                    color: AppColors.textOnPrimary,
                   )
                 : const Icon(Icons.save),
             label: Text(

@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
@@ -308,8 +309,16 @@ final userProfileDataProvider = FutureProvider.family<UserProfileData?, String>(
 class UserProfileScreen extends ConsumerStatefulWidget {
   final String userId;
   final String? userName;
+  final bool isDialogMode;
+  final VoidCallback? onBack;
 
-  const UserProfileScreen({super.key, required this.userId, this.userName});
+  const UserProfileScreen({
+    super.key,
+    required this.userId,
+    this.userName,
+    this.isDialogMode = false,
+    this.onBack,
+  });
 
   @override
   ConsumerState<UserProfileScreen> createState() => _UserProfileScreenState();
@@ -325,58 +334,66 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(userProfileDataProvider(widget.userId));
 
+    final content = profileAsync.when(
+      loading: () => Center(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: AppShadows.card,
+          ),
+          child: const IosLoader(color: AppColors.primary),
+        ),
+      ),
+      error: (e, _) => Center(
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          margin: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.error.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.error.withOpacity(0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
+              const SizedBox(height: 16),
+              Text('Erreur: $e', style: TextStyle(color: AppColors.error)),
+            ],
+          ),
+        ),
+      ),
+      data: (data) {
+        if (data == null) return _buildNotFound();
+        // Redirect teachers to their dedicated profile page
+        if (data.user['role'] == 'teacher') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) context.go('/teachers/${widget.userId}');
+          });
+          return const Center(child: IosLoader(color: AppColors.primary));
+        }
+        return _buildProfile(context, data);
+      },
+    );
+
+    if (widget.isDialogMode) {
+      return Dialog.fullscreen(
+        backgroundColor: AppColors.background,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: content,
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Row(
         children: [
           const AdminSidebar(currentRoute: '/users'),
-          Expanded(
-            child: profileAsync.when(
-              loading: () => Center(
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: AppShadows.card,
-                  ),
-                  child: const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation(AppColors.primary),
-                  ),
-                ),
-              ),
-              error: (e, _) => Center(
-                child: Container(
-                  padding: const EdgeInsets.all(32),
-                  margin: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
-                      const SizedBox(height: 16),
-                      Text('Erreur: $e', style: TextStyle(color: AppColors.error)),
-                    ],
-                  ),
-                ),
-              ),
-              data: (data) {
-                if (data == null) return _buildNotFound();
-                // Redirect teachers to their dedicated profile page
-                if (data.user['role'] == 'teacher') {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) context.go('/teachers/${widget.userId}');
-                  });
-                  return const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(AppColors.primary)));
-                }
-                return _buildProfile(context, data);
-              },
-            ),
-          ),
+          Expanded(child: content),
         ],
       ),
     );
@@ -505,7 +522,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       ),
       child: Row(
         children: [
-          _iconButton(icon: Icons.arrow_back_rounded, onTap: () => context.go('/users')),
+          _iconButton(icon: Icons.arrow_back_rounded, onTap: () {
+            if (widget.onBack != null) {
+              widget.onBack!();
+            } else if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              context.go('/users');
+            }
+          }),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -1151,7 +1176,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     boxShadow: AppShadows.sm,
                   ),
                   child: _isUploadingPhoto
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const IosLoader.small()
                       : Icon(Icons.camera_alt_rounded, size: 14, color: AppColors.slate500),
                 ),
               ),
@@ -1760,7 +1785,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (isLoading)
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.slate500))
+                  const IosLoader.small(color: AppColors.slate500)
                 else
                   const Icon(Icons.lock_reset_rounded, size: 16, color: AppColors.slate500),
                 const SizedBox(width: 8),

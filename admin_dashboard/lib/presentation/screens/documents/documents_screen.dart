@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/documents_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 
 class DocumentsScreen extends ConsumerWidget {
   const DocumentsScreen({super.key});
@@ -22,7 +23,7 @@ class DocumentsScreen extends ConsumerWidget {
               children: [
                 _buildTopBar(context, ref),
                 Expanded(child: documentsAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => const Center(child: IosLoader()),
                   error: (e, _) => Center(child: Text('Erreur: $e')),
                   data: (state) => _buildContent(context, ref, state),
                 )),

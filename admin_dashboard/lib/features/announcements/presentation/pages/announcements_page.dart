@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../presentation/widgets/ios_loader.dart';
 import '../../../../models/announcement_model.dart';
 import '../../../../repositories/announcement_repository.dart';
 import '../widgets/announcement_card.dart';
@@ -162,7 +163,7 @@ class _AnnouncementsPageState extends State<AnnouncementsPage>
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: IosLoader())
           : _error != null
               ? Center(
                   child: Column(

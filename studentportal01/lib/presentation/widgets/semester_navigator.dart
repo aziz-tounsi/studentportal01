@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/services/core_data_service.dart';
 import '../providers/student_context_provider.dart';
+import 'ios_loader.dart';
 
 /// Dynamic Semester Navigator - iOS 26 Style
 /// 
@@ -97,15 +98,11 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
           height: 56,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.6),
+            color: Colors.white.withOpacity(0.8),
             borderRadius: BorderRadius.circular(28),
           ),
           child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            child: IosLoader(),
           ),
         ),
       ),
@@ -130,7 +127,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
           height: 56,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.6),
+            color: Colors.white.withOpacity(0.8),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
@@ -269,7 +266,7 @@ class SemesterTabBar extends ConsumerWidget {
       },
       loading: () => const SizedBox(
         height: 40,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        child: Center(child: IosLoader()),
       ),
       error: (_, __) => _buildTabs([
         SemesterInfo(id: '1', name: 'Sem. 1', number: 1, isCurrent: false),

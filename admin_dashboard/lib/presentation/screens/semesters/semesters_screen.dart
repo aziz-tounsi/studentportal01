@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 
 const _brand = Color(0xFF7C3AED);
 const _brandLight = Color(0xFFF3E8FF);
@@ -44,7 +45,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                     _buildHeader(context, semestersAsync),
                     Expanded(
                       child: semestersAsync.when(
-                        loading: () => const Center(child: CircularProgressIndicator(color: _brand)),
+                        loading: () => const Center(child: IosLoader(color: _brand)),
                         error: (e, _) => Center(
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
                             Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),

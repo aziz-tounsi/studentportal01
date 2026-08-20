@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/building_models.dart';
 import '../../providers/building_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../../core/theme/app_theme.dart';
 
 class BuildingStructureScreen extends ConsumerStatefulWidget {
@@ -110,7 +111,7 @@ class _BuildingStructureScreenState
                 Expanded(
                   child: stateAsync.when(
                     loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                        const Center(child: IosLoader()),
                     error: (e, _) => _buildErrorState(e),
                     data: (state) => _buildContent(context, state),
                   ),

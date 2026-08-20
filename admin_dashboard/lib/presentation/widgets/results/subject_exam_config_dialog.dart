@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../presentation/widgets/ios_loader.dart';
 
 /// Dialog for configuring exam types and percentages for a specific subject offering
 /// Can apply configuration to all classes in the same niveau/level
@@ -490,7 +491,7 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
               child: _isLoading
                   ? const Padding(
                       padding: EdgeInsets.all(48),
-                      child: Center(child: CircularProgressIndicator()),
+                      child: Center(child: IosLoader()),
                     )
                   : _error != null
                   ? Padding(
@@ -528,9 +529,8 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
                     child: ElevatedButton.icon(
                       onPressed: _isSaving || !_isValid ? null : _save,
                       icon: _isSaving
-                          ? const SizedBox(
-                              width: 16, height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          ? const IosLoader(
+                              size: 16, color: Colors.white,
                             )
                           : const Icon(Icons.check, size: 18),
                       label: Text(

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 
 // ── Provider ───────────────────────────────────────────────────────────────
@@ -17,7 +18,48 @@ final professorsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
       .select('id, full_name, email, phone, photo_url, role, is_active, created_at, gender')
       .eq('role', 'teacher')
       .order('full_name', ascending: true);
-  return List<Map<String, dynamic>>.from(response as List);
+
+  final professors = List<Map<String, dynamic>>.from(response as List);
+
+  // Fetch teacher assignments with subjects to derive speciality
+  final teacherIds = professors.map((p) => p['id'] as String).toList();
+  if (teacherIds.isNotEmpty) {
+    try {
+      final assignmentsResp = await Supabase.instance.client
+          .from('teacher_assignments')
+          .select('teacher_id, subject_id, subjects(name)')
+          .inFilter('teacher_id', teacherIds)
+          .eq('is_active', true);
+
+      // Group subjects by teacher_id
+      final Map<String, Set<String>> teacherSubjects = {};
+      for (final a in assignmentsResp as List) {
+        final teacherId = a['teacher_id'] as String?;
+        final subjectName = (a['subjects'] as Map?)?['name'] as String?;
+        if (teacherId != null && subjectName != null) {
+          teacherSubjects.putIfAbsent(teacherId, () => {}).add(subjectName);
+        }
+      }
+
+      // Add speciality to each professor
+      for (final prof in professors) {
+        final id = prof['id'] as String;
+        final subjects = teacherSubjects[id];
+        prof['speciality'] = subjects != null && subjects.isNotEmpty
+            ? subjects.first
+            : null;
+        prof['all_subjects'] = subjects?.toList() ?? [];
+      }
+    } catch (_) {
+      // If assignments fetch fails, set empty speciality
+      for (final prof in professors) {
+        prof['speciality'] = null;
+        prof['all_subjects'] = <String>[];
+      }
+    }
+  }
+
+  return professors;
 });
 
 final _subjectsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -57,6 +99,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   String _searchQuery = '';
   String? _statusFilter; // null = tous, 'active', 'archived'
   String _genderFilter = 'all';
+  String _specialityFilter = 'all';
   final _searchController = TextEditingController();
   bool _showFilterDrawer = false;
 
@@ -67,13 +110,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   int _currentPage = 1;
   int _itemsPerPage = 20;
 
-  bool get _hasActiveFilters => _statusFilter != null || _genderFilter != 'all';
+  bool get _hasActiveFilters => _statusFilter != null || _genderFilter != 'all' || _specialityFilter != 'all';
 
   void _toggleFilters() => setState(() => _showFilterDrawer = !_showFilterDrawer);
 
   void _resetFilters() => setState(() {
     _statusFilter = null;
     _genderFilter = 'all';
+    _specialityFilter = 'all';
     _currentPage = 1;
   });
 
@@ -100,7 +144,13 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
           (_genderFilter == 'male' && gender == 'male') ||
           (_genderFilter == 'female' && gender == 'female');
 
-      return matchesSearch && matchesStatus && matchesGender;
+      final speciality = (p['speciality'] as String? ?? '').toLowerCase();
+      final allSubjects = (p['all_subjects'] as List<String>? ?? []).map((s) => s.toLowerCase()).toList();
+      final matchesSpeciality = _specialityFilter == 'all' ||
+          speciality == _specialityFilter.toLowerCase() ||
+          allSubjects.contains(_specialityFilter.toLowerCase());
+
+      return matchesSearch && matchesStatus && matchesGender && matchesSpeciality;
     }).toList();
   }
 
@@ -132,10 +182,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                             ),
                             child: const SizedBox(
                               width: 36, height: 36,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 3,
-                                valueColor: AlwaysStoppedAnimation(AppColors.primary),
-                              ),
+                              child: IosLoader(color: AppColors.primary),
                             ),
                           ),
                         ),
@@ -226,7 +273,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               top: 0,
               bottom: 0,
               width: 370,
-              child: _buildFilterDrawer(context),
+              child: _buildFilterDrawer(context, professorsAsync),
             ),
           ],
         ],
@@ -367,7 +414,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
 
   // ── Filter Drawer (sidebar, matching users page) ──────────────────────────
 
-  Widget _buildFilterDrawer(BuildContext context) {
+  Widget _buildFilterDrawer(BuildContext context, AsyncValue<List<Map<String, dynamic>>> professorsAsync) {
     return Material(
       elevation: 16,
       color: Colors.white,
@@ -432,6 +479,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         _currentPage = 1;
                       }),
                     ),
+                    const SizedBox(height: 20),
+                    // Specialité
+                    _buildDrawerFilterLabel('SPÉCIALITÉ'),
+                    const SizedBox(height: 8),
+                    _buildSpecialityDropdown(professorsAsync),
                   ],
                 ),
               ),
@@ -498,6 +550,30 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSpecialityDropdown(AsyncValue<List<Map<String, dynamic>>> professorsAsync) {
+    // Extract unique specialities from all professors
+    final allSpecialities = <String>{};
+    professorsAsync.whenOrNull(data: (professors) {
+      for (final prof in professors) {
+        final subjects = prof['all_subjects'] as List<String>? ?? [];
+        allSpecialities.addAll(subjects);
+      }
+    });
+    final sortedSpecialities = allSpecialities.toList()..sort();
+
+    return _buildDrawerDropdown<String>(
+      value: _specialityFilter == 'all' ? 'all' : (_specialityFilter),
+      items: [
+        const DropdownMenuItem(value: 'all', child: Text('Toutes')),
+        ...sortedSpecialities.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+      ],
+      onChanged: (v) => setState(() {
+        _specialityFilter = v ?? 'all';
+        _currentPage = 1;
+      }),
     );
   }
 
@@ -1095,7 +1171,8 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
         const actionsW = 44.0;
         const phoneW = 130.0;
         const statusW = 100.0;
-        final nameW = (availableWidth - checkboxW - phoneW - statusW - actionsW).clamp(200.0, 600.0);
+        const specialityW = 160.0;
+        final nameW = (availableWidth - checkboxW - phoneW - statusW - specialityW - actionsW).clamp(200.0, 600.0);
 
         return SingleChildScrollView(
           child: ConstrainedBox(
@@ -1144,6 +1221,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ),
                     ),
                     DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
+                    DataColumn(label: SizedBox(width: specialityW, child: _headerLabel('SPÉCIALITÉ'))),
                     DataColumn(label: SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE'))),
                     DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT'))),
                     DataColumn(label: SizedBox(width: actionsW, child: Container())),
@@ -1156,6 +1234,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     final isActiveProf = prof['is_active'] == true;
                     final gender = prof['gender'] as String? ?? '';
                     final photoUrl = prof['photo_url'] as String?;
+                    final speciality = prof['speciality'] as String?;
                     final isSelected = _selectedProfIds.contains(id);
 
                     return DataRow(
@@ -1228,6 +1307,27 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                             ),
                           ),
                           onTap: id.isNotEmpty ? () => context.push('/teachers/$id') : null,
+                        ),
+                        // Speciality
+                        DataCell(
+                          SizedBox(
+                            width: specialityW,
+                            child: speciality != null
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF0F5FF),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                                    ),
+                                    child: Text(
+                                      speciality,
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF3B82F6)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )
+                                : Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.textTertiary)),
+                          ),
                         ),
                         // Phone
                         DataCell(
@@ -1664,7 +1764,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                             elevation: 2,
                           ),
                           child: isCreating
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? const IosLoader.small(color: Colors.white)
                               : const Row(mainAxisSize: MainAxisSize.min, children: [
                                   Icon(Icons.check_rounded, size: 18),
                                   SizedBox(width: 8),

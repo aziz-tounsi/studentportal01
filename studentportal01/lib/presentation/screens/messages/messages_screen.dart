@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -239,7 +240,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
             ),
           IconButton(
             icon: state.isLoading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const IosLoader.small(size: 20, color: Colors.white)
               : const Icon(Icons.refresh),
             onPressed: state.isLoading ? null : () => ref.read(messagesNotifierProvider(widget.classId).notifier).refresh(),
             tooltip: l10n.refresh,
@@ -284,7 +285,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     final l10n = AppLocalizations.of(context);
     
     if (state.isLoading && state.messages.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: IosLoader());
     }
     
     if (state.error != null && state.messages.isEmpty) {
@@ -485,14 +486,10 @@ class _MessageCard extends StatelessWidget {
                                     ),
                                 loadingBuilder: (context, child, loadingProgress) {
                                   if (loadingProgress == null) return child;
-                                  return Container(
+                                   return Container(
                                     color: Colors.grey[100],
                                     child: const Center(
-                                      child: SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      ),
+                                      child: IosLoader.small(size: 14),
                                     ),
                                   );
                                 },

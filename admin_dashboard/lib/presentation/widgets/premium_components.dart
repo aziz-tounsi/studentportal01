@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
+import '../../presentation/widgets/ios_loader.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // ░░░  AURORA GLASS — Premium UI Components  ░░░
@@ -257,13 +258,9 @@ class _PremiumActionButtonState extends State<PremiumActionButton> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
               child: widget.isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation(Colors.white),
-                      ),
+                  ? const IosLoader(
+                      size: 20,
+                      color: Colors.white,
                     )
                   : Row(
                       mainAxisSize: MainAxisSize.min,

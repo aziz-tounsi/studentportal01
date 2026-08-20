@@ -12,6 +12,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/detail_modal_sheet.dart';
 import 'write_suggestion_screen.dart';
+import '../../widgets/ios_loader.dart';
 
 class SuggestionsScreen extends ConsumerStatefulWidget {
   const SuggestionsScreen({super.key});
@@ -197,7 +198,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                   },
                   loading: () => const SliverFillRemaining(
                     child: Center(
-                      child: CircularProgressIndicator(color: Colors.white),
+                      child: IosLoader(color: Colors.white),
                     ),
                   ),
                   error: (error, stack) => SliverFillRemaining(
@@ -408,14 +409,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       child: _isSubmitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
+                          ? const IosLoader(size: 20, color: Colors.white)
                           : const Text(
                               'Envoyer',
                               style: TextStyle(
@@ -943,11 +937,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                   return Container(
                     color: Colors.grey[100],
                     child: const Center(
-                      child: SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+                      child: IosLoader(size: 14),
                     ),
                   );
                 },

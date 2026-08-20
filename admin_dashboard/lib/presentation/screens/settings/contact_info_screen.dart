@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 
 // Provider for contact info state using AsyncNotifier pattern (Riverpod 3.x)
 class ContactInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
@@ -203,7 +204,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                 _buildTopBar(context),
                 Expanded(
                   child: contactInfoAsync.when(
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () => const Center(child: IosLoader()),
                     error: (e, _) => Center(child: Text('Erreur: $e')),
                     data: (data) {
                       // Populate fields only once when data is first loaded
@@ -301,7 +302,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textOnPrimary),
+                    child: IosLoader.small(color: AppColors.textOnPrimary),
                   )
                 : const Icon(Icons.save),
             label: Text(_isLoading ? 'Sauvegarde...' : 'Sauvegarder'),

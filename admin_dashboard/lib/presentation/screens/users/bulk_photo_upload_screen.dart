@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../providers/users_provider.dart';
 import '../../../data/models/user_model.dart';
 
@@ -97,7 +98,7 @@ class _BulkPhotoUploadScreenState extends ConsumerState<BulkPhotoUploadScreen> {
                 _buildTopBar(context),
                 Expanded(
                   child: usersAsync.when(
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () => const Center(child: IosLoader()),
                     error: (e, _) => Center(child: Text('Erreur: $e')),
                     data: (state) => _buildContent(context, state.users, uploadState),
                   ),
@@ -288,7 +289,7 @@ class _BulkPhotoUploadScreenState extends ConsumerState<BulkPhotoUploadScreen> {
               ElevatedButton.icon(
                 onPressed: uploadState.isLoading ? null : () => _uploadAll(uploadState, students),
                 icon: uploadState.isLoading
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const IosLoader.small(color: Colors.white)
                     : const Icon(Icons.cloud_upload, color: Colors.white),
                 label: Text(
                   uploadState.isLoading ? 'Upload en cours...' : 'Uploader tout',

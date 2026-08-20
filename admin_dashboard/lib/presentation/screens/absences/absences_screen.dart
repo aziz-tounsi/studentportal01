@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/absences_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../../data/models/class_model.dart';
 
 class AbsencesScreen extends ConsumerStatefulWidget {
@@ -101,9 +102,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: AppShadows.card,
                             ),
-                            child: const CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation(Color(0xFF655DD5)),
-                            ),
+                            child: const IosLoader(color: Color(0xFF655DD5)),
                           ),
                         ),
                         error: (e, _) => _buildErrorState(e),
@@ -1640,7 +1639,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircularProgressIndicator(),
+                          IosLoader(),
                           SizedBox(height: 16),
                           Text('Création des absences en cours...'),
                         ],
@@ -1850,7 +1849,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                         const Center(
                           child: Padding(
                             padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
+                            child: IosLoader(),
                           ),
                         )
                       else ...[

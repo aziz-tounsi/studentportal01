@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/subjects_management_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../data/models/academic_models.dart';
 import '../../../data/models/school_models.dart';
@@ -1035,7 +1036,7 @@ class _SubjectsManagementScreenState
                       Expanded(
                         child: stateAsync.when(
                           loading: () =>
-                              const Center(child: CircularProgressIndicator()),
+                              const Center(child: IosLoader()),
                           error: (e, _) => _buildErrorState(e),
                           data: (state) => TabBarView(
                             controller: _tabController,
@@ -4665,12 +4666,30 @@ class _SubjectsManagementScreenState
             // Fetch data from provider
             final stateAsync = ref.read(subjectsManagementProvider);
             final gradeLevels = stateAsync.value?.gradeLevels ?? [];
-            final allTeachers =
+            final allTeachersUnfiltered =
                 stateAsync.value?.teachers
                     .where((t) => t.role == 'teacher')
                     .toList() ??
                 [];
+            final teacherAssignments = stateAsync.value?.teacherAssignments ?? [];
             final allExamTypes = stateAsync.value?.examTypes ?? [];
+
+            // Filter teachers by subject speciality
+            final currentSubjectName = (subject?.name ?? nameCtrl.text).toLowerCase();
+            final teacherIdsForSubject = teacherAssignments
+                .where((ta) {
+                  final taSubjectName = (ta.subjectName ?? '').toLowerCase();
+                  return taSubjectName == currentSubjectName ||
+                      currentSubjectName.contains(taSubjectName) ||
+                      taSubjectName.contains(currentSubjectName);
+                })
+                .map((ta) => ta.teacherId)
+                .toSet();
+
+            // If no matching assignments found (new subject or no assignments yet), show all teachers
+            final allTeachers = teacherIdsForSubject.isEmpty
+                ? allTeachersUnfiltered
+                : allTeachersUnfiltered.where((t) => teacherIdsForSubject.contains(t.id)).toList();
 
             return Center(
               child: Material(
@@ -5465,11 +5484,7 @@ class _SubjectsManagementScreenState
                                                             ),
                                                           ),
                                                           child: Text(
-                                                            level
-                                                                    .code
-                                                                    .isNotEmpty
-                                                                ? level.code
-                                                                : level.name,
+                                                            level.name,
                                                             style: TextStyle(
                                                               fontSize: 12,
                                                               fontWeight:
@@ -5558,12 +5573,7 @@ class _SubjectsManagementScreenState
                                                               ),
                                                             ),
                                                             child: Text(
-                                                              section
-                                                                      .code
-                                                                      .isNotEmpty
-                                                                  ? section.code
-                                                                  : section
-                                                                        .name,
+                                                              section.name,
                                                               style: TextStyle(
                                                                 fontSize: 11,
                                                                 fontWeight:
@@ -5818,7 +5828,7 @@ class _SubjectsManagementScreenState
                                         spacing: 8,
                                         runSpacing: 8,
                                         children: selectedTeacherIds.map((tId) {
-                                          final teacher = allTeachers
+                                          final teacher = allTeachersUnfiltered
                                               .where((t) => t.id == tId)
                                               .firstOrNull;
                                           return Container(
@@ -8451,7 +8461,7 @@ class _SubjectsManagementScreenState
                             textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                           ),
                           child: isCreating
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? const IosLoader.small(color: Colors.white)
                               : const Text('Créer le professeur'),
                         ),
                       ),

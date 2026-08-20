@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -612,14 +613,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               ],
             ),
             child: const Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6B5CE7)),
-                ),
-              ),
+              child: IosLoader(size: 28, color: Color(0xFF6B5CE7)),
             ),
           ),
           const SizedBox(height: 16),

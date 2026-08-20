@@ -6,6 +6,7 @@ import 'package:excel/excel.dart' hide Border, TextSpan, BorderStyle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/ios_loader.dart';
 
 /// Simple bulk import screen - bypasses DataTable2 issues
 class SimpleBulkImportScreen extends ConsumerStatefulWidget {
@@ -494,7 +495,7 @@ class _SimpleBulkImportScreenState
                         child: _isLoading
                             ? Padding(
                                 padding: const EdgeInsets.all(20),
-                                child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary),
+                                child: IosLoader(color: AppColors.primary),
                               )
                             : Icon(Icons.cloud_upload_outlined, size: 40, color: AppColors.primary),
                       ),
@@ -738,10 +739,7 @@ class _SimpleBulkImportScreenState
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.textOnPrimary,
-                            ),
+                              child: IosLoader.small(color: AppColors.textOnPrimary),
                           )
                         : const Icon(Icons.upload),
                     label: Text(

@@ -8,6 +8,7 @@ import '../widgets/results/grading_config_dialog.dart';
 import '../widgets/results/bulk_grade_entry_dialog.dart';
 import '../widgets/results/single_student_grade_entry.dart';
 import '../widgets/admin_sidebar.dart';
+import '../widgets/ios_loader.dart';
 import '../widgets/user_avatar.dart';
 
 /// View mode for the results screen
@@ -1137,7 +1138,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: Color(0xFF3B82F6)),
+          IosLoader(color: Color(0xFF3B82F6)),
           SizedBox(height: 24),
           Text(
             'Calcul des résultats...',

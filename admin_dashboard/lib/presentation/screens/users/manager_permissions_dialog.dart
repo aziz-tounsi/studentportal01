@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../widgets/ios_loader.dart';
 
 /// Permission categories and their permissions
 const Map<String, List<Map<String, String>>> permissionCategories = {
@@ -259,7 +260,7 @@ class _ManagerPermissionsDialogState extends ConsumerState<ManagerPermissionsDia
             // Content
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: IosLoader())
                   : ListView(
                       padding: const EdgeInsets.all(16),
                       children: permissionCategories.entries.map((entry) {
@@ -358,7 +359,7 @@ class _ManagerPermissionsDialogState extends ConsumerState<ManagerPermissionsDia
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     ),
                     icon: _isSaving
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const IosLoader.small(color: Colors.white)
                         : const Icon(Icons.save, color: Colors.white),
                     label: const Text('Enregistrer', style: TextStyle(color: Colors.white)),
                   ),

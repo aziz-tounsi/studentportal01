@@ -10,6 +10,7 @@ import '../../providers/subjects_management_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/ios_loader.dart';
 
 const _brand = Color(0xFF655DD5);
 const _brandLight = Color(0xFFEEECFB);
@@ -226,7 +227,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           const AdminSidebar(currentRoute: '/classes'),
           Expanded(
             child: dataAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: _brand)),
+              loading: () => const Center(child: IosLoader(color: _brand)),
               error: (e, _) => _buildErrorState(e),
               data: (data) => _buildContent(context, data),
             ),
@@ -981,7 +982,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 12, offset: const Offset(0, 2))],
         ),
         child: Row(children: const [
-          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _brand)),
+          IosLoader.small(color: _brand),
           SizedBox(width: 12),
           Text('Chargement des enseignants...', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
         ]),
@@ -1713,7 +1714,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
 
         // ── Timeline ──
         timetableAsync.when(
-          loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(strokeWidth: 2, color: _brand))),
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: IosLoader(color: _brand))),
           error: (_, __) => Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(10)),
@@ -2324,7 +2325,7 @@ class _ManageTeachersDialogState extends State<_ManageTeachersDialog> {
             // List
             Flexible(
               child: _loading
-                  ? const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: _brand)))
+                  ? const Center(child: Padding(padding: EdgeInsets.all(32), child: IosLoader(color: _brand)))
                   : _search.isNotEmpty
                       ? _buildSearchResults()
                       : (_assignments.isEmpty)

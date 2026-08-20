@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/ios_loader.dart';
 
 // User detail provider
 final userDetailProvider = FutureProvider.family<UserDetailData?, String>((ref, userId) async {
@@ -157,7 +158,7 @@ class UserDetailScreen extends ConsumerWidget {
                 _buildTopBar(context),
                 Expanded(
                   child: userDetailAsync.when(
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () => const Center(child: IosLoader()),
                     error: (e, _) => Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../presentation/widgets/ios_loader.dart';
 import '../../../data/models/student_result_model.dart';
 import '../../../data/models/grading_config_model.dart';
 import '../user_avatar.dart';
@@ -194,13 +195,9 @@ class _GradeEntryDialogState extends State<GradeEntryDialog> {
                   FilledButton.icon(
                     onPressed: _isSaving ? null : _saveGrades,
                     icon: _isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.textOnPrimary,
-                            ),
+                        ? const IosLoader(
+                            size: 18,
+                            color: AppColors.textOnPrimary,
                           )
                         : const Icon(Icons.save),
                     label: const Text('Enregistrer'),

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/ios_loader.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // ░░░  AURORA GLASS — Login Screen  ░░░
@@ -764,14 +765,7 @@ class _AuroraLoginButtonState extends State<_AuroraLoginButton> {
             borderRadius: BorderRadius.circular(AppRadius.sm),
             child: Center(
               child: widget.isLoading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
+                  ? const IosLoader(size: 22, color: Colors.white)
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

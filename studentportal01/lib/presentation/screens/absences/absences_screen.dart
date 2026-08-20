@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -280,7 +281,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                   data: (absences) => _buildContent(context, absences, l10n),
                   loading: () => const SliverFillRemaining(
                     child: Center(
-                      child: CircularProgressIndicator(color: _accentColor),
+                      child: IosLoader(color: _accentColor),
                     ),
                   ),
                   error: (error, stack) => SliverFillRemaining(

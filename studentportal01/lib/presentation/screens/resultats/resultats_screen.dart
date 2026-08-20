@@ -8,6 +8,7 @@ import '../../../data/models/grade_model.dart';
 import '../../../data/repositories/results_repository.dart';
 import '../../../data/services/core_data_service.dart';
 import '../../providers/student_context_provider.dart' as ctx;
+import '../../widgets/ios_loader.dart';
 
 // Results repository provider
 final resultsRepositoryProvider = Provider<StudentResultsRepository>((ref) {
@@ -494,7 +495,7 @@ class ResultatsScreen extends ConsumerWidget {
                   ],
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: IosLoader()),
               error: (error, stack) => Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

@@ -399,6 +399,7 @@ class PaymentPlanInfo {
   final double amountTotal;
   final String currency;
   final String? description;
+  final String? category;
   final String? academicYear;
   final List<PaymentInfo> payments;
   final double totalPaid;
@@ -410,6 +411,7 @@ class PaymentPlanInfo {
     required this.amountTotal,
     required this.currency,
     this.description,
+    this.category,
     this.academicYear,
     required this.payments,
     required this.totalPaid,
@@ -423,6 +425,7 @@ class PaymentPlanInfo {
       amountTotal: (json['amount_total'] as num?)?.toDouble() ?? 0,
       currency: json['currency'] ?? 'TND',
       description: json['description'],
+      category: json['category'],
       academicYear: json['academic_year'],
       payments: (json['payments'] as List?)
           ?.map((e) => PaymentInfo.fromJson(e as Map<String, dynamic>))
@@ -473,6 +476,25 @@ class PaymentInfo {
   bool get isPending => status == 'pending';
   bool get isOverdue => status == 'overdue' || 
       (isPending && dueDate != null && dueDate!.isBefore(DateTime.now()));
+
+  String get displayMethod {
+    switch (method?.toLowerCase()) {
+      case 'cash':
+      case 'especes':
+        return 'Espèces';
+      case 'bank_transfer':
+      case 'virement':
+        return 'Virement bancaire';
+      case 'card':
+      case 'carte':
+        return 'Carte bancaire';
+      case 'check':
+      case 'cheque':
+        return 'Chèque';
+      default:
+        return method ?? 'Non spécifié';
+    }
+  }
 }
 
 /// Core Data Service - Singleton

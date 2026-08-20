@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/users_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/ios_loader.dart';
 
 /// Provider for pending password reset count (for notification badges)
 final pendingPasswordResetCountProvider = FutureProvider.autoDispose<int>((
@@ -88,7 +89,7 @@ class _PasswordResetRequestsScreenState
                 Expanded(
                   child: requestsAsync.when(
                     loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                        const Center(child: IosLoader()),
                     error: (e, stack) => Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

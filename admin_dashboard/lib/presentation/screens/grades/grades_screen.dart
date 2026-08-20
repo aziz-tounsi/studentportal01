@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/grades_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 
 class GradesScreen extends ConsumerWidget {
   const GradesScreen({super.key});
@@ -23,7 +24,7 @@ class GradesScreen extends ConsumerWidget {
               children: [
                 _buildTopBar(context),
                 Expanded(child: gradesAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => const Center(child: IosLoader()),
                   error: (e, _) => Center(child: Text('Erreur: $e')),
                   data: (state) => _buildContent(context, ref, state),
                 )),

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 
 class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
   @override
@@ -239,7 +240,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                 Expanded(
                   child: schoolAsync.when(
                     loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                        const Center(child: IosLoader()),
                     error: (e, _) => Center(child: Text('Erreur: $e')),
                     data: (data) {
                       if (_nameController.text.isEmpty &&
@@ -335,10 +336,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textOnPrimary,
-                    ),
+                    child: IosLoader.small(color: AppColors.textOnPrimary),
                   )
                 : const Icon(Icons.save),
             label: Text(_isLoading ? 'Sauvegarde...' : 'Sauvegarder'),
@@ -404,7 +402,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                         ),
                         child: _uploadingLogo
                             ? const Center(
-                                child: CircularProgressIndicator())
+                                child: IosLoader())
                             : _logoUrl != null
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(14),

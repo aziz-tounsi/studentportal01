@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 
 const _brand = Color(0xFF655DD5);
@@ -156,7 +157,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         const AdminSidebar(currentRoute: '/users'),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator(color: _brand))
+              ? const Center(child: IosLoader(color: _brand))
               : _user == null
                   ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1435,7 +1436,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                                         }
                                       },
                                 icon: saving
-                                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                    ? const IosLoader.small(color: Colors.white)
                                     : const Icon(Icons.check_rounded, size: 17),
                                 label: const Text('Enregistrer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                                 style: ElevatedButton.styleFrom(

@@ -14,6 +14,7 @@ import '../../providers/building_provider.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/ios_loader.dart';
 
 // ===================== MODELS =====================
 
@@ -159,8 +160,8 @@ final selectedClassProvider = StateProvider<ClassInfo?>((ref) => null);
 // Classes list provider
 final classesListProvider = FutureProvider.autoDispose<List<ClassInfo>>((ref) async {
   ref.keepAlive();
-  final supabase = SupabaseConfig.client;
-  final user = supabase.auth.currentUser;
+  final supabase = SupabaseConfig.adminClient;
+  final user = SupabaseConfig.client.auth.currentUser;
   if (user == null) return [];
 
   final profile = await supabase
@@ -198,7 +199,7 @@ final classSubjectOfferingsProvider =
       ref.keepAlive();
       final classId = params.$1;
       final semesterId = params.$2;
-      final supabase = SupabaseConfig.client;
+      final supabase = SupabaseConfig.adminClient;
 
       try {
         // Get class info to determine niveau_id and section_id
@@ -372,151 +373,125 @@ final classSubjectOfferingsProvider =
 final classTimetableSlotsProvider =
     FutureProvider.family.autoDispose<List<TimetableSlotAdmin>, String>((ref, classId) async {
       ref.keepAlive();
-      final supabase = SupabaseConfig.client;
+      final supabase = SupabaseConfig.adminClient;
       final semesterId = ref.watch(currentSemesterIdProvider);
 
       try {
-        // Build query with semester filter if available
-        var query = supabase
+        // Get all subject_offerings for this class first (no semester filter to be safe)
+        final offeringsResp = await supabase
+            .from('subject_offerings')
+            .select('id, subject_id, teacher_id, subjects(name, code)')
+            .eq('class_id', classId);
+
+        final offerings = offeringsResp as List;
+        if (offerings.isEmpty) return [];
+
+        final offeringIds = offerings.map((o) => o['id'] as String).toList();
+
+        // Get timetable slots for these offerings
+        final slotsResp = await supabase
             .from('timetable_slots')
-            .select(
-              '*, subject_offerings!inner(subject_id, class_id, semester_id, teacher_id, subjects(name, code), classes(id, name), users(full_name))',
-            )
-            .eq('subject_offerings.class_id', classId);
+            .select('*')
+            .inFilter('subject_offering_id', offeringIds)
+            .order('day_of_week')
+            .order('start_time');
 
-        // Filter by semester if selected
-        if (semesterId != null) {
-          query = query.eq('subject_offerings.semester_id', semesterId);
+        final slots = slotsResp as List;
+        if (slots.isEmpty) return [];
+
+        // Build lookup maps
+        final Map<String, dynamic> offeringsMap = {};
+        final Map<String, String> offeringSubjectIdMap = {};
+        for (var o in offerings) {
+          offeringsMap[o['id']] = o;
+          offeringSubjectIdMap[o['id'] as String] = (o['subject_id'] as String?) ?? '';
         }
 
-        final data = await query.order('day_of_week').order('start_time');
-
-        return (data as List)
-            .map((e) => TimetableSlotAdmin.fromJson(e))
-            .toList();
-      } catch (e) {
-        // Fallback: fetch slots and join manually
-        debugPrint('classTimetableSlotsProvider error: $e - using fallback');
+        // Fetch teacher_assignments to resolve teachers (subject_offerings.teacher_id may be NULL)
+        final Map<String, String> subjectClassTeacherMap = {};
         try {
-          // First get all subject_offerings for this class
-          final offerings = await supabase
-              .from('subject_offerings')
-              .select('id, subject_id, teacher_id')
-              .eq('class_id', classId);
+          final teacherAssResp = await supabase
+              .from('teacher_assignments')
+              .select('subject_id, class_id, users!teacher_id(full_name)')
+              .eq('is_active', true);
 
-          if ((offerings as List).isEmpty) return [];
-
-          final offeringIds = offerings.map((o) => o['id'] as String).toList();
-
-          // Get timetable slots for these offerings
-          final slots = await supabase
-              .from('timetable_slots')
-              .select('*')
-              .inFilter('subject_offering_id', offeringIds)
-              .order('day_of_week')
-              .order('start_time');
-
-          if ((slots as List).isEmpty) return [];
-
-          // Get subjects and teachers
-          final subjectIds = offerings
-              .map((o) => o['subject_id'])
-              .where((id) => id != null)
-              .toSet()
-              .toList();
-          final teacherIds = offerings
-              .map((o) => o['teacher_id'])
-              .where((id) => id != null)
-              .toSet()
-              .toList();
-
-          Map<String, dynamic> subjectsMap = {};
-          Map<String, dynamic> teachersMap = {};
-          Map<String, dynamic> offeringsMap = {};
-
-          for (var o in offerings) {
-            offeringsMap[o['id']] = o;
-          }
-
-          if (subjectIds.isNotEmpty) {
-            final subjects = await supabase
-                .from('subjects')
-                .select('id, name, code')
-                .inFilter('id', subjectIds);
-            for (var s in (subjects as List)) {
-              subjectsMap[s['id']] = s;
+          for (final ta in (teacherAssResp as List)) {
+            final subjectId = ta['subject_id'] as String?;
+            final clsId = ta['class_id'] as String?;
+            final teacherFullName = (ta['users'] as Map?)?['full_name'] as String?;
+            if (subjectId != null && clsId != null && teacherFullName != null) {
+              subjectClassTeacherMap['${subjectId}_$clsId'] = teacherFullName;
             }
           }
+        } catch (_) {}
 
-          if (teacherIds.isNotEmpty) {
-            final teachers = await supabase
-                .from('users')
-                .select('id, full_name')
-                .inFilter('id', teacherIds);
-            for (var t in (teachers as List)) {
-              teachersMap[t['id']] = t;
-            }
+        // Get class name
+        final classData = await supabase
+            .from('classes')
+            .select('id, name')
+            .eq('id', classId)
+            .maybeSingle();
+
+        return slots.map((slot) {
+          final offering = offeringsMap[slot['subject_offering_id']];
+          final subject = offering?['subjects'];
+          final subjectId = offering?['subject_id'] as String?;
+
+          // Resolve teacher: teacher_assignments → timetable_slots.teacher_name
+          String teacherName = subjectClassTeacherMap['${subjectId}_$classId'] ?? '';
+          if (teacherName.isEmpty) {
+            teacherName = (slot['teacher_name'] as String?) ?? '';
           }
 
-          // Get class info
-          final classData = await supabase
-              .from('classes')
-              .select('id, name')
-              .eq('id', classId)
-              .maybeSingle();
+          // Shorten room: extract just the room name from "Bloc A – Principal · 2ème étage · Salle 204"
+          String rawRoom = (slot['room'] as String?) ?? '';
+          String shortRoom = rawRoom;
+          if (rawRoom.contains('·')) {
+            final parts = rawRoom.split('·').map((s) => s.trim()).toList();
+            shortRoom = parts.last; // last part is the room name
+          }
 
-          return slots.map((slot) {
-            final offering = offeringsMap[slot['subject_offering_id']];
-            final subject = offering != null
-                ? subjectsMap[offering['subject_id']]
-                : null;
-            final teacher = offering != null
-                ? teachersMap[offering['teacher_id']]
-                : null;
-
-            // Convert day_of_week from string enum to integer
-            int parseDayOfWeek(dynamic value) {
-              if (value is int) return value;
-              if (value is String) {
-                switch (value.toLowerCase()) {
-                  case 'monday':
-                    return 1;
-                  case 'tuesday':
-                    return 2;
-                  case 'wednesday':
-                    return 3;
-                  case 'thursday':
-                    return 4;
-                  case 'friday':
-                    return 5;
-                  case 'saturday':
-                    return 6;
-                  case 'sunday':
-                    return 7;
-                  default:
-                    return 1;
-                }
+          int parseDayOfWeek(dynamic value) {
+            if (value is int) return value;
+            if (value is String) {
+              switch (value.toLowerCase()) {
+                case 'monday':
+                  return 1;
+                case 'tuesday':
+                  return 2;
+                case 'wednesday':
+                  return 3;
+                case 'thursday':
+                  return 4;
+                case 'friday':
+                  return 5;
+                case 'saturday':
+                  return 6;
+                case 'sunday':
+                  return 7;
+                default:
+                  return 1;
               }
-              return 1;
             }
+            return 1;
+          }
 
-            return TimetableSlotAdmin(
-              id: slot['id']?.toString() ?? '',
-              subjectOfferingId: slot['subject_offering_id']?.toString() ?? '',
-              dayOfWeek: parseDayOfWeek(slot['day_of_week']),
-              startTime: slot['start_time']?.toString() ?? '08:00',
-              endTime: slot['end_time']?.toString() ?? '09:00',
-              room: slot['room']?.toString(),
-              subjectName: subject?['name']?.toString(),
-              subjectCode: subject?['code']?.toString(),
-              className: classData?['name']?.toString(),
-              teacherName: teacher?['full_name']?.toString(),
-            );
-          }).toList();
-        } catch (e2) {
-          debugPrint('classTimetableSlotsProvider fallback error: $e2');
-          return [];
-        }
+          return TimetableSlotAdmin(
+            id: slot['id']?.toString() ?? '',
+            subjectOfferingId: slot['subject_offering_id']?.toString() ?? '',
+            dayOfWeek: parseDayOfWeek(slot['day_of_week']),
+            startTime: slot['start_time']?.toString() ?? '08:00',
+            endTime: slot['end_time']?.toString() ?? '09:00',
+            room: shortRoom.isNotEmpty ? shortRoom : rawRoom,
+            subjectName: subject?['name']?.toString(),
+            subjectCode: subject?['code']?.toString(),
+            className: classData?['name']?.toString(),
+            teacherName: teacherName.isNotEmpty ? teacherName : null,
+          );
+        }).toList();
+      } catch (e) {
+        debugPrint('classTimetableSlotsProvider error: $e');
+        return [];
       }
     });
 
@@ -1111,7 +1086,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         // ── Niveau list with expandable classes ──
         Expanded(
           child: classesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: IosLoader()),
             error: (e, _) => Center(child: Text('Erreur: $e', style: TextStyle(color: AppColors.slate500))),
             data: (classes) {
               if (classes.isEmpty) {
@@ -1751,7 +1726,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(),
+                IosLoader(),
                 SizedBox(height: 16),
                 Text('Chargement des matières...'),
               ],
@@ -2052,7 +2027,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
             // Timetable grid
             Expanded(
               child: allSlotsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: IosLoader()),
                 error: (e, _) => Center(child: Text('Erreur: $e')),
                 data: (allSlots) {
                   final filteredSlots = slotsAsync.hasValue
@@ -2458,7 +2433,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                     ),
                   ),
                 ),
-              if (slotWidth > 100 && slot.teacherName != null && slot.teacherName!.isNotEmpty)
+              if (slot.teacherName != null && slot.teacherName!.isNotEmpty)
                 Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -2563,6 +2538,18 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       ),
       items: [
         PopupMenuItem<String>(
+          value: 'view',
+          height: 44,
+          child: Row(
+            children: const [
+              Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF3B82F6)),
+              SizedBox(width: 12),
+              Text('Voir', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937))),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<String>(
           value: 'edit',
           height: 44,
           child: Row(
@@ -2587,9 +2574,140 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         ),
       ],
     ).then((value) {
+      if (value == 'view') _showSlotDetailsDialog(slot);
       if (value == 'edit') _showEditSlotDialog(slot);
       if (value == 'delete') _showDeleteSlotConfirmation(slot);
     });
+  }
+
+  void _showSlotDetailsDialog(TimetableSlotAdmin slot) {
+    final color = _getSubjectColor(slot.subjectCode ?? 'default');
+    showDialog(
+      context: context,
+      barrierColor: Colors.black26,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 380,
+          padding: const EdgeInsets.all(0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header with gradient
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [color, color.withOpacity(0.85)],
+                  ),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          slot.subjectCode ?? '?',
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            slot.subjectName ?? slot.subjectCode ?? 'N/A',
+                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
+                          if (slot.className != null)
+                            Text(
+                              'Classe: ${slot.className}',
+                              style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
+                            ),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Icon(Icons.close, color: Colors.white.withOpacity(0.7), size: 20),
+                    ),
+                  ],
+                ),
+              ),
+              // Details
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.person_outline_rounded, 'Professeur', slot.teacherName ?? 'Non assigné'),
+                    const SizedBox(height: 14),
+                    _buildDetailRow(Icons.calendar_today_outlined, 'Jour', _dayLabels[slot.dayOfWeek - 1]),
+                    const SizedBox(height: 14),
+                    _buildDetailRow(Icons.access_time_rounded, 'Horaire', '${_formatTime(slot.startTime)} - ${_formatTime(slot.endTime)}'),
+                    const SizedBox(height: 14),
+                    _buildDetailRow(Icons.door_sliding_outlined, 'Salle', slot.room ?? 'Non définie'),
+                  ],
+                ),
+              ),
+              // Footer
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Fermer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: const Color(0xFF6B7280)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937))),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   void _showEditSlotDialog(TimetableSlotAdmin slot) {
@@ -3269,7 +3387,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     String? room,
   ) async {
     try {
-      await SupabaseConfig.client.from('timetable_slots').update({
+      await SupabaseConfig.adminClient.from('timetable_slots').update({
         'day_of_week': _dayToEnum(dayOfWeek),
         'start_time': startTime,
         'end_time': endTime,
@@ -3784,38 +3902,6 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                   )).toList(),
                                   onChanged: (v) => setDialogState(() => selectedOffering = v),
                                 ),
-                                // ── Heures hebdomadaires card ──
-                                if (selectedOffering != null) ...[
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF0FDF4),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFFBBF7D0)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Heures hebdomadaires', style: TextStyle(fontSize: 10.5, color: Color(0xFF16A34A), fontWeight: FontWeight.w600, letterSpacing: 0.2)),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            _buildHoursChip('Prévu', expectedHours, const Color(0xFF6366F1)),
-                                            const SizedBox(width: 6),
-                                            _buildHoursChip('Planifié', scheduledHoursForOffering + newSlotDuration, const Color(0xFF10B981)),
-                                            if (newSlotDuration > 0) ...[
-                                              const SizedBox(width: 6),
-                                              _buildHoursChip('+${newSlotDuration.toStringAsFixed(1)}h', 0, const Color(0xFF10B981), isLabel: true),
-                                            ],
-                                            const SizedBox(width: 6),
-                                            _buildHoursChip('Reste', remainingHours < 0 ? 0 : remainingHours, remainingHours <= 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
                                 const SizedBox(height: 24),
                                 // ── PLANIFICATION ──
                                 Row(
@@ -4200,7 +4286,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     String? room,
   ) async {
     try {
-      await SupabaseConfig.client.from('timetable_slots').insert({
+      await SupabaseConfig.adminClient.from('timetable_slots').insert({
         'subject_offering_id': subjectOfferingId,
         'day_of_week': _dayToEnum(dayOfWeek),
         'start_time': startTime,
@@ -4499,14 +4585,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
           const SnackBar(
             content: Row(
               children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
+                IosLoader.small(color: Colors.white),
                 SizedBox(width: 12),
                 Text('Création des matières en cours...'),
               ],
@@ -5140,7 +5219,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                             shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
                           ),
                           child: isUploading
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? const IosLoader.small(color: Colors.white)
                               : const Text('Lancer l\'importation', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
                         ),
                       ),
@@ -5355,7 +5434,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
           )
           .toList();
 
-      await SupabaseConfig.client.from('timetable_slots').insert(inserts);
+      await SupabaseConfig.adminClient.from('timetable_slots').insert(inserts);
 
       // Invalidate providers to refresh the timetable display
       ref.invalidate(classTimetableSlotsProvider(classId));

@@ -14,6 +14,7 @@ import 'user_form_dialog.dart';
 import 'user_profile_screen.dart';
 import 'bulk_photo_upload_screen.dart';
 import 'simple_bulk_import_screen.dart';
+import '../../widgets/ios_loader.dart';
 
 class UsersScreen extends ConsumerStatefulWidget {
   const UsersScreen({super.key});
@@ -117,7 +118,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                         ),
                         child: const SizedBox(
                           width: 36, height: 36,
-                          child: CircularProgressIndicator(strokeWidth: 3, valueColor: AlwaysStoppedAnimation(AppColors.primary)),
+                          child: IosLoader(color: AppColors.primary),
                         ),
                       ),
                     ),
@@ -1778,10 +1779,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                        child: IosLoader.small(color: Colors.white),
                       ),
                       const SizedBox(width: 12),
                       Text('Suppression de $count utilisateurs en cours...'),

@@ -91,6 +91,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(
       extendBody: true,
       drawer: _buildDrawer(context, l10n, ref),
+      onDrawerChanged: (isOpen) {
+        ref.read(navBarHiddenProvider.notifier).state = isOpen;
+      },
       body: LayoutBuilder(
         builder: (context, constraints) {
           final screenHeight = constraints.maxHeight;
@@ -475,7 +478,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   const Spacer(),
                   // White Logout Button
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: GestureDetector(
                       onTap: () async {
                         Navigator.pop(context);
@@ -519,7 +522,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 60),
                 ],
               ),
             ),

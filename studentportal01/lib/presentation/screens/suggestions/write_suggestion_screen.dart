@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/suggestions_provider.dart';
+import '../../widgets/ios_loader.dart';
 
 class WriteSuggestionScreen extends ConsumerStatefulWidget {
   const WriteSuggestionScreen({super.key});
@@ -242,7 +243,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -255,7 +256,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
         data: Theme.of(context).copyWith(
           popupMenuTheme: PopupMenuThemeData(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(24),
             ),
             elevation: 8,
           ),
@@ -656,7 +657,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                             Color(0xFFFF5CA0),
                                           ],
                                         ),
-                                        borderRadius: BorderRadius.circular(16),
+                                        borderRadius: BorderRadius.circular(24),
                                         boxShadow: [
                                           BoxShadow(
                                             color: const Color(
@@ -673,20 +674,10 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                           onTap: _isSubmitting
                                               ? null
                                               : _submitSuggestion,
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(24),
                                           child: Center(
                                             child: _isSubmitting
-                                                ? const SizedBox(
-                                                    height: 24,
-                                                    width: 24,
-                                                    child: CircularProgressIndicator(
-                                                      strokeWidth: 2.5,
-                                                      valueColor:
-                                                          AlwaysStoppedAnimation(
-                                                            Colors.white,
-                                                          ),
-                                                    ),
-                                                  )
+                                                ? const IosLoader(size: 24, color: Colors.white)
                                                 : Row(
                                                     mainAxisAlignment:
                                                         MainAxisAlignment.center,

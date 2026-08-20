@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../presentation/widgets/ios_loader.dart';
 import 'subject_exam_config_dialog.dart';
 import '../user_avatar.dart';
 
@@ -349,11 +350,11 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
           Expanded(
             child: _isLoadingGrades
                 ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IosLoader(),
+                            SizedBox(height: 16),
                         Text('Chargement des notes...'),
                       ],
                     ),
@@ -776,13 +777,9 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
             child: ElevatedButton.icon(
               onPressed: _isSaving ? null : _saveGrades,
               icon: _isSaving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
+                  ? const IosLoader(
+                      size: 16,
+                      color: Colors.white,
                     )
                   : const Icon(Icons.save, size: 18),
               label: Text(

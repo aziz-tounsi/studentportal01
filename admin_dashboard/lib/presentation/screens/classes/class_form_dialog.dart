@@ -6,6 +6,7 @@ import '../../providers/classes_provider.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../providers/building_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/ios_loader.dart';
 
 class ClassFormDialog extends ConsumerStatefulWidget {
   final ClassModel? classModel;
@@ -300,7 +301,7 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
                         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                       ),
                       child: _isLoading
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const IosLoader.small(color: Colors.white)
                           : Text(isEditing ? 'Enregistrer' : 'Créer'),
                     ),
                   ),

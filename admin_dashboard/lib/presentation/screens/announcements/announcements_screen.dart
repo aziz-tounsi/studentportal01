@@ -19,6 +19,7 @@ import '../../providers/subjects_management_provider.dart';
 import '../../../data/models/building_models.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/ios_loader.dart';
 
 /// Text formatter that capitalizes the first letter of each word
 class CapitalizeWordsFormatter extends TextInputFormatter {
@@ -404,7 +405,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                     Expanded(
                       child: announcementsAsync.when(
                         loading: () =>
-                            const Center(child: CircularProgressIndicator()),
+                            const Center(child: IosLoader()),
                         error: (e, _) => Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -2971,11 +2972,7 @@ class _AnnouncementComposerDialogState
               border: Border.all(color: AppColors.slate200),
             ),
             child: const Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
-              ),
+              child: IosLoader.small(color: AppColors.secondary),
             ),
           ),
           error: (e, _) => Container(
@@ -3189,7 +3186,7 @@ class _AnnouncementComposerDialogState
             subjectsAsync.when(
               loading: () => const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                child: Center(child: IosLoader.small()),
               ),
               error: (_, __) => const SizedBox.shrink(),
               data: (state) {
@@ -3974,10 +3971,7 @@ class _AnnouncementComposerDialogState
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Row(
                   children: [
-                    SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
-                    ),
+                    IosLoader.small(color: AppColors.secondary),
                     const SizedBox(width: 12),
                     Text('Chargement des classes...', style: TextStyle(fontSize: 13, color: AppColors.slate400)),
                   ],
@@ -4126,10 +4120,7 @@ class _AnnouncementComposerDialogState
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Row(
                   children: [
-                    SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
-                    ),
+                    IosLoader.small(color: AppColors.secondary),
                     const SizedBox(width: 12),
                     Text('Chargement des élèves...', style: TextStyle(fontSize: 13, color: AppColors.slate400)),
                   ],
@@ -5472,7 +5463,7 @@ class _AnnouncementComposerDialogState
       builder: (context, ref, child) {
         final buildingAsync = ref.watch(buildingProvider);
         return buildingAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: IosLoader()),
           error: (e, _) => Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -5774,7 +5765,7 @@ class _AnnouncementComposerDialogState
               ],
             );
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: IosLoader()),
           error: (e, s) => Text('Erreur: $e'),
         );
       },
@@ -6535,11 +6526,7 @@ class _AnnouncementComposerDialogState
             child: ElevatedButton.icon(
               onPressed: _isLoading ? null : _save,
               icon: _isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
+                  ? const IosLoader.small(color: Colors.white)
                   : Icon(isEditing ? Icons.save_rounded : Icons.send_rounded, size: 16),
               label: Text(
                 isEditing ? 'Enregistrer' : 'Publier l\'annonce',

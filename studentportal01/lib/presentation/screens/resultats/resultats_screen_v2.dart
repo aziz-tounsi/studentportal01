@@ -6,6 +6,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/grade_model.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/semester_navigator.dart';
+import '../../widgets/ios_loader.dart';
 
 // Import providers from the original file
 import 'resultats_screen.dart' show gradesProvider, resultatsSemesterProvider;
@@ -121,7 +122,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                 data: (grades) => _buildContent(context, grades, selectedSemester, l10n),
                 loading: () => const SliverFillRemaining(
                   child: Center(
-                    child: CircularProgressIndicator(color: Color(0xFF06B6D4)),
+                    child: IosLoader(color: Color(0xFF06B6D4)),
                   ),
                 ),
                 error: (error, stack) => SliverFillRemaining(
@@ -467,7 +468,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     );
   }
 
-  /// Hero Progress Card — pink gradient like the web "Resultats en cours" design
+  /// Hero Progress Card — blue gradient matching the header icon glow
   Widget _buildPendingResultsCard(BuildContext context, List<SubjectGradesSummary> grades) {
     final completedCount = grades.where((g) => g.average != null).length;
     final totalCount = grades.length;
@@ -481,12 +482,12 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFF2D78), Color(0xFFB7004F), Color(0xFF8A003C)],
+            colors: [Color(0xFF06B6D4), Color(0xFF3B82F6), Color(0xFF2563EB)],
           ),
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFB7004F).withOpacity(0.5),
+              color: const Color(0xFF06B6D4).withOpacity(0.5),
               blurRadius: 50,
               offset: const Offset(0, 20),
             ),
@@ -494,27 +495,6 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
         ),
         child: Stack(
           children: [
-            // Ambient glow
-            Positioned(
-              top: -60, right: -60,
-              child: Container(
-                width: 160, height: 160,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -60, left: -60,
-              child: Container(
-                width: 160, height: 160,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.08),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
             // Content
             Column(
               children: [
@@ -595,7 +575,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           ),
                           child: const Icon(
                             Icons.task_alt_rounded,
-                            color: Color(0xFFB7004F),
+                            color: Color(0xFF3B82F6),
                             size: 36,
                           ),
                         ),

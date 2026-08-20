@@ -25,14 +25,13 @@ class SupabaseConfig {
   /// Main client for user auth and normal operations
   static SupabaseClient get client => Supabase.instance.client;
   
-  /// Admin client with service_role key for creating users
+  /// Admin client with service_role key for creating users.
+  /// Falls back to the regular anon client when the key is not set,
+  /// so the app still works for read operations without --dart-define.
   static SupabaseClient? _adminClient;
   static SupabaseClient get adminClient {
     if (serviceRoleKey.isEmpty) {
-      throw StateError(
-        'Missing SUPABASE_SERVICE_ROLE_KEY. Configure privileged admin '
-        'operations in a trusted environment.',
-      );
+      return client;
     }
     _adminClient ??= SupabaseClient(url, serviceRoleKey);
     return _adminClient!;

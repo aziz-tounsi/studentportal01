@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/announcements_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/detail_modal_sheet.dart';
+import '../../widgets/ios_loader.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -524,7 +525,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 child: Center(
                   child: Padding(
                     padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator(),
+                    child: IosLoader(),
                   ),
                 ),
               )
@@ -534,7 +535,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 child: Center(
                   child: Padding(
                     padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator(),
+                    child: IosLoader(),
                   ),
                 ),
               ),
@@ -840,11 +841,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                                       return Container(
                                         color: Colors.grey[100],
                                         child: const Center(
-                                          child: SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          ),
+                                          child: IosLoader(size: 14),
                                         ),
                                       );
                                     },

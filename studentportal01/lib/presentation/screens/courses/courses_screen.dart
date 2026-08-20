@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/course_model.dart';
 import '../../providers/course_provider.dart';
+import '../../widgets/ios_loader.dart';
 
 class CoursesScreen extends ConsumerStatefulWidget {
   const CoursesScreen({super.key});
@@ -165,7 +166,7 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
                 );
               },
               loading: () => const Center(
-                child: CircularProgressIndicator(),
+                child: IosLoader(),
               ),
               error: (error, stack) => Center(
                 child: Column(

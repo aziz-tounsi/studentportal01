@@ -11,6 +11,7 @@ import '../../../data/models/user_model.dart';
 import '../../../data/models/enrollment_model.dart';
 import '../../providers/avatar_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/ios_loader.dart';
 
 // Keep a local alias for presetAvatars to maintain compatibility
 const List<String> _presetAvatars = presetAvatars;
@@ -84,7 +85,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ),
         ),
         child: const Center(
-          child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+          child: IosLoader(color: Color(0xFF6366F1)),
         ),
       );
     }

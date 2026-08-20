@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../widgets/ios_loader.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 
@@ -281,14 +282,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 ),
                 child: isSubmitting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
+                    ? const IosLoader(size: 20, color: Colors.white)
                     : const Text('Envoyer la demande'),
               ),
             ],
@@ -653,16 +647,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       child: AnimatedContainer(
                                         duration: const Duration(milliseconds: 300),
                                         child: authState.isLoading
-                                            ? const SizedBox(
-                                                width: 24,
-                                                height: 24,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                                    Colors.white,
-                                                  ),
-                                                ),
-                                              )
+                                            ? const IosLoader(size: 24, color: Colors.white)
                                             : Row(
                                                 mainAxisAlignment: MainAxisAlignment.center,
                                                 children: [

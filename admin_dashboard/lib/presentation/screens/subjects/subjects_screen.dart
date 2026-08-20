@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../../data/models/school_models.dart';
 import '../../providers/subjects_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 
 class SubjectsScreen extends ConsumerWidget {
   const SubjectsScreen({super.key});
@@ -23,7 +24,7 @@ class SubjectsScreen extends ConsumerWidget {
               children: [
                 _buildTopBar(context, ref),
                 Expanded(child: subjectsAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => const Center(child: IosLoader()),
                   error: (e, _) => Center(child: Text('Erreur: $e')),
                   data: (state) => _buildContent(context, ref, state),
                 )),

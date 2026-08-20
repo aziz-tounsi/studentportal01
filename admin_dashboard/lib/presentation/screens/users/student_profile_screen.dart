@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/ios_loader.dart';
 
 // Comprehensive student profile provider
 final studentProfileProvider =
@@ -340,7 +341,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           const AdminSidebar(currentRoute: '/users'),
           Expanded(
             child: profileAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: IosLoader()),
               error: (e, _) => Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -608,9 +609,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                     ? const SizedBox(
                                         width: 18,
                                         height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
+                                        child: IosLoader.small(),
                                       )
                                     : const Icon(
                                         Icons.camera_alt,

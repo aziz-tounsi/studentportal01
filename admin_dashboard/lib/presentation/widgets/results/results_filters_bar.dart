@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../presentation/widgets/ios_loader.dart';
 import '../../providers/results_provider.dart';
 
 class ResultsFiltersBar extends StatelessWidget {
@@ -101,13 +102,9 @@ class ResultsFiltersBar extends StatelessWidget {
                     ? null
                     : () => provider.calculateResults(),
                 icon: provider.isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.textOnPrimary,
-                        ),
+                    ? const IosLoader(
+                        size: 18,
+                        color: AppColors.textOnPrimary,
                       )
                     : const Icon(Icons.calculate),
                 label: const Text('Calculer'),

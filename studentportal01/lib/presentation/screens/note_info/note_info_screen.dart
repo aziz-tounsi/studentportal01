@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/announcement_model.dart';
+import '../../widgets/ios_loader.dart';
 
 // =====================================================
 // REAL-TIME ANNOUNCEMENT STATE NOTIFIER
@@ -343,7 +344,7 @@ class _NoteInfoScreenState extends ConsumerState<NoteInfoScreen> {
             ),
           IconButton(
             icon: state.isLoading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const IosLoader.small(size: 20, color: Colors.white)
               : const Icon(Icons.refresh),
             onPressed: state.isLoading ? null : () => ref.read(noteInfoNotifierProvider.notifier).refresh(),
             tooltip: l10n.refresh,
@@ -388,7 +389,7 @@ class _NoteInfoScreenState extends ConsumerState<NoteInfoScreen> {
     final l10n = AppLocalizations.of(context);
     
     if (state.isLoading && state.announcements.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: IosLoader());
     }
     
     if (state.error != null && state.announcements.isEmpty) {
@@ -563,11 +564,7 @@ class _AnnouncementCard extends StatelessWidget {
                                   return Container(
                                     color: Colors.grey[100],
                                     child: const Center(
-                                      child: SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      ),
+                                      child: IosLoader.small(size: 14),
                                     ),
                                   );
                                 },

@@ -1,13 +1,17 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/payments_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../users/user_profile_screen.dart';
 
 /// Modern Payment Management Screen
 /// Full control over student payments with comprehensive filtering and actions
@@ -49,8 +53,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
       // Load niveaux
       final niveauxResp = await supabase
           .from('niveaux')
-          .select('id, name')
-          .order('name');
+          .select('id, name, cycle, display_order')
+          .order('display_order');
 
       // Load sections (filières) - need to get from niveau_sections to know which sections belong to which niveau
       final sectionsResp = await supabase
@@ -219,10 +223,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                     Expanded(
                       child: paymentsAsync.when(
                         loading: () => const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF10B981),
-                            strokeWidth: 2,
-                          ),
+                          child: IosLoader(color: Color(0xFF10B981)),
                         ),
                         error: (e, _) => Center(
                           child: Padding(
@@ -424,6 +425,15 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
             ),
           ),
 
+          const SizedBox(width: 8),
+
+          // Pricing configuration button
+          _buildHeaderIconButton(
+            icon: Icons.price_change_outlined,
+            tooltip: 'Tarification',
+            onPressed: () => _showPricingConfigDialog(context),
+          ),
+
           const SizedBox(width: 16),
 
           SizedBox(
@@ -616,22 +626,83 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
       studentName: student['full_name']?.toString() ?? '',
       enrollmentId: enrollmentId ?? '',
       className: classData?['name']?.toString() ?? '',
+      niveauId: classData?['niveau_id']?.toString(),
+      sectionId: classData?['section_id']?.toString(),
     );
   }
 
-  void _showAddPaymentPlanDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => _SelectStudentForPaymentDialog(
+  void _showAddPaymentPlanDialog(BuildContext screenContext) {
+    _showBlurredDialog(
+      context: screenContext,
+      child: _SelectStudentForPaymentDialog(
         allStudents: _allStudents,
         allNiveaux: _allNiveaux,
         allSections: _allSections,
         allClasses: _allClasses,
         onStudentSelected: (student) {
-          Navigator.pop(context);
+          Navigator.pop(screenContext);
           _showCreatePaymentPlanForStudent(student);
         },
+        onStudentProfile: (student) {
+          final studentId = student['id']?.toString();
+          if (studentId == null) return;
+          _showBlurredDialog(
+            context: screenContext,
+            child: UserProfileScreen(
+              userId: studentId,
+              userName: student['full_name']?.toString(),
+              isDialogMode: true,
+              onBack: () => Navigator.pop(screenContext),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  void _showPricingConfigDialog(BuildContext context) {
+    _showBlurredDialog(
+      context: context,
+      child: _PaymentPricingDialog(
+        allNiveaux: _allNiveaux,
+        allSections: _allSections,
+        allClasses: _allClasses,
+      ),
+    );
+  }
+
+  Future<T?> _showBlurredDialog<T>({
+    required BuildContext context,
+    required Widget child,
+    bool barrierDismissible = true,
+  }) {
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      barrierColor: Colors.transparent,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              color: Colors.black.withOpacity(0.3),
+              width: double.infinity,
+              height: double.infinity,
+              child: Material(
+                type: MaterialType.transparency,
+                child: SafeArea(
+                  child: Center(
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -640,16 +711,21 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     required String studentName,
     required String enrollmentId,
     required String className,
+    String? niveauId,
+    String? sectionId,
   }) {
-    showDialog(
+    _showBlurredDialog(
       context: context,
-      builder: (context) => _CreatePaymentPlanDialog(
+      child: _CreatePaymentPlanDialog(
         studentId: studentId,
         studentName: studentName,
         enrollmentId: enrollmentId,
         className: className,
+        niveauId: niveauId,
+        sectionId: sectionId,
         onCreated: () {
-          ref.read(paymentsProvider.notifier).refresh();
+          Navigator.pop(context);
+          ref.invalidate(paymentsProvider);
         },
       ),
     );
@@ -2786,24 +2862,64 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
 
   void _showMarkPaidDialog(BuildContext context, Payment payment) {
     String? selectedMethod;
-    final referenceController = TextEditingController();
+    final referenceController = TextEditingController(
+      text: 'PAY-${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 10)}',
+    );
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Marquer comme payé'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text('Marquer comme payé'),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Montant: ${payment.amount.toStringAsFixed(0)} TND'),
-            Text('Étudiant: ${payment.studentName ?? "-"}'),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.slate50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Montant: ${payment.amount.toStringAsFixed(0)} TND',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('Étudiant: ${payment.studentName ?? "-"}'),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Mode de paiement',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.slate200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFF10B981)),
+                ),
               ),
+              borderRadius: BorderRadius.circular(14),
               items: const [
                 DropdownMenuItem(value: 'cash', child: Text('Espèces')),
                 DropdownMenuItem(
@@ -2818,9 +2934,27 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
             const SizedBox(height: 12),
             TextField(
               controller: referenceController,
-              decoration: const InputDecoration(
-                labelText: 'Référence / Reçu (optionnel)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'Référence / Reçu',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.slate200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFF10B981)),
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: () {
+                    referenceController.text =
+                        'PAY-${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 10)}';
+                  },
+                  tooltip: 'Générer nouvelle référence',
+                ),
               ),
             ),
           ],
@@ -2836,7 +2970,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
                   ),
@@ -2859,10 +2993,10 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: const Color(0xFF10B981),
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
                 ),
@@ -3448,7 +3582,7 @@ class _StudentPaymentDetailDialogState
             _buildTabBar(),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: IosLoader())
                   : TabBarView(
                       controller: _tabController,
                       children: [
@@ -4831,6 +4965,7 @@ class _SelectStudentForPaymentDialog extends StatefulWidget {
   final List<Map<String, dynamic>> allSections;
   final List<Map<String, dynamic>> allClasses;
   final Function(Map<String, dynamic>) onStudentSelected;
+  final Function(Map<String, dynamic>)? onStudentProfile;
 
   const _SelectStudentForPaymentDialog({
     required this.allStudents,
@@ -4838,6 +4973,7 @@ class _SelectStudentForPaymentDialog extends StatefulWidget {
     required this.allSections,
     required this.allClasses,
     required this.onStudentSelected,
+    this.onStudentProfile,
   });
 
   @override
@@ -4851,6 +4987,10 @@ class _SelectStudentForPaymentDialogState
   String? _selectedNiveauId;
   String? _selectedSectionId;
   String? _selectedClassId;
+  final GlobalKey _filterIconKey = GlobalKey();
+
+  static const Color _brand = Color(0xFF6D4CF6);
+  static const Color _brandLight = Color(0xFFF3E8FF);
 
   List<Map<String, dynamic>> get _sectionsForNiveau {
     if (_selectedNiveauId == null) return [];
@@ -4876,7 +5016,6 @@ class _SelectStudentForPaymentDialogState
     final query = _searchController.text.toLowerCase();
 
     return widget.allStudents.where((s) {
-      // Search filter
       if (query.isNotEmpty) {
         final name = (s['full_name'] ?? '').toString().toLowerCase();
         final email = (s['email'] ?? '').toString().toLowerCase();
@@ -4888,10 +5027,8 @@ class _SelectStudentForPaymentDialogState
         }
       }
 
-      // Get enrollment info
       final enrollments = s['enrollments'] as List?;
 
-      // If hierarchy filter is applied, filter by class
       if (_selectedClassId != null || _selectedNiveauId != null) {
         if (enrollments == null || enrollments.isEmpty) return false;
 
@@ -4916,243 +5053,232 @@ class _SelectStudentForPaymentDialogState
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _navigateToStudentProfile(Map<String, dynamic> student) {
+    if (widget.onStudentProfile != null) {
+      widget.onStudentProfile!(student);
+    } else {
+      final studentId = student['id']?.toString();
+      if (studentId == null) return;
+      Navigator.pop(context);
+      context.push('/users/$studentId');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        width: 700,
-        height: 600,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(AppRadius.full),
-        ),
-        child: Column(
+    return Container(
+      width: 680,
+      height: 640,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
+          ),
+        ],
+      ),
+      child: Column(
           children: [
-            // Header
+            // ── Header ──
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Color(0xFF10B981),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.slate200)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.person_add, color: Colors.white, size: 28),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _brandLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.person_search_rounded, color: _brand, size: 22),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Sélectionner un élève',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 20,
                             fontWeight: FontWeight.w700,
+                            color: Color(0xFF111827),
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           'Choisissez un élève pour créer un plan de paiement',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textTertiary,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white),
+                  // Close button - borderless
+                  InkWell(
+                    onTap: () => Navigator.pop(context),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(Icons.close, size: 20, color: AppColors.textTertiary),
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Filters
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: AppColors.slate50,
-              child: Column(
+            // ── Search Bar with Filter Icon ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              child: Row(
                 children: [
-                  // Search bar
-                  TextField(
-                    controller: _searchController,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Rechercher par nom, email, téléphone...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {});
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: BorderSide(color: AppColors.slate200),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Hierarchical dropdowns
-                  Row(
-                    children: [
-                      // Niveau
-                      Expanded(
-                        child: DropdownButtonFormField<String?>(
-                          value: _selectedNiveauId,
-                          decoration: InputDecoration(
-                            labelText: 'Niveau',
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                          ),
-                          isExpanded: true,
-                          items: [
-                            const DropdownMenuItem(
-                              value: null,
-                              child: Text('Tous'),
-                            ),
-                            ...widget.allNiveaux.map(
-                              (n) => DropdownMenuItem(
-                                value: n['id']?.toString(),
-                                child: Text(
-                                  n['name']?.toString() ?? '',
-                                  overflow: TextOverflow.ellipsis,
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (_) => setState(() {}),
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Rechercher par nom, email ou téléphone...',
+                        hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                        prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textTertiary),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_searchController.text.isNotEmpty)
+                              InkWell(
+                                onTap: () {
+                                  _searchController.clear();
+                                  setState(() {});
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(Icons.close, size: 16, color: AppColors.textTertiary),
+                                ),
+                              ),
+                            // Filter icon for niveau selection
+                            InkWell(
+                              key: _filterIconKey,
+                              onTap: () => _showNiveauFilter(context),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.tune_rounded,
+                                      size: 18,
+                                      color: _selectedNiveauId != null
+                                          ? _brand
+                                          : AppColors.textTertiary,
+                                    ),
+                                    if (_selectedNiveauId != null) ...[
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: _brand,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ),
                           ],
-                          onChanged: (v) => setState(() {
-                            _selectedNiveauId = v;
-                            _selectedSectionId = null;
-                            _selectedClassId = null;
-                          }),
+                        ),
+                        filled: true,
+                        fillColor: AppColors.slate50,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: AppColors.slate200),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: AppColors.slate200),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: _brand, width: 1.5),
                         ),
                       ),
-
-                      // Section (if applicable)
-                      if (_selectedNiveauId != null && _niveauHasSections) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<String?>(
-                            value: _selectedSectionId,
-                            decoration: InputDecoration(
-                              labelText: 'Filière',
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                            ),
-                            isExpanded: true,
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('Toutes'),
-                              ),
-                              ..._sectionsForNiveau.map(
-                                (s) => DropdownMenuItem(
-                                  value: s['id']?.toString(),
-                                  child: Text(
-                                    s['name']?.toString() ?? '',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onChanged: (v) => setState(() {
-                              _selectedSectionId = v;
-                              _selectedClassId = null;
-                            }),
-                          ),
-                        ),
-                      ],
-
-                      // Class
-                      if (_selectedNiveauId != null) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<String?>(
-                            value: _selectedClassId,
-                            decoration: InputDecoration(
-                              labelText: 'Classe',
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                            ),
-                            isExpanded: true,
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('Toutes'),
-                              ),
-                              ..._filteredClasses.map(
-                                (c) => DropdownMenuItem(
-                                  value: c['id']?.toString(),
-                                  child: Text(
-                                    c['name']?.toString() ?? '',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onChanged: (v) =>
-                                setState(() => _selectedClassId = v),
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Students list
+            // ── Active filter chips ──
+            if (_selectedNiveauId != null || _selectedClassId != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                child: Row(
+                  children: [
+                    if (_selectedNiveauId != null)
+                      _buildFilterChip(
+                        _getNiveauName(_selectedNiveauId!),
+                        () => setState(() {
+                          _selectedNiveauId = null;
+                          _selectedSectionId = null;
+                          _selectedClassId = null;
+                        }),
+                      ),
+                    if (_selectedClassId != null) ...[
+                      const SizedBox(width: 8),
+                      _buildFilterChip(
+                        _getClassName(_selectedClassId!),
+                        () => setState(() => _selectedClassId = null),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+            // ── Students List ──
             Expanded(
               child: _filteredStudents.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 48,
-                            color: AppColors.slate200,
-                          ),
-                          const SizedBox(height: 12),
+                          Icon(Icons.search_off_rounded, size: 56, color: AppColors.slate200),
+                          const SizedBox(height: 16),
                           Text(
                             'Aucun élève trouvé',
-                            style: TextStyle(color: AppColors.textTertiary),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Modifiez vos filtres pour voir les résultats',
+                            style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
                           ),
                         ],
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                       itemCount: _filteredStudents.length,
                       itemBuilder: (context, index) {
                         final student = _filteredStudents[index];
@@ -5160,67 +5286,397 @@ class _SelectStudentForPaymentDialogState
                         final enrollment = enrollments?.isNotEmpty == true
                             ? enrollments!.first as Map<String, dynamic>
                             : null;
-                        final classData =
-                            enrollment?['classes'] as Map<String, dynamic>?;
+                        final classData = enrollment?['classes'] as Map<String, dynamic>?;
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: UserAvatar(
-                              name: student['full_name'] ?? '?',
-                              radius: 20,
-                            ),
-                            title: Text(
-                              student['full_name'] ?? 'Sans nom',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '${classData?['name'] ?? 'Pas de classe'} • ${student['email'] ?? ''}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textTertiary,
-                              ),
-                            ),
-                            trailing: FilledButton.icon(
-                              onPressed: () =>
-                                  widget.onStudentSelected(student),
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('Sélectionner'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                              ),
-                            ),
-                            onTap: () => widget.onStudentSelected(student),
-                          ),
-                        );
+                        return _buildStudentRow(student, classData);
                       },
                     ),
             ),
 
-            // Footer
+            // ── Footer ──
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
               decoration: BoxDecoration(
-                color: AppColors.slate50,
                 border: Border(top: BorderSide(color: AppColors.slate200)),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '${_filteredStudents.length} élève(s) trouvé(s)',
-                    style: TextStyle(color: AppColors.textTertiary),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.slate100,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_filteredStudents.length} élève(s)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Annuler'),
+                  const Spacer(),
+                  // Annuler button - styled like "Ajouter un niveau" button
+                  SizedBox(
+                    height: 42,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _brand,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shadowColor: _brand.withOpacity(0.3),
+                      ),
+                      child: const Text(
+                        'Annuler',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      );
+  }
+
+  void _showNiveauFilter(BuildContext context) {
+    final RenderBox renderBox = _filterIconKey.currentContext!.findRenderObject() as RenderBox;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx - 280 + size.width,
+        position.dy + size.height + 8,
+        position.dx,
+        position.dy + size.height + 400,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: Colors.white,
+      elevation: 8,
+      shadowColor: Colors.black.withOpacity(0.15),
+      constraints: const BoxConstraints(
+        minWidth: 280,
+        maxWidth: 280,
+      ),
+      items: [
+        PopupMenuItem(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (ctx, setMenuState) {
+              return Container(
+                width: 280,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.tune_rounded, size: 18, color: _brand),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Filtrer par niveau',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    // Niveau options
+                    _buildNiveauOption(null, 'Tous les niveaux', ctx),
+                    ...widget.allNiveaux.map(
+                      (n) => _buildNiveauOption(
+                        n['id']?.toString(),
+                        n['name']?.toString() ?? '',
+                        ctx,
+                      ),
+                    ),
+                    // Class filter (if niveau selected)
+                    if (_selectedNiveauId != null && _filteredClasses.isNotEmpty) ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.class_outlined, size: 16, color: AppColors.textTertiary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Filtrer par classe',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _buildClassOption(null, 'Toutes les classes', ctx),
+                      ..._filteredClasses.map(
+                        (c) => _buildClassOption(
+                          c['id']?.toString(),
+                          c['name']?.toString() ?? '',
+                          ctx,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNiveauOption(String? id, String label, BuildContext menuContext) {
+    final isSelected = _selectedNiveauId == id;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedNiveauId = id;
+          _selectedSectionId = null;
+          _selectedClassId = null;
+        });
+        Navigator.pop(menuContext);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        color: isSelected ? _brandLight : Colors.transparent,
+        child: Row(
+          children: [
+            Icon(
+              Icons.school_outlined,
+              size: 18,
+              color: isSelected ? _brand : AppColors.textTertiary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected ? _brand : const Color(0xFF374151),
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle, size: 18, color: _brand),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClassOption(String? id, String label, BuildContext menuContext) {
+    final isSelected = _selectedClassId == id;
+    return InkWell(
+      onTap: () {
+        setState(() => _selectedClassId = id);
+        Navigator.pop(menuContext);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: isSelected ? _brandLight : Colors.transparent,
+        child: Row(
+          children: [
+            Icon(
+              Icons.class_outlined,
+              size: 16,
+              color: isSelected ? _brand : AppColors.textTertiary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected ? _brand : const Color(0xFF374151),
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check, size: 16, color: _brand),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, VoidCallback onRemove) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _brandLight,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _brand.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _brand,
+            ),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(10),
+            child: const Icon(Icons.close, size: 14, color: _brand),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getNiveauName(String id) {
+    final niveau = widget.allNiveaux.firstWhere(
+      (n) => n['id']?.toString() == id,
+      orElse: () => {'name': 'Niveau'},
+    );
+    return niveau['name']?.toString() ?? 'Niveau';
+  }
+
+  String _getClassName(String id) {
+    final cls = widget.allClasses.firstWhere(
+      (c) => c['id']?.toString() == id,
+      orElse: () => {'name': 'Classe'},
+    );
+    return cls['name']?.toString() ?? 'Classe';
+  }
+
+  Widget _buildStudentRow(Map<String, dynamic> student, Map<String, dynamic>? classData) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.slate200.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        child: Row(
+          children: [
+            // Avatar - clickable to go to profile
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => _navigateToStudentProfile(student),
+                child: UserAvatar(
+                  name: student['full_name'] ?? '?',
+                  radius: 22,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Info - clickable to go to profile
+            Expanded(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => _navigateToStudentProfile(student),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        student['full_name'] ?? 'Sans nom',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Icon(Icons.school_outlined, size: 13, color: AppColors.textTertiary),
+                          const SizedBox(width: 4),
+                          Text(
+                            classData?['name'] ?? 'Pas de classe',
+                            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                          ),
+                          if (student['email'] != null) ...[
+                            const SizedBox(width: 12),
+                            Icon(Icons.email_outlined, size: 13, color: AppColors.textTertiary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                student['email'] ?? '',
+                                style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Select button - clickable
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => widget.onStudentSelected(student),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _brand,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _brand.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 16, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text(
+                        'Sélectionner',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -5239,6 +5695,8 @@ class _CreatePaymentPlanDialog extends StatefulWidget {
   final String studentName;
   final String enrollmentId;
   final String className;
+  final String? niveauId;
+  final String? sectionId;
   final VoidCallback onCreated;
 
   const _CreatePaymentPlanDialog({
@@ -5246,6 +5704,8 @@ class _CreatePaymentPlanDialog extends StatefulWidget {
     required this.studentName,
     required this.enrollmentId,
     required this.className,
+    this.niveauId,
+    this.sectionId,
     required this.onCreated,
   });
 
@@ -5260,266 +5720,605 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
   bool _isLoading = false;
+  bool _isLoadingPricing = true;
   DateTime _startDate = DateTime.now();
 
-  final _categories = [
-    ('scolarite', 'Scolarité', Icons.school, const Color(0xFF3B82F6)),
-    ('transport', 'Transport', Icons.directions_bus, const Color(0xFF10B981)),
-    ('cantine', 'Cantine', Icons.restaurant, const Color(0xFFF59E0B)),
-    ('inscription', 'Inscription', Icons.assignment, const Color(0xFF8B5CF6)),
-    ('uniforme', 'Uniforme', Icons.checkroom, const Color(0xFFEC4899)),
-    ('activites', 'Activités', Icons.sports_soccer, const Color(0xFF14B8A6)),
-    ('autres', 'Autres', Icons.more_horiz, const Color(0xFF6B7280)),
+  // Dynamic plan counts from academic year
+  int _monthCount = 9;
+  int _semesterCount = 3;
+
+  static const Color _brand = Color(0xFF6D4CF6);
+  static const Color _brandLight = Color(0xFFF3E8FF);
+
+  final _categories = const [
+    ('scolarite', 'Scolarité', Icons.school, Color(0xFF3B82F6)),
+    ('transport', 'Transport', Icons.directions_bus, Color(0xFF10B981)),
+    ('cantine', 'Cantine', Icons.restaurant, Color(0xFFF59E0B)),
+    ('inscription', 'Inscription', Icons.assignment, Color(0xFF8B5CF6)),
+    ('uniforme', 'Uniforme', Icons.checkroom, Color(0xFFEC4899)),
+    ('activites', 'Activités', Icons.sports_soccer, Color(0xFF14B8A6)),
+    ('autres', 'Autres', Icons.more_horiz, Color(0xFF6B7280)),
   ];
 
   final _planTypes = [
-    ('monthly', 'Mensuel (9 paiements)', 9),
-    ('semester', 'Trimestriel (3 paiements)', 3),
-    ('annual', 'Annuel (1 paiement)', 1),
+    ('monthly', 'Mensuel', 9),
+    ('semester', 'Trimestriel', 3),
+    ('annual', 'Annuel', 1),
   ];
 
   @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        width: 550,
+  void initState() {
+    super.initState();
+    _loadAcademicYearAndPricing();
+  }
+
+  Future<void> _loadAcademicYearAndPricing() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final userData = await supabase
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .single();
+      final schoolId = userData['school_id']?.toString();
+
+      if (schoolId != null) {
+        // Load current academic year, fallback to most recent
+        var yearData = await supabase
+            .from('academic_years')
+            .select('id, start_date, end_date')
+            .eq('school_id', schoolId)
+            .eq('is_current', true)
+            .maybeSingle();
+
+        yearData ??= await supabase
+            .from('academic_years')
+            .select('id, start_date, end_date')
+            .eq('school_id', schoolId)
+            .order('start_date', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        if (yearData != null) {
+          final start = DateTime.tryParse(yearData['start_date'].toString());
+          final end = DateTime.tryParse(yearData['end_date'].toString());
+          if (start != null && end != null && end.isAfter(start)) {
+            _monthCount = (end.year - start.year) * 12 + (end.month - start.month) + 1;
+          }
+
+          // Count semesters directly from the academic year
+          final semesterResp = await supabase
+              .from('semesters')
+              .select('id')
+              .eq('academic_year_id', yearData['id'].toString());
+          _semesterCount = semesterResp.length;
+        }
+
+        if (_semesterCount <= 0) {
+          final semesterCount = await supabase.rpc(
+            'get_current_academic_year_semester_count',
+            params: {'p_school_id': schoolId},
+          );
+          if (semesterCount != null) {
+            _semesterCount = (semesterCount as num).toInt();
+          }
+        }
+        if (_semesterCount <= 0) _semesterCount = 3;
+        if (_monthCount <= 0) _monthCount = 9;
+
+        // Load pricing for scolarite if niveauId available
+        if (widget.niveauId != null) {
+          final pricing = await supabase.rpc(
+            'get_payment_pricing_for_enrollment',
+            params: {
+              'p_enrollment_id': widget.enrollmentId,
+              'p_category': 'scolarite',
+            },
+          );
+          if (pricing != null && (pricing as List).isNotEmpty) {
+            final amount = (pricing.first['amount'] as num?)?.toDouble();
+            if (amount != null && amount > 0) {
+              _amountController.text = amount.toStringAsFixed(0);
+            }
+          } else {
+            // Fallback: try by niveau/section directly for scolarite
+            final query = supabase
+                .from('payment_pricing')
+                .select('amount')
+                .eq('school_id', schoolId)
+                .eq('category', 'scolarite')
+                .eq('niveau_id', widget.niveauId!);
+
+            final pricingData = widget.sectionId == null
+                ? await query.isFilter('section_id', null).limit(1)
+                : await query.eq('section_id', widget.sectionId!).limit(1);
+
+            if (pricingData.isNotEmpty) {
+              final amount = (pricingData.first['amount'] as num?)?.toDouble();
+              if (amount != null && amount > 0) {
+                _amountController.text = amount.toStringAsFixed(0);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading academic year/pricing: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingPricing = false);
+    }
+  }
+
+  List<(String, String, int)> get _dynamicPlanTypes {
+    return [
+      ('monthly', 'Mensuel ($_monthCount paiements)', _monthCount),
+      ('semester', 'Trimestriel ($_semesterCount paiements)', _semesterCount),
+      ('annual', 'Annuel (1 paiement)', 1),
+    ];
+  }
+
+  bool get _isScolarite => _selectedCategory == 'scolarite';
+
+  void _onCategoryChanged(String category) {
+    setState(() {
+      _selectedCategory = category;
+      if (!_isScolarite) {
+        _selectedPlanType = 'annual';
+      } else if (!['monthly', 'semester', 'annual'].contains(_selectedPlanType)) {
+        _selectedPlanType = 'monthly';
+      }
+    });
+    _loadPricingForCategory(category);
+  }
+
+  Future<void> _loadPricingForCategory(String category) async {
+    if (widget.niveauId == null) return;
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final userData = await supabase.from('users').select('school_id').eq('id', user.id).single();
+      final schoolId = userData['school_id']?.toString();
+      if (schoolId == null) return;
+
+      final pricing = await supabase.rpc(
+        'get_payment_pricing_for_enrollment',
+        params: {
+          'p_enrollment_id': widget.enrollmentId,
+          'p_category': category,
+        },
+      );
+      if (pricing != null && (pricing as List).isNotEmpty) {
+        final amount = (pricing.first['amount'] as num?)?.toDouble();
+        if (amount != null && amount > 0) {
+          _amountController.text = amount.toStringAsFixed(0);
+        } else {
+          _amountController.clear();
+        }
+      } else {
+        _amountController.clear();
+      }
+    } catch (e) {
+      debugPrint('Error loading category pricing: $e');
+    }
+  }
+
+  double? get _currentAmount {
+    final text = _amountController.text;
+    if (text.isEmpty) return null;
+    return double.tryParse(text);
+  }
+
+  Widget _buildAmountPreview() {
+    final amount = _currentAmount;
+    if (amount == null || amount <= 0) {
+      return Container(
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(AppRadius.full),
+          color: AppColors.slate50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.slate200),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                ),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
+            Icon(Icons.info_outline, color: AppColors.textTertiary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Tarification non définie pour cette catégorie. Veuillez la configurer dans la page Tarification.',
+                style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
               ),
-              child: Row(
-                children: [
-                  UserAvatar(
-                    name: widget.studentName,
-                    radius: 25,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    textColor: Colors.white,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final planType = _isScolarite ? _selectedPlanType : 'annual';
+    final plan = _dynamicPlanTypes.firstWhere(
+      (pt) => pt.$1 == planType,
+      orElse: () => ('annual', 'Annuel (1 paiement)', 1),
+    );
+    final count = plan.$3;
+    final installment = amount / count;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_brand.withOpacity(0.08), _brand.withOpacity(0.02)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _brand.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.preview_outlined, color: _brand, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Montant à facturer',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _brand),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${_formatCurrency(amount)} TND',
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            count == 1
+                ? '1 paiement unique de ${_formatCurrency(installment)} TND'
+                : '$count paiements de ${_formatCurrency(installment)} TND',
+            style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
+          ),
+          Text(
+            'Ce montant sera visible par l\'élève dans l\'application.',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatCurrency(double amount) {
+    final formatter = NumberFormat('#,###.##', 'fr_FR');
+    return formatter.format(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 620,
+      height: 720,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Header matching select-student dialog ──
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.slate200)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _brandLight,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
+                  child: const Icon(Icons.payment_rounded, color: _brand, size: 22),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Nouveau Plan de Paiement',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${widget.studentName} • ${widget.className}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Close button - borderless
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(Icons.close, size: 20, color: AppColors.textTertiary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Form ──
+          Expanded(
+            child: _isLoadingPricing
+                ? const Center(child: IosLoader(color: _brand))
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(28),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Nouveau Plan de Paiement',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                  // Category selection
+                  const Text(
+                    'Catégorie',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _categories.map((cat) {
+                      final isSelected = _selectedCategory == cat.$1;
+                      return FilterChip(
+                        selected: isSelected,
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              cat.$3,
+                              size: 16,
+                              color: isSelected ? Colors.white : cat.$4,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(cat.$2),
+                          ],
+                        ),
+                        selectedColor: cat.$4,
+                        checkmarkColor: Colors.white,
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: isSelected ? cat.$4 : AppColors.slate200,
                           ),
                         ),
-                        Text(
-                          '${widget.studentName} • ${widget.className}',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
+                        backgroundColor: Colors.white,
+                        onSelected: (_) => _onCategoryChanged(cat.$1),
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Plan type (only for scolarité)
+                  if (_isScolarite) ...[
+                    const Text(
+                      'Type de paiement',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.slate50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.slate200),
+                      ),
+                      child: Column(
+                        children: _dynamicPlanTypes.map((pt) {
+                          final isSelected = _selectedPlanType == pt.$1;
+                          return RadioListTile<String>(
+                            value: pt.$1,
+                            groupValue: _selectedPlanType,
+                            onChanged: (v) => setState(() => _selectedPlanType = v!),
+                            title: Text(
+                              pt.$2,
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                color: isSelected ? _brand : AppColors.textPrimary,
+                              ),
+                            ),
+                            activeColor: _brand,
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Amount preview from pricing
+                  _buildAmountPreview(),
+
+                  const SizedBox(height: 20),
+
+                  // Start date
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate,
+                        firstDate: DateTime(2024),
+                        lastDate: DateTime(2030),
+                        builder: (context, child) => Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: Theme.of(context).colorScheme.copyWith(
+                              primary: _brand,
+                            ),
                           ),
+                          child: child!,
                         ),
-                      ],
+                      );
+                      if (picked != null) {
+                        setState(() => _startDate = picked);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.slate50,
+                        border: Border.all(color: AppColors.slate200),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, color: AppColors.textTertiary, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Date de début',
+                                  style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${_startDate.day}/${_startDate.month}/${_startDate.year}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.edit_calendar_outlined, color: _brand, size: 18),
+                        ],
+                      ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white),
+
+                  const SizedBox(height: 20),
+
+                  // Description
+                  TextField(
+                    controller: _descriptionController,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Description (optionnel)',
+                      labelStyle: TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                      prefixIcon: const Icon(Icons.notes, size: 20),
+                      filled: true,
+                      fillColor: AppColors.slate50,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.slate200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.slate200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _brand, width: 1.5),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
+          ),
 
-            // Form - wrapped in Expanded + SingleChildScrollView
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Category selection
-                    const Text(
-                      'Catégorie',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _categories.map((cat) {
-                        final isSelected = _selectedCategory == cat.$1;
-                        return FilterChip(
-                          selected: isSelected,
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                cat.$3,
-                                size: 16,
-                                color: isSelected ? Colors.white : cat.$4,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(cat.$2),
-                            ],
-                          ),
-                          selectedColor: cat.$4,
-                          checkmarkColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.textPrimary,
-                          ),
-                          onSelected: (_) =>
-                              setState(() => _selectedCategory = cat.$1),
-                        );
-                      }).toList(),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Plan type
-                    const Text(
-                      'Type de paiement',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    ...(_planTypes.map(
-                      (pt) => RadioListTile<String>(
-                        value: pt.$1,
-                        groupValue: _selectedPlanType,
-                        onChanged: (v) => setState(() => _selectedPlanType = v!),
-                        title: Text(pt.$2),
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    )),
-
-                    const SizedBox(height: 16),
-
-                    // Amount
-                    TextField(
-                      controller: _amountController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Montant total (TND)',
-                        prefixIcon: const Icon(Icons.attach_money),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        helperText: _selectedPlanType == 'monthly'
-                            ? 'Sera divisé en 9 paiements mensuels'
-                            : _selectedPlanType == 'semester'
-                            ? 'Sera divisé en 3 paiements trimestriels'
-                            : 'Un seul paiement',
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Start date
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _startDate,
-                          firstDate: DateTime(2024),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() => _startDate = picked);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.textTertiary),
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_today, color: AppColors.textTertiary),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Date de début: ${_startDate.day}/${_startDate.month}/${_startDate.year}',
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Description
-                    TextField(
-                      controller: _descriptionController,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        labelText: 'Description (optionnel)',
-                        prefixIcon: const Icon(Icons.notes),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          // ── Footer matching select-student dialog ──
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.slate200)),
             ),
-
-            // Actions
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.slate50,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 42,
+                  child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Annuler'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.slate100,
+                      foregroundColor: AppColors.textPrimary,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text(
+                      'Annuler',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 42,
+                  child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : _createPaymentPlan,
                     icon: _isLoading
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            child: IosLoader.small(color: Colors.white),
                           )
-                        : const Icon(Icons.check),
-                    label: const Text('Créer le plan'),
-                    style: FilledButton.styleFrom(
+                        : const Icon(Icons.check, size: 18),
+                    label: const Text(
+                      'Créer le plan',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shadowColor: const Color(0xFF10B981).withOpacity(0.3),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -5529,7 +6328,7 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Veuillez entrer un montant valide'),
+          content: Text('Tarification non définie pour cette catégorie. Veuillez la configurer dans la page Tarification.'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -5560,18 +6359,20 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
       final planId = planResult['id'];
 
       // Create individual payments based on plan type
-      final numPayments = _planTypes
-          .firstWhere((pt) => pt.$1 == _selectedPlanType)
-          .$3;
+      final numPayments = _isScolarite
+          ? _dynamicPlanTypes.firstWhere((pt) => pt.$1 == _selectedPlanType).$3
+          : 1;
       final paymentAmount = amount / numPayments;
 
       final payments = <Map<String, dynamic>>[];
       for (int i = 0; i < numPayments; i++) {
         DateTime dueDate;
-        if (_selectedPlanType == 'monthly') {
+        if (_selectedPlanType == 'monthly' && _isScolarite) {
           dueDate = DateTime(_startDate.year, _startDate.month + i, 1);
-        } else if (_selectedPlanType == 'semester') {
-          dueDate = DateTime(_startDate.year, _startDate.month + (i * 3), 1);
+        } else if (_selectedPlanType == 'semester' && _isScolarite) {
+          // Distribute evenly based on semester count, starting from start date
+          final monthsPerSemester = _monthCount / _semesterCount;
+          dueDate = DateTime(_startDate.year, _startDate.month + (i * monthsPerSemester.ceil()), 1);
         } else {
           dueDate = _startDate;
         }
@@ -5616,5 +6417,692 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
           orElse: () => ('', 'Autres', Icons.more_horiz, AppColors.textTertiary),
         )
         .$2;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAYMENT PRICING CONFIGURATION DIALOG
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _PaymentPricingDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> allNiveaux;
+  final List<Map<String, dynamic>> allSections;
+  final List<Map<String, dynamic>> allClasses;
+
+  const _PaymentPricingDialog({
+    required this.allNiveaux,
+    required this.allSections,
+    required this.allClasses,
+  });
+
+  @override
+  State<_PaymentPricingDialog> createState() => _PaymentPricingDialogState();
+}
+
+class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
+  String _selectedCategory = 'scolarite';
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _schoolId;
+  String? _academicYearId;
+
+  // Map: niveauId -> { sectionId (null for niveau-level) -> amount }
+  final Map<String, Map<String?, double>> _pricing = {};
+
+  static const Color _brand = Color(0xFF6D4CF6);
+  static const Color _brandLight = Color(0xFFF3E8FF);
+
+  final _categories = const [
+    ('scolarite', 'Scolarité', Icons.school, Color(0xFF3B82F6)),
+    ('transport', 'Transport', Icons.directions_bus, Color(0xFF10B981)),
+    ('cantine', 'Cantine', Icons.restaurant, Color(0xFFF59E0B)),
+    ('inscription', 'Inscription', Icons.assignment, Color(0xFF8B5CF6)),
+    ('uniforme', 'Uniforme', Icons.checkroom, Color(0xFFEC4899)),
+    ('activites', 'Activités', Icons.sports_soccer, Color(0xFF14B8A6)),
+    ('autres', 'Autres', Icons.more_horiz, Color(0xFF6B7280)),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  List<Map<String, dynamic>> get _sortedNiveaux {
+    final sorted = List<Map<String, dynamic>>.from(widget.allNiveaux);
+    sorted.sort((a, b) {
+      // Put base cycle (primaire + collège) before secondaire (lycée)
+      final cycleA = a['cycle']?.toString() ?? '';
+      final cycleB = b['cycle']?.toString() ?? '';
+      final cycleCompare = cycleA.compareTo(cycleB);
+      if (cycleCompare != 0) return cycleCompare;
+
+      // Then by display order
+      final orderA = (a['display_order'] as num?)?.toInt() ?? 0;
+      final orderB = (b['display_order'] as num?)?.toInt() ?? 0;
+      return orderA.compareTo(orderB);
+    });
+    return sorted;
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final userData = await supabase
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .single();
+      _schoolId = userData['school_id']?.toString();
+
+      if (_schoolId != null) {
+        final yearData = await supabase
+            .from('academic_years')
+            .select('id')
+            .eq('school_id', _schoolId!)
+            .eq('is_current', true)
+            .maybeSingle();
+        _academicYearId = yearData?['id']?.toString();
+      }
+
+      await _loadPricing();
+    } catch (e) {
+      debugPrint('Error loading pricing data: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadPricing() async {
+    if (_schoolId == null) return;
+    try {
+      final supabase = Supabase.instance.client;
+      // Load all pricing rows for this category + school, then prefer current academic year
+      final response = await supabase
+          .from('payment_pricing')
+          .select()
+          .eq('school_id', _schoolId!)
+          .eq('category', _selectedCategory);
+
+      _pricing.clear();
+      // First pass: rows with matching academic_year_id
+      for (final row in response) {
+        final yearId = row['academic_year_id']?.toString();
+        if (yearId != null && yearId == _academicYearId) {
+          final niveauId = row['niveau_id']?.toString();
+          final sectionId = row['section_id']?.toString();
+          final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
+          if (niveauId != null) {
+            _pricing.putIfAbsent(niveauId, () => {});
+            _pricing[niveauId]![sectionId] = amount;
+          }
+        }
+      }
+      // Second pass: fallback to null academic_year_id only if no specific year row exists
+      for (final row in response) {
+        final yearId = row['academic_year_id']?.toString();
+        if (yearId == null) {
+          final niveauId = row['niveau_id']?.toString();
+          final sectionId = row['section_id']?.toString();
+          final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
+          if (niveauId != null) {
+            _pricing.putIfAbsent(niveauId, () => {});
+            if (!_pricing[niveauId]!.containsKey(sectionId)) {
+              _pricing[niveauId]![sectionId] = amount;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading pricing: $e');
+    }
+  }
+
+  Future<void> _savePricing() async {
+    if (_schoolId == null) return;
+    setState(() => _isSaving = true);
+    try {
+      final supabase = Supabase.instance.client;
+
+      for (final entry in _pricing.entries) {
+        final niveauId = entry.key;
+        for (final sectionEntry in entry.value.entries) {
+          final sectionId = sectionEntry.key;
+          final amount = sectionEntry.value;
+
+          final query = supabase
+              .from('payment_pricing')
+              .select('id')
+              .eq('school_id', _schoolId!)
+              .eq('category', _selectedCategory)
+              .eq('niveau_id', niveauId);
+
+          final existing = sectionId == null
+              ? await query.isFilter('section_id', null).maybeSingle()
+              : await query.eq('section_id', sectionId!).maybeSingle();
+
+          if (existing != null) {
+            await supabase
+                .from('payment_pricing')
+                .update({'amount': amount, 'updated_at': DateTime.now().toIso8601String()})
+                .eq('id', existing['id']);
+          } else {
+            await supabase.from('payment_pricing').insert({
+              'school_id': _schoolId,
+              'academic_year_id': _academicYearId,
+              'category': _selectedCategory,
+              'niveau_id': niveauId,
+              'section_id': sectionId,
+              'amount': amount,
+            });
+          }
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tarification enregistrée'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _sectionsForNiveau(String niveauId) {
+    return widget.allSections
+        .where((s) => s['niveau_id']?.toString() == niveauId)
+        .toList();
+  }
+
+  bool _niveauHasSections(String niveauId) {
+    return _sectionsForNiveau(niveauId).isNotEmpty;
+  }
+
+  double? _getAmount(String niveauId, String? sectionId) {
+    return _pricing[niveauId]?[sectionId];
+  }
+
+  void _setAmount(String niveauId, String? sectionId, double? amount) {
+    _pricing.putIfAbsent(niveauId, () => {});
+    if (amount == null || amount <= 0) {
+      _pricing[niveauId]!.remove(sectionId);
+    } else {
+      _pricing[niveauId]![sectionId] = amount;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 720,
+      height: 760,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.slate200)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _brandLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.price_change_outlined, color: _brand, size: 22),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Tarification des paiements',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Définissez les montants par niveau et section',
+                        style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(Icons.close, size: 20, color: AppColors.textTertiary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Category selector
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _categories.map((cat) {
+                final isSelected = _selectedCategory == cat.$1;
+                return FilterChip(
+                  selected: isSelected,
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(cat.$3, size: 16, color: isSelected ? Colors.white : cat.$4),
+                      const SizedBox(width: 6),
+                      Text(cat.$2),
+                    ],
+                  ),
+                  selectedColor: cat.$4,
+                  checkmarkColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : AppColors.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: BorderSide(color: isSelected ? cat.$4 : AppColors.slate200),
+                  ),
+                  backgroundColor: Colors.white,
+                  onSelected: (_) async {
+                    _selectedCategory = cat.$1;
+                    await _loadPricing();
+                    if (mounted) setState(() {});
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+
+          // Apply to all (non-scolarité)
+          if (_selectedCategory != 'scolarite') ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: SizedBox(
+                height: 42,
+                child: ElevatedButton.icon(
+                  onPressed: _showApplyToAllDialog,
+                  icon: const Icon(Icons.copy_all, size: 16),
+                  label: const Text('Appliquer un montant aux niveaux'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _brand,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shadowColor: _brand.withOpacity(0.3),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          // Pricing list
+          Expanded(
+            child: _isLoading
+                ? const Center(child: IosLoader(color: _brand))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    itemCount: _sortedNiveaux.length,
+                    itemBuilder: (context, index) {
+                      final niveau = _sortedNiveaux[index];
+                      final niveauId = niveau['id']?.toString() ?? '';
+                      final sections = _sectionsForNiveau(niveauId);
+                      return _buildNiveauPricingCard(niveau, sections);
+                    },
+                  ),
+          ),
+
+          // Footer
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.slate200)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 42,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.slate100,
+                      foregroundColor: AppColors.textPrimary,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 42,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _savePricing,
+                    icon: _isSaving
+                        ? const SizedBox(width: 18, height: 18, child: IosLoader.small(color: Colors.white))
+                        : const Icon(Icons.save, size: 18),
+                    label: const Text('Enregistrer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _brand,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shadowColor: _brand.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNiveauPricingCard(Map<String, dynamic> niveau, List<Map<String, dynamic>> sections) {
+    final niveauId = niveau['id']?.toString() ?? '';
+    final hasSections = sections.isNotEmpty;
+    final niveauAmount = _getAmount(niveauId, null);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.zero,
+        border: Border(
+          bottom: BorderSide(color: AppColors.slate100),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    niveau['name']?.toString() ?? 'Niveau',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                ),
+                if (!hasSections) ...[
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 160,
+                    child: _buildAmountField(
+                      initialValue: niveauAmount,
+                      onChanged: (v) => _setAmount(niveauId, null, v),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            if (hasSections) ...[
+              const SizedBox(height: 12),
+              ...sections.map((section) {
+                final sectionId = section['id']?.toString() ?? '';
+                final amount = _getAmount(niveauId, sectionId);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.arrow_right, color: AppColors.textTertiary, size: 18),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          section['name']?.toString() ?? 'Section',
+                          style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 160,
+                        child: _buildAmountField(
+                          initialValue: amount,
+                          onChanged: (v) => _setAmount(niveauId, sectionId, v),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAmountField({
+    required double? initialValue,
+    required ValueChanged<double?> onChanged,
+  }) {
+    final controller = TextEditingController(
+      text: initialValue != null && initialValue > 0 ? initialValue.toStringAsFixed(0) : '',
+    );
+    return TextField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: false),
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      style: const TextStyle(fontSize: 14),
+      textAlign: TextAlign.end,
+      decoration: InputDecoration(
+        hintText: '0',
+        hintStyle: TextStyle(color: AppColors.textTertiary),
+        suffixText: 'TND',
+        suffixStyle: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.slate200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.slate200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _brand, width: 1.5),
+        ),
+      ),
+      onChanged: (v) {
+        final amount = double.tryParse(v);
+        onChanged(amount);
+      },
+    );
+  }
+
+  void _showApplyToAllDialog() {
+    final selectedNiveaux = <String>{};
+    final amountController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text(
+              'Appliquer un montant',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Montant',
+                      labelStyle: TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                      prefixIcon: const Icon(Icons.attach_money, size: 20),
+                      suffixText: 'TND',
+                      filled: true,
+                      fillColor: AppColors.slate50,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.slate200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.slate200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _brand, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        'Niveaux sélectionnés',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setState(() => selectedNiveaux.addAll(_sortedNiveaux.map((n) => n['id']?.toString() ?? '').where((id) => id.isNotEmpty))),
+                        child: const Text('Tout'),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() => selectedNiveaux.clear()),
+                        child: const Text('Aucun'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _sortedNiveaux.length,
+                      itemBuilder: (context, index) {
+                        final niveau = _sortedNiveaux[index];
+                        final niveauId = niveau['id']?.toString() ?? '';
+                        final isSelected = selectedNiveaux.contains(niveauId);
+                        return CheckboxListTile(
+                          value: isSelected,
+                          onChanged: (_) {
+                            setState(() {
+                              if (isSelected) {
+                                selectedNiveaux.remove(niveauId);
+                              } else {
+                                selectedNiveaux.add(niveauId);
+                              }
+                            });
+                          },
+                          title: Text(
+                            niveau['name']?.toString() ?? 'Niveau',
+                            style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: _brand,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Annuler'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final amount = double.tryParse(amountController.text);
+                  if (amount != null && amount > 0 && selectedNiveaux.isNotEmpty) {
+                    _applyToSelectedNiveaux(selectedNiveaux.toList(), amount);
+                    Navigator.pop(ctx);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _brand,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Appliquer'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _applyToSelectedNiveaux(List<String> niveauIds, double amount) {
+    for (final niveauId in niveauIds) {
+      final sections = _sectionsForNiveau(niveauId);
+      if (sections.isEmpty) {
+        _setAmount(niveauId, null, amount);
+      } else {
+        for (final section in sections) {
+          _setAmount(niveauId, section['id']?.toString(), amount);
+        }
+      }
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 }

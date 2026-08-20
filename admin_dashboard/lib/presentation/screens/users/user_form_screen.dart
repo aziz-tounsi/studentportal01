@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../../core/theme/app_theme.dart';
 
 class UserFormScreen extends ConsumerStatefulWidget {
@@ -135,7 +136,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                 _buildTopBar(context),
                 Expanded(
                   child: _isLoadingUser
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const Center(child: IosLoader())
                       : SingleChildScrollView(
                           padding: const EdgeInsets.all(24),
                           child: _buildForm(),
@@ -298,7 +299,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: IosLoader.small(),
                           )
                         : const Icon(Icons.save),
                     label: Text(isEditing ? 'Update User' : 'Create User'),

@@ -9,6 +9,7 @@ import '../../providers/users_provider.dart';
 import '../../providers/curriculum_provider.dart';
 import '../../providers/classes_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/ios_loader.dart';
 
 class UserFormDialog extends ConsumerStatefulWidget {
   final UserModel? user;
@@ -765,7 +766,7 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
             child: ElevatedButton.icon(
               onPressed: _isLoading ? null : _submit,
               icon: _isLoading
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const IosLoader.small(color: Colors.white)
                   : const Icon(Icons.check_rounded, size: 16),
               label: Text(isEditing ? 'Enregistrer' : 'Créer l\'utilisateur', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(

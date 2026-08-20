@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/ios_loader.dart';
 import '../../../data/models/academic_models.dart';
 
 // =====================================================================
@@ -62,10 +63,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                     Expanded(
                       child: stateAsync.when(
                         loading: () => const Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFF655DD5),
-                          ),
+                          child: IosLoader(color: Color(0xFF655DD5)),
                         ),
                         error: (e, _) => _buildErrorState(e),
                         data: (state) => _buildContent(context, state),

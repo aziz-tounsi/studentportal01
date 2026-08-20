@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../widgets/ios_loader.dart';
 
 // Demo group members provider
 final groupMembersProvider = FutureProvider<GroupData>((ref) async {
@@ -254,7 +255,7 @@ class MonGroupeScreen extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: IosLoader()),
         error: (error, stack) => Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

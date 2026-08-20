@@ -10,6 +10,7 @@ import '../../data/models/enrollment_model.dart';
 import '../../data/models/school_model.dart';
 import '../../core/config/supabase_config.dart';
 import '../providers/auth_provider.dart';
+import 'ios_loader.dart';
 
 class StudentCard extends ConsumerStatefulWidget {
   final UserModel user;
@@ -292,14 +293,7 @@ class _CardContent extends StatelessWidget {
                               color: Colors.black26,
                             ),
                             child: Center(
-                              child: SizedBox(
-                                width: s(24),
-                                height: s(24),
-                                child: const CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              ),
+                              child: IosLoader(color: Colors.white, size: s(24)),
                             ),
                           ),
                         ),

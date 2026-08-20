@@ -9,6 +9,7 @@ import '../../providers/classes_provider.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/ios_loader.dart';
 import 'class_form_dialog.dart';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -50,10 +51,10 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
           const AdminSidebar(currentRoute: '/classes'),
           Expanded(
             child: classesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: IosLoader()),
               error: (e, _) => _buildErrorState(e),
               data: (state) => gradeLevelsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: IosLoader()),
                 error: (e, _) => _buildErrorState(e),
                 data: (glState) => _buildBody(context, state, glState),
               ),
@@ -860,7 +861,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
             const SizedBox(height: 18),
 
             timetableAsync.when(
-              loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2))),
+              loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: IosLoader())),
               error: (_, __) => const Text('Erreur de chargement', style: TextStyle(color: AppColors.error, fontSize: 12)),
               data: (slots) {
                 if (slots.isEmpty) {

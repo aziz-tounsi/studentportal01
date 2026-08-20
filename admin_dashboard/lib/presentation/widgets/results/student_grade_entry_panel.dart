@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../presentation/widgets/ios_loader.dart';
 import '../user_avatar.dart';
 
 /// A panel for entering grades per student across all subjects and exam types
@@ -705,13 +706,9 @@ class _StudentGradeEntryPanelState extends State<StudentGradeEntryPanel> {
           ElevatedButton.icon(
             onPressed: _isSaving ? null : _saveGrades,
             icon: _isSaving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.textOnPrimary),
-                    ),
+                ? const IosLoader(
+                    size: 18,
+                    color: AppColors.textOnPrimary,
                   )
                 : const Icon(Icons.save, size: 18),
             label: Text(_isSaving ? 'Enregistrement...' : 'Enregistrer'),

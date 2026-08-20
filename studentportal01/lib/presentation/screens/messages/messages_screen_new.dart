@@ -2,6 +2,7 @@
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -512,7 +513,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                 child: Center(
                   child: Padding(
                     padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator(),
+                    child: IosLoader(),
                   ),
                 ),
               )
@@ -522,7 +523,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                 child: Center(
                   child: Padding(
                     padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator(),
+                    child: IosLoader(),
                   ),
                 ),
               ),
@@ -818,11 +819,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                       return Container(
                                         color: Colors.grey[100],
                                         child: const Center(
-                                          child: SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          ),
+                                          child: IosLoader.small(size: 14),
                                         ),
                                       );
                                     },

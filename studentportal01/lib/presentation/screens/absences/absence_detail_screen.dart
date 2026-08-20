@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -159,7 +160,7 @@ class AbsenceDetailScreen extends ConsumerWidget {
         ),
         child: detailAsync.when(
           data: (data) => data != null ? _DetailBody(data: data) : const _ErrorBody(),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: IosLoader()),
           error: (_, __) => const _ErrorBody(),
         ),
       ),

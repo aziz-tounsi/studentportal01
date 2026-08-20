@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/course_model.dart';
 import '../../providers/course_provider.dart';
+import '../../widgets/ios_loader.dart';
 
 class CourseDetailScreen extends ConsumerStatefulWidget {
   final String courseId;
@@ -43,7 +44,7 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
           return _buildCourseDetail(context, course);
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(),
+          child: IosLoader(),
         ),
         error: (error, stack) => _buildError(error),
       ),
@@ -434,7 +435,7 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
             loadingBuilder: (_, child, loadingProgress) {
               if (loadingProgress == null) return child;
               return const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: IosLoader(),
               );
             },
           ),
