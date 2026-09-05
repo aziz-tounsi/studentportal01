@@ -1085,20 +1085,25 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           // Items per page
           Text('Afficher par ', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppColors.border),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 value: _itemsPerPage,
                 isDense: true,
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: AppColors.textTertiary),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
                 items: _perPageOptions.map((v) => DropdownMenuItem(
                   value: v,
-                  child: Text(v == -1 ? 'All' : '$v'),
+                  child: Text(v == -1 ? 'All' : '$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                 )).toList(),
                 onChanged: (v) => setState(() {
                   _itemsPerPage = v!;
@@ -1745,6 +1750,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 child: ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(ctx);
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Mot de passe réinitialisé'), backgroundColor: AppColors.success),
                     );
@@ -1811,6 +1817,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 child: ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(ctx);
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Utilisateur archiv\u00e9'), backgroundColor: AppColors.success),
                     );
@@ -1992,6 +1999,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 child: ElevatedButton.icon(
                   onPressed: () async {
                     Navigator.pop(ctx);
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Row(

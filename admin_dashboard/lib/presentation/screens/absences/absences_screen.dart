@@ -879,180 +879,219 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(11),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 320 - 64),
-              child: DataTable(
-                showCheckboxColumn: false,
-                headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
-                headingTextStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5),
-                dataRowMinHeight: 64,
-                dataRowMaxHeight: 64,
-                horizontalMargin: 24,
-                columnSpacing: 24,
-                dividerThickness: 1,
-                border: TableBorder(horizontalInside: BorderSide(color: AppColors.border, width: 1)),
-                columns: [
-                  DataColumn(
-                    label: SizedBox(
-                      width: 24,
-                      child: Center(
-                        child: SizedBox(
-                          width: 16, height: 16,
-                          child: Consumer(builder: (context, ref, _) {
-                            final st = ref.watch(absencesProvider).asData?.value;
-                            final list2 = st?.filtered ?? [];
-                            final allSel = list2.isNotEmpty && list2.every((a) => st!.selectedIds.contains(a.id));
-                            return Checkbox(
-                              value: allSel,
-                              tristate: false,
-                              onChanged: (v) {
-                                if (allSel) {
-                                  ref.read(absencesProvider.notifier).clearSelection();
-                                } else {
-                                  for (final a in list2) ref.read(absencesProvider.notifier).toggleSelection(a.id);
-                                }
-                              },
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-                              side: const BorderSide(color: AppColors.slate300, width: 1.5),
-                              activeColor: Color(0xFF655DD5),
-                            );
-                          }),
-                        ),
-                      ),
+    const rowHeight = 64.0;
+    const headerHeight = 52.0;
+    const colWidths = <double>[44, 180, 90, 130, 90, 70, 60, 160, 90];
+    const colLabels = ['', 'ÉTUDIANT', 'CLASSE', 'MATIÈRE', 'DATE', 'HEURES', 'TYPE', 'MOTIF', 'JUSTIFIÉ'];
+
+    Widget headerCell(String text, double width) {
+      return Expanded(
+        flex: width.round(),
+        child: text.isEmpty
+            ? Consumer(builder: (context, ref, _) {
+                final st = ref.watch(absencesProvider).asData?.value;
+                final list2 = st?.filtered ?? [];
+                final allSel = list2.isNotEmpty && list2.every((a) => st!.selectedIds.contains(a.id));
+                return Center(
+                  child: SizedBox(
+                    width: 16, height: 16,
+                    child: Checkbox(
+                      value: allSel,
+                      tristate: false,
+                      onChanged: (v) {
+                        if (allSel) {
+                          ref.read(absencesProvider.notifier).clearSelection();
+                        } else {
+                          for (final a in list2) ref.read(absencesProvider.notifier).toggleSelection(a.id);
+                        }
+                      },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                      side: const BorderSide(color: AppColors.slate300, width: 1.5),
+                      activeColor: const Color(0xFF655DD5),
                     ),
                   ),
-                  const DataColumn(label: Text('ÉTUDIANT')),
-                  const DataColumn(label: Text('CLASSE')),
-                  const DataColumn(label: Text('MATIÈRE')),
-                  const DataColumn(label: Text('DATE')),
-                  const DataColumn(label: Text('HEURES')),
-                  const DataColumn(label: Text('TYPE')),
-                  const DataColumn(label: Text('MOTIF')),
-                  const DataColumn(label: Text('JUSTIFIÉ')),
-                  const DataColumn(label: Text('ACTIONS')),
-                ],
-                rows: list.map((a) {
-                  final isSelected = state.selectedIds.contains(a.id);
-                  return DataRow(
-                    selected: isSelected,
-                    onSelectChanged: (v) => ref.read(absencesProvider.notifier).toggleSelection(a.id),
-                    color: MaterialStateProperty.resolveWith((states) {
-                      if (states.contains(MaterialState.hovered)) return AppColors.primarySoft.withOpacity(0.5);
-                      if (isSelected) return AppColors.primarySoft;
-                      return Colors.white;
-                    }),
-                    cells: [
-                      DataCell(
-                        Checkbox(
-                          value: isSelected,
-                          activeColor: const Color(0xFF655DD5),
-                          onChanged: (v) => ref.read(absencesProvider.notifier).toggleSelection(a.id),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            if (a.studentId.isNotEmpty) {
-                              context.push('/users/${a.studentId}');
-                            }
-                          },
+                );
+              })
+            : Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5)),
+              ),
+      );
+    }
+
+    Widget dataCell(Widget child, double width) {
+      return Expanded(flex: width.round(), child: child);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+            ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth - 64, maxHeight: constraints.maxHeight),
+                    child: SizedBox(
+                      width: constraints.maxWidth - 64,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header
+                        Container(
+                          height: headerHeight,
+                          color: const Color(0xFFF8FAFC),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              UserAvatar(name: a.studentName, radius: 16),
-                              const SizedBox(width: 12),
-                              Text(a.studentName, style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-                            ],
+                            children: List.generate(colLabels.length, (i) => headerCell(colLabels[i], colWidths[i])),
                           ),
                         ),
-                      ),
-                      DataCell(Text(a.className ?? '—', style: const TextStyle(color: AppColors.textSecondary))),
-                      DataCell(Text(a.subjectName ?? '—', style: const TextStyle(color: AppColors.textSecondary))),
-                      DataCell(Text(dateFormat.format(a.date), style: const TextStyle(color: AppColors.textSecondary))),
-                      DataCell(Text('${a.hoursAbsent.toStringAsFixed(0)}h', style: const TextStyle(color: AppColors.textSecondary))),
-                      DataCell(_SessionTypeChip(type: a.sessionType)),
-                      DataCell(
-                        Tooltip(
-                          message: a.reason ?? 'Aucun motif',
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 150),
-                            child: Text(
-                              a.reason ?? '—',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: a.reason != null ? AppColors.textPrimary : AppColors.slate300),
-                            ),
+                        Divider(height: 1, color: AppColors.border, indent: 24, endIndent: 24),
+                        // Virtualized rows
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: list.length,
+                            itemExtent: rowHeight,
+                            itemBuilder: (context, index) {
+                              final a = list[index];
+                              final isSelected = state.selectedIds.contains(a.id);
+                              return Container(
+                                height: rowHeight,
+                                color: isSelected ? AppColors.primarySoft : Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                child: Row(
+                                  children: [
+                                    dataCell(
+                                      Center(
+                                        child: Checkbox(
+                                          value: isSelected,
+                                          activeColor: const Color(0xFF655DD5),
+                                          onChanged: (v) => ref.read(absencesProvider.notifier).toggleSelection(a.id),
+                                        ),
+                                      ),
+                                      colWidths[0],
+                                    ),
+                                    dataCell(
+                                      InkWell(
+                                        onTap: () {
+                                          if (a.studentId.isNotEmpty) context.push('/student-absences/${a.studentId}');
+                                        },
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            UserAvatar(name: a.studentName, radius: 16),
+                                            const SizedBox(width: 12),
+                                            Flexible(child: Text(a.studentName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.textPrimary))),
+                                          ],
+                                        ),
+                                      ),
+                                      colWidths[1],
+                                    ),
+                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(a.className ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary))), colWidths[2]),
+                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(a.subjectName ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary))), colWidths[3]),
+                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(dateFormat.format(a.date), style: const TextStyle(color: AppColors.textSecondary))), colWidths[4]),
+                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('${a.hoursAbsent.toStringAsFixed(0)}h', style: const TextStyle(color: AppColors.textSecondary))), colWidths[5]),
+                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: _SessionTypeChip(type: a.sessionType)), colWidths[6]),
+                                    dataCell(
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        child: Tooltip(
+                                          message: a.reason ?? 'Aucun motif',
+                                          child: Text(
+                                            a.reason ?? '—',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(color: a.reason != null ? AppColors.textPrimary : AppColors.slate300),
+                                          ),
+                                        ),
+                                      ),
+                                      colWidths[7],
+                                    ),
+                                    dataCell(
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        child: _JustifiedBadge(
+                                          justified: a.justified,
+                                          onTap: () => ref.read(absencesProvider.notifier).toggleJustified(a.id, a.justified),
+                                        ),
+                                      ),
+                                      colWidths[8],
+                                    ),
+                                    PopupMenuButton<String>(
+                                      icon: const Icon(Icons.more_horiz, size: 18, color: AppColors.textTertiary),
+                                      tooltip: 'Actions',
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      elevation: 8,
+                                      offset: const Offset(-160, 40),
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          _showEditDialog(context, a);
+                                        } else if (value == 'delete') {
+                                          _confirmDelete(context, a);
+                                        } else if (value == 'view_profile') {
+                                          if (a.studentId.isNotEmpty) context.push('/users/${a.studentId}');
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        PopupMenuItem(
+                                          value: 'view_profile',
+                                          height: 40,
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.person_outline, size: 18, color: const Color(0xFF8B5CF6)),
+                                              const SizedBox(width: 12),
+                                              const Text('Voir le profil', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                                            ],
+                                          ),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          height: 40,
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.edit_outlined, size: 18, color: const Color(0xFF655DD5)),
+                                              const SizedBox(width: 12),
+                                              const Text('Modifier', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuDivider(),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          height: 40,
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
+                                              const SizedBox(width: 12),
+                                              const Text('Supprimer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.error)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                         ),
-                      ),
-                      DataCell(
-                        _JustifiedBadge(
-                          justified: a.justified,
-                          onTap: () => ref.read(absencesProvider.notifier).toggleJustified(a.id, a.justified),
-                        ),
-                      ),
-                      DataCell(
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_horiz, size: 18, color: AppColors.textTertiary),
-                          tooltip: 'Actions',
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          elevation: 8,
-                          offset: const Offset(-160, 40),
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              _showEditDialog(context, a);
-                            } else if (value == 'delete') {
-                              _confirmDelete(context, a);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: 'edit',
-                              height: 40,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_outlined, size: 18, color: const Color(0xFF655DD5)),
-                                  const SizedBox(width: 12),
-                                  Text('Modifier', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuDivider(),
-                            PopupMenuItem(
-                              value: 'delete',
-                              height: 40,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
-                                  const SizedBox(width: 12),
-                                  Text('Supprimer', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.error)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

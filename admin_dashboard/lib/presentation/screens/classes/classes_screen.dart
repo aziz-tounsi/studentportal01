@@ -622,50 +622,33 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
               if (cls.sectionName != null) Text(cls.sectionName!, style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
             ])),
             PopupMenuButton<String>(
-              icon: Icon(Icons.more_horiz_rounded, size: 20, color: AppColors.textTertiary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              icon: Icon(Icons.more_horiz, size: 18, color: AppColors.textTertiary),
+              tooltip: 'Actions',
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               elevation: 8,
-              shadowColor: Colors.black.withOpacity(0.12),
-              color: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              offset: const Offset(0, 8),
+              offset: const Offset(-160, 40),
               onSelected: (v) {
+                if (v == 'view') context.push('/classes/${cls.id}');
                 if (v == 'edit') _showClassDialog(context, cls: cls);
                 if (v == 'delete') _confirmDelete(context, cls);
-                if (v == 'view') context.push('/classes/${cls.id}');
               },
               itemBuilder: (ctx) => [
-                PopupMenuItem(
-                  value: 'view',
-                  height: 48,
-                  child: Row(children: [
-                    Container(width: 32, height: 32, decoration: BoxDecoration(color: const Color(0xFFF0F1F5), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF5A5B6A))),
-                    const SizedBox(width: 12),
-                    const Text('Détails', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                  ]),
-                ),
-                PopupMenuItem(
-                  value: 'edit',
-                  height: 48,
-                  child: Row(children: [
-                    Container(width: 32, height: 32, decoration: BoxDecoration(color: const Color(0xFFF0F1F5), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF5A5B6A))),
-                    const SizedBox(width: 12),
-                    const Text('Modifier', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                  ]),
-                ),
-                const PopupMenuDivider(height: 8),
-                PopupMenuItem(
-                  value: 'delete',
-                  height: 48,
-                  child: Row(children: [
-                    Container(width: 32, height: 32, decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error)),
-                    const SizedBox(width: 12),
-                    Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.error)),
-                  ]),
-                ),
+                PopupMenuItem(value: 'view', height: 40, child: Row(children: [
+                  Icon(Icons.visibility_outlined, size: 18, color: AppColors.success),
+                  const SizedBox(width: 12),
+                  Text('Voir détails', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                ])),
+                PopupMenuItem(value: 'edit', height: 40, child: Row(children: [
+                  Icon(Icons.edit_outlined, size: 18, color: const Color(0xFF655DD5)),
+                  const SizedBox(width: 12),
+                  Text('Modifier', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                ])),
+                const PopupMenuDivider(),
+                PopupMenuItem(value: 'delete', height: 40, child: Row(children: [
+                  Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
+                  const SizedBox(width: 12),
+                  Text('Supprimer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.error)),
+                ])),
               ],
             ),
           ]),

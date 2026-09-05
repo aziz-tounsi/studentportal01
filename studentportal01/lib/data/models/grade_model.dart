@@ -69,6 +69,8 @@ class SubjectGradesSummary {
   final List<ComponentGrade> components;
   final double? average;
   final String weightsDisplay; // e.g., "CC:40% | Examen:60%"
+  final String? teacherName;
+  final String? teacherPhotoUrl;
 
   SubjectGradesSummary({
     required this.subjectOfferingId,
@@ -78,6 +80,8 @@ class SubjectGradesSummary {
     required this.components,
     this.average,
     required this.weightsDisplay,
+    this.teacherName,
+    this.teacherPhotoUrl,
   });
 }
 

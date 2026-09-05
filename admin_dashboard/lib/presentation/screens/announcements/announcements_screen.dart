@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:ui';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
@@ -1554,13 +1554,16 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
               child: DropdownButton<int>(
                 value: _pageSize,
                 isDense: true,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
                 items: [10, 20, 50]
                     .map((s) => DropdownMenuItem(
                         value: s,
                         child: Text('$s',
                             style:
-                                const TextStyle(fontSize: 13))))
+                                const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))))
                     .toList(),
                 onChanged: (v) => setState(() {
                   _pageSize = v!;

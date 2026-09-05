@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../providers/nav_bar_provider.dart';
+
 const Color _pink = Color(0xFFFF2D78);
 const String _openRouterApiKey = String.fromEnvironment('OPENROUTER_API_KEY');
 
@@ -129,7 +131,10 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
     );
     _typingAnimCtrl.repeat(reverse: true);
     _loadConversations();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _addWelcome());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(navBarHiddenProvider.notifier).state = true;
+      _addWelcome();
+    });
   }
 
   Future<Directory> _getConvDir() async {
@@ -520,6 +525,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
   @override
   void dispose() {
+    ref.read(navBarHiddenProvider.notifier).state = false;
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocus.dispose();
@@ -533,7 +539,14 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
     final topPadding = MediaQuery.of(context).padding.top;
     final screenWidth = MediaQuery.of(context).size.width;
 
-    return Stack(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          ref.read(navBarHiddenProvider.notifier).state = false;
+        }
+      },
+      child: Stack(
         children: [
           Scaffold(
             body: Container(
@@ -542,11 +555,11 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFFE8D5F2),
-                    Color(0xFFD4C4E8),
-                    Color(0xFFC9D6F0),
-                    Color(0xFFE0EAF5),
-                    Color(0xFFF0F5FA),
+                    Color(0xFFF8F0FC),
+                    Color(0xFFF0E6F8),
+                    Color(0xFFEAF0FA),
+                    Color(0xFFF4F8FC),
+                    Color(0xFFFAFCFD),
                   ],
                   stops: [0.0, 0.25, 0.5, 0.75, 1.0],
                 ),
@@ -562,7 +575,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                             left: 16,
                             right: 16,
                             top: topPadding + 100,
-                            bottom: bottomInset > 0 ? 140 : 220,
+                            bottom: bottomInset > 0 ? 140 : 80,
                           ),
                           itemCount: _messages.length + (_isTyping ? 1 : 0),
                           itemBuilder: (context, index) {
@@ -605,6 +618,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                                     children: [
                                       GestureDetector(
                                         onTap: () {
+                                          ref.read(navBarHiddenProvider.notifier).state = false;
                                           if (context.canPop()) {
                                             context.pop();
                                           } else {
@@ -698,7 +712,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
           Positioned(
             left: 16,
             right: 16,
-            bottom: bottomInset > 0 ? bottomInset + 80 : 210,
+            bottom: bottomInset > 0 ? bottomInset + 80 : 80,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -739,7 +753,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
         Positioned(
           left: 0,
           right: 0,
-          bottom: bottomInset > 0 ? bottomInset + 8 : 140,
+          bottom: bottomInset > 0 ? bottomInset + 8 : 16,
           child: Center(
             child: Container(
               constraints: const BoxConstraints(maxWidth: 600),
@@ -959,6 +973,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
               ),
             ),
         ],
+      ),
     );
   }
 

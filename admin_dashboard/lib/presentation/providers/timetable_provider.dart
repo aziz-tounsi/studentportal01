@@ -129,8 +129,11 @@ class TimetableNotifier extends AsyncNotifier<TimetableState> {
     }
   }
 
+  static const _dayNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+
   Future<void> create({required String subjectOfferingId, required int dayOfWeek, required String startTime, required String endTime, String? room}) async {
-    await SupabaseConfig.client.from('timetable_slots').insert({'subject_offering_id': subjectOfferingId, 'day_of_week': dayOfWeek, 'start_time': startTime, 'end_time': endTime, 'room': room});
+    final dayStr = _dayNames[dayOfWeek - 1];
+    await SupabaseConfig.client.from('timetable_slots').insert({'subject_offering_id': subjectOfferingId, 'day_of_week': dayStr, 'start_time': startTime, 'end_time': endTime, 'room': room});
     ref.invalidateSelf();
   }
 

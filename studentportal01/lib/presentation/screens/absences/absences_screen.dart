@@ -85,6 +85,7 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
         .from('subject_offerings')
         .select('''
           id,
+          subject_id,
           total_hours,
           weekly_ci_hours,
           weekly_tp_hours,
@@ -104,6 +105,29 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     if (subjectOfferings.isEmpty) {
       debugPrint('absencesProvider: No subject offerings found');
       return [];
+    }
+    
+    // Fetch teacher assignments for this class
+    final Map<String, Map<String, String>> teacherMap = {};
+    try {
+      final teacherResp = await supabase
+          .from('teacher_assignments')
+          .select('subject_id, teacher_id, users!teacher_id(full_name, photo_url)')
+          .eq('class_id', classId)
+          .eq('is_active', true);
+      
+      for (final ta in (teacherResp as List)) {
+        final subjectId = ta['subject_id'] as String?;
+        final teacherData = ta['users'] as Map<String, dynamic>?;
+        if (subjectId != null) {
+          teacherMap[subjectId] = {
+            'name': teacherData?['full_name'] as String? ?? '',
+            'photo': teacherData?['photo_url'] as String? ?? '',
+          };
+        }
+      }
+    } catch (e) {
+      debugPrint('absencesProvider: Error fetching teacher_assignments: $e');
     }
     
     final absenceResponse = await supabase
@@ -149,6 +173,9 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
         message = warningMessage;
       }
       
+      final subjectId = so['subject_id'] as String?;
+      final teacher = subjectId != null ? teacherMap[subjectId] : null;
+      
       summaries.add(SubjectAbsenceSummary(
         subjectOfferingId: soId,
         subjectName: subject?['name'] as String? ?? 'Matière inconnue',
@@ -161,6 +188,8 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
         absencePercent: absencePercent,
         level: level,
         warningMessage: message,
+        teacherName: teacher?['name'],
+        teacherPhotoUrl: teacher?['photo'],
       ));
     }
     
@@ -667,6 +696,28 @@ class _GlassyAbsenceCard extends StatelessWidget {
                               ),
                             ],
                           ),
+                          if (absence.teacherName != null && absence.teacherName!.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 10,
+                                  backgroundColor: Colors.grey.shade200,
+                                  backgroundImage: absence.teacherPhotoUrl != null && absence.teacherPhotoUrl!.isNotEmpty
+                                      ? NetworkImage(absence.teacherPhotoUrl!)
+                                      : null,
+                                  child: (absence.teacherPhotoUrl == null || absence.teacherPhotoUrl!.isEmpty)
+                                      ? Icon(Icons.person, size: 12, color: Colors.grey.shade500)
+                                      : null,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  absence.teacherName!,
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

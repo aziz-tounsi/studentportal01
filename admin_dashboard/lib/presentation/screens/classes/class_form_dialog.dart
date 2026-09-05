@@ -173,19 +173,9 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey.shade300, width: 1),
-                    ),
-                    child: InkWell(
-                      onTap: () => Navigator.pop(context),
-                      customBorder: const CircleBorder(),
-                      child: const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Icon(Icons.close, size: 18, color: Color(0xFF7B7D8B)),
-                      ),
-                    ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF7B7D8B)),
                   ),
                 ],
               ),

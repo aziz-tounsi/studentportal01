@@ -261,6 +261,11 @@ class ClassTimetableSlot {
     return 1;
   }
 
+  static int _timeToMinutes(String time) {
+    final parts = time.split(':');
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+  }
+
   factory ClassTimetableSlot.fromJson(Map<String, dynamic> json) {
     final so = json['subject_offerings'] as Map<String, dynamic>?;
     return ClassTimetableSlot(
@@ -290,39 +295,105 @@ final classTimetableTodayProvider =
   final dayName = dayNames[dow - 1];
 
   try {
-    final offerings = await supabase
+    // Get all subject_offerings for this class with subject details
+    final offeringsResp = await supabase
         .from('subject_offerings')
-        .select('id')
+        .select('id, subject_id, teacher_id, subjects(name, code)')
         .eq('class_id', classId);
-    final ids = (offerings as List).map((e) => e['id'] as String).toList();
-    if (ids.isEmpty) return [];
 
-    List<dynamic> data;
+    final offerings = offeringsResp as List;
+    if (offerings.isEmpty) return [];
+
+    final offeringIds = offerings.map((o) => o['id'] as String).toList();
+
+    // Get timetable slots for these offerings for today
+    final slotsResp = await supabase
+        .from('timetable_slots')
+        .select('*')
+        .inFilter('subject_offering_id', offeringIds)
+        .eq('day_of_week', dayName)
+        .order('start_time');
+
+    final slots = slotsResp as List;
+    if (slots.isEmpty) return [];
+
+    // Build lookup map for offerings
+    final Map<String, dynamic> offeringsMap = {};
+    for (var o in offerings) {
+      offeringsMap[o['id']] = o;
+    }
+
+    // Resolve teachers from teacher_assignments (subject_offerings.teacher_id may be NULL)
+    final Map<String, String> subjectClassTeacherMap = {};
     try {
-      data = await supabase
-          .from('timetable_slots')
-          .select('*, subject_offerings(subject_id, teacher_id, subjects(name, code), users(full_name))')
-          .inFilter('subject_offering_id', ids)
-          .eq('day_of_week', dayName)
-          .order('start_time');
-    } catch (_) {
-      data = await supabase
-          .from('timetable_slots')
-          .select('*, subject_offerings(subject_id, teacher_id, subjects(name, code), users(full_name))')
-          .inFilter('subject_offering_id', ids)
-          .eq('day_of_week', dow)
-          .order('start_time');
+      final teacherAssResp = await supabase
+          .from('teacher_assignments')
+          .select('subject_id, class_id, users!teacher_id(full_name)')
+          .eq('is_active', true);
+
+      for (final ta in (teacherAssResp as List)) {
+        final subjectId = ta['subject_id'] as String?;
+        final clsId = ta['class_id'] as String?;
+        final teacherData = ta['users'] as Map<String, dynamic>?;
+        if (subjectId != null && clsId != null) {
+          subjectClassTeacherMap['${subjectId}_$clsId'] = teacherData?['full_name'] as String? ?? '';
+        }
+      }
+    } catch (_) {}
+
+    // Build slot list with resolved teachers and cleaned rooms
+    final List<ClassTimetableSlot> result = [];
+    for (final slot in slots) {
+      final offering = offeringsMap[slot['subject_offering_id']];
+      final subject = offering?['subjects'];
+      final subjectId = offering?['subject_id'] as String?;
+
+      // Resolve teacher from teacher_assignments first, then fallbacks
+      String teacherName = subjectClassTeacherMap['${subjectId}_$classId'] ?? '';
+      if (teacherName.isEmpty) {
+        teacherName = (slot['teacher_name'] as String?) ?? '';
+      }
+
+      // Clean room: extract just the room name from strings like "Bloc A – Principal · 2ème étage · Salle 204"
+      String rawRoom = (slot['room'] as String?) ?? '';
+      String shortRoom = rawRoom;
+      if (rawRoom.contains('·')) {
+        final parts = rawRoom.split('·').map((s) => s.trim()).toList();
+        shortRoom = parts.last;
+      }
+
+      result.add(ClassTimetableSlot(
+        id: slot['id']?.toString() ?? '',
+        dayOfWeek: ClassTimetableSlot._parseDow(slot['day_of_week']),
+        startTime: slot['start_time']?.toString() ?? '08:00',
+        endTime: slot['end_time']?.toString() ?? '09:00',
+        room: shortRoom.isNotEmpty ? shortRoom : null,
+        subjectName: subject?['name']?.toString(),
+        subjectCode: subject?['code']?.toString(),
+        teacherName: teacherName.isNotEmpty ? teacherName : null,
+        teacherId: offering?['teacher_id']?.toString(),
+      ));
     }
 
-    // Deduplicate by composite key (same time + same subject = same course)
-    final seen = <String>{};
-    final slots = <ClassTimetableSlot>[];
-    for (final e in data) {
-      final slot = ClassTimetableSlot.fromJson(e as Map<String, dynamic>);
-      final key = '${slot.startTime}|${slot.endTime}|${slot.subjectName ?? slot.id}';
-      if (seen.add(key)) slots.add(slot);
+    // Deduplicate: same subject + same start time = same course; keep the longest one
+    final deduped = <String, ClassTimetableSlot>{};
+    for (final slot in result) {
+      final key = '${slot.startTime}|${slot.subjectName ?? slot.id}';
+      final existing = deduped[key];
+      if (existing == null) {
+        deduped[key] = slot;
+      } else {
+        final existingDuration = ClassTimetableSlot._timeToMinutes(existing.endTime) -
+            ClassTimetableSlot._timeToMinutes(existing.startTime);
+        final newDuration = ClassTimetableSlot._timeToMinutes(slot.endTime) -
+            ClassTimetableSlot._timeToMinutes(slot.startTime);
+        if (newDuration > existingDuration) {
+          deduped[key] = slot;
+        }
+      }
     }
-    return slots;
+
+    return deduped.values.toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
   } catch (e) {
     debugPrint('classTimetableTodayProvider error: $e');
     return [];
@@ -405,6 +476,9 @@ class ClassTeacherWithSubject {
   final String? photoUrl;
   final String? subjectName;
   final String? subjectCode;
+  final String? phone;
+  final bool isActive;
+  final DateTime? createdAt;
 
   ClassTeacherWithSubject({
     required this.id,
@@ -413,6 +487,9 @@ class ClassTeacherWithSubject {
     this.photoUrl,
     this.subjectName,
     this.subjectCode,
+    this.phone,
+    this.isActive = true,
+    this.createdAt,
   });
 }
 
@@ -428,7 +505,7 @@ final classAllTeachersProvider =
   try {
     final assignments = await supabase
         .from('teacher_assignments')
-        .select('teacher_id, subjects(name, code), users(id, full_name, email, photo_url)')
+        .select('teacher_id, subjects(name, code), users(id, full_name, email, photo_url, phone, is_active, created_at)')
         .eq('class_id', classId)
         .eq('is_active', true);
 
@@ -454,6 +531,9 @@ final classAllTeachersProvider =
         photoUrl: u['photo_url']?.toString(),
         subjectName: subjectName,
         subjectCode: s?['code']?.toString(),
+        phone: u['phone']?.toString(),
+        isActive: u['is_active'] == true,
+        createdAt: u['created_at'] != null ? DateTime.tryParse(u['created_at'].toString()) : null,
       ));
     }
     debugPrint('classAllTeachersProvider: ${teachers.length} teachers from teacher_assignments');

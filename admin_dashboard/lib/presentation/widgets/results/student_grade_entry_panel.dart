@@ -582,9 +582,11 @@ class _StudentGradeEntryPanelState extends State<StudentGradeEntryPanel> {
                   ],
                   decoration: InputDecoration(
                     hintText: '0.00',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       fontSize: 13,
                       color: AppColors.slate400,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 8,
                     ),

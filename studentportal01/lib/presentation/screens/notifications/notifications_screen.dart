@@ -489,11 +489,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFFE8D5F2), // Lavender / lilac
-            Color(0xFFD4C4E8), // Soft lilac
-            Color(0xFFC9D6F0), // Light periwinkle
-            Color(0xFFE0EAF5), // Icy blue-white
-            Color(0xFFF0F5FA), // Cool icy white
+            Color(0xFFF8F0FC),
+            Color(0xFFF0E6F8),
+            Color(0xFFEAF0FA),
+            Color(0xFFF4F8FC),
+            Color(0xFFFAFCFD),
           ],
           stops: [0.0, 0.25, 0.5, 0.75, 1.0],
         ),

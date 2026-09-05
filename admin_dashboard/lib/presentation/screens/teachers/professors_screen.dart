@@ -10,6 +10,34 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 
+// ── Speciality Color Helper ───────────────────────────────────────────────
+
+Color _specialityColor(String? name) {
+  if (name == null || name.trim().isEmpty) return const Color(0xFF655DD5);
+  final s = name.trim().toLowerCase();
+
+  if (s.contains('math')) return const Color(0xFF2563EB); // Blue
+  if (s.contains('phys') || s.contains('chim')) return const Color(0xFFDC2626); // Red
+  if (s.contains('svt') || s.contains('biol') || s.contains('vie') || s.contains('sc. nat')) return const Color(0xFF059669); // Emerald
+  if (s.contains('arab') || s == 'ar') return const Color(0xFF0891B2); // Cyan
+  if (s.contains('fran') || s == 'fr') return const Color(0xFF7C3AED); // Purple
+  if (s.contains('angl') || s.contains('eng') || s == 'en' || s == 'ang') return const Color(0xFFDB2777); // Pink
+  if (s.contains('hist') || s.contains('géo') || s.contains('geo') || s == 'hg') return const Color(0xFFD97706); // Amber
+  if (s.contains('philo')) return const Color(0xFF4F46E5); // Indigo
+  if (s.contains('info') || s.contains('tic') || s.contains('prog') || s.contains('syst') || s.contains('réseau')) return const Color(0xFF0284C7); // Sky
+  if (s.contains('sport') || s.contains('eps')) return const Color(0xFF10B981); // Green
+  if (s.contains('esp') || s.contains('span')) return const Color(0xFFE11D48); // Crimson
+  if (s.contains('all') || s.contains('germ')) return const Color(0xFFB45309); // Dark Amber
+  if (s.contains('ita')) return const Color(0xFF047857); // Forest Green
+  if (s.contains('tech') || s.contains('méc') || s.contains('élec')) return const Color(0xFF6D28D9); // Violet
+  if (s.contains('éco') || s.contains('eco') || s.contains('gest') || s.contains('compt')) return const Color(0xFFEA580C); // Orange
+  if (s.contains('mus') || s.contains('art') || s.contains('dess')) return const Color(0xFFBE185D); // Berry
+  if (s.contains('islam') || s.contains('pens') || s.contains('relig') || s.contains('pens_is')) return const Color(0xFF9333EA); // Purple-violet
+
+  final hue = (s.hashCode % 360).abs().toDouble();
+  return HSLColor.fromAHSL(1.0, hue, 0.65, 0.45).toColor();
+}
+
 // ── Provider ───────────────────────────────────────────────────────────────
 
 final professorsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -21,40 +49,48 @@ final professorsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
 
   final professors = List<Map<String, dynamic>>.from(response as List);
 
-  // Fetch teacher assignments with subjects to derive speciality
+  // Fetch teacher assignments with subjects, classes, and niveaux
   final teacherIds = professors.map((p) => p['id'] as String).toList();
   if (teacherIds.isNotEmpty) {
     try {
       final assignmentsResp = await Supabase.instance.client
           .from('teacher_assignments')
-          .select('teacher_id, subject_id, subjects(name)')
+          .select('teacher_id, subject_id, niveau_id, class_id, subjects(name), classes(name, niveaux(code)), niveaux(code)')
           .inFilter('teacher_id', teacherIds)
           .eq('is_active', true);
 
-      // Group subjects by teacher_id
+      // Group subjects, classes, niveaux by teacher_id
       final Map<String, Set<String>> teacherSubjects = {};
+      final Map<String, List<String>> teacherClasses = {};
+      final Map<String, Set<String>> teacherNiveaux = {};
       for (final a in assignmentsResp as List) {
         final teacherId = a['teacher_id'] as String?;
         final subjectName = (a['subjects'] as Map?)?['name'] as String?;
-        if (teacherId != null && subjectName != null) {
-          teacherSubjects.putIfAbsent(teacherId, () => {}).add(subjectName);
+        final className = (a['classes'] as Map?)?['name'] as String?;
+        // Try direct niveau_id first, fallback to class→niveaux, use code
+        final niveauCode = (a['niveaux'] as Map?)?['code'] as String? ??
+            ((a['classes'] as Map?)?['niveaux'] as Map?)?['code'] as String?;
+        if (teacherId != null) {
+          if (subjectName != null) teacherSubjects.putIfAbsent(teacherId, () => {}).add(subjectName);
+          if (className != null) teacherClasses.putIfAbsent(teacherId, () => []).add(className);
+          if (niveauCode != null) teacherNiveaux.putIfAbsent(teacherId, () => {}).add(niveauCode);
         }
       }
 
-      // Add speciality to each professor
       for (final prof in professors) {
         final id = prof['id'] as String;
         final subjects = teacherSubjects[id];
-        prof['speciality'] = subjects != null && subjects.isNotEmpty
-            ? subjects.first
-            : null;
+        prof['speciality'] = subjects != null && subjects.isNotEmpty ? subjects.first : null;
         prof['all_subjects'] = subjects?.toList() ?? [];
+        prof['classes'] = teacherClasses[id] ?? [];
+        prof['niveaux'] = teacherNiveaux[id]?.toList() ?? [];
       }
     } catch (_) {
-      // If assignments fetch fails, set empty speciality
       for (final prof in professors) {
         prof['speciality'] = null;
         prof['all_subjects'] = <String>[];
+        prof['classes'] = <String>[];
+        prof['niveaux'] = <String>[];
       }
     }
   }
@@ -1167,18 +1203,21 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
-        const checkboxW = 44.0;
-        const actionsW = 44.0;
-        const phoneW = 130.0;
-        const statusW = 100.0;
-        const specialityW = 160.0;
-        final nameW = (availableWidth - checkboxW - phoneW - statusW - specialityW - actionsW).clamp(200.0, 600.0);
+        const checkboxW = 40.0;
+        const actionsW = 40.0;
+        const phoneW = 140.0;
+        const statusW = 70.0;
+        const specialityW = 140.0;
+        const niveauxW = 100.0;
+        const classesW = 110.0;
+        const dateJoinedW = 90.0;
+        final nameW = (availableWidth - checkboxW - phoneW - statusW - specialityW - niveauxW - classesW - dateJoinedW - actionsW).clamp(200.0, 320.0);
 
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minWidth: availableWidth),
             child: DataTable(
-                  columnSpacing: 0,
+                  columnSpacing: 12,
                   horizontalMargin: 0,
                   dataRowMinHeight: 60,
                   dataRowMaxHeight: 64,
@@ -1192,7 +1231,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   ),
                   showCheckboxColumn: false,
                   columns: [
-                    // Checkbox header
                     DataColumn(
                       label: SizedBox(
                         width: checkboxW,
@@ -1222,8 +1260,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     ),
                     DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
                     DataColumn(label: SizedBox(width: specialityW, child: _headerLabel('SPÉCIALITÉ'))),
+                    DataColumn(label: SizedBox(width: niveauxW, child: _headerLabel('NIVEAUX'))),
+                    DataColumn(label: SizedBox(width: classesW, child: _headerLabel('CLASSES'))),
                     DataColumn(label: SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE'))),
                     DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT'))),
+                    DataColumn(label: SizedBox(width: dateJoinedW, child: _headerLabel('CRÉÉ LE'))),
                     DataColumn(label: SizedBox(width: actionsW, child: Container())),
                   ],
                   rows: professors.map((prof) {
@@ -1235,6 +1276,9 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     final gender = prof['gender'] as String? ?? '';
                     final photoUrl = prof['photo_url'] as String?;
                     final speciality = prof['speciality'] as String?;
+                    final profClasses = (prof['classes'] as List?)?.cast<String>() ?? [];
+                    final profNiveaux = (prof['niveaux'] as List?)?.cast<String>() ?? [];
+                    final createdAt = prof['created_at'] != null ? DateTime.tryParse(prof['created_at']) : null;
                     final isSelected = _selectedProfIds.contains(id);
 
                     return DataRow(
@@ -1244,7 +1288,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         return null;
                       }),
                       cells: [
-                        // Checkbox
                         DataCell(
                           SizedBox(
                             width: checkboxW,
@@ -1308,52 +1351,121 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           ),
                           onTap: id.isNotEmpty ? () => context.push('/teachers/$id') : null,
                         ),
-                        // Speciality
+                        // Speciality (matching users page niveau pill)
                         DataCell(
                           SizedBox(
                             width: specialityW,
                             child: speciality != null
-                                ? Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF0F5FF),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                                    ),
-                                    child: Text(
-                                      speciality,
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF3B82F6)),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                ? Center(
+                                    child: () {
+                                      final specColor = _specialityColor(speciality);
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: specColor.withOpacity(0.10),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: specColor.withOpacity(0.25)),
+                                        ),
+                                        child: Text(
+                                          speciality,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: specColor,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }(),
                                   )
-                                : Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.textTertiary)),
+                                : const Center(child: Text('—', style: TextStyle(fontSize: 12, color: AppColors.textTertiary))),
                           ),
                         ),
-                        // Phone
+                        // Niveaux
+                        DataCell(
+                          SizedBox(
+                            width: niveauxW,
+                            child: profNiveaux.isNotEmpty
+                                ? Center(
+                                    child: Wrap(
+                                      spacing: 4,
+                                      runSpacing: 2,
+                                      children: profNiveaux.take(2).map((n) {
+                                        final nColor = _specialityColor(n);
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: nColor.withOpacity(0.10),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: nColor.withOpacity(0.25)),
+                                          ),
+                                          child: Text(n, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: nColor), overflow: TextOverflow.ellipsis),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  )
+                                : const Center(child: Text('—', style: TextStyle(fontSize: 12, color: AppColors.textTertiary))),
+                          ),
+                        ),
+                        // Classes
+                        DataCell(
+                          SizedBox(
+                            width: classesW,
+                            child: profClasses.isNotEmpty
+                                ? Center(
+                                    child: Wrap(
+                                      spacing: 4,
+                                      runSpacing: 2,
+                                      children: profClasses.take(2).map((c) => Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.successSoft,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: AppColors.success.withOpacity(0.2)),
+                                        ),
+                                        child: Text(c, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis),
+                                      )).toList(),
+                                    ),
+                                  )
+                                : const Center(child: Text('—', style: TextStyle(fontSize: 12, color: AppColors.textTertiary))),
+                          ),
+                        ),
+                        // Phone (centered)
                         DataCell(
                           SizedBox(
                             width: phoneW,
-                            child: Text(phone.isNotEmpty ? phone : '—', style: const TextStyle(fontSize: 12.5, color: Color(0xFF4B5563))),
+                            child: Center(
+                              child: Text(phone.isNotEmpty ? phone : '—', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                            ),
                           ),
                         ),
-                        // Status badge
+                        // Status (matching users page niveau pill style)
                         DataCell(
                           SizedBox(
                             width: statusW,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
+                            child: Center(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: isActiveProf ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(AppRadius.xs),
                                   border: Border.all(color: isActiveProf ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA)),
                                 ),
                                 child: Text(
                                   isActiveProf ? 'Actif' : 'Inactif',
                                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isActiveProf ? const Color(0xFF16A34A) : const Color(0xFFDC2626)),
-                ),
+                                ),
                               ),
+                            ),
+                          ),
+                        ),
+                        // Date joined
+                        DataCell(
+                          SizedBox(
+                            width: dateJoinedW,
+                            child: Text(
+                              createdAt != null ? '${createdAt.day}/${createdAt.month}/${createdAt.year}' : '—',
+                              style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
                             ),
                           ),
                         ),
@@ -1407,20 +1519,25 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
           // Items per page
           const Text('Afficher par ', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 value: _itemsPerPage,
                 isDense: true,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: AppColors.textTertiary),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF4B5563)),
                 items: [10, 20, 50, 100].map((v) => DropdownMenuItem(
                   value: v,
-                  child: Text('$v'),
+                  child: Text('$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                 )).toList(),
                 onChanged: (v) => setState(() {
                   if (v != null) {

@@ -15,6 +15,7 @@ import '../../presentation/screens/subjects/subjects_management_screen.dart';
 import '../../presentation/screens/timetables/timetables_screen.dart';
 import '../../presentation/screens/announcements/announcements_screen.dart';
 import '../../presentation/screens/absences/absences_screen.dart';
+import '../../presentation/screens/absences/student_absences_screen.dart';
 import '../../presentation/screens/results_screen.dart';
 import '../../presentation/screens/suggestions/suggestions_screen.dart';
 import '../../presentation/screens/payments/payments_screen.dart';
@@ -94,6 +95,12 @@ final router = GoRouter(
       },
     ),
     GoRoute(path: '/absences', pageBuilder: (_, _) => const NoTransitionPage(child: AbsencesScreen())),
+    GoRoute(
+      path: '/student-absences/:studentId',
+      pageBuilder: (context, state) => NoTransitionPage(
+        child: StudentAbsencesScreen(studentId: state.pathParameters['studentId']!),
+      ),
+    ),
     GoRoute(path: '/results', pageBuilder: (_, _) => const NoTransitionPage(child: ResultsScreen())),
     GoRoute(path: '/suggestions', pageBuilder: (_, _) => const NoTransitionPage(child: SuggestionsScreen())),
     GoRoute(path: '/payments', pageBuilder: (_, _) => const NoTransitionPage(child: PaymentsScreen())),

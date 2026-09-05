@@ -13,6 +13,37 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../users/user_profile_screen.dart';
 
+// Maps UI plan-type keys to/from the Postgres enum values.
+// UI: 'semester' = Trimestriel (3 payments) -> DB 'trimester'
+// UI: 'semesterly' = Semestriel (2 payments) -> DB 'semesterly'
+String _mapUiPlanTypeToDb(String uiType) {
+  switch (uiType) {
+    case 'semester':
+      return 'trimester';
+    case 'semesterly':
+      return 'semesterly';
+    case 'annual':
+      return 'annual';
+    case 'monthly':
+    default:
+      return 'monthly';
+  }
+}
+
+String _mapDbPlanTypeToUi(String dbType) {
+  switch (dbType) {
+    case 'trimester':
+      return 'semester';
+    case 'semesterly':
+      return 'semesterly';
+    case 'annual':
+      return 'annual';
+    case 'monthly':
+    default:
+      return 'monthly';
+  }
+}
+
 /// Modern Payment Management Screen
 /// Full control over student payments with comprehensive filtering and actions
 class PaymentsScreen extends ConsumerStatefulWidget {
@@ -22,9 +53,7 @@ class PaymentsScreen extends ConsumerStatefulWidget {
   ConsumerState<PaymentsScreen> createState() => _PaymentsScreenState();
 }
 
-class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
-    with TickerProviderStateMixin {
-  late TabController _viewTabController;
+class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   final _searchController = TextEditingController();
   bool _showFilters = false;
   Set<String> _selectedPayments = {};
@@ -38,11 +67,19 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
   String? _selectedSectionId;
   String? _selectedClassId;
   bool _isLoadingHierarchy = true;
+  // Classes layout state
+  String? _layoutSelectedNiveauId;
+  String? _layoutSelectedSectionId;
+  String? _layoutSelectedClassId;
+  String? _layoutSelectedClassName;
+
+  // Class students pagination
+  int _classStudentsPage = 0;
+  int _classStudentsPerPage = 10;
 
   @override
   void initState() {
     super.initState();
-    _viewTabController = TabController(length: 3, vsync: this);
     _loadHierarchyData();
   }
 
@@ -200,7 +237,6 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
 
   @override
   void dispose() {
-    _viewTabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -367,10 +403,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
           ],
 
           // Student search (Autocomplete)
-          SizedBox(
-            width: 320,
-            height: 40,
-            child: _buildStudentSearchBar(),
+          Flexible(
+            child: SizedBox(
+              height: 40,
+              child: _buildStudentSearchBar(),
+            ),
           ),
 
           const SizedBox(width: 12),
@@ -605,15 +642,33 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
       );
   }
 
-  void _showCreatePaymentPlanForStudent(Map<String, dynamic> student) {
-    final enrollments = student['enrollments'] as List?;
+  void _showCreatePaymentPlanForStudent(Map<String, dynamic> student) async {
+    var enrollments = student['enrollments'] as List?;
+
+    // If enrollments not present (e.g. from DataTable), fetch them
     if (enrollments == null || enrollments.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cet élève n\'est inscrit dans aucune classe'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+      final studentId = student['id']?.toString() ?? student['studentId']?.toString() ?? '';
+      if (studentId.isEmpty) return;
+      try {
+        final supabase = Supabase.instance.client;
+        final resp = await supabase
+            .from('enrollments')
+            .select('id, classes(id, name, niveau_id, section_id)')
+            .eq('user_id', studentId)
+            .eq('is_active', true);
+        enrollments = resp as List?;
+      } catch (_) {}
+    }
+
+    if (enrollments == null || enrollments.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cet élève n\'est inscrit dans aucune classe'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
       return;
     }
 
@@ -622,8 +677,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     final classData = enrollment['classes'] as Map<String, dynamic>?;
 
     _showPaymentPlanCreationDialog(
-      studentId: student['id']?.toString() ?? '',
-      studentName: student['full_name']?.toString() ?? '',
+      studentId: student['id']?.toString() ?? student['studentId']?.toString() ?? '',
+      studentName: student['full_name']?.toString() ?? student['studentName']?.toString() ?? '',
       enrollmentId: enrollmentId ?? '',
       className: classData?['name']?.toString() ?? '',
       niveauId: classData?['niveau_id']?.toString(),
@@ -724,7 +779,6 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
         niveauId: niveauId,
         sectionId: sectionId,
         onCreated: () {
-          Navigator.pop(context);
           ref.invalidate(paymentsProvider);
         },
       ),
@@ -1593,118 +1647,1181 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
   // ═══════════════════════════════════════════════════════════════════════════
 
   Widget _buildMainContent(BuildContext context, PaymentsState state) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 20),
-          // ─── Tab bar (grade_levels style) ───
-          Container(
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.slate200)),
+    return _buildClassesLayout(context, state);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLASSES-STYLE LAYOUT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildClassesLayout(BuildContext context, PaymentsState state) {
+    if (_isLoadingHierarchy) {
+      return const Center(
+        child: IosLoader(color: Color(0xFF10B981)),
+      );
+    }
+
+    return Row(
+      children: [
+        // Left panel: niveaux navigation
+        Container(
+          width: 300,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              right: BorderSide(color: AppColors.border.withOpacity(0.5)),
             ),
-            child: Row(
-              children: [
-                TabBar(
-                  controller: _viewTabController,
-                  isScrollable: true,
-                  labelColor: const Color(0xFF0F172A),
-                  unselectedLabelColor: AppColors.slate500,
-                  labelStyle: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.bold),
-                  unselectedLabelStyle: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500),
-                  indicatorColor: const Color(0xFF10B981),
-                  indicatorWeight: 2,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  tabAlignment: TabAlignment.start,
-                  dividerColor: Colors.transparent,
-                  tabs: [
-                    Tab(text: 'Liste'),
-                    Tab(text: 'Par Étudiant'),
-                    Tab(text: 'Statistiques'),
+          ),
+          child: _buildPaymentsNiveauxPanel(),
+        ),
+        // Center: classes grid or selected class students
+        Expanded(
+          child: _layoutSelectedClassId == null
+              ? _buildPaymentsClassesGrid(state)
+              : _buildClassStudentsList(state),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentsNiveauxPanel() {
+    final brand = const Color(0xFF10B981);
+    final brandLight = const Color(0xFFD1FAE5);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Panel header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: brand.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.account_tree_outlined,
+                  size: 18,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Niveaux',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Sélectionnez un niveau',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
                   ],
                 ),
-                const Spacer(),
-                // Select-all (visible in Liste tab)
-                if (_viewTabController.index == 0 && state.filtered.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8, bottom: 4),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: Checkbox(
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            value: _selectedPayments.length ==
-                                state.filtered
-                                    .where(
-                                        (p) => p.status != PaymentStatus.paid)
-                                    .length,
-                            tristate: true,
-                            onChanged: (v) {
-                              setState(() {
-                                if (v == true) {
-                                  _selectedPayments = state.filtered
-                                      .where(
-                                          (p) => p.status != PaymentStatus.paid)
-                                      .map((p) => p.id)
-                                      .toSet();
-                                } else {
-                                  _selectedPayments.clear();
-                                }
-                              });
-                            },
-                            activeColor: const Color(0xFF10B981),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+
+        // Niveaux list
+        Expanded(
+          child: _allNiveaux.isEmpty
+              ? _buildEmptyState(
+                  icon: Icons.school_outlined,
+                  title: 'Aucun niveau',
+                  subtitle: 'Créez des niveaux pour commencer',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _allNiveaux.length,
+                  itemBuilder: (context, index) {
+                    final niveau = _allNiveaux[index];
+                    final niveauId = niveau['id'] as String;
+                    final isExpanded = _layoutSelectedNiveauId == niveauId;
+                    final sectionsForNiveau = _allSections
+                        .where((s) => s['niveau_id'] == niveauId)
+                        .toList();
+                    final classesForNiveau = _allClasses
+                        .where((c) => c['niveau_id'] == niveauId)
+                        .toList();
+                    final count = sectionsForNiveau.isNotEmpty
+                        ? sectionsForNiveau.length
+                        : classesForNiveau.length;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isExpanded ? brand.withOpacity(0.06) : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            if (!isExpanded)
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                          ],
+                          border: Border.all(
+                            color: isExpanded
+                                ? brand.withOpacity(0.18)
+                                : const Color(0xFFE5E7EB),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        child: Column(
+                          children: [
+                            InkWell(
+                              onTap: () => setState(() {
+                                if (isExpanded) {
+                                  _layoutSelectedNiveauId = null;
+                                  _layoutSelectedSectionId = null;
+                                  _layoutSelectedClassId = null;
+                                  _layoutSelectedClassName = null;
+                                } else {
+                                  _layoutSelectedNiveauId = niveauId;
+                                  _layoutSelectedSectionId = null;
+                                  _layoutSelectedClassId = null;
+                                  _layoutSelectedClassName = null;
+                                }
+                              }),
+                              borderRadius: BorderRadius.circular(14),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        niveau['name'] ?? 'Niveau',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: isExpanded
+                                              ? brand
+                                              : const Color(0xFF111827),
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 26,
+                                      height: 26,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isExpanded
+                                            ? brand
+                                            : const Color(0xFFF3F4F6),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '$count',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: isExpanded
+                                              ? Colors.white
+                                              : const Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (isExpanded && sectionsForNiveau.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                    left: 14, right: 14, bottom: 12),
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Container(
+                                        width: 2,
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: brand.withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(1),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          children: sectionsForNiveau
+                                              .map((section) {
+                                            final sClasses = classesForNiveau
+                                                .where((c) =>
+                                                    c['section_id'] ==
+                                                    section['id'])
+                                                .toList();
+                                            final isSel =
+                                                _layoutSelectedSectionId ==
+                                                    section['id'];
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                  bottom: 4),
+                                              child: Material(
+                                                color: Colors.transparent,
+                                                child: InkWell(
+                                                  onTap: () => setState(() {
+                                                    _layoutSelectedSectionId =
+                                                        isSel
+                                                            ? null
+                                                            : section['id'];
+                                                    _layoutSelectedClassId =
+                                                        null;
+                                                    _layoutSelectedClassName =
+                                                        null;
+                                                  }),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          10),
+                                                  child: Container(
+                                                    width: double.infinity,
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 10),
+                                                    decoration: BoxDecoration(
+                                                      color: isSel
+                                                          ? Colors.white
+                                                          : Colors.white
+                                                              .withOpacity(0.5),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10),
+                                                      boxShadow: isSel
+                                                          ? [
+                                                              BoxShadow(
+                                                                color: brand
+                                                                    .withOpacity(
+                                                                        0.08),
+                                                                blurRadius: 6,
+                                                                offset:
+                                                                    const Offset(
+                                                                        0, 2),
+                                                              ),
+                                                            ]
+                                                          : null,
+                                                      border: Border.all(
+                                                        color: isSel
+                                                            ? brand.withOpacity(
+                                                                0.22)
+                                                            : Colors
+                                                                .transparent,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Text(
+                                                            section['name'] ??
+                                                                'Section',
+                                                            style: TextStyle(
+                                                              fontSize: 13,
+                                                              fontWeight: isSel
+                                                                  ? FontWeight
+                                                                      .w600
+                                                                  : FontWeight
+                                                                      .w500,
+                                                              color: isSel
+                                                                  ? brand
+                                                                  : const Color(
+                                                                      0xFF4B5563),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        Container(
+                                                          padding: const EdgeInsets
+                                                              .symmetric(
+                                                              horizontal: 7,
+                                                              vertical: 2),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: isSel
+                                                                ? brandLight
+                                                                : const Color(
+                                                                    0xFFF3F4F6),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8),
+                                                          ),
+                                                          child: Text(
+                                                            '${sClasses.length}',
+                                                            style: TextStyle(
+                                                              fontSize: 11,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                              color: isSel
+                                                                  ? brand
+                                                                  : const Color(
+                                                                      0xFF9CA3AF),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  List<Map<String, dynamic>> get _layoutFilteredClasses {
+    if (_layoutSelectedNiveauId == null) return _allClasses;
+
+    return _allClasses.where((c) {
+      if (c['niveau_id'] != _layoutSelectedNiveauId) return false;
+      final sectionsForNiveau = _allSections
+          .where((s) => s['niveau_id'] == _layoutSelectedNiveauId)
+          .toList();
+      if (sectionsForNiveau.isNotEmpty &&
+          _layoutSelectedSectionId != null) {
+        return c['section_id'] == _layoutSelectedSectionId;
+      }
+      return true;
+    }).toList();
+  }
+
+  Widget _buildPaymentsClassesGrid(PaymentsState state) {
+    final classes = _layoutFilteredClasses;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Grid header
+        Container(
+          margin: const EdgeInsets.fromLTRB(28, 28, 28, 16),
+          child: Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Toutes les classes',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${classes.length} classe(s)',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              if (_layoutSelectedNiveauId != null)
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _layoutSelectedNiveauId = null;
+                    _layoutSelectedSectionId = null;
+                  }),
+                  icon: const Icon(Icons.clear, size: 16),
+                  label: const Text('Réinitialiser'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // Grid
+        Expanded(
+          child: classes.isEmpty
+              ? _buildEmptyState(
+                  icon: Icons.meeting_room_outlined,
+                  title: 'Aucune classe',
+                  subtitle: 'Aucune classe ne correspond à ce niveau',
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 350,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    mainAxisExtent: 205,
+                  ),
+                  itemCount: classes.length,
+                  itemBuilder: (context, index) {
+                    final cls = classes[index];
+                    final classId = cls['id'] as String;
+                    final studentCount = _allStudents
+                        .where((s) {
+                          final enrollments =
+                              s['enrollments'] as List? ?? [];
+                          return enrollments.any(
+                            (e) =>
+                                (e['class_id'] as String?) == classId,
+                          );
+                        })
+                        .length;
+                    return _buildPaymentClassCard(
+                      cls: cls,
+                      studentCount: studentCount,
+                      state: state,
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentClassCard({
+    required Map<String, dynamic> cls,
+    required int studentCount,
+    required PaymentsState state,
+  }) {
+    final brand = const Color(0xFF10B981);
+    final className = cls['name'] as String? ?? 'Classe';
+    final classId = cls['id'] as String?;
+    final sectionId = cls['section_id'] as String?;
+    final niveauId = cls['niveau_id'] as String?;
+    final isSelected = _layoutSelectedClassId == classId;
+
+    String? subtitle;
+    for (final s in _allSections) {
+      if (s['id'] == sectionId) {
+        subtitle = s['name'] as String?;
+        break;
+      }
+    }
+    if (subtitle == null) {
+      for (final n in _allNiveaux) {
+        if (n['id'] == niveauId) {
+          subtitle = n['name'] as String?;
+          break;
+        }
+      }
+    }
+
+    // Find all student IDs in this class
+    final classStudents = _allStudents.where((s) {
+      final enrollments = s['enrollments'] as List? ?? [];
+      return enrollments.any((e) => (e['class_id'] as String?) == classId);
+    }).toList();
+    final studentIds = classStudents
+        .map((s) => s['id']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    // Compute total to pay and amount already paid for this class
+    double totalAmount = 0;
+    double paidAmount = 0;
+
+    final matchingPlans = state.paymentPlans.where(
+      (p) =>
+          p.classId == classId ||
+          (p.studentId != null && studentIds.contains(p.studentId)),
+    ).toList();
+
+    for (final plan in matchingPlans) {
+      totalAmount += plan.amountTotal;
+      paidAmount += plan.paidAmount;
+    }
+
+    if (totalAmount == 0) {
+      final matchingSummaries = state.studentSummaries.where(
+        (s) =>
+            s.classId == classId ||
+            studentIds.contains(s.studentId),
+      ).toList();
+      for (final s in matchingSummaries) {
+        totalAmount += s.totalAmount;
+        paidAmount += s.paidAmount;
+      }
+    }
+
+    if (totalAmount == 0) {
+      final matchingPayments = state.payments.where(
+        (p) =>
+            p.classId == classId ||
+            (p.studentId != null && studentIds.contains(p.studentId)),
+      ).toList();
+      for (final p in matchingPayments) {
+        totalAmount += p.amount;
+        if (p.status == PaymentStatus.paid) {
+          paidAmount += p.amount;
+        }
+      }
+    }
+
+    final double remaining =
+        (totalAmount - paidAmount).clamp(0.0, double.infinity);
+    final double payRate =
+        totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
+    final int percent = (payRate * 100).round();
+
+    final currencyFormatter = NumberFormat('#,###', 'fr_FR');
+    final formattedPaid = currencyFormatter.format(paidAmount).replaceAll('\u00A0', ' ');
+    final formattedTotal = currencyFormatter.format(totalAmount).replaceAll('\u00A0', ' ');
+    final formattedRemaining = currencyFormatter.format(remaining).replaceAll('\u00A0', ' ');
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() {
+          _layoutSelectedClassId = classId;
+          _layoutSelectedClassName = className;
+        }),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? brand : const Color(0xFFF1F5F9),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Header: Icon + Class Info + Student count pill
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.article_rounded,
+                      color: Color(0xFF475569),
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Tout sélectionner',
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.textTertiary),
+                          className,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (subtitle != null)
+                          Text(
+                            subtitle,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF94A3B8),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFF1F5F9)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.people_outline_rounded,
+                          size: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$studentCount',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF475569),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                // Result count badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  margin: const EdgeInsets.only(bottom: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.slate100,
-                    borderRadius: BorderRadius.circular(20),
+                ],
+              ),
+
+              // Amounts Row: Déjà payé (left) & Total à payer (right)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Déjà payé',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$formattedPaid TND',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF059669),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    '${state.filtered.length} résultat(s)',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.slate600,
-                        fontWeight: FontWeight.w500),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'Total à payer',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$formattedTotal TND',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              // Progress Bar + Percentage
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: payRate,
+                        minHeight: 5.5,
+                        backgroundColor: const Color(0xFFE2E8F0),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF0D9488),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '$percent%',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Bottom Status (Reste / Paiements soldés)
+              if (remaining > 0)
+                Text(
+                  'Reste: $formattedRemaining TND',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFD97706),
+                  ),
+                )
+              else
+                const Text(
+                  'Paiements soldés',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF059669),
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
 
-          const SizedBox(height: 20),
+  Widget _buildClassStudentsList(PaymentsState state) {
+    final classStudentsRaw = _allStudents.where((s) {
+      final enrollments = s['enrollments'] as List? ?? [];
+      return enrollments.any(
+        (e) => (e['class_id'] as String?) == _layoutSelectedClassId,
+      );
+    }).toList();
 
-          // ─── Tab content ───
-          Expanded(
-            child: TabBarView(
-              controller: _viewTabController,
-              children: [
-                _buildPaymentsList(context, state),
-                _buildStudentsList(context, state),
-                _buildStatisticsView(context, state),
-              ],
-            ),
+    // Build enriched list: raw student data + payment summary
+    final List<Map<String, dynamic>> enrichedStudents = [];
+    for (final student in classStudentsRaw) {
+      final studentId = student['id'] as String?;
+      final existingSummary = state.studentSummaries.where((s) => s.studentId == studentId).firstOrNull;
+      enrichedStudents.add({
+        'id': studentId ?? '',
+        'full_name': student['full_name'] as String? ?? 'Sans nom',
+        'email': student['email'] as String? ?? '',
+        'phone': student['phone'] as String? ?? '',
+        'paidPayments': existingSummary?.paidPayments ?? 0,
+        'totalPayments': existingSummary?.totalPayments ?? 0,
+      });
+    }
+
+    final totalPages = _classStudentsPerPage > 0
+        ? (enrichedStudents.length / _classStudentsPerPage).ceil()
+        : 1;
+    final start = _classStudentsPage * _classStudentsPerPage;
+    final end = _classStudentsPerPage == -1
+        ? enrichedStudents.length
+        : (start + _classStudentsPerPage).clamp(0, enrichedStudents.length);
+    final pageStudents = enrichedStudents.sublist(start, end);
+
+    return Column(
+      children: [
+        // Header with back button
+        Container(
+          margin: const EdgeInsets.fromLTRB(28, 24, 28, 16),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() {
+                  _layoutSelectedClassId = null;
+                  _layoutSelectedClassName = null;
+                }),
+                icon: const Icon(Icons.arrow_back_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFF3F4F6),
+                  foregroundColor: const Color(0xFF374151),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                _layoutSelectedClassName ?? 'Classe',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${enrichedStudents.length} étudiant(s)',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+
+        // Bordered card with DataTable
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+            child: enrichedStudents.isEmpty
+                ? _buildEmptyState(
+                    icon: Icons.people_outline,
+                    title: 'Aucun étudiant',
+                    subtitle: 'Aucun étudiant inscrit dans cette classe',
+                  )
+                : Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border.withOpacity(0.3)),
+                      boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: const Offset(0, 2))],
+                    ),
+                    child: Column(children: [
+                      // Card header
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        decoration: const BoxDecoration(
+                          border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEECFB),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.people_rounded, color: Color(0xFF655DD5), size: 16),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text('Liste des étudiants', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEECFB),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text('${enrichedStudents.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF655DD5))),
+                          ),
+                        ]),
+                      ),
+
+                      // DataTable
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final w = constraints.maxWidth;
+                            const spacerW = 48.0;
+                            const actionsW = 48.0;
+                            const phoneW = 160.0;
+                            const paymentsW = 120.0;
+                            final nameW = (w - spacerW - phoneW - paymentsW - actionsW).clamp(200.0, double.infinity);
+
+                            return DataTable(
+                              columnSpacing: 0,
+                              horizontalMargin: 0,
+                              dataRowMinHeight: 56,
+                              dataRowMaxHeight: 60,
+                              headingRowHeight: 42,
+                              headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                              headingTextStyle: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textTertiary,
+                                fontSize: 11,
+                                letterSpacing: 0.5,
+                              ),
+                              showCheckboxColumn: false,
+                              columns: [
+                                DataColumn(label: SizedBox(width: spacerW, child: Container())),
+                                DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
+                                DataColumn(label: SizedBox(width: phoneW, child: _headerLabelCenter('TÉLÉPHONE'))),
+                                DataColumn(label: SizedBox(width: paymentsW, child: _headerLabelCenter('PAIEMENTS'))),
+                                DataColumn(label: SizedBox(width: actionsW, child: Container())),
+                              ],
+                              rows: pageStudents.map((s) {
+                                final sid = s['id'] as String;
+                                final fullName = s['full_name'] as String;
+                                final email = s['email'] as String;
+                                final phone = s['phone'] as String;
+                                final paid = s['paidPayments'] as int;
+                                final total = s['totalPayments'] as int;
+                                final allPaid = total > 0 && paid >= total;
+
+                                return DataRow(
+                                  color: WidgetStateProperty.resolveWith<Color?>((states) {
+                                    if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                                    return null;
+                                  }),
+                                  cells: [
+                                    DataCell(SizedBox(width: spacerW, child: Container())),
+                                    DataCell(
+                                      SizedBox(
+                                        width: nameW,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          child: Row(
+                                            children: [
+                                              UserAvatar(name: fullName, radius: 17),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      fullName,
+                                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      email,
+                                                      style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      onTap: () {
+                                        final existingSummary = state.studentSummaries.where((s) => s.studentId == sid).firstOrNull;
+                                        final summary = existingSummary ?? StudentPaymentSummary(
+                                          studentId: sid,
+                                          studentName: fullName,
+                                          studentEmail: email,
+                                          classId: _layoutSelectedClassId,
+                                          className: _layoutSelectedClassName,
+                                          totalAmount: 0,
+                                          paidAmount: 0,
+                                          pendingAmount: 0,
+                                          totalPayments: 0,
+                                          paidPayments: 0,
+                                          overduePayments: 0,
+                                          plans: [],
+                                        );
+                                        showDialog(
+                                          context: context,
+                                          builder: (_) => _StudentPaymentDetailDialog(student: summary, ref: ref),
+                                        );
+                                      },
+                                    ),
+                                    DataCell(
+                                      SizedBox(
+                                        width: phoneW,
+                                        child: Center(
+                                          child: Text(
+                                            phone.isNotEmpty ? phone : '—',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      SizedBox(
+                                        width: paymentsW,
+                                        child: Center(
+                                          child: total > 0
+                                              ? Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: allPaid ? const Color(0xFFF0FDF4) : const Color(0xFFFEF3C7),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: allPaid ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A)),
+                                                  ),
+                                                  child: Text(
+                                                    '$paid/$total',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: allPaid ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                                    ),
+                                                  ),
+                                                )
+                                              : const Text('—', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      SizedBox(
+                                        width: actionsW,
+                                        child: Center(
+                                          child: PopupMenuButton<String>(
+                                            icon: Icon(Icons.more_horiz, size: 18, color: AppColors.textTertiary),
+                                            tooltip: 'Actions',
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            elevation: 8,
+                                            offset: const Offset(-160, 40),
+                                            onSelected: (action) {
+                                              switch (action) {
+                                                case 'profile': context.push('/users/$sid'); break;
+                                                case 'edit_plan':
+                                                  final studentData = s;
+                                                  _showCreatePaymentPlanForStudent(studentData);
+                                                  break;
+                                              }
+                                            },
+                                            itemBuilder: (_) => [
+                                              PopupMenuItem(
+                                                value: 'profile',
+                                                height: 40,
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF10B981)),
+                                                    const SizedBox(width: 12),
+                                                    const Text('Voir profil', style: TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem(
+                                                value: 'edit_plan',
+                                                height: 40,
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF655DD5)),
+                                                    const SizedBox(width: 12),
+                                                    const Text('Modifier le plan', style: TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
+                      ),
+
+                      // Pagination footer
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFAFAFB),
+                          border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.3))),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                        ),
+                        child: Row(children: [
+                          Text('Afficher par ', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: _classStudentsPerPage,
+                                isDense: true,
+                                borderRadius: BorderRadius.circular(10),
+                                dropdownColor: Colors.white,
+                                elevation: 4,
+                                menuMaxHeight: 200,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: AppColors.textTertiary),
+                                items: [10, 20, 50].map((v) => DropdownMenuItem(
+                                  value: v,
+                                  child: Text('$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                                )).toList(),
+                                onChanged: (v) {
+                                  if (v != null) setState(() {
+                                    _classStudentsPerPage = v;
+                                    _classStudentsPage = 0;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Page ${_classStudentsPage + 1} sur ${totalPages == 0 ? 1 : totalPages}',
+                            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              InkWell(
+                                onTap: _classStudentsPage > 0 ? () => setState(() => _classStudentsPage--) : null,
+                                borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(Icons.chevron_left, size: 18, color: _classStudentsPage > 0 ? AppColors.textSecondary : AppColors.textTertiary),
+                                ),
+                              ),
+                              Container(width: 1, height: 24, color: AppColors.border),
+                              InkWell(
+                                onTap: _classStudentsPage < totalPages - 1 ? () => setState(() => _classStudentsPage++) : null,
+                                borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(Icons.chevron_right, size: 18, color: _classStudentsPage < totalPages - 1 ? AppColors.textSecondary : AppColors.textTertiary),
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ]),
+                      ),
+                    ]),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textTertiary, letterSpacing: 0.5),
+      ),
+    );
+  }
+
+  Widget _headerLabelCenter(String text) {
+    return Center(
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textTertiary, letterSpacing: 0.5),
       ),
     );
   }
@@ -1970,6 +3087,15 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                                 ]),
                               ),
                               PopupMenuItem(
+                                value: 'view_profile',
+                                child: Row(children: [
+                                  Icon(Icons.person_outline,
+                                      color: const Color(0xFF8B5CF6), size: 18),
+                                  const SizedBox(width: 10),
+                                  const Text('Voir profil'),
+                                ]),
+                              ),
+                              PopupMenuItem(
                                 value: 'edit',
                                 child: Row(children: [
                                   Icon(Icons.edit,
@@ -2055,256 +3181,79 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     StudentPaymentSummary student,
   ) {
     final progress = student.progressPercent;
-    final progressColor = progress >= 100
-        ? const Color(0xFF10B981)
-        : (progress >= 50 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE9EAF2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              // Left accent bar
-              Container(
-                width: 4,
-                color: progressColor,
-              ),
-              // Card content
-              Expanded(
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _showStudentPaymentDetails(context, student),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      child: Row(
-                        children: [
-                          // Progress circle
-                          SizedBox(
-                            width: 60,
-                            height: 60,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                CircularProgressIndicator(
-                                  value: progress / 100,
-                                  backgroundColor:
-                                      progressColor.withOpacity(0.12),
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(progressColor),
-                                  strokeWidth: 5,
-                                ),
-                                Text(
-                                  '${progress.toInt()}%',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: progressColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(width: 16),
-
-                          // Student info
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      student.studentName,
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF111827),
-                                      ),
-                                    ),
-                                    if (student.overduePayments > 0) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEF4444)
-                                              .withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.warning_rounded,
-                                                size: 11,
-                                                color: Color(0xFFEF4444)),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              '${student.overduePayments} en retard',
-                                              style: const TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFFEF4444)),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                const SizedBox(height: 3),
-                                Row(
-                                  children: [
-                                    Icon(Icons.school_outlined,
-                                        size: 12, color: AppColors.slate400),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      student.className ?? 'Classe non assignée',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.slate500),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                // Amount chips row
-                                Row(
-                                  children: [
-                                    _amountChip(
-                                        '${student.totalAmount.toStringAsFixed(0)} TND',
-                                        'Total',
-                                        AppColors.slate400,
-                                        AppColors.slate50),
-                                    const SizedBox(width: 8),
-                                    _amountChip(
-                                        '${student.paidAmount.toStringAsFixed(0)} TND',
-                                        'Payé',
-                                        const Color(0xFF10B981),
-                                        const Color(0xFF10B981)
-                                            .withOpacity(0.08)),
-                                    if (student.pendingAmount > 0) ...[
-                                      const SizedBox(width: 8),
-                                      _amountChip(
-                                          '${student.pendingAmount.toStringAsFixed(0)} TND',
-                                          'Reste',
-                                          const Color(0xFFF59E0B),
-                                          const Color(0xFFF59E0B)
-                                              .withOpacity(0.08)),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Paid/Total count
-                          Padding(
-                            padding: const EdgeInsets.only(left: 12, right: 4),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.check_circle,
-                                        size: 14,
-                                        color: const Color(0xFF10B981)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${student.paidPayments}/${student.totalPayments}',
-                                      style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF10B981)),
-                                    ),
-                                  ],
-                                ),
-                                Text(
-                                  'paiements',
-                                  style: TextStyle(
-                                      fontSize: 11, color: AppColors.slate400),
-                                ),
-                                const SizedBox(height: 6),
-                                // Quick reminder button
-                                if (student.overduePayments > 0)
-                                  GestureDetector(
-                                    onTap: () => _sendReminder(student),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF3B82F6)
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.send,
-                                              size: 12,
-                                              color: Color(0xFF3B82F6)),
-                                          const SizedBox(width: 4),
-                                          const Text('Rappel',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Color(0xFF3B82F6),
-                                                  fontWeight: FontWeight.w500)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-
-                          const Icon(Icons.chevron_right,
-                              color: Color(0xFFCBD5E1), size: 20),
-                        ],
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showStudentPaymentDetails(context, student),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                UserAvatar(
+                  name: student.studentName,
+                  radius: 20,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        student.studentName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
+                        ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        student.className ?? 'Classe non assignée',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.slate400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Payment status pill
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: progress >= 100
+                        ? const Color(0xFF10B981).withOpacity(0.08)
+                        : AppColors.slate50,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${student.paidPayments}/${student.totalPayments}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: progress >= 100
+                          ? const Color(0xFF10B981)
+                          : AppColors.slate600,
                     ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Icon(Icons.chevron_right_rounded,
+                    size: 18, color: AppColors.slate300),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _amountChip(
-      String value, String label, Color color, Color bgColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: TextStyle(fontSize: 9, color: color.withOpacity(0.8))),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: color)),
-        ],
       ),
     );
   }
@@ -2850,6 +3799,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
         break;
       case 'view':
         _showPaymentDetails(context, payment);
+        break;
+      case 'view_profile':
+        if (payment.studentId != null) {
+          context.push('/users/${payment.studentId}');
+        }
         break;
       case 'cancel':
         _confirmCancelPayment(context, payment);
@@ -3490,22 +4444,20 @@ class _StudentPaymentDetailDialog extends ConsumerStatefulWidget {
 class _StudentPaymentDetailDialogState
     extends ConsumerState<_StudentPaymentDetailDialog>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
   List<Map<String, dynamic>> _payments = [];
   List<Map<String, dynamic>> _paymentPlans = [];
   bool _isLoading = true;
   String _selectedCategory = 'all';
+  final Set<String> _selectedPaymentIds = {};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _loadStudentPayments();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -3513,34 +4465,46 @@ class _StudentPaymentDetailDialogState
     try {
       final supabase = Supabase.instance.client;
 
-      // Load payment plans with payments
+      // Get enrollment IDs for this student
+      final enrollments = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', widget.student.studentId);
+      final enrollmentIds = (enrollments as List).map((e) => e['id'] as String).toList();
+
+      if (enrollmentIds.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Load payment plans (latest first to get the active plan_type)
       final plansResponse = await supabase
           .from('payment_plans')
-          .select('''
-            *,
-            payments(*)
-          ''')
-          .eq('enrollment_id', widget.student.studentId)
+          .select('id, plan_type, category, enrollment_id, amount_total, created_at')
+          .inFilter('enrollment_id', enrollmentIds)
           .order('created_at', ascending: false);
 
-      // Load all payments for this student
+      // Load payments — deduplicate by payment ID
       final paymentsResponse = await supabase
           .from('payments')
-          .select('''
-            *,
-            payment_plans!inner(
-              id,
-              plan_type,
-              category,
-              enrollment_id
-            )
-          ''')
-          .eq('payment_plans.enrollment_id', widget.student.studentId)
+          .select('*, payment_plans!inner(id, plan_type, category, enrollment_id)')
+          .inFilter('payment_plans.enrollment_id', enrollmentIds)
           .order('due_date', ascending: true);
+
+      // Deduplicate: keep only one payment per ID (the first seen, which is earliest due_date)
+      final seenIds = <String>{};
+      final uniquePayments = <Map<String, dynamic>>[];
+      for (final p in paymentsResponse as List) {
+        final id = p['id']?.toString() ?? '';
+        if (id.isNotEmpty && !seenIds.contains(id)) {
+          seenIds.add(id);
+          uniquePayments.add(Map<String, dynamic>.from(p));
+        }
+      }
 
       setState(() {
         _paymentPlans = List<Map<String, dynamic>>.from(plansResponse);
-        _payments = List<Map<String, dynamic>>.from(paymentsResponse);
+        _payments = uniquePayments;
         _isLoading = false;
       });
     } catch (e) {
@@ -3550,77 +4514,78 @@ class _StudentPaymentDetailDialogState
   }
 
   List<Map<String, dynamic>> get _filteredPayments {
-    if (_selectedCategory == 'all') return _payments;
-    return _payments.where((p) {
-      final plan = p['payment_plans'] as Map<String, dynamic>?;
-      return plan?['category'] == _selectedCategory;
-    }).toList();
+    List<Map<String, dynamic>> result;
+    if (_selectedCategory == 'all') {
+      result = List.from(_payments);
+    } else {
+      result = _payments.where((p) {
+        final plan = p['payment_plans'] as Map<String, dynamic>?;
+        return plan?['category'] == _selectedCategory;
+      }).toList();
+    }
+    result.sort((a, b) {
+      final catA = (a['payment_plans'] as Map<String, dynamic>?)?['category'] ?? '';
+      final catB = (b['payment_plans'] as Map<String, dynamic>?)?['category'] ?? '';
+      final statusA = a['status'] ?? '';
+      final statusB = b['status'] ?? '';
+      if (statusA == statusB) return catA.compareTo(catB);
+      if (statusA == 'pending') return -1;
+      if (statusB == 'pending') return 1;
+      return catA.compareTo(catB);
+    });
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      child: Container(
-        width: 900,
-        height: 700,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 30,
-              offset: const Offset(0, 15),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildSummaryCards(),
-            _buildTabBar(),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: IosLoader())
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildMonthlyTimelineView(),
-                        _buildPaymentsListView(),
-                        _buildPaymentPlansView(),
-                      ],
-                    ),
-            ),
-          ],
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          width: 880,
+          height: 680,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: IosLoader())
+                    : _buildPaymentsListView(),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [const Color(0xFF667EEA), const Color(0xFF764BA2)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
-      ),
+    final s = widget.student;
+    final progress = s.progressPercent;
+    final isComplete = progress >= 100;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
       child: Row(
         children: [
           UserAvatar(
             name: widget.student.studentName,
-            radius: 30,
-            backgroundColor: Colors.white.withOpacity(0.2),
-            textColor: Colors.white,
+            radius: 22,
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3628,86 +4593,204 @@ class _StudentPaymentDetailDialogState
                 Text(
                   widget.student.studentName,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
+                    fontSize: 17,
                     fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(AppRadius.full),
-                      ),
-                      child: Text(
-                        widget.student.className ?? 'Non assigné',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                        ),
+                    Text(
+                      widget.student.className ?? 'Non assigné',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.slate400,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _buildStatusBadge(),
+                    if (_paymentPlans.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      _buildPaymentModeBadge(),
+                    ],
                   ],
                 ),
               ],
             ),
           ),
+          // Summary pills inline
+          _headerPill(
+            '${s.paidAmount.toStringAsFixed(0)} TND',
+            'payé sur ${s.totalAmount.toStringAsFixed(0)}',
+          ),
+          const SizedBox(width: 6),
+          _headerPill(
+            '${s.paidPayments}/${s.totalPayments}',
+            'paiements',
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: isComplete
+                  ? const Color(0xFF10B981).withOpacity(0.08)
+                  : AppColors.slate50,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isComplete ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                  size: 12,
+                  color: isComplete ? const Color(0xFF10B981) : AppColors.slate400,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isComplete ? 'Soldé' : '${progress.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isComplete ? const Color(0xFF10B981) : AppColors.slate600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close, color: Colors.white),
+            icon: Icon(Icons.close_rounded, size: 20, color: AppColors.slate400),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusBadge() {
-    final isComplete = widget.student.progressPercent >= 100;
-    final hasOverdue = widget.student.overduePayments > 0;
+  Widget _headerPill(String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.slate50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.slate800,
+              ),
+            ),
+            TextSpan(
+              text: ' $label',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.slate400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    Color bgColor;
-    String text;
-    IconData icon;
+  Widget _buildPaymentModeBadge() {
+    // Get the most recent active plan type
+    String planType = 'monthly';
+    for (final p in _paymentPlans) {
+      if (p['is_active'] != false) {
+        planType = p['plan_type']?.toString() ?? 'monthly';
+        break;
+      }
+    }
+    if (_paymentPlans.isNotEmpty) {
+      planType = _paymentPlans.first['plan_type']?.toString() ?? planType;
+    }
 
-    if (isComplete) {
-      bgColor = const Color(0xFF10B981);
-      text = 'Soldé';
-      icon = Icons.check_circle;
-    } else if (hasOverdue) {
-      bgColor = const Color(0xFFEF4444);
-      text = '${widget.student.overduePayments} en retard';
-      icon = Icons.warning_rounded;
-    } else {
-      bgColor = const Color(0xFFF59E0B);
-      text = 'En cours';
-      icon = Icons.access_time;
+    final String label;
+    switch (planType) {
+      case 'annual':
+        label = 'Annuel';
+        break;
+      case 'semester':
+      case 'trimester':
+        label = 'Trimestriel';
+        break;
+      case 'semesterly':
+        label = 'Semestriel';
+        break;
+      case 'monthly':
+      default:
+        label = 'Mensuel';
+        break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(AppRadius.full),
+        color: AppColors.slate100,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.slate200),
       ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow() {
+    final s = widget.student;
+    final progress = s.progressPercent;
+    final isComplete = progress >= 100;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 14),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          _summaryPill(
+            '${s.paidAmount.toStringAsFixed(0)} TND',
+            'payé sur ${s.totalAmount.toStringAsFixed(0)}',
+          ),
+          const SizedBox(width: 10),
+          _summaryPill(
+            '${s.paidPayments}/${s.totalPayments}',
+            'paiements',
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: isComplete
+                  ? const Color(0xFF10B981).withOpacity(0.08)
+                  : AppColors.slate50,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isComplete ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                  size: 14,
+                  color: isComplete ? const Color(0xFF10B981) : AppColors.slate400,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isComplete ? 'Soldé' : '${progress.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isComplete ? const Color(0xFF10B981) : AppColors.slate600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -3715,80 +4798,30 @@ class _StudentPaymentDetailDialogState
     );
   }
 
-  Widget _buildSummaryCards() {
+  Widget _summaryPill(String value, String label) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      color: AppColors.slate50,
-      child: Row(
-        children: [
-          _buildSummaryCard(
-            'Total',
-            '${widget.student.totalAmount.toStringAsFixed(0)} TND',
-            Icons.account_balance_wallet,
-            const Color(0xFF3B82F6),
-          ),
-          const SizedBox(width: 12),
-          _buildSummaryCard(
-            'Payé',
-            '${widget.student.paidAmount.toStringAsFixed(0)} TND',
-            Icons.check_circle,
-            const Color(0xFF10B981),
-          ),
-          const SizedBox(width: 12),
-          _buildSummaryCard(
-            'Reste',
-            '${widget.student.pendingAmount.toStringAsFixed(0)} TND',
-            Icons.pending,
-            const Color(0xFFF59E0B),
-          ),
-          const SizedBox(width: 12),
-          _buildProgressCard(),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.slate50,
+        borderRadius: BorderRadius.circular(20),
       ),
-    );
-  }
-
-  Widget _buildSummaryCard(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.slate200),
-        ),
-        child: Row(
+      child: RichText(
+        text: TextSpan(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.slate800,
               ),
-              child: Icon(icon, color: color, size: 22),
             ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
+            TextSpan(
+              text: ' $label',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.slate400,
+              ),
             ),
           ],
         ),
@@ -3796,94 +4829,18 @@ class _StudentPaymentDetailDialogState
     );
   }
 
-  Widget _buildProgressCard() {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.slate200),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 44,
-              height: 44,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: widget.student.progressPercent / 100,
-                    strokeWidth: 4,
-                    backgroundColor: AppColors.slate200,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      _getProgressColor(widget.student.progressPercent),
-                    ),
-                  ),
-                  Text(
-                    '${widget.student.progressPercent.toStringAsFixed(0)}%',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Progression',
-                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                ),
-                Text(
-                  '${widget.student.paidPayments}/${widget.student.totalPayments} paiements',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _getProgressColor(double progress) {
+  Color _progressColor(double progress) {
     if (progress >= 100) return const Color(0xFF10B981);
-    if (progress >= 75) return const Color(0xFF3B82F6);
-    if (progress >= 50) return const Color(0xFFF59E0B);
-    return const Color(0xFFEF4444);
+    if (progress >= 50) return const Color(0xFF655DD5);
+    return AppColors.slate400;
   }
 
-  Widget _buildTabBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.slate200)),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: const Color(0xFF667EEA),
-        unselectedLabelColor: AppColors.textTertiary,
-        indicatorColor: const Color(0xFF667EEA),
-        indicatorWeight: 3,
-        tabs: const [
-          Tab(
-            icon: Icon(Icons.calendar_month, size: 20),
-            text: 'Échéancier Mensuel',
-          ),
-          Tab(icon: Icon(Icons.list_alt, size: 20), text: 'Tous les Paiements'),
-          Tab(icon: Icon(Icons.category, size: 20), text: 'Plans de Paiement'),
-        ],
-      ),
-    );
-  }
+  static const _monthNames = [
+    '', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+  ];
+
+  String _monthName(int month) => month >= 1 && month <= 12 ? _monthNames[month] : '';
 
   Widget _buildMonthlyTimelineView() {
     // Group payments by month
@@ -3927,7 +4884,6 @@ class _StudentPaymentDetailDialogState
 
   Widget _buildCategoryFilter() {
     final categories = [
-      ('all', 'Toutes', Icons.apps),
       ('scolarite', 'Scolarité', Icons.school),
       ('transport', 'Transport', Icons.directions_bus),
       ('cantine', 'Cantine', Icons.restaurant),
@@ -3947,14 +4903,26 @@ class _StudentPaymentDetailDialogState
               label: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(cat.$3, size: 16),
-                  const SizedBox(width: 6),
+                  Icon(cat.$3, size: 15),
+                  const SizedBox(width: 5),
                   Text(cat.$2),
                 ],
               ),
-              selectedColor: const Color(0xFF667EEA).withOpacity(0.2),
-              checkmarkColor: const Color(0xFF667EEA),
-              onSelected: (_) => setState(() => _selectedCategory = cat.$1),
+              selectedColor: const Color(0xFF655DD5).withOpacity(0.1),
+              checkmarkColor: const Color(0xFF655DD5),
+              labelStyle: TextStyle(
+                fontSize: 12,
+                color: isSelected ? const Color(0xFF655DD5) : AppColors.slate600,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              ),
+              side: BorderSide(
+                color: isSelected
+                    ? const Color(0xFF655DD5).withOpacity(0.3)
+                    : AppColors.slate200,
+              ),
+              onSelected: (_) => setState(() {
+                _selectedCategory = _selectedCategory == cat.$1 ? 'all' : cat.$1;
+              }),
             ),
           );
         }).toList(),
@@ -4135,156 +5103,176 @@ class _StudentPaymentDetailDialogState
       statusText = 'En attente';
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(
-          color: isPaid ? AppColors.slate200 : statusColor.withOpacity(0.3),
+    return InkWell(
+      onTap: isPaid ? () => _showPaymentReceipt(payment) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _selectedPaymentIds.contains(payment['id']?.toString())
+                ? const Color(0xFF655DD5).withOpacity(0.4)
+                : isPaid ? AppColors.slate100 : statusColor.withOpacity(0.2),
+          ),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Category icon
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _getCategoryColor(category).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: _selectedPaymentIds.contains(payment['id']?.toString()),
+                onChanged: (value) {
+                  final id = payment['id']?.toString();
+                  if (id == null) return;
+                  setState(() {
+                    if (value == true) {
+                      _selectedPaymentIds.add(id);
+                    } else {
+                      _selectedPaymentIds.remove(id);
+                    }
+                  });
+                },
+                activeColor: const Color(0xFF655DD5),
+                side: BorderSide(color: AppColors.slate300),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
             ),
-            child: Icon(
-              _getCategoryIcon(category),
-              color: _getCategoryColor(category),
-              size: 20,
+            const SizedBox(width: 10),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _getCategoryColor(category).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _getCategoryIcon(category),
+                color: _getCategoryColor(category),
+                size: 18,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          // Details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _getCategoryName(category),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: AppColors.slate800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    dueDate != null
+                        ? 'Échéance: ${dueDate.day} ${_monthName(dueDate.month)} ${dueDate.year}'
+                        : 'Date non définie',
+                    style: TextStyle(color: AppColors.slate400, fontSize: 12),
+                  ),
+                  if (paidAt != null)
+                    Text(
+                      'Payé le: ${paidAt.day} ${_monthName(paidAt.month)} ${paidAt.year}',
+                      style: TextStyle(
+                        color: AppColors.slate400,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _getCategoryName(category),
-                  style: const TextStyle(
+                  '${amount.toStringAsFixed(0)} TND',
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
+                    color: AppColors.slate700,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  dueDate != null
-                      ? 'Échéance: ${dueDate.day}/${dueDate.month}/${dueDate.year}'
-                      : 'Date non définie',
-                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                ),
-                if (paidAt != null)
-                  Text(
-                    'Payé le: ${paidAt.day}/${paidAt.month}/${paidAt.year}',
-                    style: const TextStyle(
-                      color: Color(0xFF10B981),
-                      fontSize: 11,
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-              ],
-            ),
-          ),
-          // Amount
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${amount.toStringAsFixed(0)} TND',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: isPaid ? AppColors.textTertiary : AppColors.textPrimary,
-                  decoration: isPaid ? TextDecoration.lineThrough : null,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(statusIcon, size: 12, color: statusColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      statusText,
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 11, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          // Actions
-          if (!isPaid)
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, color: AppColors.textTertiary),
-              onSelected: (action) => _handlePaymentAction(action, payment),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'mark_paid',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Color(0xFF10B981),
-                        size: 18,
-                      ),
-                      SizedBox(width: 8),
-                      Text('Marquer payé'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, color: Color(0xFF3B82F6), size: 18),
-                      SizedBox(width: 8),
-                      Text('Modifier'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'cancel',
-                  child: Row(
-                    children: [
-                      Icon(Icons.cancel, color: Color(0xFFEF4444), size: 18),
-                      SizedBox(width: 8),
-                      Text('Annuler'),
                     ],
                   ),
                 ),
               ],
             ),
-          if (isPaid)
-            IconButton(
-              onPressed: () => _showPaymentReceipt(payment),
-              icon: Icon(Icons.receipt_long, color: AppColors.textTertiary),
-              tooltip: 'Voir le reçu',
+            const SizedBox(width: 6),
+            if (!isPaid)
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_horiz, size: 18, color: AppColors.slate400),
+                tooltip: '',
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 8,
+                offset: const Offset(-8, 32),
+                onSelected: (action) => _handlePaymentAction(action, payment),
+                itemBuilder: (context) => [
+                  _buildPopupItem('mark_paid', Icons.check_circle_outline_rounded, 'Marquer payé', const Color(0xFF10B981)),
+                  _buildPopupItem('edit', Icons.edit_outlined, 'Modifier', const Color(0xFF655DD5)),
+                  const PopupMenuDivider(height: 1),
+                  _buildPopupItem('cancel', Icons.close_rounded, 'Annuler', AppColors.error),
+                ],
+              ),
+            if (isPaid)
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_horiz, size: 18, color: AppColors.slate400),
+                tooltip: '',
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 8,
+                offset: const Offset(-8, 32),
+                onSelected: (action) => _handlePaymentAction(action, payment),
+                itemBuilder: (context) => [
+                  _buildPopupItem('view_receipt', Icons.receipt_long_rounded, 'Voir reçu', const Color(0xFF3B82F6)),
+                  _buildPopupItem('mark_unpaid', Icons.cancel_outlined, 'Marquer impayé', const Color(0xFFF59E0B)),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _buildPopupItem(String value, IconData icon, String label, Color color) {
+    return PopupMenuItem(
+      value: value,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: color),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: value == 'cancel' ? AppColors.error : AppColors.slate700,
             ),
+          ),
         ],
       ),
     );
@@ -4296,6 +5284,12 @@ class _StudentPaymentDetailDialogState
     switch (action) {
       case 'mark_paid':
         await _markPaymentAsPaid(paymentId);
+        break;
+      case 'mark_unpaid':
+        await _markPaymentAsUnpaid(paymentId);
+        break;
+      case 'view_receipt':
+        _showPaymentReceipt(payment);
         break;
       case 'edit':
         await _showEditPaymentDialog(payment);
@@ -4321,6 +5315,33 @@ class _StudentPaymentDetailDialogState
         const SnackBar(
           content: Text('Paiement marqué comme payé'),
           backgroundColor: Color(0xFF10B981),
+        ),
+      );
+
+      await _loadStudentPayments();
+      ref.read(paymentsProvider.notifier).refresh();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  Future<void> _markPaymentAsUnpaid(String paymentId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('payments')
+          .update({
+            'status': 'pending',
+            'paid_at': null,
+          })
+          .eq('id', paymentId);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Paiement marqué comme impayé'),
+          backgroundColor: Color(0xFFF59E0B),
         ),
       );
 
@@ -4558,117 +5579,154 @@ class _StudentPaymentDetailDialogState
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.receipt_long, color: Color(0xFF10B981)),
-            const SizedBox(width: 8),
-            const Text('Reçu de Paiement'),
-          ],
-        ),
-        content: SizedBox(
-          width: 350,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            width: 380,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 30,
+                  offset: const Offset(0, 15),
                 ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: Color(0xFF10B981),
-                      size: 48,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Paiement Effectué',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt_long_rounded, size: 18, color: AppColors.slate400),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Reçu de Paiement',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
+                        ),
                       ),
-                    ),
-                    Text(
-                      '${amount.toStringAsFixed(0)} TND',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 28,
-                        color: Color(0xFF10B981),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: Icon(Icons.close_rounded, size: 18, color: AppColors.slate400),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildReceiptRow('Étudiant', widget.student.studentName),
-              _buildReceiptRow('Catégorie', _getCategoryName(category)),
-              _buildReceiptRow('Méthode', _getPaymentMethodName(method)),
-              _buildReceiptRow('Référence', reference),
-              if (paidAt != null)
-                _buildReceiptRow(
-                  'Date',
-                  '${paidAt.day}/${paidAt.month}/${paidAt.year}',
-                ),
-            ],
-          ),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Fermer', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Impression en cours...')),
-                      );
-                    },
-                    icon: const Icon(Icons.print, size: 16),
-                    label: const Text('Imprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.slate50,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline_rounded,
+                          color: Color(0xFF655DD5),
+                          size: 36,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '${amount.toStringAsFixed(0)} TND',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 24,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Paiement effectué',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.slate400,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                  child: Column(
+                    children: [
+                      _receiptRow('Étudiant', widget.student.studentName),
+                      _receiptRow('Catégorie', _getCategoryName(category)),
+                      _receiptRow('Méthode', _getPaymentMethodName(method)),
+                      _receiptRow('Référence', reference),
+                      if (paidAt != null)
+                        _receiptRow(
+                          'Date',
+                          '${paidAt.day}/${paidAt.month}/${paidAt.year}',
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 42,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.slate200),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Fermer',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.slate500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildReceiptRow(String label, String value) {
+  Widget _receiptRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: AppColors.textTertiary)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(fontSize: 13, color: AppColors.slate400),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.slate700,
+            ),
+          ),
         ],
       ),
     );
@@ -4690,16 +5748,256 @@ class _StudentPaymentDetailDialogState
   }
 
   Widget _buildPaymentsListView() {
-    if (_filteredPayments.isEmpty) {
+    if (_filteredPayments.isEmpty && _payments.isEmpty) {
       return _buildEmptyState('Aucun paiement trouvé', Icons.payments);
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: _filteredPayments.length,
-      itemBuilder: (context, index) =>
-          _buildPaymentTimelineCard(_filteredPayments[index]),
+    final allFilteredSelected = _filteredPayments.isNotEmpty &&
+        _filteredPayments.every((p) => _selectedPaymentIds.contains(p['id']?.toString()));
+
+    return Stack(
+      children: [
+        Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Row(
+                children: [
+                  if (_filteredPayments.isNotEmpty)
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: allFilteredSelected,
+                        tristate: true,
+                        onChanged: (value) {
+                          setState(() {
+                            if (allFilteredSelected) {
+                              for (final p in _filteredPayments) {
+                                final id = p['id']?.toString();
+                                if (id != null) _selectedPaymentIds.remove(id);
+                              }
+                            } else {
+                              for (final p in _filteredPayments) {
+                                final id = p['id']?.toString();
+                                if (id != null) _selectedPaymentIds.add(id);
+                              }
+                            }
+                          });
+                        },
+                        activeColor: const Color(0xFF655DD5),
+                        side: BorderSide(color: AppColors.slate300),
+                      ),
+                    ),
+                  if (_filteredPayments.isNotEmpty) const SizedBox(width: 10),
+                  Expanded(child: _buildCategoryFilter()),
+                  if (_selectedPaymentIds.isNotEmpty)
+                    Text(
+                      '${_selectedPaymentIds.length} sélectionné(s)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.slate600,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _filteredPayments.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Aucun paiement pour cette catégorie',
+                        style: TextStyle(fontSize: 13, color: AppColors.slate400),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
+                      itemCount: _filteredPayments.length,
+                      itemBuilder: (context, index) =>
+                          _buildPaymentTimelineCard(_filteredPayments[index]),
+                    ),
+            ),
+          ],
+        ),
+        // Floating bulk action bar
+        if (_selectedPaymentIds.isNotEmpty)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              margin: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1F2937),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${_selectedPaymentIds.length}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFA5B4FC),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'paiement(s) sélectionné(s)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                    ),
+                  ),
+                  // Mark as paid
+                  _bulkActionButton(
+                    icon: Icons.check_circle_outline_rounded,
+                    label: 'Marquer payé',
+                    color: const Color(0xFF10B981),
+                    onPressed: () => _bulkMarkPaid(),
+                  ),
+                  const SizedBox(width: 8),
+                  // Mark as unpaid
+                  _bulkActionButton(
+                    icon: Icons.cancel_outlined,
+                    label: 'Marquer impayé',
+                    color: const Color(0xFFF59E0B),
+                    onPressed: () => _bulkMarkUnpaid(),
+                  ),
+                  const SizedBox(width: 8),
+                  // Delete
+                  _bulkActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Supprimer',
+                    color: const Color(0xFFEF4444),
+                    onPressed: () => _bulkDelete(),
+                  ),
+                  const SizedBox(width: 8),
+                  // Clear selection
+                  _bulkActionButton(
+                    icon: Icons.close_rounded,
+                    label: '',
+                    color: AppColors.slate400,
+                    onPressed: () => setState(() => _selectedPaymentIds.clear()),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
+  }
+
+  Widget _bulkActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: color.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              if (label.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _bulkMarkPaid() async {
+    final ids = _selectedPaymentIds.toList();
+    if (ids.isEmpty) return;
+
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('payments')
+          .update({'status': 'paid', 'paid_at': DateTime.now().toIso8601String()})
+          .inFilter('id', ids);
+
+      setState(() {
+        _selectedPaymentIds.clear();
+      });
+      await _loadStudentPayments();
+    } catch (e) {
+      debugPrint('Error bulk marking paid: $e');
+    }
+  }
+
+  Future<void> _bulkMarkUnpaid() async {
+    final ids = _selectedPaymentIds.toList();
+    if (ids.isEmpty) return;
+
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('payments')
+          .update({'status': 'pending', 'paid_at': null})
+          .inFilter('id', ids);
+
+      setState(() {
+        _selectedPaymentIds.clear();
+      });
+      await _loadStudentPayments();
+    } catch (e) {
+      debugPrint('Error bulk marking unpaid: $e');
+    }
+  }
+
+  Future<void> _bulkDelete() async {
+    final ids = _selectedPaymentIds.toList();
+    if (ids.isEmpty) return;
+
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('payments').delete().inFilter('id', ids);
+
+      setState(() {
+        _selectedPaymentIds.clear();
+      });
+      await _loadStudentPayments();
+    } catch (e) {
+      debugPrint('Error bulk deleting: $e');
+    }
   }
 
   Widget _buildPaymentPlansView() {
@@ -4819,7 +6117,7 @@ class _StudentPaymentDetailDialogState
                   Text(
                     '${progress.toStringAsFixed(0)}%',
                     style: TextStyle(
-                      color: _getProgressColor(progress),
+                      color: _progressColor(progress),
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
@@ -4834,7 +6132,7 @@ class _StudentPaymentDetailDialogState
                   minHeight: 8,
                   backgroundColor: AppColors.slate200,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    _getProgressColor(progress),
+                    _progressColor(progress),
                   ),
                 ),
               ),
@@ -4878,9 +6176,309 @@ class _StudentPaymentDetailDialogState
               }).toList(),
             ),
           ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 14, color: AppColors.textTertiary),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () => _showChangeFrequencyDialog(plan),
+                child: Text(
+                  'Modifier la fréquence',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF655DD5),
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
+  }
+
+  void _showChangeFrequencyDialog(Map<String, dynamic> plan) {
+    final currentType = _mapDbPlanTypeToUi(plan['plan_type']?.toString() ?? 'monthly');
+    final planId = plan['id']?.toString() ?? '';
+    final totalAmount = (plan['amount_total'] as num?)?.toDouble() ?? 0;
+    String selectedType = currentType;
+
+    final planTypes = [
+      ('monthly', 'Mensuel', '9x', Icons.calendar_view_month_rounded),
+      ('semester', 'Trimestriel', '3x', Icons.view_week_rounded),
+      ('semesterly', 'Semestriel', '2x', Icons.view_day_rounded),
+      ('annual', 'Annuel', '1x', Icons.event_available_rounded),
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: 500,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF655DD5).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.schedule, color: Color(0xFF655DD5), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Modifier la fréquence',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Les paiements existants seront supprimés et recalculés selon la nouvelle fréquence.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: planTypes.map((pt) {
+                    final isSelected = selectedType == pt.$1;
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: pt != planTypes.last ? 8 : 0),
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => selectedType = pt.$1),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF655DD5).withOpacity(0.05) : Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF655DD5) : const Color(0xFFE5E7EB),
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(pt.$4, color: isSelected ? const Color(0xFF655DD5) : const Color(0xFF6B7280), size: 22),
+                                const SizedBox(height: 6),
+                                Text(
+                                  pt.$2,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected ? const Color(0xFF655DD5) : const Color(0xFF374151),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  pt.$3,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isSelected ? const Color(0xFF655DD5).withOpacity(0.7) : AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Annuler'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: selectedType == currentType
+                          ? null
+                          : () async {
+                              Navigator.pop(ctx);
+                              await _applyFrequencyChange(planId, selectedType, totalAmount);
+                            },
+                      icon: const Icon(Icons.check, size: 16),
+                      label: const Text('Appliquer'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF655DD5),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyFrequencyChange(String planId, String newUiType, double totalAmount) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final dbType = _mapUiPlanTypeToDb(newUiType);
+
+      setState(() => _isLoading = true);
+
+      // 1. Update the plan_type on the plan
+      await supabase
+          .from('payment_plans')
+          .update({'plan_type': dbType})
+          .eq('id', planId);
+
+      // 2. Delete ALL existing payments for this plan
+      await supabase
+          .from('payments')
+          .delete()
+          .eq('payment_plan_id', planId);
+
+      // 3. Determine number of payments
+      int numPayments;
+      switch (newUiType) {
+        case 'semester':
+          numPayments = 3;
+          break;
+        case 'semesterly':
+          numPayments = 2;
+          break;
+        case 'annual':
+          numPayments = 1;
+          break;
+        case 'monthly':
+        default:
+          numPayments = 9;
+          break;
+      }
+
+      // 4. Load the enrollment to get academic year dates
+      final planData = await supabase
+          .from('payment_plans')
+          .select('enrollment_id')
+          .eq('id', planId)
+          .single();
+
+      final enrollmentId = planData['enrollment_id']?.toString();
+      if (enrollmentId == null) {
+        throw Exception('Enrollment not found');
+      }
+
+      final enrollment = await supabase
+          .from('enrollments')
+          .select('academic_year_id, classes(niveau_id)')
+          .eq('id', enrollmentId)
+          .single();
+
+      final academicYearId = enrollment['academic_year_id']?.toString();
+
+      DateTime startDate = DateTime(DateTime.now().year, 9, 1);
+      int totalMonths = 9;
+
+      if (academicYearId != null) {
+        final yearData = await supabase
+            .from('academic_years')
+            .select('start_date, end_date')
+            .eq('id', academicYearId)
+            .maybeSingle();
+
+        if (yearData != null) {
+          final s = DateTime.tryParse(yearData['start_date']?.toString() ?? '');
+          final e = DateTime.tryParse(yearData['end_date']?.toString() ?? '');
+          if (s != null && e != null && e.isAfter(s)) {
+            startDate = DateTime(s.year, s.month, 1);
+            totalMonths = (e.year - s.year) * 12 + (e.month - s.month) + 1;
+          }
+        }
+      }
+
+      // 5. Create new payments
+      final paymentAmount = totalAmount / numPayments;
+      final newPayments = <Map<String, dynamic>>[];
+
+      for (int i = 0; i < numPayments; i++) {
+        DateTime dueDate;
+        if (newUiType == 'monthly') {
+          dueDate = DateTime(startDate.year, startDate.month + i, 1);
+        } else {
+          final monthsPerPart = (totalMonths / numPayments).ceil();
+          dueDate = DateTime(startDate.year, startDate.month + (i * monthsPerPart), 1);
+        }
+
+        newPayments.add({
+          'payment_plan_id': planId,
+          'amount': paymentAmount,
+          'due_date': dueDate.toIso8601String(),
+          'status': 'pending',
+        });
+      }
+
+      if (newPayments.isNotEmpty) {
+        await supabase.from('payments').insert(newPayments);
+      }
+
+      // 6. Reload
+      await _loadStudentPayments();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fréquence changée en ${_getPlanTypeName(newUiType)}'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error changing frequency: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+      setState(() => _isLoading = false);
+    }
   }
 
   String _getPlanTypeName(String planType) {
@@ -4888,7 +6486,10 @@ class _StudentPaymentDetailDialogState
       case 'monthly':
         return 'Paiement mensuel (9x)';
       case 'semester':
+      case 'trimester':
         return 'Paiement trimestriel (3x)';
+      case 'semesterly':
+        return 'Paiement semestriel (2x)';
       case 'annual':
         return 'Paiement annuel (1x)';
       default:
@@ -5743,6 +7344,7 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
   final _planTypes = [
     ('monthly', 'Mensuel', 9),
     ('semester', 'Trimestriel', 3),
+    ('semesterly', 'Semestriel', 2),
     ('annual', 'Annuel', 1),
   ];
 
@@ -5783,18 +7385,37 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
             .maybeSingle();
 
         if (yearData != null) {
-          final start = DateTime.tryParse(yearData['start_date'].toString());
-          final end = DateTime.tryParse(yearData['end_date'].toString());
-          if (start != null && end != null && end.isAfter(start)) {
-            _monthCount = (end.year - start.year) * 12 + (end.month - start.month) + 1;
-          }
-
-          // Count semesters directly from the academic year
+          // Load actual semesters to compute real month count and start date
           final semesterResp = await supabase
               .from('semesters')
-              .select('id')
-              .eq('academic_year_id', yearData['id'].toString());
-          _semesterCount = semesterResp.length;
+              .select('start_date, end_date')
+              .eq('academic_year_id', yearData['id'].toString())
+              .order('start_date', ascending: true);
+
+          final semesterList = semesterResp as List;
+
+          if (semesterList.isNotEmpty) {
+            // Use first semester's start date as the real start
+            final firstStart = DateTime.tryParse(semesterList.first['start_date'].toString());
+            final lastEnd = DateTime.tryParse(semesterList.last['end_date'].toString());
+
+            if (firstStart != null) _startDate = firstStart;
+
+            if (firstStart != null && lastEnd != null) {
+              // Count months spanning all semesters
+              _monthCount = (lastEnd.year - firstStart.year) * 12 + (lastEnd.month - firstStart.month) + 1;
+            }
+          } else {
+            // Fallback to academic year dates
+            final start = DateTime.tryParse(yearData['start_date'].toString());
+            final end = DateTime.tryParse(yearData['end_date'].toString());
+            if (start != null && end != null && end.isAfter(start)) {
+              _monthCount = (end.year - start.year) * 12 + (end.month - start.month) + 1;
+              _startDate = start;
+            }
+          }
+
+          _semesterCount = semesterList.length;
         }
 
         if (_semesterCount <= 0) {
@@ -5810,7 +7431,7 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
         if (_monthCount <= 0) _monthCount = 9;
 
         // Load pricing for scolarite if niveauId available
-        if (widget.niveauId != null) {
+        if (widget.niveauId != null && _amountController.text.isEmpty) {
           final pricing = await supabase.rpc(
             'get_payment_pricing_for_enrollment',
             params: {
@@ -5844,6 +7465,8 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
             }
           }
         }
+
+        await _loadExistingPlanForCategory(_selectedCategory);
       }
     } catch (e) {
       debugPrint('Error loading academic year/pricing: $e');
@@ -5855,7 +7478,8 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
   List<(String, String, int)> get _dynamicPlanTypes {
     return [
       ('monthly', 'Mensuel ($_monthCount paiements)', _monthCount),
-      ('semester', 'Trimestriel ($_semesterCount paiements)', _semesterCount),
+      ('semester', 'Trimestriel (3 paiements)', 3),
+      ('semesterly', 'Semestriel (2 paiements)', 2),
       ('annual', 'Annuel (1 paiement)', 1),
     ];
   }
@@ -5867,11 +7491,12 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
       _selectedCategory = category;
       if (!_isScolarite) {
         _selectedPlanType = 'annual';
-      } else if (!['monthly', 'semester', 'annual'].contains(_selectedPlanType)) {
+      } else if (!['monthly', 'semester', 'semesterly', 'annual'].contains(_selectedPlanType)) {
         _selectedPlanType = 'monthly';
       }
     });
     _loadPricingForCategory(category);
+    _loadExistingPlanForCategory(category);
   }
 
   Future<void> _loadPricingForCategory(String category) async {
@@ -5895,15 +7520,58 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
       if (pricing != null && (pricing as List).isNotEmpty) {
         final amount = (pricing.first['amount'] as num?)?.toDouble();
         if (amount != null && amount > 0) {
-          _amountController.text = amount.toStringAsFixed(0);
+          setState(() => _amountController.text = amount.toStringAsFixed(0));
         } else {
-          _amountController.clear();
+          setState(() => _amountController.clear());
         }
       } else {
-        _amountController.clear();
+        setState(() => _amountController.clear());
       }
     } catch (e) {
       debugPrint('Error loading category pricing: $e');
+    }
+  }
+
+  Future<void> _loadExistingPlanForCategory(String category) async {
+    // Reset fields for the newly selected category first so stale values
+    // from a previous category don't leak through.
+    setState(() {
+      _descriptionController.clear();
+      if (!_isScolarite) {
+        _selectedPlanType = 'annual';
+      } else {
+        _selectedPlanType = 'monthly';
+      }
+    });
+
+    try {
+      final supabase = Supabase.instance.client;
+      final existingPlan = await supabase
+          .from('payment_plans')
+          .select('plan_type, category, amount_total, description')
+          .eq('enrollment_id', widget.enrollmentId)
+          .eq('category', category)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (existingPlan != null && mounted) {
+        final dbType = existingPlan['plan_type']?.toString() ?? 'monthly';
+        final amt = (existingPlan['amount_total'] as num?)?.toDouble() ?? 0;
+        final desc = existingPlan['description']?.toString() ?? '';
+
+        setState(() {
+          _selectedPlanType = _mapDbPlanTypeToUi(dbType);
+          if (amt > 0) {
+            _amountController.text = amt.toStringAsFixed(0);
+          }
+          if (desc.isNotEmpty) {
+            _descriptionController.text = desc;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading existing plan for category: $e');
     }
   }
 
@@ -5917,20 +7585,38 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
     final amount = _currentAmount;
     if (amount == null || amount <= 0) {
       return Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.slate50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.slate200),
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFDE68A)),
         ),
         child: Row(
           children: [
-            Icon(Icons.info_outline, color: AppColors.textTertiary, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Tarification non définie pour cette catégorie. Veuillez la configurer dans la page Tarification.',
-                style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBBF24).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 22),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tarification non définie',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Configurez-la dans la page Tarification.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFFB45309)),
+                  ),
+                ],
               ),
             ),
           ],
@@ -5947,50 +7633,173 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
     final installment = amount / count;
 
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_brand.withOpacity(0.08), _brand.withOpacity(0.02)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _brand.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(color: _brand.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 6)),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.preview_outlined, color: _brand, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Montant à facturer',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _brand),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _brandLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded, color: _brand, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  count == 1 ? 'Paiement unique' : 'Plan en $count fois',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _brand),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '${_formatCurrency(amount)} TND',
+              style: const TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+                letterSpacing: -1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _brandLight,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                count == 1
+                    ? '${_formatCurrency(installment)} TND en 1 versement'
+                    : '${_formatCurrency(installment)} TND × $count versements',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _brand),
+              ),
+            ),
+            if (count > 1) ...[
+              const SizedBox(height: 20),
+              // Timeline header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _brandLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timeline_rounded, color: _brand, size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$count échéances',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _brand),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${DateFormat('MMM yyyy', 'fr').format(_startDate)} → ${DateFormat('MMM yyyy', 'fr').format(_getEndDate(planType, count))}',
+                    style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Horizontal timeline
+              SizedBox(
+                height: 110,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: count,
+                  itemBuilder: (context, i) {
+                    DateTime dueDate;
+                    if (planType == 'monthly') {
+                      dueDate = DateTime(_startDate.year, _startDate.month + i, 1);
+                    } else if (planType == 'semester' || planType == 'trimester' || planType == 'semesterly') {
+                      final monthsPerPart = (_monthCount / count).ceil();
+                      dueDate = DateTime(_startDate.year, _startDate.month + (i * monthsPerPart), 1);
+                    } else {
+                      dueDate = _startDate;
+                    }
+                    final isFirst = i == 0;
+                    final isLast = i == count - 1;
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (i == 0) const SizedBox(width: 4),
+                        Column(
+                          children: [
+                            // Month label
+                            Text(
+                              DateFormat('MMM', 'fr').format(dueDate).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textTertiary,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            // Node
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: _brandLight,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: _brand.withOpacity(0.3)),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '${i + 1}',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _brand),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            // Amount
+                            Text(
+                              '${_formatCurrency(installment)}',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                            ),
+                            Text(
+                              'TND',
+                              style: TextStyle(fontSize: 9, color: AppColors.textTertiary),
+                            ),
+                          ],
+                        ),
+                        // Connector line
+                        if (!isLast)
+                          Container(
+                            margin: const EdgeInsets.only(top: 18),
+                            width: 24,
+                            height: 2,
+                            decoration: BoxDecoration(
+                              color: _brand.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                          ),
+                        if (isLast) const SizedBox(width: 4),
+                      ],
+                    );
+                  },
+                ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${_formatCurrency(amount)} TND',
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            count == 1
-                ? '1 paiement unique de ${_formatCurrency(installment)} TND'
-                : '$count paiements de ${_formatCurrency(installment)} TND',
-            style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
-          ),
-          Text(
-            'Ce montant sera visible par l\'élève dans l\'application.',
-            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -5998,6 +7807,19 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
   String _formatCurrency(double amount) {
     final formatter = NumberFormat('#,###.##', 'fr_FR');
     return formatter.format(amount);
+  }
+
+  DateTime _getEndDate(String planType, int count) {
+    if (planType == 'monthly') {
+      return DateTime(_startDate.year, _startDate.month + count - 1, 1);
+    } else if (planType == 'semester' || planType == 'trimester') {
+      final monthsPerPart = (_monthCount / count).ceil();
+      return DateTime(_startDate.year, _startDate.month + ((count - 1) * monthsPerPart), 1);
+    } else if (planType == 'semesterly') {
+      final monthsPerPart = (_monthCount / count).ceil();
+      return DateTime(_startDate.year, _startDate.month + ((count - 1) * monthsPerPart), 1);
+    }
+    return _startDate;
   }
 
   @override
@@ -6086,40 +7908,42 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
                     'Catégorie',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: _categories.map((cat) {
                       final isSelected = _selectedCategory == cat.$1;
-                      return FilterChip(
-                        selected: isSelected,
-                        label: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              cat.$3,
-                              size: 16,
-                              color: isSelected ? Colors.white : cat.$4,
+                      return GestureDetector(
+                        onTap: () => _onCategoryChanged(cat.$1),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeInOut,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected ? cat.$4.withOpacity(0.08) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected ? cat.$4 : const Color(0xFFE5E7EB),
+                              width: isSelected ? 1.5 : 1,
                             ),
-                            const SizedBox(width: 6),
-                            Text(cat.$2),
-                          ],
-                        ),
-                        selectedColor: cat.$4,
-                        checkmarkColor: Colors.white,
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: isSelected ? cat.$4 : AppColors.slate200,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(cat.$3, size: 18, color: cat.$4),
+                              const SizedBox(width: 8),
+                              Text(
+                                cat.$2,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                  color: isSelected ? const Color(0xFF111827) : const Color(0xFF374151),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        backgroundColor: Colors.white,
-                        onSelected: (_) => _onCategoryChanged(cat.$1),
                       );
                     }).toList(),
                   ),
@@ -6128,40 +7952,75 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
 
                   // Plan type (only for scolarité)
                   if (_isScolarite) ...[
-                    const Text(
-                      'Type de paiement',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: _brand.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.schedule_rounded, color: _brand, size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Fréquence de paiement',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF111827)),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.slate50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.slate200),
-                      ),
-                      child: Column(
-                        children: _dynamicPlanTypes.map((pt) {
-                          final isSelected = _selectedPlanType == pt.$1;
-                          return RadioListTile<String>(
-                            value: pt.$1,
-                            groupValue: _selectedPlanType,
-                            onChanged: (v) => setState(() => _selectedPlanType = v!),
-                            title: Text(
-                              pt.$2,
-                              style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                color: isSelected ? _brand : AppColors.textPrimary,
+                    const SizedBox(height: 12),
+                    Row(
+                      children: _dynamicPlanTypes.map((pt) {
+                        final isSelected = _selectedPlanType == pt.$1;
+                        final icons = {'monthly': Icons.calendar_view_month_rounded, 'semester': Icons.view_week_rounded, 'trimester': Icons.view_week_rounded, 'semesterly': Icons.view_day_rounded, 'annual': Icons.event_available_rounded};
+                        final icon = icons[pt.$1] ?? Icons.payments_rounded;
+                        return Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(right: pt != _dynamicPlanTypes.last ? 8 : 0),
+                            child: GestureDetector(
+                              onTap: () => setState(() => _selectedPlanType = pt.$1),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeInOut,
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isSelected ? _brand : const Color(0xFFE5E7EB),
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(icon, color: isSelected ? _brand : const Color(0xFF6B7280), size: 22),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      pt.$1 == 'monthly' ? 'Mensuel' : (pt.$1 == 'semester' || pt.$1 == 'trimester') ? 'Trimestriel' : pt.$1 == 'semesterly' ? 'Semestriel' : 'Annuel',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isSelected ? _brand : const Color(0xFF374151),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${pt.$3}×',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: isSelected ? _brand.withOpacity(0.7) : const Color(0xFF9CA3AF),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            activeColor: _brand,
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                     const SizedBox(height: 20),
                   ],
@@ -6277,9 +8136,10 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.slate100,
-                      foregroundColor: AppColors.textPrimary,
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF374151),
                       elevation: 0,
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -6341,11 +8201,26 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
       final supabase = Supabase.instance.client;
 
       // Create payment plan
+      // First: delete any existing plans for this enrollment+category to prevent accumulation
+      final existingPlans = await supabase
+          .from('payment_plans')
+          .select('id')
+          .eq('enrollment_id', widget.enrollmentId)
+          .eq('category', _selectedCategory);
+
+      if ((existingPlans as List).isNotEmpty) {
+        final oldPlanIds = existingPlans.map((p) => p['id'].toString()).toList();
+        // Delete payments for old plans first
+        await supabase.from('payments').delete().inFilter('payment_plan_id', oldPlanIds);
+        // Delete old plans
+        await supabase.from('payment_plans').delete().inFilter('id', oldPlanIds);
+      }
+
       final planResult = await supabase
           .from('payment_plans')
           .insert({
             'enrollment_id': widget.enrollmentId,
-            'plan_type': _selectedPlanType,
+            'plan_type': _mapUiPlanTypeToDb(_selectedPlanType),
             'amount_total': amount,
             'currency': 'TND',
             'description': _descriptionController.text.isNotEmpty
@@ -6369,10 +8244,10 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
         DateTime dueDate;
         if (_selectedPlanType == 'monthly' && _isScolarite) {
           dueDate = DateTime(_startDate.year, _startDate.month + i, 1);
-        } else if (_selectedPlanType == 'semester' && _isScolarite) {
-          // Distribute evenly based on semester count, starting from start date
-          final monthsPerSemester = _monthCount / _semesterCount;
-          dueDate = DateTime(_startDate.year, _startDate.month + (i * monthsPerSemester.ceil()), 1);
+        } else if ((_selectedPlanType == 'semester' || _selectedPlanType == 'semesterly') && _isScolarite) {
+          // Distribute evenly based on count, starting from start date
+          final monthsPerPart = _monthCount / numPayments;
+          dueDate = DateTime(_startDate.year, _startDate.month + (i * monthsPerPart.ceil()), 1);
         } else {
           dueDate = _startDate;
         }
@@ -6388,14 +8263,18 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
       await supabase.from('payments').insert(payments);
 
       if (mounted) {
-        Navigator.pop(context);
-        widget.onCreated();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Plan de paiement créé pour ${widget.studentName}'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.of(context).pop();
+            widget.onCreated();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Plan de paiement créé pour ${widget.studentName}'),
+                backgroundColor: const Color(0xFF10B981),
+              ),
+            );
+          }
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -6649,8 +8528,8 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 720,
-      height: 760,
+      width: 520,
+      height: 700,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -6717,58 +8596,125 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
           // Category selector
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _categories.map((cat) {
-                final isSelected = _selectedCategory == cat.$1;
-                return FilterChip(
-                  selected: isSelected,
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(cat.$3, size: 16, color: isSelected ? Colors.white : cat.$4),
-                      const SizedBox(width: 6),
-                      Text(cat.$2),
-                    ],
-                  ),
-                  selectedColor: cat.$4,
-                  checkmarkColor: Colors.white,
-                  labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    side: BorderSide(color: isSelected ? cat.$4 : AppColors.slate200),
-                  ),
-                  backgroundColor: Colors.white,
-                  onSelected: (_) async {
-                    _selectedCategory = cat.$1;
-                    await _loadPricing();
-                    if (mounted) setState(() {});
-                  },
-                );
-              }).toList(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children:               [
+                Row(
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: _brand,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'CATÉGORIE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _categories.map((cat) {
+                    final isSelected = _selectedCategory == cat.$1;
+                    return GestureDetector(
+                      onTap: () async {
+                        _selectedCategory = cat.$1;
+                        await _loadPricing();
+                        if (mounted) setState(() {});
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? cat.$4.withOpacity(0.08) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? cat.$4 : const Color(0xFFE5E7EB),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(cat.$3, size: 18, color: cat.$4),
+                            const SizedBox(width: 8),
+                            Text(
+                              cat.$2,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                color: isSelected ? const Color(0xFF111827) : const Color(0xFF374151),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
           ),
 
           // Apply to all (non-scolarité)
           if (_selectedCategory != 'scolarite') ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-              child: SizedBox(
-                height: 42,
-                child: ElevatedButton.icon(
-                  onPressed: _showApplyToAllDialog,
-                  icon: const Icon(Icons.copy_all, size: 16),
-                  label: const Text('Appliquer un montant aux niveaux'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _brand,
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    shadowColor: _brand.withOpacity(0.3),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _showApplyToAllDialog,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F3FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _brand.withOpacity(0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: _brand.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.content_copy_rounded, size: 16, color: _brand),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Appliquer un montant aux niveaux',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _brand),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Copier ce montant pour tous les niveaux',
+                                style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios_rounded, size: 14, color: _brand.withOpacity(0.5)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -6779,15 +8725,49 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
           Expanded(
             child: _isLoading
                 ? const Center(child: IosLoader(color: _brand))
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    itemCount: _sortedNiveaux.length,
-                    itemBuilder: (context, index) {
-                      final niveau = _sortedNiveaux[index];
-                      final niveauId = niveau['id']?.toString() ?? '';
-                      final sections = _sectionsForNiveau(niveauId);
-                      return _buildNiveauPricingCard(niveau, sections);
-                    },
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 3,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: _brand,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'MONTANTS PAR NIVEAU',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+                          itemCount: _sortedNiveaux.length,
+                          itemBuilder: (context, index) {
+                            final niveau = _sortedNiveaux[index];
+                            final niveauId = niveau['id']?.toString() ?? '';
+                            final sections = _sectionsForNiveau(niveauId);
+                            return _buildNiveauPricingCard(niveau, sections);
+                          },
+                        ),
+                      ),
+                    ],
                   ),
           ),
 
@@ -6845,76 +8825,89 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
     final niveauId = niveau['id']?.toString() ?? '';
     final hasSections = sections.isNotEmpty;
     final niveauAmount = _getAmount(niveauId, null);
+    final niveauName = niveau['name']?.toString() ?? 'Niveau';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.zero,
-        border: Border(
-          bottom: BorderSide(color: AppColors.slate100),
-        ),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB).withOpacity(0.6)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    niveau['name']?.toString() ?? 'Niveau',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF111827),
-                    ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: _brand,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  niveauName,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
                   ),
                 ),
-                if (!hasSections) ...[
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 160,
-                    child: _buildAmountField(
-                      initialValue: niveauAmount,
-                      onChanged: (v) => _setAmount(niveauId, null, v),
-                    ),
+              ),
+              if (!hasSections) ...[
+                SizedBox(
+                  width: 120,
+                  child: _buildAmountField(
+                    initialValue: niveauAmount,
+                    onChanged: (v) => _setAmount(niveauId, null, v),
                   ),
-                ],
+                ),
               ],
-            ),
-            if (hasSections) ...[
-              const SizedBox(height: 12),
-              ...sections.map((section) {
-                final sectionId = section['id']?.toString() ?? '';
-                final amount = _getAmount(niveauId, sectionId);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.arrow_right, color: AppColors.textTertiary, size: 18),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          section['name']?.toString() ?? 'Section',
-                          style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 160,
-                        child: _buildAmountField(
-                          initialValue: amount,
-                          onChanged: (v) => _setAmount(niveauId, sectionId, v),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
             ],
+          ),
+          if (hasSections) ...[
+            const SizedBox(height: 8),
+            ...sections.map((section) {
+              final sectionId = section['id']?.toString() ?? '';
+              final amount = _getAmount(niveauId, sectionId);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 16),
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.textTertiary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        section['name']?.toString() ?? 'Section',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 120,
+                      child: _buildAmountField(
+                        initialValue: amount,
+                        onChanged: (v) => _setAmount(niveauId, sectionId, v),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -6930,26 +8923,27 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: false),
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      style: const TextStyle(fontSize: 14),
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
       textAlign: TextAlign.end,
       decoration: InputDecoration(
         hintText: '0',
-        hintStyle: TextStyle(color: AppColors.textTertiary),
+        hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 12),
         suffixText: 'TND',
-        suffixStyle: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+        suffixStyle: TextStyle(color: AppColors.textTertiary, fontSize: 10),
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: AppColors.slate200),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: AppColors.slate200),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _brand, width: 1.5),
         ),
       ),
@@ -6968,119 +8962,206 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          return AlertDialog(
+          return Dialog(
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text(
-              'Appliquer un montant',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            content: SizedBox(
-              width: 420,
+            child: SizedBox(
+              width: 440,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: const TextStyle(fontSize: 14),
-                    decoration: InputDecoration(
-                      labelText: 'Montant',
-                      labelStyle: TextStyle(color: AppColors.textTertiary, fontSize: 14),
-                      prefixIcon: const Icon(Icons.attach_money, size: 20),
-                      suffixText: 'TND',
-                      filled: true,
-                      fillColor: AppColors.slate50,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: AppColors.slate200),
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEECFB),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.content_copy_rounded, size: 16, color: _brand),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: AppColors.slate200),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text('Appliquer un montant', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: _brand, width: 1.5),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close, size: 18, color: Color(0xFF9CA3AF)),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       ),
+                    ]),
+                  ),
+
+                  // Content
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Amount field
+                        TextField(
+                          controller: amountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          style: const TextStyle(fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Montant',
+                            hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                            suffixText: 'TND',
+                            suffixStyle: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                            filled: true,
+                            fillColor: const Color(0xFFF9FAFB),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: AppColors.slate200),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: AppColors.slate200),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: _brand, width: 1.5),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Niveaux label + select all/none
+                        Row(
+                          children: [
+                            Text(
+                              'Niveaux',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            ),
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: () => setState(() {
+                                if (selectedNiveaux.length == _sortedNiveaux.length) {
+                                  selectedNiveaux.clear();
+                                } else {
+                                  selectedNiveaux.addAll(_sortedNiveaux.map((n) => n['id']?.toString() ?? '').where((id) => id.isNotEmpty));
+                                }
+                              }),
+                              child: Text(
+                                selectedNiveaux.length == _sortedNiveaux.length ? 'Tout désélectionner' : 'Tout sélectionner',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _brand),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Niveau chips
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _sortedNiveaux.map((niveau) {
+                            final niveauId = niveau['id']?.toString() ?? '';
+                            final niveauName = niveau['name']?.toString() ?? 'Niveau';
+                            final isSelected = selectedNiveaux.contains(niveauId);
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  if (isSelected) {
+                                    selectedNiveaux.remove(niveauId);
+                                  } else {
+                                    selectedNiveaux.add(niveauId);
+                                  }
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? _brand.withOpacity(0.08) : Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isSelected ? _brand : const Color(0xFFE5E7EB),
+                                    width: isSelected ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isSelected) ...[
+                                      Icon(Icons.check_rounded, size: 14, color: _brand),
+                                      const SizedBox(width: 6),
+                                    ],
+                                    Text(
+                                      niveauName,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                        color: isSelected ? const Color(0xFF111827) : const Color(0xFF374151),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Text(
-                        'Niveaux sélectionnés',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => setState(() => selectedNiveaux.addAll(_sortedNiveaux.map((n) => n['id']?.toString() ?? '').where((id) => id.isNotEmpty))),
-                        child: const Text('Tout'),
-                      ),
-                      TextButton(
-                        onPressed: () => setState(() => selectedNiveaux.clear()),
-                        child: const Text('Aucun'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _sortedNiveaux.length,
-                      itemBuilder: (context, index) {
-                        final niveau = _sortedNiveaux[index];
-                        final niveauId = niveau['id']?.toString() ?? '';
-                        final isSelected = selectedNiveaux.contains(niveauId);
-                        return CheckboxListTile(
-                          value: isSelected,
-                          onChanged: (_) {
-                            setState(() {
-                              if (isSelected) {
-                                selectedNiveaux.remove(niveauId);
-                              } else {
-                                selectedNiveaux.add(niveauId);
-                              }
-                            });
-                          },
-                          title: Text(
-                            niveau['name']?.toString() ?? 'Niveau',
-                            style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
+
+                  // Footer
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: const BoxDecoration(
+                      border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          height: 36,
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF374151),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text('Annuler', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                           ),
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
-                          activeColor: _brand,
-                        );
-                      },
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          height: 36,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final amount = double.tryParse(amountController.text);
+                              if (amount != null && amount > 0 && selectedNiveaux.isNotEmpty) {
+                                _applyToSelectedNiveaux(selectedNiveaux.toList(), amount);
+                                Navigator.pop(ctx);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _brand,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text('Appliquer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Annuler'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final amount = double.tryParse(amountController.text);
-                  if (amount != null && amount > 0 && selectedNiveaux.isNotEmpty) {
-                    _applyToSelectedNiveaux(selectedNiveaux.toList(), amount);
-                    Navigator.pop(ctx);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _brand,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text('Appliquer'),
-              ),
-            ],
           );
         },
       ),

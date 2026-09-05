@@ -1197,7 +1197,6 @@ class _HoverableNiveauRow extends StatefulWidget {
 }
 
 class _HoverableNiveauRowState extends State<_HoverableNiveauRow> {
-  bool _isHovered = false;
   String? _selectedSectionId;
 
   @override
@@ -1220,129 +1219,124 @@ class _HoverableNiveauRowState extends State<_HoverableNiveauRow> {
         ? widget.classes.where((c) => c['section_id'] == _selectedSectionId).toList()
         : widget.classes;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border.all(color: _isHovered ? AppColors.slate200 : AppColors.slate100),
-          borderRadius: BorderRadius.circular(12),
-          color: _isHovered ? AppColors.slate50.withOpacity(0.5) : Colors.transparent,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title row — same as _HoverableGradeRow
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    children: [
-                      Text(
-                        niveau['name']?.toString() ?? '',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
-                      ),
-                      Text(
-                        '• ${widget.classes.length} classe${widget.classes.length != 1 ? 's' : ''}',
-                        style: TextStyle(fontSize: 12, color: AppColors.slate400),
-                      ),
-                    ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.slate100),
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.transparent,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title row — same as _HoverableGradeRow
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  children: [
+                    Text(
+                      niveau['name']?.toString() ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                    ),
+                    Text(
+                      '• ${widget.classes.length} classe${widget.classes.length != 1 ? 's' : ''}',
+                      style: TextStyle(fontSize: 12, color: AppColors.slate400),
+                    ),
+                  ],
+                ),
+              ),
+              if (niveau['code'] != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF655DD5).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    niveau['code'].toString(),
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF655DD5)),
                   ),
                 ),
-                if (niveau['code'] != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF655DD5).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      niveau['code'].toString(),
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF655DD5)),
-                    ),
-                  ),
-              ],
-            ),
-            // Filières filter — same as _HoverableGradeRow sections row
-            if (hasSections && sectionMap.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    'FILIÈRES',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.slate400, letterSpacing: 0.5),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: sectionMap.entries.map((entry) {
-                        final isSelected = _selectedSectionId == entry.key;
-                        return InkWell(
-                          onTap: () => setState(() {
-                            _selectedSectionId = isSelected ? null : entry.key;
-                          }),
-                          borderRadius: BorderRadius.circular(4),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF655DD5).withOpacity(0.12) : AppColors.slate100,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: isSelected ? const Color(0xFF655DD5).withOpacity(0.4) : AppColors.slate200,
-                              ),
-                            ),
-                            child: Text(
-                              entry.value,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: isSelected ? const Color(0xFF655DD5) : AppColors.slate500,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
             ],
-            // Class pills — exact _classPill design from grade_levels
-            const SizedBox(height: 12),
-            displayedClasses.isEmpty
-                ? Text('Aucune classe', style: TextStyle(fontSize: 12, color: AppColors.slate400))
-                : Wrap(
+          ),
+          // Filières filter — same as _HoverableGradeRow sections row
+          if (hasSections && sectionMap.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'FILIÈRES',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.slate400, letterSpacing: 0.5),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Wrap(
                     spacing: 8,
-                    runSpacing: 8,
-                    children: displayedClasses.map((cls) {
+                    runSpacing: 4,
+                    children: sectionMap.entries.map((entry) {
+                      final isSelected = _selectedSectionId == entry.key;
                       return InkWell(
-                        onTap: () => widget.onClassTap(cls['id'] as String),
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        onTap: () => setState(() {
+                          _selectedSectionId = isSelected ? null : entry.key;
+                        }),
+                        borderRadius: BorderRadius.circular(4),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: AppColors.slate200),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 2, offset: const Offset(0, 1))],
+                            color: isSelected ? const Color(0xFF655DD5).withOpacity(0.12) : AppColors.slate100,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF655DD5).withOpacity(0.4) : AppColors.slate200,
+                            ),
                           ),
                           child: Text(
-                            cls['name']?.toString() ?? '',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.slate600),
+                            entry.value,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected ? const Color(0xFF655DD5) : AppColors.slate500,
+                            ),
                           ),
                         ),
                       );
                     }).toList(),
                   ),
+                ),
+              ],
+            ),
           ],
-        ),
+          // Class pills — exact _classPill design from grade_levels
+          const SizedBox(height: 12),
+          displayedClasses.isEmpty
+              ? Text('Aucune classe', style: TextStyle(fontSize: 12, color: AppColors.slate400))
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: displayedClasses.map((cls) {
+                    return InkWell(
+                      onTap: () => widget.onClassTap(cls['id'] as String),
+                      borderRadius: BorderRadius.circular(999),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppColors.slate200),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 2, offset: const Offset(0, 1))],
+                        ),
+                        child: Text(
+                          cls['name']?.toString() ?? '',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.slate600),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ],
       ),
     );
   }

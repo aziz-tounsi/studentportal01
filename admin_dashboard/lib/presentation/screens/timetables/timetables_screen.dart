@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +30,9 @@ class TimetableSlotAdmin {
   final String? subjectCode;
   final String? className;
   final String? teacherName;
+  final String? teacherPhotoUrl;
+  final String timetableType;
+  final String? examPeriodId;
 
   TimetableSlotAdmin({
     required this.id,
@@ -41,6 +45,9 @@ class TimetableSlotAdmin {
     this.subjectCode,
     this.className,
     this.teacherName,
+    this.teacherPhotoUrl,
+    this.timetableType = 'regular',
+    this.examPeriodId,
   });
 
   factory TimetableSlotAdmin.fromJson(Map<String, dynamic> json) {
@@ -82,6 +89,8 @@ class TimetableSlotAdmin {
       className: json['subject_offerings']?['classes']?['name']?.toString(),
       teacherName: json['subject_offerings']?['users']?['full_name']
           ?.toString(),
+      timetableType: json['timetable_type']?.toString() ?? 'regular',
+      examPeriodId: json['exam_period_id']?.toString(),
     );
   }
 }
@@ -233,21 +242,14 @@ final classSubjectOfferingsProvider =
               (c['weekly_hours'] as num?)?.toDouble() ?? 0;
         }
 
-        // Now fetch subject_offerings with nested relations
-        var query = supabase
+        // Don't filter by semester - show all offerings for the class
+        final data = await supabase
             .from('subject_offerings')
             .select(
               'id, subject_id, teacher_id, subjects(name, code), users(full_name)',
             )
             .eq('class_id', classId)
             .eq('is_active', true);
-
-        // Filter by semester if selected
-        if (semesterId != null) {
-          query = query.eq('semester_id', semesterId);
-        }
-
-        final data = await query;
 
         return (data as List).map((e) {
           final subjectId = e['subject_id']?.toString() ?? '';
@@ -296,18 +298,11 @@ final classSubjectOfferingsProvider =
                 (c['weekly_hours'] as num?)?.toDouble() ?? 0;
           }
 
-          var query = supabase
+          final offerings = await supabase
               .from('subject_offerings')
               .select('id, subject_id, teacher_id')
               .eq('class_id', classId)
               .eq('is_active', true);
-
-          // Filter by semester if selected
-          if (semesterId != null) {
-            query = query.eq('semester_id', semesterId);
-          }
-
-          final offerings = await query;
 
           if ((offerings as List).isEmpty) return [];
 
@@ -375,6 +370,8 @@ final classTimetableSlotsProvider =
       ref.keepAlive();
       final supabase = SupabaseConfig.adminClient;
       final semesterId = ref.watch(currentSemesterIdProvider);
+      final timetableType = ref.watch(timetableTypeFilterProvider);
+      final examPeriodId = ref.watch(selectedExamPeriodFilterProvider);
 
       try {
         // Get all subject_offerings for this class first (no semester filter to be safe)
@@ -388,11 +385,18 @@ final classTimetableSlotsProvider =
 
         final offeringIds = offerings.map((o) => o['id'] as String).toList();
 
-        // Get timetable slots for these offerings
-        final slotsResp = await supabase
+        // Get timetable slots for these offerings, filtered by type
+        var slotsQuery = supabase
             .from('timetable_slots')
             .select('*')
             .inFilter('subject_offering_id', offeringIds)
+            .eq('timetable_type', timetableType);
+
+        if (timetableType == 'exam' && examPeriodId != null) {
+          slotsQuery = slotsQuery.eq('exam_period_id', examPeriodId);
+        }
+
+        final slotsResp = await slotsQuery
             .order('day_of_week')
             .order('start_time');
 
@@ -409,18 +413,20 @@ final classTimetableSlotsProvider =
 
         // Fetch teacher_assignments to resolve teachers (subject_offerings.teacher_id may be NULL)
         final Map<String, String> subjectClassTeacherMap = {};
+        final Map<String, String> subjectClassTeacherPhotoMap = {};
         try {
           final teacherAssResp = await supabase
               .from('teacher_assignments')
-              .select('subject_id, class_id, users!teacher_id(full_name)')
+              .select('subject_id, class_id, users!teacher_id(full_name, photo_url)')
               .eq('is_active', true);
 
           for (final ta in (teacherAssResp as List)) {
             final subjectId = ta['subject_id'] as String?;
             final clsId = ta['class_id'] as String?;
-            final teacherFullName = (ta['users'] as Map?)?['full_name'] as String?;
-            if (subjectId != null && clsId != null && teacherFullName != null) {
-              subjectClassTeacherMap['${subjectId}_$clsId'] = teacherFullName;
+            final teacherData = ta['users'] as Map<String, dynamic>?;
+            if (subjectId != null && clsId != null) {
+              subjectClassTeacherMap['${subjectId}_$clsId'] = teacherData?['full_name'] as String? ?? '';
+              subjectClassTeacherPhotoMap['${subjectId}_$clsId'] = teacherData?['photo_url'] as String? ?? '';
             }
           }
         } catch (_) {}
@@ -439,6 +445,7 @@ final classTimetableSlotsProvider =
 
           // Resolve teacher: teacher_assignments → timetable_slots.teacher_name
           String teacherName = subjectClassTeacherMap['${subjectId}_$classId'] ?? '';
+          String teacherPhoto = subjectClassTeacherPhotoMap['${subjectId}_$classId'] ?? '';
           if (teacherName.isEmpty) {
             teacherName = (slot['teacher_name'] as String?) ?? '';
           }
@@ -487,6 +494,7 @@ final classTimetableSlotsProvider =
             subjectCode: subject?['code']?.toString(),
             className: classData?['name']?.toString(),
             teacherName: teacherName.isNotEmpty ? teacherName : null,
+            teacherPhotoUrl: teacherPhoto.isNotEmpty ? teacherPhoto : null,
           );
         }).toList();
       } catch (e) {
@@ -665,6 +673,19 @@ final currentSemesterIdProvider = Provider<String?>((ref) {
   );
 });
 
+// Exam periods from semestersProvider
+final examPeriodsListProvider = Provider<List<ExamPeriodModel>>((ref) {
+  final semestersAsync = ref.watch(semestersProvider);
+  return semestersAsync.whenOrNull(data: (state) {
+    final yearId = state.selectedAcademicYearId;
+    return yearId != null ? state.filteredExams(yearId) : state.examPeriods;
+  }) ?? [];
+});
+
+// Timetable type filter: 'regular' or 'exam' (used by classTimetableSlotsProvider)
+final timetableTypeFilterProvider = StateProvider<String>((ref) => 'regular');
+final selectedExamPeriodFilterProvider = StateProvider<String?>((ref) => null);
+
 // Filtered classes provider
 final filteredClassesProvider = Provider<AsyncValue<List<ClassInfo>>>((ref) {
   final classesAsync = ref.watch(classesListProvider);
@@ -828,6 +849,10 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
   bool _showFilterDrawer = false;
   bool _showTimetableFilterDrawer = false;
   String? _expandedNiveauId;
+
+  // Timetable type: 'regular' or 'exam'
+  String _timetableType = 'regular';
+  String? _selectedExamPeriodId;
 
   @override
   void dispose() {
@@ -1709,6 +1734,11 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     final hasTimetableFilters = dayFilter != null || subjectFilter != null;
     final hasFilters =
         searchQuery.isNotEmpty || dayFilter != null || subjectFilter != null;
+    final semesterState = ref.watch(semestersProvider).asData?.value;
+    final isVacationToday = semesterState?.isDateVacation(DateTime.now()) ?? false;
+    final examPeriods = ref.watch(examPeriodsListProvider);
+    final currentTimetableType = ref.watch(timetableTypeFilterProvider);
+    final selectedExamPeriodId = ref.watch(selectedExamPeriodFilterProvider);
 
     return Container(
       decoration: BoxDecoration(
@@ -1757,6 +1787,32 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         ),
         data: (offerings) => Column(
           children: [
+            if (isVacationToday)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.beach_access, size: 18, color: Color(0xFF92400E)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Vacances en cours',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // Header
             Padding(
               padding: const EdgeInsets.all(16),
@@ -1781,14 +1837,18 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Emploi du temps: ${selectedClass.name}',
+                              currentTimetableType == 'exam'
+                                  ? 'Emploi d\'examen: ${selectedClass.name}'
+                                  : 'Emploi du temps: ${selectedClass.name}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                               ),
                             ),
                             Text(
-                              'Cliquez sur une cellule vide pour ajouter un cours',
+                              currentTimetableType == 'exam'
+                                  ? 'Emploi d\'examen — cliquez pour ajouter un cours'
+                                  : 'Cliquez sur une cellule vide pour ajouter un cours',
                               style: TextStyle(
                                 color: AppColors.slate500,
                                 fontSize: 12,
@@ -1797,6 +1857,93 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                           ],
                         ),
                       ),
+                      // Timetable type toggle
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.slate100,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.all(3),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                ref.read(timetableTypeFilterProvider.notifier).state = 'regular';
+                                ref.read(selectedExamPeriodFilterProvider.notifier).state = null;
+                                setState(() {
+                                  _timetableType = 'regular';
+                                  _selectedExamPeriodId = null;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: currentTimetableType == 'regular' ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: currentTimetableType == 'regular'
+                                      ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4)]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.schedule, size: 14, color: currentTimetableType == 'regular' ? _brand : AppColors.slate400),
+                                    const SizedBox(width: 5),
+                                    Text('Régulier', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: currentTimetableType == 'regular' ? _brand : AppColors.slate400)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () async {
+                                if (examPeriods.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Aucune période d\'examen configurée. Ajoutez-en depuis la page Périodes.'), backgroundColor: AppColors.warning),
+                                  );
+                                  return;
+                                }
+                                if (selectedExamPeriodId == null || examPeriods.every((e) => e.id != selectedExamPeriodId)) {
+                                  final picked = await _showExamPeriodPicker(examPeriods);
+                                  if (picked != null) {
+                                    ref.read(selectedExamPeriodFilterProvider.notifier).state = picked.id;
+                                    setState(() {
+                                      _timetableType = 'exam';
+                                      _selectedExamPeriodId = picked.id;
+                                    });
+                                    ref.read(timetableTypeFilterProvider.notifier).state = 'exam';
+                                  }
+                                } else {
+                                  ref.read(timetableTypeFilterProvider.notifier).state = 'exam';
+                                  setState(() {
+                                    _timetableType = 'exam';
+                                    _selectedExamPeriodId = selectedExamPeriodId;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: currentTimetableType == 'exam' ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: currentTimetableType == 'exam'
+                                      ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4)]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.school, size: 14, color: currentTimetableType == 'exam' ? _brand : AppColors.slate400),
+                                    const SizedBox(width: 5),
+                                    Text('Examen', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: currentTimetableType == 'exam' ? _brand : AppColors.slate400)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       // Bulk upload button (icon only)
                       Tooltip(
                         message: 'Import CSV',
@@ -2651,7 +2798,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    _buildDetailRow(Icons.person_outline_rounded, 'Professeur', slot.teacherName ?? 'Non assigné'),
+                    _buildTeacherRow(slot.teacherName ?? 'Non assigné', slot.teacherPhotoUrl),
                     const SizedBox(height: 14),
                     _buildDetailRow(Icons.calendar_today_outlined, 'Jour', _dayLabels[slot.dayOfWeek - 1]),
                     const SizedBox(height: 14),
@@ -2681,6 +2828,33 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTeacherRow(String teacherName, String? photoUrl) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: const Color(0xFFF3F4F6),
+          backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+              ? NetworkImage(photoUrl)
+              : null,
+          child: (photoUrl == null || photoUrl.isEmpty)
+              ? const Icon(Icons.person_outline_rounded, size: 18, color: Color(0xFF6B7280))
+              : null,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Professeur', style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+              Text(teacherName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937))),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -2772,32 +2946,17 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       }
     });
 
-    showGeneralDialog(
+    showDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Close',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 300),
-      transitionBuilder: (ctx, a1, a2, child) {
-        final curve = CurvedAnimation(parent: a1, curve: Curves.easeOutCubic);
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16 * a1.value, sigmaY: 16 * a1.value),
-          child: FadeTransition(
-            opacity: curve,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.92, end: 1.0).animate(curve),
-              child: child,
-            ),
-          ),
-        );
-      },
-      pageBuilder: (ctx, _, __) {
+      barrierColor: Colors.black54,
+      builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
-            return Center(
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Container(
                   width: 480,
                   constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
                   decoration: BoxDecoration(
@@ -3166,8 +3325,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                     ),
                   ),
                 ),
-              ),
-            );
+              );
           },
         );
       },
@@ -3690,11 +3848,12 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         if ((offerings as List).isNotEmpty) {
           final offeringIds = offerings.map((o) => o['id'] as String).toList();
 
-          // Delete all slots that belong to these offerings
+          // Delete only slots of the current timetable type
           await SupabaseConfig.client
               .from('timetable_slots')
               .delete()
-              .inFilter('subject_offering_id', offeringIds);
+              .inFilter('subject_offering_id', offeringIds)
+              .eq('timetable_type', _timetableType);
 
           totalDeleted++;
         }
@@ -3722,6 +3881,103 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         );
       }
     }
+  }
+
+  Future<ExamPeriodModel?> _showExamPeriodPicker(List<ExamPeriodModel> examPeriods) async {
+    return showGeneralDialog<ExamPeriodModel>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 250),
+      transitionBuilder: (ctx, a1, a2, child) {
+        final curve = CurvedAnimation(parent: a1, curve: Curves.easeOutCubic);
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12 * a1.value, sigmaY: 12 * a1.value),
+          child: FadeTransition(
+            opacity: curve,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1.0).animate(curve),
+              child: child,
+            ),
+          ),
+        );
+      },
+      pageBuilder: (ctx, _, __) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 400,
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 48, offset: const Offset(0, 16)),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEA580C).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.school, color: Color(0xFFEA580C), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Choisir la période d\'examen',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          icon: const Icon(Icons.close, size: 20),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: examPeriods.length,
+                      itemBuilder: (ctx, i) {
+                        final ep = examPeriods[i];
+                        final startStr = '${ep.startDate.day}/${ep.startDate.month}/${ep.startDate.year}';
+                        final endStr = '${ep.endDate.day}/${ep.endDate.month}/${ep.endDate.year}';
+                        return ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEA580C).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.event, color: Color(0xFFEA580C), size: 20),
+                          ),
+                          title: Text(ep.name ?? 'Examen', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text('$startStr — $endStr', style: const TextStyle(fontSize: 12)),
+                          onTap: () => Navigator.of(ctx).pop(ep),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showAddSlotDialog(
@@ -3765,55 +4021,44 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     FloorModel? selectedFloor;
     RoomModel? selectedRoom;
 
-    showGeneralDialog(
+    showDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Close',
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 300),
-      transitionBuilder: (ctx, a1, a2, child) {
-        final curve = CurvedAnimation(parent: a1, curve: Curves.easeOutCubic);
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16 * a1.value, sigmaY: 16 * a1.value),
-          child: FadeTransition(
-            opacity: curve,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.92, end: 1.0).animate(curve),
-              child: child,
-            ),
-          ),
-        );
-      },
-      pageBuilder: (ctx, _, __) {
-        final buildingAsync = ref.watch(buildingProvider);
+      builder: (ctx) {
+        return Consumer(
+          builder: (ctx, ref, child) {
+            final buildingAsync = ref.watch(buildingProvider);
 
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            double expectedHours = 0;
-            double scheduledHoursForOffering = 0;
-            double newSlotDuration = 0;
-            double remainingHours = 0;
+            return StatefulBuilder(
+              builder: (ctx, setDialogState) {
+                double expectedHours = 0;
+                double scheduledHoursForOffering = 0;
+                double newSlotDuration = 0;
+                double remainingHours = 0;
 
-            if (selectedOffering != null) {
-              expectedHours = selectedOffering!.weeklyCiHours + selectedOffering!.weeklyTpHours;
-              scheduledHoursForOffering = scheduledHours[selectedOffering!.id] ?? 0;
-              final startParts = selectedStartTime.split(':').map(int.parse).toList();
-              final endParts = selectedEndTime.split(':').map(int.parse).toList();
-              final startMin = startParts[0] * 60 + (startParts.length > 1 ? startParts[1] : 0);
-              final endMin = endParts[0] * 60 + (endParts.length > 1 ? endParts[1] : 0);
-              newSlotDuration = (endMin - startMin) / 60.0;
-              remainingHours = expectedHours - scheduledHoursForOffering - newSlotDuration;
-            }
+                if (selectedOffering != null) {
+                  expectedHours = selectedOffering!.weeklyCiHours + selectedOffering!.weeklyTpHours;
+                  scheduledHoursForOffering = scheduledHours[selectedOffering!.id] ?? 0;
+                  final startParts = selectedStartTime.split(':').map(int.parse).toList();
+                  final endParts = selectedEndTime.split(':').map(int.parse).toList();
+                  final startMin = startParts[0] * 60 + (startParts.length > 1 ? startParts[1] : 0);
+                  final endMin = endParts[0] * 60 + (endParts.length > 1 ? endParts[1] : 0);
+                  newSlotDuration = (endMin - startMin) / 60.0;
+                  remainingHours = expectedHours - scheduledHoursForOffering - newSlotDuration;
+                }
 
-            return Center(
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: 520,
-                  constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.92),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
+                return BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Dialog(
+                    backgroundColor: Colors.transparent,
+                    insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    child: Container(
+                      width: 520,
+                      constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.92),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 48, offset: const Offset(0, 16)),
                     ],
@@ -4197,6 +4442,8 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         );
       },
     );
+  },
+);
   }
 
   // Helper widget for hours chip
@@ -4286,18 +4533,23 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     String? room,
   ) async {
     try {
-      await SupabaseConfig.adminClient.from('timetable_slots').insert({
+      final data = <String, dynamic>{
         'subject_offering_id': subjectOfferingId,
         'day_of_week': _dayToEnum(dayOfWeek),
         'start_time': startTime,
         'end_time': endTime,
         'room': room,
-      });
+        'timetable_type': _timetableType,
+      };
+      if (_timetableType == 'exam' && _selectedExamPeriodId != null) {
+        data['exam_period_id'] = _selectedExamPeriodId;
+      }
+      await SupabaseConfig.adminClient.from('timetable_slots').insert(data);
       ref.invalidate(classTimetableSlotsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cours ajouté'),
+          SnackBar(
+            content: Text(_timetableType == 'exam' ? 'Cours d\'examen ajouté' : 'Cours ajouté'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -4968,7 +5220,24 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
                                   onPressed: () {
-                                    // Download template logic could go here
+                                    // Generate CSV template and trigger download
+                                    final csv = StringBuffer();
+                                    csv.writeln('Matiere,Jour (1-6),Debut (HH:MM),Fin (HH:MM),Salle (optionnel)');
+                                    csv.writeln('MATH,1,08:00,09:30,Salle 1');
+                                    csv.writeln('FRANCAIS,2,08:00,09:30,Salle 2');
+                                    csv.writeln('PHYS,3,10:00,11:30,Labo 5');
+                                    final bytes = utf8.encode(csv.toString());
+                                    final blob = [bytes];
+                                    final url = html.Url.createObjectUrlFromBlob(html.Blob(blob, 'text/csv'));
+                                    html.AnchorElement(href: url)
+                                      ..setAttribute('download', 'emploi_modele.csv')
+                                      ..click();
+                                    html.Url.revokeObjectUrl(url);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Modèle CSV téléchargé'), backgroundColor: AppColors.success),
+                                      );
+                                    }
                                   },
                                   icon: const Icon(Icons.download, size: 18, color: Colors.white),
                                   label: const Text('Télécharger .CSV'),

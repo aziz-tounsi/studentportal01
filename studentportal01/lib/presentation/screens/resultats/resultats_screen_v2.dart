@@ -110,7 +110,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: DynamicSemesterNav(
                     selectedSemesterNumber: selectedSemester,
-                    onChanged: (v) => ref.read(resultatsSemesterProvider.notifier).state = v,
+                    onChanged: (v) =>
+                        ref.read(resultatsSemesterProvider.notifier).state = v,
                   ),
                 ),
               ),
@@ -119,18 +120,21 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
 
               // Content
               gradesAsync.when(
-                data: (grades) => _buildContent(context, grades, selectedSemester, l10n),
+                data: (grades) =>
+                    _buildContent(context, grades, selectedSemester, l10n),
                 loading: () => const SliverFillRemaining(
-                  child: Center(
-                    child: IosLoader(color: Color(0xFF06B6D4)),
-                  ),
+                  child: Center(child: IosLoader(color: Color(0xFF06B6D4))),
                 ),
                 error: (error, stack) => SliverFillRemaining(
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                        Icon(
+                          Icons.error_outline,
+                          size: 48,
+                          color: Colors.red.shade300,
+                        ),
                         const SizedBox(height: 16),
                         Text('Erreur: $error'),
                       ],
@@ -349,25 +353,31 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     );
   }
 
-  Widget _buildContent(BuildContext context, List<SubjectGradesSummary> grades, int semester, AppLocalizations l10n) {
+  Widget _buildContent(
+    BuildContext context,
+    List<SubjectGradesSummary> grades,
+    int semester,
+    AppLocalizations l10n,
+  ) {
     if (grades.isEmpty) {
-      return SliverFillRemaining(
-        child: _buildEmptyState(context),
-      );
+      return SliverFillRemaining(child: _buildEmptyState(context));
     }
 
     // Filter grades based on search
     var filteredGrades = grades;
     if (_searchQuery.isNotEmpty) {
-      filteredGrades = grades.where((g) => 
-        g.subjectName.toLowerCase().contains(_searchQuery) ||
-        (g.subjectCode?.toLowerCase().contains(_searchQuery) ?? false)
-      ).toList();
+      filteredGrades = grades
+          .where(
+            (g) =>
+                g.subjectName.toLowerCase().contains(_searchQuery) ||
+                (g.subjectCode?.toLowerCase().contains(_searchQuery) ?? false),
+          )
+          .toList();
     }
 
     // Check if ALL subjects have complete results
     final allCompleted = grades.every((g) => g.average != null);
-    
+
     // Calculate average ONLY if all subjects are completed
     double? semesterAverage;
     if (allCompleted) {
@@ -413,10 +423,12 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
 
           // Subject Cards
           if (filteredGrades.isNotEmpty)
-            ...filteredGrades.map((subject) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _GlassySubjectCard(subject: subject),
-            ))
+            ...filteredGrades.map(
+              (subject) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _GlassySubjectCard(subject: subject),
+              ),
+            )
           else
             Center(
               child: Padding(
@@ -469,7 +481,10 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
   }
 
   /// Hero Progress Card — blue gradient matching the header icon glow
-  Widget _buildPendingResultsCard(BuildContext context, List<SubjectGradesSummary> grades) {
+  Widget _buildPendingResultsCard(
+    BuildContext context,
+    List<SubjectGradesSummary> grades,
+  ) {
     final completedCount = grades.where((g) => g.average != null).length;
     final totalCount = grades.length;
     final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
@@ -541,7 +556,11 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Icon(Icons.check_circle_rounded, size: 14, color: Colors.white.withOpacity(0.8)),
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 14,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
                               const SizedBox(width: 6),
                               Text(
                                 'Matières complètes',
@@ -563,7 +582,9 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
                       ),
                       child: Center(
                         child: Container(
@@ -590,7 +611,9 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                   child: LinearProgressIndicator(
                     value: progress,
                     backgroundColor: Colors.white.withOpacity(0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.6)),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Colors.white.withOpacity(0.6),
+                    ),
                     minHeight: 6,
                   ),
                 ),
@@ -622,6 +645,10 @@ class _iOS26TrimesterNavState extends State<_iOS26TrimesterNav>
   late AnimationController _controller;
   late Animation<double> _animation;
   int _previousIndex = 0;
+
+  static const _gradientColors = [Color(0xFF06B6D4), Color(0xFF3B82F6)];
+
+  Color get _selectedTextColor => Colors.white;
 
   @override
   void initState() {
@@ -686,7 +713,8 @@ class _iOS26TrimesterNavState extends State<_iOS26TrimesterNav>
                     builder: (context, child) {
                       final startPos = _previousIndex * tabWidth;
                       final endPos = currentIndex * tabWidth;
-                      final currentPos = startPos + (endPos - startPos) * _animation.value;
+                      final currentPos =
+                          startPos + (endPos - startPos) * _animation.value;
 
                       return Positioned(
                         left: currentPos,
@@ -720,11 +748,13 @@ class _iOS26TrimesterNavState extends State<_iOS26TrimesterNav>
                       _TrimesterTab(
                         label: 'Semestre 1',
                         isSelected: widget.selectedTrimester == 1,
+                        selectedTextColor: _selectedTextColor,
                         onTap: () => widget.onChanged(1),
                       ),
                       _TrimesterTab(
                         label: 'Semestre 2',
                         isSelected: widget.selectedTrimester == 2,
+                        selectedTextColor: _selectedTextColor,
                         onTap: () => widget.onChanged(2),
                       ),
                     ],
@@ -742,11 +772,13 @@ class _iOS26TrimesterNavState extends State<_iOS26TrimesterNav>
 class _TrimesterTab extends StatelessWidget {
   final String label;
   final bool isSelected;
+  final Color selectedTextColor;
   final VoidCallback onTap;
 
   const _TrimesterTab({
     required this.label,
     required this.isSelected,
+    required this.selectedTextColor,
     required this.onTap,
   });
 
@@ -764,7 +796,7 @@ class _TrimesterTab extends StatelessWidget {
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 14,
-              color: isSelected ? Colors.white : Colors.grey.shade600,
+              color: isSelected ? selectedTextColor : Colors.grey.shade600,
               letterSpacing: -0.2,
             ),
             child: Text(label),
@@ -866,7 +898,9 @@ class _GlassySemesterCard extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      isValidated ? Icons.check_circle_rounded : Icons.warning_rounded,
+                      isValidated
+                          ? Icons.check_circle_rounded
+                          : Icons.warning_rounded,
                       color: Colors.white,
                       size: 36,
                     ),
@@ -875,7 +909,10 @@ class _GlassySemesterCard extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
@@ -884,7 +921,9 @@ class _GlassySemesterCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isValidated ? Icons.verified_rounded : Icons.cancel_rounded,
+                      isValidated
+                          ? Icons.verified_rounded
+                          : Icons.cancel_rounded,
                       color: Colors.white,
                       size: 18,
                     ),
@@ -918,7 +957,7 @@ class _GlassySubjectCard extends StatefulWidget {
   State<_GlassySubjectCard> createState() => _GlassySubjectCardState();
 }
 
-class _GlassySubjectCardState extends State<_GlassySubjectCard> 
+class _GlassySubjectCardState extends State<_GlassySubjectCard>
     with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
   late AnimationController _controller;
@@ -932,9 +971,10 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _rotationAnimation = Tween<double>(begin: 0, end: 0.5).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
+    _rotationAnimation = Tween<double>(
+      begin: 0,
+      end: 0.5,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
     _expandAnimation = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOutCubic,
@@ -954,8 +994,8 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
     final gradeColor = !hasAverage
         ? Colors.grey.shade400
         : grade >= 10
-            ? const Color(0xFF00B087)
-            : const Color(0xFFEF4444);
+        ? const Color(0xFF00B087)
+        : const Color(0xFFEF4444);
     final gradeBgColor = gradeColor.withOpacity(0.1);
 
     return ClipRRect(
@@ -1010,7 +1050,11 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                                     fontSize: 18,
                                   ),
                                 )
-                              : Icon(Icons.pending_outlined, color: gradeColor, size: 24),
+                              : Icon(
+                                  Icons.pending_outlined,
+                                  color: gradeColor,
+                                  size: 24,
+                                ),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -1032,7 +1076,10 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                               children: [
                                 if (widget.subject.subjectCode != null) ...[
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: Colors.grey.shade100,
                                       borderRadius: BorderRadius.circular(8),
@@ -1050,7 +1097,10 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                                   const SizedBox(width: 8),
                                 ],
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFE1F0FF),
                                     borderRadius: BorderRadius.circular(8),
@@ -1066,6 +1116,51 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                                 ),
                               ],
                             ),
+                            if (widget.subject.teacherName != null &&
+                                widget.subject.teacherName!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 10,
+                                    backgroundColor: Colors.grey.shade200,
+                                    backgroundImage:
+                                        widget.subject.teacherPhotoUrl !=
+                                                null &&
+                                            widget
+                                                .subject
+                                                .teacherPhotoUrl!
+                                                .isNotEmpty
+                                        ? NetworkImage(
+                                            widget.subject.teacherPhotoUrl!,
+                                          )
+                                        : null,
+                                    child:
+                                        (widget.subject.teacherPhotoUrl ==
+                                                null ||
+                                            widget
+                                                .subject
+                                                .teacherPhotoUrl!
+                                                .isEmpty)
+                                        ? Icon(
+                                            Icons.person,
+                                            size: 12,
+                                            color: Colors.grey.shade500,
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    widget.subject.teacherName!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1119,7 +1214,11 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
             ),
             child: Row(
               children: [
-                Icon(Icons.pie_chart_rounded, size: 18, color: Colors.grey.shade500),
+                Icon(
+                  Icons.pie_chart_rounded,
+                  size: 18,
+                  color: Colors.grey.shade500,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -1137,13 +1236,14 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
           const SizedBox(height: 16),
           // Components
           ...widget.subject.components.map((component) {
-            final isGraded = component.status == 'OK' && component.grade != null;
+            final isGraded =
+                component.status == 'OK' && component.grade != null;
             final compGrade = component.grade ?? 0;
             final compColor = !isGraded
                 ? Colors.grey.shade400
                 : compGrade >= 10
-                    ? const Color(0xFF00B087)
-                    : const Color(0xFFEF4444);
+                ? const Color(0xFF00B087)
+                : const Color(0xFFEF4444);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -1208,7 +1308,10 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                     )
                   else
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(6),

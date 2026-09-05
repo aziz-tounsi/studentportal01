@@ -580,7 +580,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
       onEdit: () => _showGradeDialog(grade),
       onDelete: () => _confirmDeleteGrade(grade),
       onAddClass: () => _showClassDialog(grade, state),
-      onClassTap: (cls) => context.go('/classes/${cls.id}'),
+      onClassTap: (cls) => context.push('/classes/${cls.id}'),
       onAssignSection: () => _showAssignSectionDialog(grade, state),
       onRemoveSection: (sId) => _removeSectionFromGrade(grade.id, sId),
     );
@@ -2292,7 +2292,6 @@ class _HoverableGradeRow extends StatefulWidget {
 }
 
 class _HoverableGradeRowState extends State<_HoverableGradeRow> {
-  bool _isHovered = false;
   String? _selectedSectionId;
 
   @override
@@ -2303,140 +2302,135 @@ class _HoverableGradeRowState extends State<_HoverableGradeRow> {
         ? grade.classes.where((c) => c.sectionId == _selectedSectionId).toList()
         : grade.classes;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border.all(color: _isHovered ? AppColors.slate200 : AppColors.slate100),
-          borderRadius: BorderRadius.circular(12),
-          color: _isHovered ? AppColors.slate50.withOpacity(0.5) : Colors.transparent,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title + action buttons
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    children: [
-                      Text(
-                        grade.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      Text(
-                        '• ${grade.classCount} classes, ${grade.studentCount} élèves',
-                        style: TextStyle(fontSize: 12, color: AppColors.slate400),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.slate100),
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.transparent,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title + action buttons
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
                   children: [
-                    _actionButton(Icons.edit, widget.onEdit),
-                    const SizedBox(width: 4),
-                    _actionButton(Icons.delete_outline, widget.onDelete, isDelete: true),
+                    Text(
+                      grade.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    Text(
+                      '• ${grade.classCount} classes, ${grade.studentCount} élèves',
+                      style: TextStyle(fontSize: 12, color: AppColors.slate400),
+                    ),
                   ],
                 ),
-              ],
-            ),
-            // Filières (for secondaire)
-            if (grade.levelType == 'secondaire') ...[
-              const SizedBox(height: 8),
+              ),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    'FILIÈRES',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.slate400,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  if (grade.sections.isEmpty)
-                    InkWell(
-                      onTap: widget.onAssignSection,
-                      borderRadius: BorderRadius.circular(4),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFF655DD5).withOpacity(0.3), style: BorderStyle.solid),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          '+ Assigner',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF655DD5)),
-                        ),
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          ...grade.sections.map((section) {
-                            final isSelected = _selectedSectionId == section.id;
-                            return InkWell(
-                              onTap: () => setState(() {
-                                _selectedSectionId = isSelected ? null : section.id;
-                              }),
-                              borderRadius: BorderRadius.circular(4),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? const Color(0xFF655DD5).withOpacity(0.12)
-                                      : AppColors.slate100,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? const Color(0xFF655DD5).withOpacity(0.4)
-                                        : AppColors.slate200,
-                                  ),
-                                ),
-                                child: Text(
-                                  section.name,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected ? const Color(0xFF655DD5) : AppColors.slate500,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
+                  _actionButton(Icons.edit, widget.onEdit),
+                  const SizedBox(width: 4),
+                  _actionButton(Icons.delete_outline, widget.onDelete, isDelete: true),
                 ],
               ),
             ],
-            // Class pills
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+          ),
+          // Filières (for secondaire)
+          if (grade.levelType == 'secondaire') ...[
+            const SizedBox(height: 8),
+            Row(
               children: [
-                ...displayedClasses.map((cls) => _classPill(cls)),
-                _addClassButton(),
+                Text(
+                  'FILIÈRES',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.slate400,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (grade.sections.isEmpty)
+                  InkWell(
+                    onTap: widget.onAssignSection,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFF655DD5).withOpacity(0.3), style: BorderStyle.solid),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '+ Assigner',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF655DD5)),
+                      ),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        ...grade.sections.map((section) {
+                          final isSelected = _selectedSectionId == section.id;
+                          return InkWell(
+                            onTap: () => setState(() {
+                              _selectedSectionId = isSelected ? null : section.id;
+                            }),
+                            borderRadius: BorderRadius.circular(4),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF655DD5).withOpacity(0.12)
+                                    : AppColors.slate100,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF655DD5).withOpacity(0.4)
+                                      : AppColors.slate200,
+                                ),
+                              ),
+                              child: Text(
+                                section.name,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected ? const Color(0xFF655DD5) : AppColors.slate500,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ],
-        ),
+          // Class pills
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ...displayedClasses.map((cls) => _classPill(cls)),
+              _addClassButton(),
+            ],
+          ),
+        ],
       ),
     );
   }

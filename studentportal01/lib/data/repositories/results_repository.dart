@@ -119,6 +119,27 @@ class StudentResultsRepository {
         .eq('semester_id', semesterId)
         .eq('class_id', enrollment['class_id']);
 
+    // Fetch teacher assignments for this class
+    final Map<String, Map<String, String>> teacherMap = {};
+    try {
+      final teacherResp = await _client
+          .from('teacher_assignments')
+          .select('subject_id, teacher_id, users!teacher_id(full_name, photo_url)')
+          .eq('class_id', enrollment['class_id'])
+          .eq('is_active', true);
+      
+      for (final ta in (teacherResp as List)) {
+        final subjectId = ta['subject_id'] as String?;
+        final teacherData = ta['users'] as Map<String, dynamic>?;
+        if (subjectId != null) {
+          teacherMap[subjectId] = {
+            'name': teacherData?['full_name'] as String? ?? '',
+            'photo': teacherData?['photo_url'] as String? ?? '',
+          };
+        }
+      }
+    } catch (_) {}
+
     // Get all grades for this enrollment and semester
     final grades = await _client
         .from('grades')
@@ -189,6 +210,9 @@ class StudentResultsRepository {
           )
           .join(' | ');
 
+      final subjectId = offering['subject_id'] as String?;
+      final teacher = subjectId != null ? teacherMap[subjectId] : null;
+
       summaries.add(
         SubjectGradesSummary(
           subjectOfferingId: offering['id'],
@@ -198,6 +222,8 @@ class StudentResultsRepository {
           weightsDisplay: weightsDisplay,
           components: componentGrades,
           average: average,
+          teacherName: teacher?['name'],
+          teacherPhotoUrl: teacher?['photo'],
         ),
       );
     }

@@ -389,45 +389,49 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   }
 
   Widget _buildContent(BuildContext context, StudentProfileData data) {
-    return CustomScrollView(
-      slivers: [
-        // Top bar
-        SliverToBoxAdapter(child: _buildTopBar(context, data)),
-        // Profile Header (Social Media Style)
-        SliverToBoxAdapter(child: _buildProfileHeader(context, data)),
-        // Quick Stats
-        SliverToBoxAdapter(child: _buildQuickStats(context, data)),
-        // Main content grid
-        SliverPadding(
-          padding: const EdgeInsets.all(24),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              childAspectRatio: 1.2,
-            ),
-            delegate: SliverChildListDelegate([
-              _buildAttendanceCard(context, data),
-              _buildPaymentCard(context, data),
-              _buildAcademicCard(context, data),
-            ]),
-          ),
-        ),
-        // Quick Access Section
-        SliverToBoxAdapter(child: _buildQuickAccessSection(context, data)),
-        // Bottom Row
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          sliver: SliverToBoxAdapter(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 2, child: _buildSuggestionsCard(context, data)),
-                const SizedBox(width: 20),
-                Expanded(flex: 1, child: _buildMessagesCard(context, data)),
-              ],
-            ),
+    return Column(
+      children: [
+        _buildTopBar(context, data),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 24),
+            children: [
+              _buildProfileHeader(context, data),
+              _buildQuickStats(context, data),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cardWidth = (constraints.maxWidth - 40) / 3;
+                    final cardHeight = cardWidth / 1.2;
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: cardWidth, height: cardHeight, child: _buildAttendanceCard(context, data)),
+                        const SizedBox(width: 20),
+                        SizedBox(width: cardWidth, height: cardHeight, child: _buildPaymentCard(context, data)),
+                        const SizedBox(width: 20),
+                        SizedBox(width: cardWidth, height: cardHeight, child: _buildAcademicCard(context, data)),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildQuickAccessSection(context, data),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 2, child: _buildSuggestionsCard(context, data)),
+                    const SizedBox(width: 20),
+                    Expanded(flex: 1, child: _buildMessagesCard(context, data)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -522,30 +526,25 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
     return Container(
       margin: const EdgeInsets.all(24),
-      child: ClipRRect(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF6366F1).withOpacity(0.9),
+            const Color(0xFF8B5CF6).withOpacity(0.9),
+          ],
+        ),
         borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF6366F1).withOpacity(0.9),
-                  const Color(0xFF8B5CF6).withOpacity(0.9),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6366F1).withOpacity(0.3),
-                  blurRadius: 30,
-                  offset: const Offset(0, 15),
-                ),
-              ],
-            ),
-            child: Stack(
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withOpacity(0.3),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
+          ),
+        ],
+      ),
+      child: Stack(
               children: [
                 // Background pattern
                 Positioned(
@@ -723,9 +722,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                 if (user['date_of_birth'] != null)
                                   Builder(
                                     builder: (context) {
-                                      final dob = DateTime.parse(
-                                        user['date_of_birth'],
+                                      final dob = DateTime.tryParse(
+                                        user['date_of_birth']?.toString() ?? '',
                                       );
+                                      if (dob == null) return const SizedBox.shrink();
                                       final now = DateTime.now();
                                       int age = now.year - dob.year;
                                       if (now.month < dob.month ||
@@ -773,11 +773,17 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                   ),
                                 // Date of birth
                                 if (user['date_of_birth'] != null)
-                                  _InfoChipLight(
-                                    icon: Icons.calendar_today,
-                                    label: DateFormat('dd/MM/yyyy').format(
-                                      DateTime.parse(user['date_of_birth']),
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final dob = DateTime.tryParse(
+                                        user['date_of_birth']?.toString() ?? '',
+                                      );
+                                      if (dob == null) return const SizedBox.shrink();
+                                      return _InfoChipLight(
+                                        icon: Icons.calendar_today,
+                                        label: DateFormat('dd/MM/yyyy').format(dob),
+                                      );
+                                    },
                                   ),
                                 if (data.yearsAtSchool > 0)
                                   _InfoChipLight(
@@ -932,12 +938,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+               ],
+             ),
+     );
   }
 
   Widget _buildInitialsAvatar(Map<String, dynamic> user) {
@@ -1025,7 +1028,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     Map<int, double> dailyAbsences = {};
     for (final absence in data.monthlyAbsences) {
       if (absence['date'] != null) {
-        final date = DateTime.parse(absence['date']);
+        final date = DateTime.tryParse(absence['date']?.toString() ?? '');
+        if (date == null) continue;
         final day = date.day;
         dailyAbsences[day] =
             (dailyAbsences[day] ?? 0) +
@@ -1589,9 +1593,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         const SizedBox(height: 4),
                         Text(
                           m['published_at'] != null
-                              ? DateFormat(
-                                  'dd/MM/yyyy',
-                                ).format(DateTime.parse(m['published_at']))
+                              ? () {
+                                  final parsed = DateTime.tryParse(
+                                    m['published_at']?.toString() ?? '',
+                                  );
+                                  if (parsed == null) return '';
+                                  return DateFormat('dd/MM/yyyy').format(parsed);
+                                }()
                               : '',
                           style: TextStyle(
                             color: AppColors.slate500,
@@ -1717,15 +1725,21 @@ class _QuickStatCard extends StatelessWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    label,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                    value,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: color,
                     ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

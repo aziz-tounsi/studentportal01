@@ -94,11 +94,11 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
           .single();
       final schoolId = userResp['school_id'];
 
-      // Get users with their current class name and niveau via enrollments
+      // Get users with their current class name, niveau, and section via enrollments
       final usersResp = await _supabase
           .from('users')
           .select(
-            '*, enrollments:enrollments(class_id, classes:classes(name, niveau_id, niveaux:niveaux(code, name)))',
+            '*, enrollments:enrollments(class_id, classes:classes(name, niveau_id, section_id, niveaux:niveaux(code, name), sections:sections(code)))',
           )
           .eq('school_id', schoolId)
           .order('full_name');
@@ -110,11 +110,12 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
           .order('name');
       final groupsResp = await _supabase.from('groups').select();
 
-      // Parse users and extract class name and niveau from enrollment
+      // Parse users and extract class name, niveau, and section from enrollment
       final users = (usersResp as List).map((e) {
         final enrollments = e['enrollments'] as List?;
         String? className;
         String? niveauCode;
+        String? sectionCode;
         if (enrollments != null && enrollments.isNotEmpty) {
           final enrollment = enrollments.first;
           final classInfo = enrollment['classes'] as Map<String, dynamic>?;
@@ -122,16 +123,22 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
           final niveauInfo = classInfo?['niveaux'] as Map<String, dynamic>?;
           if (niveauInfo != null) {
             niveauCode = niveauInfo['code'];
-            // niveauName available but not currently used
+          }
+          final sectionInfo = classInfo?['sections'] as Map<String, dynamic>?;
+          if (sectionInfo != null) {
+            sectionCode = sectionInfo['code'];
           }
         }
         // Remove enrollments from the map before parsing to avoid conflicts
         final userData = Map<String, dynamic>.from(e);
         userData.remove('enrollments');
         userData['class_name'] = className;
-        // Set niveau_code from enrollment if user doesn't have one
+        // Set niveau_code and section_code from enrollment if user doesn't have them
         if (userData['niveau_code'] == null && niveauCode != null) {
           userData['niveau_code'] = niveauCode;
+        }
+        if (userData['section_code'] == null && sectionCode != null) {
+          userData['section_code'] = sectionCode;
         }
         return UserModel.fromJson(userData);
       }).toList();

@@ -390,23 +390,10 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   }
 
   Widget _contactBlock(IconData icon, String label, String value) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(children: [
-        Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4)],
-          ),
-          child: Icon(icon, size: 18, color: AppColors.textTertiary),
-        ),
+        Icon(icon, size: 18, color: AppColors.textTertiary),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.grey.shade400)),
@@ -452,7 +439,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             decoration: BoxDecoration(
               color: _brand,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: _brand.withOpacity(0.3), blurRadius: 12)],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.terminal_rounded, size: 16, color: Colors.white),

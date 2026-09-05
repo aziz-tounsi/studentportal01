@@ -114,6 +114,8 @@ class SubjectAbsenceSummary {
   final double absencePercent;
   final AbsenceLevel level;
   final String? warningMessage;
+  final String? teacherName;
+  final String? teacherPhotoUrl;
 
   SubjectAbsenceSummary({
     required this.subjectOfferingId,
@@ -127,6 +129,8 @@ class SubjectAbsenceSummary {
     required this.absencePercent,
     required this.level,
     this.warningMessage,
+    this.teacherName,
+    this.teacherPhotoUrl,
   });
 }
 

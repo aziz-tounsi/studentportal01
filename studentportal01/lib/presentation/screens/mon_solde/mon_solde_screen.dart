@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/services/core_data_service.dart';
 import '../../providers/student_context_provider.dart';
-import '../../widgets/semester_navigator.dart';
 import '../../widgets/ios_loader.dart';
 
 // Semester state provider for this screen
@@ -79,58 +79,111 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
   }).toList();
 });
 
-// Semester count provider - fetches from system
-final semesterCountProvider = FutureProvider<int>((ref) async {
+// Semesters provider for Mon Solde - uses real semester records with start/end dates
+final monSoldeSemestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
+  final context = await ref.watch(studentContextProvider.future);
+  final supabase = Supabase.instance.client;
+
+  // Get academic year ID - try context first, then fallback to current year
+  String? academicYearId = context?.academicYearId;
+  if (academicYearId == null || academicYearId.isEmpty) {
+    try {
+      final yearResp = await supabase
+          .from('academic_years')
+          .select('id')
+          .eq('is_current', true)
+          .order('start_date', ascending: false)
+          .maybeSingle();
+      academicYearId = yearResp?['id'] as String?;
+    } catch (_) {}
+  }
+  if (academicYearId == null) return [];
+
   try {
-    final context = await ref.watch(studentContextProvider.future);
-    if (context == null) return 3;
-    final supabase = Supabase.instance.client;
-    final resp = await supabase
-        .from('semesters')
-        .select('id')
-        .eq('academic_year_id', context.academicYearId ?? '')
-        .order('number');
-    if (resp.length > 0) return resp.length;
-    // Fallback: count all semesters for school's current year
-    final count = await supabase.rpc(
-      'get_current_academic_year_semester_count',
-      params: {'p_school_id': context.schoolId},
-    );
-    return (count as num?)?.toInt() ?? 3;
-  } catch (e) {
-    return 3;
+    final service = ref.read(coreDataServiceProvider);
+    return service.getSemestersForAcademicYear(academicYearId);
+  } catch (_) {
+    // Direct fallback query
+    try {
+      final resp = await supabase
+          .from('semesters')
+          .select('id, name, number, start_date, end_date, is_current')
+          .eq('academic_year_id', academicYearId)
+          .order('number');
+      return (resp as List).map((e) => SemesterInfo(
+        id: e['id'] ?? '',
+        name: e['name'] ?? '',
+        number: e['number'] ?? 0,
+        isCurrent: e['is_current'] ?? false,
+        startDate: e['start_date'] != null ? DateTime.tryParse(e['start_date'].toString()) : null,
+        endDate: e['end_date'] != null ? DateTime.tryParse(e['end_date'].toString()) : null,
+      )).toList();
+    } catch (_) {
+      return [];
+    }
   }
 });
 
 // Academic year date range provider
-final academicYearDatesProvider = FutureProvider<({DateTime? start, DateTime? end})>((ref) async {
-  try {
-    final context = await ref.watch(studentContextProvider.future);
-    if (context == null) return (start: null, end: null);
-    final supabase = Supabase.instance.client;
-    final resp = await supabase
-        .from('academic_years')
-        .select('start_date, end_date')
-        .eq('id', context.academicYearId ?? '')
-        .maybeSingle();
-    if (resp == null) return (start: null, end: null);
-    return (
-      start: DateTime.tryParse(resp['start_date']?.toString() ?? ''),
-      end: DateTime.tryParse(resp['end_date']?.toString() ?? ''),
-    );
-  } catch (e) {
-    return (start: null, end: null);
-  }
-});
+final academicYearDatesProvider =
+    FutureProvider<({DateTime? start, DateTime? end})>((ref) async {
+      try {
+        final context = await ref.watch(studentContextProvider.future);
+        final supabase = Supabase.instance.client;
+
+        // Get academic year ID - try context first, then fallback
+        String? academicYearId = context?.academicYearId;
+        if (academicYearId == null || academicYearId.isEmpty) {
+          try {
+            final yearResp = await supabase
+                .from('academic_years')
+                .select('id, start_date, end_date')
+                .eq('is_current', true)
+                .order('start_date', ascending: false)
+                .maybeSingle();
+            if (yearResp != null) {
+              return (
+                start: DateTime.tryParse(yearResp['start_date']?.toString() ?? ''),
+                end: DateTime.tryParse(yearResp['end_date']?.toString() ?? ''),
+              );
+            }
+          } catch (_) {}
+          return (start: null, end: null);
+        }
+
+        final resp = await supabase
+            .from('academic_years')
+            .select('start_date, end_date')
+            .eq('id', academicYearId)
+            .maybeSingle();
+        if (resp == null) return (start: null, end: null);
+        return (
+          start: DateTime.tryParse(resp['start_date']?.toString() ?? ''),
+          end: DateTime.tryParse(resp['end_date']?.toString() ?? ''),
+        );
+      } catch (e) {
+        return (start: null, end: null);
+      }
+    });
 
 // Pricing fallback provider - fetches pricing from payment_pricing for all categories
-final pricingFallbackProvider = FutureProvider<Map<String, double>>((ref) async {
+final pricingFallbackProvider = FutureProvider<Map<String, double>>((
+  ref,
+) async {
   try {
     final context = await ref.watch(studentContextProvider.future);
     if (context == null || context.niveauId == null) return {};
     final supabase = Supabase.instance.client;
 
-    final categories = ['scolarite', 'transport', 'inscription', 'uniforme', 'cantine', 'activites', 'autres'];
+    final categories = [
+      'scolarite',
+      'transport',
+      'inscription',
+      'uniforme',
+      'cantine',
+      'activites',
+      'autres',
+    ];
     final Map<String, double> pricing = {};
 
     for (final cat in categories) {
@@ -188,8 +241,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     final l10n = AppLocalizations.of(context);
     final paymentDataAsync = ref.watch(paymentsDataProvider);
     final categories = ref.watch(paymentCategoriesProvider);
-    final selectedSemester = ref.watch(soldeSemesterProvider);
-    final semesterCount = ref.watch(semesterCountProvider);
+    final semestersAsync = ref.watch(monSoldeSemestersProvider);
     final yearDates = ref.watch(academicYearDatesProvider);
     final pricingAsync = ref.watch(pricingFallbackProvider);
 
@@ -223,36 +275,44 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                 ),
               ),
 
-              // Semester Navigator
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: DynamicSemesterNav(
-                    selectedSemesterNumber: selectedSemester,
-                    onChanged: (v) => ref.read(soldeSemesterProvider.notifier).state = v,
-                    accentColor: const Color(0xFFF59E0B),
-                    secondaryColor: const Color(0xFFF97316),
-                  ),
-                ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-              
               // Content
               paymentDataAsync.when(
-                data: (plans) => _buildContent(
-                  context,
-                  plans,
-                  categories,
-                  l10n,
-                  semesterCount.asData?.value ?? 3,
-                  yearDates.asData?.value,
-                  pricingAsync.asData?.value ?? {},
-                ),
+                data: (plans) {
+                  try {
+                    return _buildContent(
+                      context,
+                      plans,
+                      categories,
+                      l10n,
+                      semestersAsync.asData?.value ?? [],
+                      yearDates.asData?.value,
+                      pricingAsync.asData?.value ?? {},
+                    );
+                  } catch (e, _) {
+                    return SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                            const SizedBox(height: 16),
+                            Text('Erreur: $e', textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () {
+                                ref.invalidate(paymentsDataProvider);
+                                ref.invalidate(monSoldeSemestersProvider);
+                              },
+                              child: const Text('Réessayer'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                },
                 loading: () => const SliverFillRemaining(
-                  child: Center(
-                    child: IosLoader(color: Color(0xFFF59E0B)),
-                  ),
+                  child: Center(child: IosLoader(color: Color(0xFFF59E0B))),
                 ),
                 error: (error, stack) => SliverFillRemaining(
                   child: Center(
@@ -340,26 +400,63 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     List<PaymentPlanInfo> plans,
     List<PaymentCategoryData> categories,
     AppLocalizations l10n,
-    int semesterCount,
+    List<SemesterInfo> semesters,
     ({DateTime? start, DateTime? end})? yearDates,
     Map<String, double> pricing,
   ) {
-    // Balance card uses ALL categories
-    final allPlansTotal = plans.fold<double>(0, (sum, p) => sum + p.amountTotal);
-    final allPaidAmount = plans.fold<double>(0, (sum, p) => sum + p.totalPaid);
+    // Balance card uses ALL categories — keep only the latest plan per category
+    // Sort plans so the one with the latest payment due date comes first,
+    // ensuring we keep the most recent plan per category.
+    final sortedPlans = List<PaymentPlanInfo>.from(plans)
+      ..sort((a, b) {
+        final aLatest = a.payments.isNotEmpty
+            ? a.payments.map((p) => p.dueDate ?? DateTime(2000)).reduce((d1, d2) => d1.isAfter(d2) ? d1 : d2)
+            : DateTime(2000);
+        final bLatest = b.payments.isNotEmpty
+            ? b.payments.map((p) => p.dueDate ?? DateTime(2000)).reduce((d1, d2) => d1.isAfter(d2) ? d1 : d2)
+            : DateTime(2000);
+        return bLatest.compareTo(aLatest);
+      });
+
+    final latestPlansByCategory = <String, PaymentPlanInfo>{};
+    for (final p in sortedPlans) {
+      final cat = p.category ?? 'scolarite';
+      latestPlansByCategory.putIfAbsent(cat, () => p);
+    }
+    final dedupedPlans = latestPlansByCategory.values.toList();
+
+    final allPlansTotal = dedupedPlans.fold<double>(
+      0,
+      (sum, p) => sum + p.amountTotal,
+    );
+    final allPaidAmount = dedupedPlans.fold<double>(0, (sum, p) => sum + p.totalPaid);
     final pricingTotal = pricing.values.fold<double>(0, (sum, v) => sum + v);
     final totalAmount = allPlansTotal > 0 ? allPlansTotal : pricingTotal;
     final paidAmount = allPaidAmount;
     final remainingAmount = totalAmount - paidAmount;
-    final progressPercent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0.0;
+    final progressPercent = totalAmount > 0
+        ? (paidAmount / totalAmount) * 100
+        : 0.0;
 
     // Schedule uses scolarite only
-    final scolaritePlans = plans.where((p) => 
-      p.category == null || p.category == 'scolarite'
-    ).toList();
+    final scolaritePlans = dedupedPlans
+        .where((p) => p.category == null || p.category == 'scolarite')
+        .toList();
     final scolaritePricing = pricing['scolarite'] ?? 0.0;
-    final scheduleTotal = scolaritePlans.fold<double>(0, (sum, p) => sum + p.amountTotal);
+    final scheduleTotal = scolaritePlans.fold<double>(
+      0,
+      (sum, p) => sum + p.amountTotal,
+    );
     final scheduleAmount = scheduleTotal > 0 ? scheduleTotal : scolaritePricing;
+
+    // Get plan type from admin (monthly, semester, annual)
+    final planType = scolaritePlans.isNotEmpty
+        ? scolaritePlans.first.planType
+        : 'semester';
+
+    // Find current semester
+    final currentSemester = semesters.firstWhereOrNull((s) => s.isCurrent) ??
+        semesters.firstOrNull;
 
     // Flatten all scolarite payments across plans, sorted by due date
     final allPayments = scolaritePlans.expand((p) => p.payments).toList()
@@ -369,15 +466,21 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
         return aDate.compareTo(bDate);
       });
 
-    // If no real payments, create placeholder schedule based on semester count
-    final displayPayments = allPayments.isNotEmpty
-        ? allPayments
-        : _buildPlaceholderPayments(semesterCount, yearDates, scheduleAmount);
+    // Always build the full month schedule from the current semester,
+    // then overlay real payment data where it exists
+    final displayPayments = _buildFullSchedule(
+      planType,
+      semesters,
+      currentSemester,
+      yearDates,
+      scheduleAmount,
+      allPayments,
+    );
 
     // Categories excluding scolarite
-    final nonScolariteCategories = categories.where((c) => 
-      c.category != PaymentCategory.scolarite
-    ).toList();
+    final nonScolariteCategories = categories
+        .where((c) => c.category != PaymentCategory.scolarite)
+        .toList();
 
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 110),
@@ -393,23 +496,12 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           const SizedBox(height: 28),
 
           // Payment Schedule Section
-          Text(
-            l10n.paymentSchedule,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade800,
-            ),
+          _buildPaymentScheduleSection(
+            planType,
+            displayPayments,
+            l10n,
+            currentSemester,
           ),
-          const SizedBox(height: 16),
-
-          ...displayPayments.map(
-            (payment) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _GlassyPaymentCard(payment: payment, currency: 'TND'),
-            ),
-          ),
-          const SizedBox(height: 28),
 
           // Categories Section Title
           Text(
@@ -434,44 +526,340 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     );
   }
 
-  List<PaymentInfo> _buildPlaceholderPayments(
-    int semesterCount,
+  Widget _buildPaymentScheduleSection(
+    String planType,
+    List<PaymentInfo> displayPayments,
+    AppLocalizations l10n,
+    SemesterInfo? currentSemester,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.paymentSchedule,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey.shade800,
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (planType == 'monthly')
+          _buildMonthlyPaymentGrid(displayPayments, currentSemester)
+        else
+          ...displayPayments.map(
+            (payment) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _GlassyPaymentCard(payment: payment, currency: 'TND'),
+            ),
+          ),
+        const SizedBox(height: 28),
+      ],
+    );
+  }
+
+  Widget _buildMonthlyPaymentGrid(
+    List<PaymentInfo> payments,
+    SemesterInfo? currentSemester,
+  ) {
+    final now = DateTime.now();
+
+    // Always find the payment matching the actual current month first
+    var currentIndex = payments.indexWhere(
+      (p) =>
+          p.dueDate != null &&
+          p.dueDate!.year == now.year &&
+          p.dueDate!.month == now.month,
+    );
+
+    // If no exact match, find by month only (ignoring year)
+    if (currentIndex < 0) {
+      currentIndex = payments.indexWhere(
+        (p) => p.dueDate != null && p.dueDate!.month == now.month,
+      );
+    }
+
+    // If still no match, find the closest past month
+    if (currentIndex < 0) {
+      final nowDate = DateTime(now.year, now.month, 1);
+      var bestIndex = -1;
+      for (var i = payments.length - 1; i >= 0; i--) {
+        if (payments[i].dueDate != null) {
+          final dueDate = DateTime(
+            payments[i].dueDate!.year,
+            payments[i].dueDate!.month,
+            1,
+          );
+          if (!dueDate.isAfter(nowDate)) {
+            bestIndex = i;
+            break;
+          }
+        }
+      }
+      currentIndex = bestIndex;
+    }
+
+    final initialIndex = currentIndex >= 0 ? currentIndex : 0;
+
+    // Find the index of the current month in the payments list
+    final currentMonthIdx = payments.indexWhere(
+      (p) =>
+          p.dueDate != null &&
+          p.dueDate!.year == now.year &&
+          p.dueDate!.month == now.month,
+    );
+
+    return _PaymentCarousel(
+      payments: payments,
+      currency: 'TND',
+      initialIndex: initialIndex,
+      currentMonthIndex: currentMonthIdx,
+    );
+  }
+
+  // Builds the payment schedule.  When real payments exist (admin has created
+  // a plan) we return them directly so the student sees the exact due dates.
+  // Only when there are no payments do we generate a preview from semester dates.
+  List<PaymentInfo> _buildFullSchedule(
+    String planType,
+    List<SemesterInfo> semesters,
+    SemesterInfo? currentSemester,
+    ({DateTime? start, DateTime? end})? yearDates,
+    double totalAmount,
+    List<PaymentInfo> realPayments,
+  ) {
+    if (planType != 'monthly') {
+      // For non-monthly plans, return real payments or generate placeholders
+      if (realPayments.isNotEmpty) return realPayments;
+      return _buildPlaceholderPaymentsForType(
+        planType,
+        semesters,
+        yearDates,
+        totalAmount,
+      );
+    }
+
+    // If real payments exist, use them directly — the admin already created
+    // the exact due dates. Only generate a semester-based schedule when there
+    // are no real payments (preview / before first plan creation).
+    if (realPayments.isNotEmpty) return realPayments;
+
+    // For monthly plans with no real payments, generate all months covered by
+    // the academic year's semesters so the user sees the expected schedule.
+    final scheduleStart = semesters.isNotEmpty
+        ? semesters
+            .map((s) => s.startDate)
+            .whereType<DateTime>()
+            .reduce((a, b) => a.isBefore(b) ? a : b)
+        : yearDates?.start;
+    final scheduleEnd = semesters.isNotEmpty
+        ? semesters
+            .map((s) => s.endDate)
+            .whereType<DateTime>()
+            .reduce((a, b) => a.isAfter(b) ? a : b)
+        : yearDates?.end;
+    if (scheduleStart == null || scheduleEnd == null) {
+      return realPayments.isNotEmpty
+          ? realPayments
+          : _buildPlaceholderPaymentsForType(
+              planType,
+              semesters,
+              yearDates,
+              totalAmount,
+            );
+    }
+
+    // Generate all months in the semester range
+    final allMonths = <DateTime>[];
+    var current = DateTime(scheduleStart.year, scheduleStart.month, 1);
+    final endMonth = DateTime(scheduleEnd.year, scheduleEnd.month, 1);
+    while (!current.isAfter(endMonth)) {
+      allMonths.add(current);
+      current = DateTime(current.year, current.month + 1, 1);
+    }
+
+    if (allMonths.isEmpty) {
+      return realPayments.isNotEmpty
+          ? realPayments
+          : _buildPlaceholderPaymentsForType(
+              planType,
+              semesters,
+              yearDates,
+              totalAmount,
+            );
+    }
+
+    // Build a lookup of real payments by month — only include payments within the schedule range
+    final realByMonth = <String, PaymentInfo>{};
+    for (final p in realPayments) {
+      if (p.dueDate != null) {
+        final d = p.dueDate!;
+        if (!d.isBefore(scheduleStart) && !d.isAfter(scheduleEnd)) {
+          final key = '${d.year}-${d.month}';
+          realByMonth[key] = p;
+        }
+      }
+    }
+
+    // For each month, use real payment if available, otherwise create a placeholder
+    final partAmount =
+        allMonths.isNotEmpty && totalAmount > 0 ? totalAmount / allMonths.length : 0.0;
+    return allMonths.asMap().entries.map((e) {
+      final month = e.value;
+      final key = '${month.year}-${month.month}';
+      if (realByMonth.containsKey(key)) {
+        return realByMonth[key]!;
+      }
+      return PaymentInfo(
+        id: 'schedule_${e.key}',
+        amount: partAmount,
+        dueDate: month,
+        status: 'pending',
+      );
+    }).toList();
+  }
+
+  List<PaymentInfo> _buildPlaceholderPaymentsForType(
+    String planType,
+    List<SemesterInfo> semesters,
     ({DateTime? start, DateTime? end})? yearDates,
     double totalAmount,
   ) {
-    if (semesterCount <= 0) semesterCount = 3;
-    final startDate = yearDates?.start ?? DateTime(DateTime.now().year, 9, 1);
-    final endDate = yearDates?.end ?? DateTime(DateTime.now().year + 6, 1);
-    final totalMonths = (endDate.year - startDate.year) * 12 + (endDate.month - startDate.month);
-    final monthsPerPart = (totalMonths / semesterCount).ceil();
-    final partAmount = totalAmount > 0 ? totalAmount / semesterCount : 0.0;
+    final sortedSemesters = [...semesters]..sort((a, b) => a.number.compareTo(b.number));
 
-    final payments = <PaymentInfo>[];
-    for (int i = 0; i < semesterCount; i++) {
-      final dueDate = DateTime(startDate.year, startDate.month + (i * monthsPerPart), 1);
-      payments.add(PaymentInfo(
-        id: 'placeholder_$i',
+    switch (planType) {
+      case 'annual':
+        return _buildAnnualPlaceholder(sortedSemesters, yearDates, totalAmount);
+      case 'monthly':
+        return _buildMonthlyPlaceholder(sortedSemesters, yearDates, totalAmount);
+      case 'semesterly':
+        return _buildSemesterPlaceholder(sortedSemesters, yearDates, totalAmount);
+      case 'trimester':
+        return _buildTrimesterPlaceholder(sortedSemesters, yearDates, totalAmount);
+      case 'semester':
+      default:
+        return _buildSemesterPlaceholder(sortedSemesters, yearDates, totalAmount);
+    }
+  }
+
+  List<PaymentInfo> _buildAnnualPlaceholder(
+    List<SemesterInfo> semesters,
+    ({DateTime? start, DateTime? end})? yearDates,
+    double totalAmount,
+  ) {
+    final start = yearDates?.start ??
+        semesters.firstOrNull?.startDate ??
+        DateTime(DateTime.now().year, 9, 1);
+    return [
+      PaymentInfo(
+        id: 'placeholder_annual',
+        amount: totalAmount,
+        dueDate: DateTime(start.year, start.month, 1),
+        status: 'pending',
+      ),
+    ];
+  }
+
+  List<PaymentInfo> _buildSemesterPlaceholder(
+    List<SemesterInfo> semesters,
+    ({DateTime? start, DateTime? end})? yearDates,
+    double totalAmount,
+  ) {
+    var effectiveSemesters = semesters;
+    if (effectiveSemesters.isEmpty) {
+      effectiveSemesters = [
+        SemesterInfo(
+          id: 'placeholder_s1',
+          name: 'Semestre 1',
+          number: 1,
+          isCurrent: false,
+          startDate: yearDates?.start ?? DateTime(DateTime.now().year, 9, 1),
+          endDate: yearDates?.end ?? DateTime(DateTime.now().year + 1, 6, 30),
+        ),
+        SemesterInfo(
+          id: 'placeholder_s2',
+          name: 'Semestre 2',
+          number: 2,
+          isCurrent: false,
+          startDate: yearDates?.start != null
+              ? DateTime(yearDates!.start!.year, yearDates.start!.month + 5, 1)
+              : DateTime(DateTime.now().year + 1, 2, 1),
+          endDate: yearDates?.end ?? DateTime(DateTime.now().year + 1, 6, 30),
+        ),
+      ];
+    }
+
+    final partAmount = totalAmount > 0 ? totalAmount / effectiveSemesters.length : 0.0;
+    return effectiveSemesters.asMap().entries.map((e) {
+      final semester = e.value;
+      final dueDate = semester.startDate != null
+          ? DateTime(semester.startDate!.year, semester.startDate!.month, 1)
+          : _fallbackDateFromYear(yearDates, e.key, effectiveSemesters.length);
+      return PaymentInfo(
+        id: 'placeholder_${e.key}',
         amount: partAmount,
         dueDate: dueDate,
         status: 'pending',
-      ));
-    }
-    return payments;
+      );
+    }).toList();
   }
 
-  Widget _buildEmptyState(String message) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      alignment: Alignment.center,
-      child: Text(
-        message,
-        style: TextStyle(
-          fontSize: 14,
-          color: Colors.grey.shade500,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+  List<PaymentInfo> _buildTrimesterPlaceholder(
+    List<SemesterInfo> semesters,
+    ({DateTime? start, DateTime? end})? yearDates,
+    double totalAmount,
+  ) {
+    const count = 3;
+    final partAmount = totalAmount > 0 ? totalAmount / count : 0.0;
+    return List.generate(count, (index) {
+      final dueDate = _fallbackDateFromYear(yearDates, index, count);
+      return PaymentInfo(
+        id: 'placeholder_$index',
+        amount: partAmount,
+        dueDate: dueDate,
+        status: 'pending',
+      );
+    });
+  }
+
+  List<PaymentInfo> _buildMonthlyPlaceholder(
+    List<SemesterInfo> semesters,
+    ({DateTime? start, DateTime? end})? yearDates,
+    double totalAmount,
+  ) {
+    // Use actual semester dates first, not academic year bounds
+    final firstSemStart = semesters.isNotEmpty ? semesters.first.startDate : null;
+    final lastSemEnd = semesters.isNotEmpty ? semesters.last.endDate : null;
+    final start = firstSemStart ?? yearDates?.start ?? DateTime(DateTime.now().year, 9, 1);
+    final end = lastSemEnd ?? yearDates?.end ?? DateTime(start.year + 1, start.month, 1);
+
+    final months = <DateTime>[];
+    var current = DateTime(start.year, start.month, 1);
+    final endMonth = DateTime(end.year, end.month, 1);
+    while (!current.isAfter(endMonth)) {
+      months.add(current);
+      current = DateTime(current.year, current.month + 1, 1);
+    }
+
+    final partAmount = months.isNotEmpty && totalAmount > 0 ? totalAmount / months.length : 0.0;
+    return months.asMap().entries.map((e) => PaymentInfo(
+          id: 'placeholder_${e.key}',
+          amount: partAmount,
+          dueDate: e.value,
+          status: 'pending',
+        )).toList();
+  }
+
+  DateTime? _fallbackDateFromYear(
+    ({DateTime? start, DateTime? end})? yearDates,
+    int index,
+    int count,
+  ) {
+    final start = yearDates?.start ?? DateTime(DateTime.now().year, 9, 1);
+    final end = yearDates?.end ?? DateTime(start.year + 1, start.month, 1);
+    final totalMonths = (end.year - start.year) * 12 + (end.month - start.month);
+    final monthsPerPart = (totalMonths / count).ceil();
+    return DateTime(start.year, start.month + (index * monthsPerPart), 1);
   }
 
   Widget _buildBalanceCard(
@@ -580,6 +968,358 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
   }
 }
 
+// Payment Carousel (horizontal scrollable circle cards)
+class _PaymentCarousel extends StatefulWidget {
+  final List<PaymentInfo> payments;
+  final String currency;
+  final int initialIndex;
+  final int currentMonthIndex;
+
+  const _PaymentCarousel({
+    required this.payments,
+    required this.currency,
+    this.initialIndex = 0,
+    this.currentMonthIndex = -1,
+  });
+
+  @override
+  State<_PaymentCarousel> createState() => _PaymentCarouselState();
+}
+
+class _PaymentCarouselState extends State<_PaymentCarousel> {
+  static const double _centerSize = 160.0;
+
+  late PageController _pageController;
+  late double _currentPage;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentPage = widget.initialIndex.toDouble();
+    _pageController = PageController(
+      viewportFraction: 0.5,
+      initialPage: widget.initialIndex,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  double _scaleForDistance(double distance) {
+    final abs = distance.abs();
+    if (abs <= 1.0) {
+      return lerpDouble(1.0, 0.68, abs)!;
+    } else if (abs <= 2.0) {
+      return lerpDouble(0.68, 0.44, abs - 1.0)!;
+    } else {
+      return lerpDouble(0.44, 0.25, (abs - 2.0).clamp(0.0, 1.0))!;
+    }
+  }
+
+  double _xOffsetForDistance(double distance) {
+    final abs = distance.abs();
+    final sign = distance < 0 ? -1.0 : 1.0;
+    double offset;
+    if (abs <= 1.0) {
+      offset = abs * 76.0;
+    } else if (abs <= 2.0) {
+      offset = 76.0 + (abs - 1.0) * 60.0;
+    } else {
+      offset = 136.0 + (abs - 2.0) * 50.0;
+    }
+    return sign * offset;
+  }
+
+  double _verticalOffset(double distance) {
+    final abs = distance.abs();
+    if (abs <= 1.0) {
+      return abs * 36.0;
+    } else if (abs <= 2.0) {
+      return 36.0 + (abs - 1.0) * 52.0;
+    } else {
+      return 88.0 + (abs - 2.0) * 30.0;
+    }
+  }
+
+  double _opacityForDistance(double distance) {
+    final abs = distance.abs();
+    if (abs <= 0.5) return 1.0;
+    if (abs <= 1.2) {
+      return lerpDouble(1.0, 0.70, (abs - 0.5) / 0.7)!;
+    } else if (abs <= 2.0) {
+      return lerpDouble(0.70, 0.35, (abs - 1.2) / 0.8)!;
+    } else if (abs <= 2.3) {
+      return lerpDouble(0.35, 0.0, (abs - 2.0) / 0.3)!;
+    }
+    return 0.0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 260,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final centerX = constraints.maxWidth / 2;
+          final centerY = constraints.maxHeight * 0.36;
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Visual circles animated reactively with 60fps hardware acceleration
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _pageController,
+                  builder: (context, _) {
+                    final currentPage = _pageController.hasClients && _pageController.page != null
+                        ? _pageController.page!
+                        : _currentPage;
+
+                    final sortedIndices = List.generate(widget.payments.length, (i) => i)
+                      ..sort((a, b) {
+                        final distA = (a - currentPage).abs();
+                        final distB = (b - currentPage).abs();
+                        return distB.compareTo(distA);
+                      });
+
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: sortedIndices.map((index) {
+                        final distance = index - currentPage;
+                        final absDistance = distance.abs();
+                        if (absDistance >= 2.4) return const SizedBox.shrink();
+
+                        final opacity = _opacityForDistance(distance);
+                        if (opacity <= 0.01) return const SizedBox.shrink();
+
+                        final scale = _scaleForDistance(distance);
+                        final xOffset = _xOffsetForDistance(distance);
+                        final vOffset = _verticalOffset(distance);
+                        final isCenter = absDistance < 0.5;
+
+                        return Positioned(
+                          key: ValueKey('circle_item_$index'),
+                          left: centerX + xOffset - _centerSize / 2,
+                          top: centerY + vOffset - _centerSize / 2,
+                          child: SizedBox(
+                            width: _centerSize,
+                            height: _centerSize,
+                            child: Transform.scale(
+                              scale: scale,
+                              child: Opacity(
+                                opacity: opacity,
+                                child: _PaymentCircleCard(
+                                  key: ValueKey('payment_card_$index'),
+                                  payment: widget.payments[index],
+                                  currency: widget.currency,
+                                  isCenter: isCenter,
+                                  absDistance: absDistance,
+                                  isCurrentMonth: index == widget.currentMonthIndex,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+              ),
+
+              // Invisible PageView to enable smooth swipe gestures
+              Positioned.fill(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.payments.length,
+                  physics: const BouncingScrollPhysics(),
+                  itemBuilder: (context, index) => const SizedBox.shrink(),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Circle Payment Card (matching the design)
+class _PaymentCircleCard extends StatelessWidget {
+  final PaymentInfo payment;
+  final String currency;
+  final bool isCenter;
+  final double absDistance;
+  final bool isCurrentMonth;
+
+  const _PaymentCircleCard({
+    super.key,
+    required this.payment,
+    required this.currency,
+    required this.isCenter,
+    this.absDistance = 0,
+    this.isCurrentMonth = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final monthFormat = DateFormat.MMM('fr_FR');
+    final monthLabel = payment.dueDate != null
+        ? monthFormat.format(payment.dueDate!).replaceAll('.', '').toUpperCase()
+        : '';
+    final isPaid = payment.status == 'paid';
+    final isOverdue =
+        !isPaid &&
+        payment.dueDate != null &&
+        payment.dueDate!.isBefore(DateTime.now());
+
+    final Color statusColor;
+    final String statusText;
+    if (isPaid) {
+      statusColor = const Color(0xFF22C55E);
+      statusText = 'Payé';
+    } else if (isOverdue) {
+      statusColor = const Color(0xFFEF4444);
+      statusText = 'En retard';
+    } else {
+      statusColor = const Color(0xFFFF6B9D);
+      statusText = 'En attente';
+    }
+
+    final monthColor = Color.lerp(
+      const Color(0xFFFF6B9D),
+      Colors.grey.shade400,
+      (absDistance * 1.5).clamp(0.0, 1.0),
+    ) ?? Colors.grey.shade400;
+
+    Widget card = Container(
+      width: 160,
+      height: 160,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isCenter ? 0.07 : 0.04),
+            blurRadius: isCenter ? 18 : 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            monthLabel,
+            style: TextStyle(
+              fontSize: 14.0,
+              fontWeight: FontWeight.w600,
+              color: monthColor,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _formatCurrency(payment.amount),
+            style: const TextStyle(
+              fontSize: 28.0,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1F2937),
+              height: 1.1,
+            ),
+          ),
+          Text(
+            currency,
+            style: TextStyle(
+              fontSize: 11.0,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade400,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6.0,
+                  height: 6.0,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: statusColor,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 10.0,
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (isCurrentMonth) {
+      card = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          card,
+          Positioned(
+            top: -10,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B9D),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF6B9D).withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  'Actuel',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return card;
+  }
+
+  String _formatCurrency(double amount) {
+    final formatter = NumberFormat('#,###', 'fr_FR');
+    return formatter.format(amount);
+  }
+}
+
 // Glassy Category Card
 class _GlassyCategoryCard extends StatelessWidget {
   final PaymentCategoryData category;
@@ -603,145 +1343,145 @@ class _GlassyCategoryCard extends StatelessWidget {
             width: 1,
           ),
         ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: cat.color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cat.color.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Icon(cat.icon, color: cat.color, size: 24),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: cat.color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: cat.color.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            cat.label,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Colors.grey.shade800,
-                            ),
+              child: Icon(cat.icon, color: cat.color, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          cat.label,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: Colors.grey.shade800,
                           ),
                         ),
-                        if (isPaid)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF10B981,
-                              ).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_rounded,
-                                  size: 12,
+                      ),
+                      if (isPaid)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 12,
+                                color: Color(0xFF10B981),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Payé',
+                                style: TextStyle(
+                                  fontSize: 10,
                                   color: Color(0xFF10B981),
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Payé',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Color(0xFF10B981),
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Progress bar with gradient
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Stack(
+                      children: [
+                        Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: cat.color.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: (category.progressPercent / 100).clamp(
+                            0.0,
+                            1.0,
+                          ),
+                          child: Container(
+                            height: 6,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  cat.color,
+                                  cat.color.withValues(alpha: 0.7),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: cat.color.withValues(alpha: 0.4),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
                           ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    // Progress bar with gradient
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Stack(
-                        children: [
-                          Container(
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: cat.color.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          FractionallySizedBox(
-                            widthFactor: (category.progressPercent / 100).clamp(
-                              0.0,
-                              1.0,
-                            ),
-                            child: Container(
-                              height: 6,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    cat.color,
-                                    cat.color.withValues(alpha: 0.7),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: cat.color.withValues(alpha: 0.4),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${_formatCurrency(category.paid)} / ${_formatCurrency(category.amount)} TND',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
+                      if (!isPaid)
                         Text(
-                          '${_formatCurrency(category.paid)} / ${_formatCurrency(category.amount)} TND',
+                          'Reste: ${_formatCurrency(category.remaining)} TND',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
+                            fontSize: 11,
+                            color: cat.color,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (!isPaid)
-                          Text(
-                            'Reste: ${_formatCurrency(category.remaining)} TND',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cat.color,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   String _formatCurrency(double amount) {
@@ -914,145 +1654,155 @@ class _GlassyPaymentCard extends StatelessWidget {
     }
 
     // Generate reference if not exists
-    final reference = payment.reference ?? 'PAY-${payment.id.length >= 8 ? payment.id.substring(0, 8).toUpperCase() : payment.id.toUpperCase()}';
+    final reference =
+        payment.reference ??
+        'PAY-${payment.id.length >= 8 ? payment.id.substring(0, 8).toUpperCase() : payment.id.toUpperCase()}';
 
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black.withOpacity(0.35),
+      barrierColor: Colors.black.withValues(alpha: 0.35),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return Center(
           child: Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(32),
+            ),
             backgroundColor: Colors.white,
             child: Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(32),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-              // Header with status icon
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(statusIcon, color: statusColor, size: 36),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Détails du paiement',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Text(
-                  statusText,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              // Show delay duration for overdue as info row
-              if (delayText != null) ...[
-                const SizedBox(height: 24),
-                _buildDetailRow(
-                  'Retard',
-                  delayText,
-                  Icons.timer_off_rounded,
-                  statusColor,
-                ),
-              ],
-              if (delayText == null) const SizedBox(height: 24),
-              // Amount
-              _buildDetailRow(
-                'Montant',
-                '${_formatCurrency(payment.amount)} $currency',
-                Icons.attach_money_rounded,
-                statusColor,
-              ),
-              // Due date
-              if (payment.dueDate != null)
-                _buildDetailRow(
-                  'Date d\'échéance',
-                  dateFormat.format(payment.dueDate!),
-                  Icons.calendar_today_rounded,
-                  statusColor,
-                ),
-              // Paid date
-              if (payment.paidAt != null)
-                _buildDetailRow(
-                  'Date de paiement',
-                  dateFormat.format(payment.paidAt!),
-                  Icons.event_available_rounded,
-                  statusColor,
-                ),
-              // Payment method
-              if (payment.method != null)
-                _buildDetailRow(
-                  'Méthode',
-                  payment.displayMethod,
-                  Icons.payment_rounded,
-                  statusColor,
-                ),
-              // Reference
-              _buildDetailRow(
-                'Référence',
-                reference,
-                Icons.receipt_rounded,
-                statusColor,
-              ),
-              // Notes
-              if (payment.notes != null && payment.notes!.isNotEmpty)
-                _buildDetailRow(
-                  'Notes',
-                  payment.notes!,
-                  Icons.note_rounded,
-                  statusColor,
-                ),
-              const SizedBox(height: 28),
-              // Close button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: statusColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header with status icon
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
                     ),
-                    elevation: 0,
+                    child: Icon(statusIcon, color: statusColor, size: 36),
                   ),
-                  child: const Text(
-                    'Fermer',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Détails du paiement',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  // Show delay duration for overdue as info row
+                  if (delayText != null) ...[
+                    const SizedBox(height: 24),
+                    _buildDetailRow(
+                      'Retard',
+                      delayText,
+                      Icons.timer_off_rounded,
+                      statusColor,
+                    ),
+                  ],
+                  if (delayText == null) const SizedBox(height: 24),
+                  // Amount
+                  _buildDetailRow(
+                    'Montant',
+                    '${_formatCurrency(payment.amount)} $currency',
+                    Icons.attach_money_rounded,
+                    statusColor,
+                  ),
+                  // Due date
+                  if (payment.dueDate != null)
+                    _buildDetailRow(
+                      'Date d\'échéance',
+                      dateFormat.format(payment.dueDate!),
+                      Icons.calendar_today_rounded,
+                      statusColor,
+                    ),
+                  // Paid date
+                  if (payment.paidAt != null)
+                    _buildDetailRow(
+                      'Date de paiement',
+                      dateFormat.format(payment.paidAt!),
+                      Icons.event_available_rounded,
+                      statusColor,
+                    ),
+                  // Payment method
+                  if (payment.method != null)
+                    _buildDetailRow(
+                      'Méthode',
+                      payment.displayMethod,
+                      Icons.payment_rounded,
+                      statusColor,
+                    ),
+                  // Reference
+                  _buildDetailRow(
+                    'Référence',
+                    reference,
+                    Icons.receipt_rounded,
+                    statusColor,
+                  ),
+                  // Notes
+                  if (payment.notes != null && payment.notes!.isNotEmpty)
+                    _buildDetailRow(
+                      'Notes',
+                      payment.notes!,
+                      Icons.note_rounded,
+                      statusColor,
+                    ),
+                  const SizedBox(height: 28),
+                  // Close button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: statusColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Fermer',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
+        );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         return BackdropFilter(
@@ -1060,16 +1810,18 @@ class _GlassyPaymentCard extends StatelessWidget {
             sigmaX: 8 * animation.value,
             sigmaY: 8 * animation.value,
           ),
-          child: FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+          child: FadeTransition(opacity: animation, child: child),
         );
       },
     );
   }
 
-  Widget _buildDetailRow(String label, String value, IconData icon, Color statusColor) {
+  Widget _buildDetailRow(
+    String label,
+    String value,
+    IconData icon,
+    Color statusColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -1090,10 +1842,7 @@ class _GlassyPaymentCard extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
                 Text(
                   value,

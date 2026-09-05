@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/subjects_management_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -12,9 +11,7 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../data/models/academic_models.dart';
 import '../../../data/models/school_models.dart';
-import '../../../data/models/teacher_assignment_model.dart';
 import '../../../data/models/user_model.dart';
-import '../../../data/models/class_model.dart';
 
 const _brand = Color(0xFF6D4CF6);
 const _brandLight = Color(0xFFF0ECFE);
@@ -31,7 +28,6 @@ class _SubjectsManagementScreenState
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _searchController = TextEditingController();
-  final _teacherSearchController = TextEditingController();
 
   // Selection state for bulk operations
   final Set<String> _selectedAssignmentIds = {};
@@ -49,7 +45,6 @@ class _SubjectsManagementScreenState
   final _filterSubjectSearch = TextEditingController();
   double _filterCoefMin = 1;
   double _filterCoefMax = 6;
-  final Set<String> _filterTeacherIds = {};
   final Set<String> _filterNiveauIds = {};
   final Set<String> _filterSectionIds = {};
 
@@ -61,16 +56,14 @@ class _SubjectsManagementScreenState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
     // Clear search/filter state when page is (re)visited
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchController.clear();
-      _teacherSearchController.clear();
       ref.read(subjectsManagementProvider.notifier).setSearch('');
-      ref.read(subjectsManagementProvider.notifier).setTeacherSearch('');
     });
   }
 
@@ -78,7 +71,6 @@ class _SubjectsManagementScreenState
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
-    _teacherSearchController.dispose();
     _filterSubjectSearch.dispose();
     super.dispose();
   }
@@ -88,7 +80,6 @@ class _SubjectsManagementScreenState
       _filterSubjectSearch.clear();
       _filterCoefMin = 1;
       _filterCoefMax = 6;
-      _filterTeacherIds.clear();
       _filterNiveauIds.clear();
       _filterSectionIds.clear();
       _filtersActive = false;
@@ -101,826 +92,10 @@ class _SubjectsManagementScreenState
           _filterSubjectSearch.text.isNotEmpty ||
           _filterCoefMin > 1 ||
           _filterCoefMax < 6 ||
-          _filterTeacherIds.isNotEmpty ||
           _filterNiveauIds.isNotEmpty ||
           _filterSectionIds.isNotEmpty;
       _showFilterDrawer = false;
     });
-  }
-
-  // ── Shorten niveau/grade label ──
-  static String _shortenNiveau(String name) {
-    final n = name.trim().toLowerCase();
-    // Tunisian system: "7ème année de base", "8ème année de base", "9ème année de base"
-    if (n.contains('7') && (n.contains('année') || n.contains('base')))
-      return '7e';
-    if (n.contains('8') && (n.contains('année') || n.contains('base')))
-      return '8e';
-    if (n.contains('9') && (n.contains('année') || n.contains('base')))
-      return '9e';
-    // Lycée: "1ère année secondaire", "2ème année secondaire", "3ème année secondaire", "4ème année (Bac)"
-    if (n.contains('1') && (n.contains('secondaire') || n.contains('sec')))
-      return '1re Sec';
-    if (n.contains('2') && (n.contains('secondaire') || n.contains('sec')))
-      return '2e Sec';
-    if (n.contains('3') && (n.contains('secondaire') || n.contains('sec')))
-      return '3e Sec';
-    if (n.contains('4') && (n.contains('bac') || n.contains('année')))
-      return '4e Bac';
-    // Code-style already short: "7eme", "8eme", etc.
-    final codeMatch = RegExp(r'(\d+)\s*[eè]me').firstMatch(n);
-    if (codeMatch != null) return '${codeMatch.group(1)}e';
-    // Already short enough
-    if (name.length <= 6) return name;
-    // Fallback: truncate
-    return name.length > 8 ? '${name.substring(0, 7)}…' : name;
-  }
-
-  // ── Floating overlay: all teachers list ──
-  void _showAllTeachersOverlay(
-    BuildContext context,
-    SubjectsManagementState state,
-  ) {
-    final allTeachers = state.teachers;
-    final searchCtrl = TextEditingController();
-    String? selectedSubjectFilter; // null = "Toutes"
-
-    // Collect all unique matière names for filter
-    final allSubjectNames = <String>{};
-    for (final a in state.teacherAssignments) {
-      if (a.subjectName != null && a.subjectName!.isNotEmpty) {
-        allSubjectNames.add(a.subjectName!);
-      }
-    }
-    final sortedSubjects = allSubjectNames.toList()..sort();
-
-    // Get niveaux assigned to a teacher (from assignment records + class lookups)
-    List<String> getNiveauxForTeacher(String teacherId) {
-      final assignments = state.teacherAssignments.where(
-        (a) => a.teacherId == teacherId,
-      );
-      final niveaux = <String>{};
-      for (final a in assignments) {
-        // 1) Explicit niveau on the assignment
-        if (a.niveauName != null && a.niveauName!.isNotEmpty) {
-          niveaux.add(a.niveauName!);
-        } else if (a.niveauCode != null && a.niveauCode!.isNotEmpty) {
-          niveaux.add(a.niveauCode!);
-        } else if (a.classId != null) {
-          // 2) Derive from the assigned class's grade level
-          final cls = state.classes.where((c) => c.id == a.classId).firstOrNull;
-          if (cls?.gradeLevelName != null && cls!.gradeLevelName!.isNotEmpty) {
-            niveaux.add(cls.gradeLevelName!);
-          }
-        }
-      }
-      return niveaux.toList();
-    }
-
-    // Get primary subject for a teacher
-    String? getSubjectForTeacher(String teacherId) {
-      final assignment = state.teacherAssignments
-          .where((a) => a.teacherId == teacherId)
-          .firstOrNull;
-      return assignment?.subjectName ?? assignment?.subjectCode;
-    }
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setOverlayState) {
-            final query = searchCtrl.text.toLowerCase();
-            var filtered = allTeachers.toList();
-
-            // Filter by subject
-            if (selectedSubjectFilter != null) {
-              final teacherIdsForSubject = state.teacherAssignments
-                  .where((a) => a.subjectName == selectedSubjectFilter)
-                  .map((a) => a.teacherId)
-                  .toSet();
-              filtered = filtered
-                  .where((t) => teacherIdsForSubject.contains(t.id))
-                  .toList();
-            }
-
-            // Filter by search query
-            if (query.isNotEmpty) {
-              filtered = filtered
-                  .where(
-                    (t) =>
-                        t.fullName.toLowerCase().contains(query) ||
-                        t.email.toLowerCase().contains(query) ||
-                        (getSubjectForTeacher(
-                              t.id,
-                            )?.toLowerCase().contains(query) ??
-                            false),
-                  )
-                  .toList();
-            }
-
-            return Center(
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: 820,
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(ctx).size.height * 0.85,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.25),
-                        blurRadius: 50,
-                        offset: const Offset(0, 25),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // ── Header ──
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Tous les Professeurs',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF111827),
-                                      letterSpacing: -0.3,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Base de données complète du corps enseignant',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Search field
-                            SizedBox(
-                              width: 220,
-                              height: 38,
-                              child: TextField(
-                                controller: searchCtrl,
-                                style: const TextStyle(fontSize: 13),
-                                decoration: InputDecoration(
-                                  hintText: 'Rechercher un professeur...',
-                                  hintStyle: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                  prefixIcon: Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 10,
-                                      right: 6,
-                                    ),
-                                    child: Icon(
-                                      Icons.search,
-                                      size: 18,
-                                      color: Colors.grey.shade400,
-                                    ),
-                                  ),
-                                  prefixIconConstraints: const BoxConstraints(
-                                    minWidth: 34,
-                                  ),
-                                  filled: true,
-                                  fillColor: const Color(0xFFF9FAFB),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    vertical: 0,
-                                    horizontal: 12,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE5E7EB),
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE5E7EB),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: _brand),
-                                  ),
-                                ),
-                                onChanged: (_) => setOverlayState(() {}),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // ── Filter dropdown (matière) ──
-                            PopupMenuButton<String?>(
-                              onSelected: (value) {
-                                selectedSubjectFilter = value;
-                                setOverlayState(() {});
-                              },
-                              offset: const Offset(0, 42),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 8,
-                              shadowColor: Colors.black.withOpacity(0.15),
-                              color: Colors.white,
-                              constraints: const BoxConstraints(minWidth: 200),
-                              itemBuilder: (_) => [
-                                PopupMenuItem<String?>(
-                                  value: null,
-                                  height: 40,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        selectedSubjectFilter == null
-                                            ? Icons.radio_button_checked
-                                            : Icons.radio_button_off,
-                                        size: 16,
-                                        color: selectedSubjectFilter == null
-                                            ? _brand
-                                            : const Color(0xFFD1D5DB),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      const Text(
-                                        'Toutes les matières',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const PopupMenuDivider(height: 1),
-                                ...sortedSubjects.map(
-                                  (s) => PopupMenuItem<String?>(
-                                    value: s,
-                                    height: 40,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          selectedSubjectFilter == s
-                                              ? Icons.radio_button_checked
-                                              : Icons.radio_button_off,
-                                          size: 16,
-                                          color: selectedSubjectFilter == s
-                                              ? _brand
-                                              : const Color(0xFFD1D5DB),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Text(
-                                          s,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: selectedSubjectFilter != null
-                                        ? _brand.withOpacity(0.5)
-                                        : const Color(0xFFE5E7EB),
-                                  ),
-                                  color: selectedSubjectFilter != null
-                                      ? _brand.withOpacity(0.04)
-                                      : Colors.transparent,
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.filter_list,
-                                    size: 18,
-                                    color: selectedSubjectFilter != null
-                                        ? _brand
-                                        : const Color(0xFF6B7280),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Close button
-                            Material(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () => Navigator.pop(ctx),
-                                hoverColor: const Color(0xFFF3F4F6),
-                                child: const SizedBox(
-                                  width: 36,
-                                  height: 36,
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.close,
-                                      size: 18,
-                                      color: Color(0xFF9CA3AF),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Active filter chip
-                      if (selectedSubjectFilter != null)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            left: 24,
-                            right: 24,
-                            bottom: 8,
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _brand.withOpacity(0.06),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: _brand.withOpacity(0.15),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      selectedSubjectFilter!,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: _brand,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    GestureDetector(
-                                      onTap: () {
-                                        selectedSubjectFilter = null;
-                                        setOverlayState(() {});
-                                      },
-                                      child: Icon(
-                                        Icons.close,
-                                        size: 14,
-                                        color: _brand.withOpacity(0.6),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${filtered.length} résultat${filtered.length > 1 ? "s" : ""}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                      // ── Teachers grid ──
-                      Flexible(
-                        child: Container(
-                          color: const Color(0xFFFAFAFB),
-                          child: filtered.isEmpty
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(40),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.search_off,
-                                          size: 40,
-                                          color: Colors.grey.shade300,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Text(
-                                          'Aucun professeur trouvé',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.grey.shade500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                )
-                              : LayoutBuilder(
-                                  builder: (ctx, constraints) {
-                                    const crossAxisCount = 3;
-                                    const spacing = 12.0;
-                                    const hPadding = 20.0;
-                                    final totalSpacing =
-                                        spacing * (crossAxisCount - 1) +
-                                        hPadding * 2;
-                                    final cardWidth =
-                                        (constraints.maxWidth - totalSpacing) /
-                                        crossAxisCount;
-                                    const cardHeight = 72.0;
-
-                                    return GridView.builder(
-                                      padding: const EdgeInsets.all(hPadding),
-                                      gridDelegate:
-                                          SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: crossAxisCount,
-                                            crossAxisSpacing: spacing,
-                                            mainAxisSpacing: spacing,
-                                            childAspectRatio:
-                                                cardWidth / cardHeight,
-                                          ),
-                                      itemCount: filtered.length,
-                                      itemBuilder: (ctx, i) {
-                                        final t = filtered[i];
-                                        final isSelected = _filterTeacherIds
-                                            .contains(t.id);
-                                        final subject = getSubjectForTeacher(
-                                          t.id,
-                                        );
-                                        final rawNiveaux = getNiveauxForTeacher(
-                                          t.id,
-                                        );
-                                        final niveaux = rawNiveaux
-                                            .map(_shortenNiveau)
-                                            .toList();
-                                        final maxChips = 2;
-                                        final visibleChips = niveaux
-                                            .take(maxChips)
-                                            .toList();
-                                        final extraCount =
-                                            niveaux.length - maxChips;
-
-                                        return Material(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          clipBehavior: Clip.antiAlias,
-                                          child: InkWell(
-                                            onTap: () {
-                                              setState(() {
-                                                if (isSelected)
-                                                  _filterTeacherIds.remove(
-                                                    t.id,
-                                                  );
-                                                else
-                                                  _filterTeacherIds.add(t.id);
-                                              });
-                                              setOverlayState(() {});
-                                            },
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            hoverColor: _brand.withOpacity(
-                                              0.02,
-                                            ),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 8,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: isSelected
-                                                      ? _brand.withOpacity(0.4)
-                                                      : const Color(0xFFF3F4F6),
-                                                  width: isSelected ? 1.5 : 1,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.center,
-                                                children: [
-                                                  UserAvatar(
-                                                    name: t.fullName,
-                                                    photoUrl: t.photoUrl,
-                                                    radius: 18,
-                                                    gender: t.gender,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .center,
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        // Name + subject badge
-                                                        Row(
-                                                          children: [
-                                                            Flexible(
-                                                              child: Text(
-                                                                t.fullName,
-                                                                style: const TextStyle(
-                                                                  fontSize: 12,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w700,
-                                                                  color: Color(
-                                                                    0xFF111827,
-                                                                  ),
-                                                                  height: 1.2,
-                                                                ),
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                                maxLines: 1,
-                                                              ),
-                                                            ),
-                                                            if (subject !=
-                                                                null) ...[
-                                                              const SizedBox(
-                                                                width: 5,
-                                                              ),
-                                                              Container(
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          5,
-                                                                      vertical:
-                                                                          1,
-                                                                    ),
-                                                                decoration: BoxDecoration(
-                                                                  color: _brand
-                                                                      .withOpacity(
-                                                                        0.08,
-                                                                      ),
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        20,
-                                                                      ),
-                                                                ),
-                                                                child: Text(
-                                                                  subject
-                                                                      .toUpperCase(),
-                                                                  style: const TextStyle(
-                                                                    fontSize: 7,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w700,
-                                                                    color:
-                                                                        _brand,
-                                                                    letterSpacing:
-                                                                        0.4,
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ],
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 2,
-                                                        ),
-                                                        // Email
-                                                        Text(
-                                                          t.email,
-                                                          style: TextStyle(
-                                                            fontSize: 10,
-                                                            color: Colors
-                                                                .grey
-                                                                .shade500,
-                                                            height: 1.2,
-                                                          ),
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                          maxLines: 1,
-                                                        ),
-                                                        if (niveaux
-                                                            .isNotEmpty) ...[
-                                                          const SizedBox(
-                                                            height: 4,
-                                                          ),
-                                                          // Niveau chips — wrapped, max 2 + "+N"
-                                                          Wrap(
-                                                            spacing: 3,
-                                                            runSpacing: 3,
-                                                            children: [
-                                                              ...visibleChips.map(
-                                                                (
-                                                                  n,
-                                                                ) => Container(
-                                                                  padding:
-                                                                      const EdgeInsets.symmetric(
-                                                                        horizontal:
-                                                                            5,
-                                                                        vertical:
-                                                                            1.5,
-                                                                      ),
-                                                                  decoration: BoxDecoration(
-                                                                    color: const Color(
-                                                                      0xFFF3F4F6,
-                                                                    ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          4,
-                                                                        ),
-                                                                    border: Border.all(
-                                                                      color: const Color(
-                                                                        0xFFE5E7EB,
-                                                                      ),
-                                                                      width:
-                                                                          0.5,
-                                                                    ),
-                                                                  ),
-                                                                  child: Text(
-                                                                    n,
-                                                                    style: const TextStyle(
-                                                                      fontSize:
-                                                                          9,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w500,
-                                                                      color: Color(
-                                                                        0xFF6B7280,
-                                                                      ),
-                                                                      height:
-                                                                          1.1,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                              if (extraCount >
-                                                                  0)
-                                                                Container(
-                                                                  padding:
-                                                                      const EdgeInsets.symmetric(
-                                                                        horizontal:
-                                                                            5,
-                                                                        vertical:
-                                                                            1.5,
-                                                                      ),
-                                                                  decoration: BoxDecoration(
-                                                                    color: _brand
-                                                                        .withOpacity(
-                                                                          0.06,
-                                                                        ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          4,
-                                                                        ),
-                                                                  ),
-                                                                  child: Text(
-                                                                    '+$extraCount',
-                                                                    style: const TextStyle(
-                                                                      fontSize:
-                                                                          9,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                      color:
-                                                                          _brand,
-                                                                      height:
-                                                                          1.1,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                        ),
-                      ),
-                      // ── Footer ──
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            top: BorderSide(color: Color(0xFFF3F4F6)),
-                          ),
-                          color: Colors.white,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(12),
-                            bottomRight: Radius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Material(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() => _filterTeacherIds.clear());
-                                  setOverlayState(() {});
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 10,
-                                  ),
-                                  child: Text(
-                                    'Réinitialiser',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: _brand,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _brand.withOpacity(0.3),
-                                    blurRadius: 15,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
-                                child: InkWell(
-                                  onTap: () => Navigator.pop(ctx),
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 10,
-                                    ),
-                                    child: Text(
-                                      'Appliquer',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   List<SubjectModel> _applyLocalFilters(
@@ -947,17 +122,6 @@ class _SubjectsManagementScreenState
         final coef = s.defaultCoefficient ?? 1;
         return coef >= _filterCoefMin && coef <= _filterCoefMax;
       }).toList();
-    }
-
-    // Filter by teacher
-    if (_filterTeacherIds.isNotEmpty) {
-      final subjectIdsForTeachers = state.teacherAssignments
-          .where((a) => _filterTeacherIds.contains(a.teacherId))
-          .map((a) => a.subjectId)
-          .toSet();
-      result = result
-          .where((s) => subjectIdsForTeachers.contains(s.id))
-          .toList();
     }
 
     // Filter by niveau
@@ -1043,7 +207,6 @@ class _SubjectsManagementScreenState
                             children: [
                               _buildSubjectsTab(context, state),
                               _buildAssignmentsTab(context, state),
-                              _buildTeachersTab(context, state),
                             ],
                           ),
                         ),
@@ -1106,9 +269,7 @@ class _SubjectsManagementScreenState
               ),
               const SizedBox(height: 4),
               Text(
-                _tabController.index == 2
-                    ? 'Gérer les professeurs et leurs affectations par matière'
-                    : 'Gérer les matières, coefficients et affectations',
+                'Gérer les matières, coefficients et affectations',
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
               ),
             ],
@@ -1119,10 +280,10 @@ class _SubjectsManagementScreenState
             width: 320,
             height: 40,
             child: TextField(
-              controller: _tabController.index == 2 ? _teacherSearchController : _searchController,
+              controller: _searchController,
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
-                hintText: _tabController.index == 2 ? 'Rechercher un professeur...' : 'Rechercher par nom, code...',
+                hintText: 'Rechercher par nom, code...',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
                 prefixIcon: Icon(
                   Icons.search,
@@ -1147,7 +308,7 @@ class _SubjectsManagementScreenState
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide(color: AppColors.primary.withOpacity(0.4), width: 1.5),
                 ),
-                suffixIcon: (_tabController.index == 2 ? _teacherSearchController : _searchController).text.isEmpty
+                suffixIcon: _searchController.text.isEmpty
                     ? Padding(
                         padding: const EdgeInsets.all(6),
                         child: Container(
@@ -1163,27 +324,16 @@ class _SubjectsManagementScreenState
                     : IconButton(
                         icon: const Icon(Icons.clear, size: 16),
                         onPressed: () {
-                          if (_tabController.index == 2) {
-                            _teacherSearchController.clear();
-                            ref
-                                .read(subjectsManagementProvider.notifier)
-                                .setTeacherSearch('');
-                          } else {
-                            _searchController.clear();
-                            ref
-                                .read(subjectsManagementProvider.notifier)
-                                .setSearch('');
-                          }
+                          _searchController.clear();
+                          ref
+                              .read(subjectsManagementProvider.notifier)
+                              .setSearch('');
                           setState(() {});
                         },
                       ),
               ),
               onChanged: (v) {
-                if (_tabController.index == 2) {
-                  ref.read(subjectsManagementProvider.notifier).setTeacherSearch(v);
-                } else {
-                  ref.read(subjectsManagementProvider.notifier).setSearch(v);
-                }
+                ref.read(subjectsManagementProvider.notifier).setSearch(v);
                 setState(() {});
               },
             ),
@@ -1203,30 +353,28 @@ class _SubjectsManagementScreenState
             ),
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
-          if (_tabController.index != 2) ...[
-            const SizedBox(width: 12),
-            SizedBox(
-              height: 40,
-              child: ElevatedButton.icon(
-                onPressed: () => _showSubjectDialog(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text(
-                  'Ajouter une matière',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          const SizedBox(width: 12),
+          SizedBox(
+            height: 40,
+            child: ElevatedButton.icon(
+              onPressed: () => _showSubjectDialog(),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text(
+                'Ajouter une matière',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _brand,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _brand,
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  shadowColor: _brand.withOpacity(0.3),
-                ),
+                shadowColor: _brand.withOpacity(0.3),
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -1243,13 +391,6 @@ class _SubjectsManagementScreenState
     final lyceeNiveaux =
         state.gradeLevels.where((g) => g.levelType != 'college').toList()
           ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-
-    // Teachers: first 3 initially, or all grouped by subject when expanded
-    final allTeachers = state.teachers;
-    final showAllTeachers = allTeachers.length <= 3;
-    final displayTeachers = showAllTeachers
-        ? allTeachers
-        : allTeachers.take(3).toList();
 
     // Sections: only from selected niveaux that have hasSections
     final selectedNiveauxWithSections = state.gradeLevels
@@ -1465,179 +606,6 @@ class _SubjectsManagementScreenState
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 28),
-
-                  // ── Professeurs ──
-                  const Text(
-                    'Professeurs',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF374151),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // Compact view (first N teachers)
-                  ...displayTeachers.map((t) {
-                    final isSelected = _filterTeacherIds.contains(t.id);
-                    final teacherAssignment = state.teacherAssignments
-                        .where((a) => a.teacherId == t.id)
-                        .firstOrNull;
-                    final subjectName = teacherAssignment?.subjectName;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Material(
-                        color: isSelected
-                            ? _brand.withOpacity(0.04)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          onTap: () => setState(() {
-                            if (isSelected)
-                              _filterTeacherIds.remove(t.id);
-                            else
-                              _filterTeacherIds.add(t.id);
-                          }),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected
-                                    ? _brand.withOpacity(0.2)
-                                    : Colors.transparent,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 20,
-                                  child: isSelected
-                                      ? Container(
-                                          width: 20,
-                                          height: 20,
-                                          decoration: BoxDecoration(
-                                            color: _brand,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.check,
-                                            size: 12,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : Container(
-                                          width: 20,
-                                          height: 20,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: const Color(0xFFD1D5DB),
-                                              width: 1.5,
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                                const SizedBox(width: 10),
-                                UserAvatar(
-                                  name: t.fullName,
-                                  photoUrl: t.photoUrl,
-                                  radius: 16,
-                                  gender: t.gender,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        t.fullName,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                          color: Color(0xFF1F2937),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (subjectName != null)
-                                        Text(
-                                          subjectName,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Color(0xFF6B7280),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                  if (!showAllTeachers)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2, top: 2),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        child: InkWell(
-                          onTap: () => _showAllTeachersOverlay(context, state),
-                          borderRadius: BorderRadius.circular(8),
-                          hoverColor: _brand.withOpacity(0.04),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 16,
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _brand.withOpacity(0.08),
-                                  ),
-                                  child: const Icon(
-                                    Icons.people_outline,
-                                    size: 10,
-                                    color: _brand,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Voir tous (${allTeachers.length})',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: _brand,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 9,
-                                  color: _brand,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
 
                   const SizedBox(height: 28),
 
@@ -2007,16 +975,6 @@ class _SubjectsManagementScreenState
                   Icon(Icons.layers_outlined, size: 16),
                   SizedBox(width: 6),
                   Text('Affectations par Niveau'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.people_outline, size: 16),
-                  SizedBox(width: 6),
-                  Text('Professeurs'),
                 ],
               ),
             ),
@@ -3483,24 +2441,6 @@ class _SubjectsManagementScreenState
     );
   }
 
-  // ==================== DIALOGS ====================
-  void _showAddDialog(String type) {
-    final stateAsync = ref.read(subjectsManagementProvider);
-    stateAsync.whenData((state) {
-      switch (type) {
-        case 'subject':
-          _showSubjectDialog();
-          break;
-        case 'assignment':
-          _showAssignmentDialog(state);
-          break;
-        case 'teacher':
-          _showTeacherAssignmentDialog(state);
-          break;
-      }
-    });
-  }
-
   // ═══════════════════════════════════════════════════════════════
   // SUBJECT DETAIL FLOATING OVERLAY — pixel-match mockup
   // ═══════════════════════════════════════════════════════════════
@@ -3513,11 +2453,6 @@ class _SubjectsManagementScreenState
     // ── Gather data ──
     final assignments = state.assignments
         .where((a) => a.subjectId == subject.id)
-        .toList();
-    final niveauNames = assignments
-        .map((a) => a.gradeLevelName)
-        .whereType<String>()
-        .toSet()
         .toList();
     final teacherIds = state.teacherAssignments
         .where((a) => a.subjectId == subject.id)
@@ -6366,365 +5301,551 @@ class _SubjectsManagementScreenState
     double coefficient = assignment?.coefficient ?? 1.0;
     double weeklyHours = assignment?.weeklyHours ?? 0;
     bool isMainSubject = assignment?.isMainSubject ?? false;
-    bool isLoadingHours = false;
+
+    final isEditing = assignment != null;
 
     showDialog(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: Text(
-            assignment == null
-                ? 'Nouvelle Affectation'
-                : 'Modifier Affectation',
-          ),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Subject dropdown
-                  DropdownButtonFormField<String>(
-                    value: subjectId,
-                    decoration: const InputDecoration(
-                      labelText: 'Matière *',
-                      prefixIcon: Icon(Icons.book),
-                    ),
-                    items: state.subjects
-                        .map(
-                          (s) => DropdownMenuItem(
-                            value: s.id,
-                            child: Text('${s.name} (${s.code})'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      setState(() => subjectId = v);
-                    },
+        builder: (ctx, setState) => Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                child: Container(color: Colors.black.withOpacity(0.28)),
+              ),
+            ),
+            Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 560,
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.85,
                   ),
-                  const SizedBox(height: 16),
-
-                  // Grade dropdown
-                  DropdownButtonFormField<String>(
-                    value: gradeId,
-                    decoration: const InputDecoration(
-                      labelText: 'Niveau *',
-                      prefixIcon: Icon(Icons.school),
-                    ),
-                    items: state.gradeLevels
-                        .map(
-                          (g) => DropdownMenuItem(
-                            value: g.id,
-                            child: Text(g.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      setState(() {
-                        gradeId = v;
-                        sectionId = null; // Reset section when grade changes
-                      });
-                    },
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 48, offset: const Offset(0, 16)),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // Section dropdown (only show if selected grade has sections)
-                  if (gradeId != null &&
-                      state.gradeLevels
-                          .firstWhere(
-                            (g) => g.id == gradeId,
-                            orElse: () => state.gradeLevels.first,
-                          )
-                          .hasSections) ...[
-                    Builder(
-                      builder: (_) {
-                        final selectedGrade = state.gradeLevels.firstWhere(
-                          (g) => g.id == gradeId,
-                          orElse: () => state.gradeLevels.first,
-                        );
-                        final gradeSections = selectedGrade.sections.isNotEmpty
-                            ? selectedGrade.sections
-                            : state.sections;
-                        return DropdownButtonFormField<String?>(
-                          value: sectionId,
-                          decoration: const InputDecoration(
-                            labelText: 'Filière *',
-                            prefixIcon: Icon(Icons.category),
-                          ),
-                          items: gradeSections
-                              .map(
-                                (s) => DropdownMenuItem(
-                                  value: s.id,
-                                  child: Text(s.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) {
-                            setState(() => sectionId = v);
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  // Coefficient and Weekly Hours
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: const InputDecoration(
-                            labelText: 'Coefficient',
-                            prefixIcon: Icon(Icons.trending_up),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          controller:
-                              TextEditingController(
-                                  text: coefficient.toString(),
-                                )
-                                ..selection = TextSelection.fromPosition(
-                                  TextPosition(
-                                    offset: coefficient.toString().length,
-                                  ),
-                                ),
-                          onChanged: (v) =>
-                              coefficient = double.tryParse(v) ?? 1.0,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Heures/Semaine *', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-                            const SizedBox(height: 6),
-                            InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () async {
-                                final hours = weeklyHours.floor();
-                                final mins = ((weeklyHours - hours) * 60).round();
-                                int pickedH = hours;
-                                int pickedM = mins;
-                                final result = await showDialog<double>(
-                                  context: context,
-                                  builder: (dCtx) => StatefulBuilder(
-                                    builder: (dCtx, setPickerState) => AlertDialog(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                      title: Row(
-                                        children: [
-                                          Container(
-                                            width: 40, height: 40,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFEEF2FF),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            child: const Icon(Icons.schedule, color: Color(0xFF6366F1), size: 20),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          const Text('Durée hebdomadaire', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                                        ],
-                                      ),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Text('Choisissez les heures et minutes', style: TextStyle(fontSize: 12.5, color: Color(0xFF9CA3AF))),
-                                          const SizedBox(height: 20),
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              // Hours wheel
-                                              Column(
-                                                children: [
-                                                  const Text('Heures', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6366F1))),
-                                                  const SizedBox(height: 6),
-                                                  SizedBox(
-                                                    width: 80, height: 120,
-                                                    child: ListWheelScrollView.useDelegate(
-                                                      itemExtent: 40,
-                                                      diameterRatio: 1.2,
-                                                      physics: const FixedExtentScrollPhysics(),
-                                                      controller: FixedExtentScrollController(initialItem: pickedH),
-                                                      onSelectedItemChanged: (i) => setPickerState(() => pickedH = i),
-                                                      childDelegate: ListWheelChildBuilderDelegate(
-                                                        childCount: 13,
-                                                        builder: (ctx, i) => Container(
-                                                          alignment: Alignment.center,
-                                                          decoration: BoxDecoration(
-                                                            color: i == pickedH ? const Color(0xFFEEF2FF) : Colors.transparent,
-                                                            borderRadius: BorderRadius.circular(8),
-                                                          ),
-                                                          child: Text('$i h', style: TextStyle(fontSize: 18, fontWeight: i == pickedH ? FontWeight.w700 : FontWeight.w400, color: i == pickedH ? const Color(0xFF6366F1) : const Color(0xFF9CA3AF))),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const Padding(
-                                                padding: EdgeInsets.symmetric(horizontal: 12),
-                                                child: Text(':', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF6366F1))),
-                                              ),
-                                              // Minutes wheel
-                                              Column(
-                                                children: [
-                                                  const Text('Minutes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6366F1))),
-                                                  const SizedBox(height: 6),
-                                                  SizedBox(
-                                                    width: 80, height: 120,
-                                                    child: ListWheelScrollView.useDelegate(
-                                                      itemExtent: 40,
-                                                      diameterRatio: 1.2,
-                                                      physics: const FixedExtentScrollPhysics(),
-                                                      controller: FixedExtentScrollController(initialItem: pickedM ~/ 15),
-                                                      onSelectedItemChanged: (i) => setPickerState(() => pickedM = i * 15),
-                                                      childDelegate: ListWheelChildBuilderDelegate(
-                                                        childCount: 4, // 0, 15, 30, 45
-                                                        builder: (ctx, i) {
-                                                          final m = i * 15;
-                                                          final isSelected = m == pickedM;
-                                                          return Container(
-                                                            alignment: Alignment.center,
-                                                            decoration: BoxDecoration(
-                                                              color: isSelected ? const Color(0xFFEEF2FF) : Colors.transparent,
-                                                              borderRadius: BorderRadius.circular(8),
-                                                            ),
-                                                            child: Text('${m.toString().padLeft(2, '0')} min', style: TextStyle(fontSize: 18, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400, color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF9CA3AF))),
-                                                          );
-                                                        },
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF0FDF4),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: const Color(0xFFBBF7D0)),
-                                            ),
-                                            child: Text('${pickedH}h ${pickedM.toString().padLeft(2, '0')}min = ${(pickedH + pickedM / 60.0).toStringAsFixed(2)} heures', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF16A34A))),
-                                          ),
-                                        ],
-                                      ),
-                                      actions: [
-                                        TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Annuler')),
-                                        ElevatedButton(
-                                          onPressed: () => Navigator.pop(dCtx, pickedH + pickedM / 60.0),
-                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                          child: const Text('Confirmer'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                                if (result != null) {
-                                  setState(() => weeklyHours = result);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // ═══ HEADER ═══
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(28, 28, 24, 20),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 44, height: 44,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF8F9FB),
+                                  color: _brandLight,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFE8EAF0)),
                                 ),
-                                child: Row(
+                                child: Icon(
+                                  isEditing ? Icons.edit_rounded : Icons.add_circle_outline_rounded,
+                                  color: _brand,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Icon(Icons.schedule, size: 18, color: Color(0xFF6366F1)),
-                                    const SizedBox(width: 10),
                                     Text(
-                                      '${weeklyHours.floor()}h ${((weeklyHours - weeklyHours.floor()) * 60).round().toString().padLeft(2, '0')}min',
-                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+                                      isEditing ? 'Modifier Affectation' : 'Nouvelle Affectation',
+                                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
                                     ),
-                                    const Spacer(),
-                                    const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF9CA3AF)),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      isEditing
+                                          ? 'Modifiez les paramètres de cette affectation.'
+                                          : 'Configurez l\'affectation d\'une matière à un niveau.',
+                                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade500),
+                                    ),
                                   ],
                                 ),
                               ),
-                            ),
-                          ],
+                              InkWell(
+                                onTap: () => Navigator.pop(ctx),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 32, height: 32,
+                                  decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(8)),
+                                  child: Icon(Icons.close_rounded, size: 16, color: Colors.grey.shade500),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                        const Divider(height: 1),
 
-                  // Main subject switch
-                  SwitchListTile(
-                    title: const Text('Matière principale'),
-                    subtitle: const Text(
-                      'Cette matière est la principale pour cette filière',
-                    ),
-                    value: isMainSubject,
-                    onChanged: (v) => setState(() => isMainSubject = v),
-                  ),
+                        // ═══ SCROLLABLE CONTENT ═══
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // ── Section: Informations ──
+                                _buildSectionTitle('Informations'),
+                                const SizedBox(height: 14),
 
-                  // Show suggested subjects button
-                  if (gradeId != null && assignment == null) ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _showSuggestedSubjectsForAssignment(
-                        state,
-                        gradeId!,
-                        sectionId,
-                      ),
-                      icon: const Icon(Icons.lightbulb_outline),
-                      label: const Text('Voir matières suggérées'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.accent,
-                      ),
+                                // Matière dropdown
+                                _buildFieldLabel('Matière *'),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  value: subjectId,
+                                  borderRadius: BorderRadius.circular(12),
+                                  menuMaxHeight: 300,
+                                  dropdownColor: Colors.white,
+                                  decoration: InputDecoration(
+                                    hintText: 'Sélectionner une matière',
+                                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                    filled: true,
+                                    fillColor: const Color(0xFFF9FAFB),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
+                                    prefixIcon: const Icon(Icons.book_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                  ),
+                                  items: state.subjects
+                                      .map((s) => DropdownMenuItem(value: s.id, child: Text('${s.name} (${s.code})', style: const TextStyle(fontSize: 13))))
+                                      .toList(),
+                                  onChanged: (v) => setState(() => subjectId = v),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Niveau dropdown
+                                _buildFieldLabel('Niveau *'),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  value: gradeId,
+                                  borderRadius: BorderRadius.circular(12),
+                                  dropdownColor: Colors.white,
+                                  decoration: InputDecoration(
+                                    hintText: 'Sélectionner un niveau',
+                                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                    filled: true,
+                                    fillColor: const Color(0xFFF9FAFB),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
+                                    prefixIcon: const Icon(Icons.school_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                  ),
+                                  items: state.gradeLevels
+                                      .map((g) => DropdownMenuItem(value: g.id, child: Text(g.name, style: const TextStyle(fontSize: 13))))
+                                      .toList(),
+                                  onChanged: (v) => setState(() { gradeId = v; sectionId = null; }),
+                                ),
+
+                                // Section dropdown (conditional)
+                                if (gradeId != null &&
+                                    state.gradeLevels
+                                        .firstWhere((g) => g.id == gradeId, orElse: () => state.gradeLevels.first)
+                                        .hasSections) ...[
+                                  const SizedBox(height: 16),
+                                  Builder(
+                                    builder: (_) {
+                                      final selectedGrade = state.gradeLevels.firstWhere((g) => g.id == gradeId, orElse: () => state.gradeLevels.first);
+                                      final gradeSections = selectedGrade.sections.isNotEmpty ? selectedGrade.sections : state.sections;
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          _buildFieldLabel('Filière'),
+                                          const SizedBox(height: 6),
+                                          DropdownButtonFormField<String?>(
+                                            value: sectionId,
+                                            borderRadius: BorderRadius.circular(12),
+                                            dropdownColor: Colors.white,
+                                            elevation: 8,
+                                            decoration: InputDecoration(
+                                              hintText: 'Sélectionner une filière',
+                                              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                              filled: true,
+                                              fillColor: const Color(0xFFF9FAFB),
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
+                                              prefixIcon: const Icon(Icons.category_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                            ),
+                                            items: gradeSections
+                                                .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name, style: const TextStyle(fontSize: 13))))
+                                                .toList(),
+                                            onChanged: (v) => setState(() => sectionId = v),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ],
+
+                                const SizedBox(height: 20),
+                                // ── Divider ──
+                                Divider(height: 1, color: Colors.grey.shade200),
+                                const SizedBox(height: 20),
+
+                                // ── Section: Configuration Académique ──
+                                _buildSectionTitle('Configuration Académique'),
+                                const SizedBox(height: 14),
+
+                                // Coefficient + Heures/Semaine row
+                                Row(
+                                  children: [
+                                    // Coefficient
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          _buildFieldLabel('Coefficient'),
+                                          const SizedBox(height: 6),
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF9FAFB),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const SizedBox(width: 14),
+                                                const Icon(Icons.trending_up, size: 16, color: Color(0xFF9CA3AF)),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: TextField(
+                                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                    controller: TextEditingController(text: coefficient.toString())
+                                                      ..selection = TextSelection.fromPosition(TextPosition(offset: coefficient.toString().length)),
+                                                    onChanged: (v) => coefficient = double.tryParse(v) ?? 1.0,
+                                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 12)),
+                                                  ),
+                                                ),
+                                                // +/- buttons
+                                                Container(
+                                                  width: 1, height: 28,
+                                                  color: const Color(0xFFE5E7EB),
+                                                ),
+                                                InkWell(
+                                                  onTap: () => setState(() => coefficient = (coefficient - 1).clamp(0.5, 10)),
+                                                  child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.remove, size: 16, color: Color(0xFF6B7280))),
+                                                ),
+                                                Container(
+                                                  width: 1, height: 28,
+                                                  color: const Color(0xFFE5E7EB),
+                                                ),
+                                                InkWell(
+                                                  onTap: () => setState(() => coefficient = (coefficient + 1).clamp(0.5, 10)),
+                                                  child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.add, size: 16, color: Color(0xFF6B7280))),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // Heures/Semaine
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          _buildFieldLabel('Heures/Semaine'),
+                                          const SizedBox(height: 6),
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(12),
+                                            onTap: () async {
+                                              final hours = weeklyHours.floor();
+                                              final mins = ((weeklyHours - hours) * 60).round();
+                                              int pickedH = hours;
+                                              int pickedM = mins;
+                                              final result = await showDialog<double>(
+                                                context: context,
+                                                builder: (dCtx) => StatefulBuilder(
+                                                  builder: (dCtx, setPickerState) => AlertDialog(
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                                    title: Row(
+                                                      children: [
+                                                        Container(
+                                                          width: 40, height: 40,
+                                                          decoration: BoxDecoration(color: _brandLight, borderRadius: BorderRadius.circular(10)),
+                                                          child: const Icon(Icons.schedule, color: _brand, size: 20),
+                                                        ),
+                                                        const SizedBox(width: 12),
+                                                        const Text('Durée hebdomadaire', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                                      ],
+                                                    ),
+                                                    content: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Text('Choisissez les heures et minutes', style: TextStyle(fontSize: 12.5, color: Color(0xFF9CA3AF))),
+                                                        const SizedBox(height: 20),
+                                                        Row(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            Column(
+                                                              children: [
+                                                                const Text('Heures', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _brand)),
+                                                                const SizedBox(height: 6),
+                                                                SizedBox(
+                                                                  width: 80, height: 120,
+                                                                  child: ListWheelScrollView.useDelegate(
+                                                                    itemExtent: 40, diameterRatio: 1.2,
+                                                                    physics: const FixedExtentScrollPhysics(),
+                                                                    controller: FixedExtentScrollController(initialItem: pickedH),
+                                                                    onSelectedItemChanged: (i) => setPickerState(() => pickedH = i),
+                                                                    childDelegate: ListWheelChildBuilderDelegate(
+                                                                      childCount: 13,
+                                                                      builder: (ctx, i) => Container(
+                                                                        alignment: Alignment.center,
+                                                                        decoration: BoxDecoration(color: i == pickedH ? _brandLight : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+                                                                        child: Text('$i h', style: TextStyle(fontSize: 18, fontWeight: i == pickedH ? FontWeight.w700 : FontWeight.w400, color: i == pickedH ? _brand : const Color(0xFF9CA3AF))),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            const Padding(
+                                                              padding: EdgeInsets.symmetric(horizontal: 12),
+                                                              child: Text(':', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _brand)),
+                                                            ),
+                                                            Column(
+                                                              children: [
+                                                                const Text('Minutes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _brand)),
+                                                                const SizedBox(height: 6),
+                                                                SizedBox(
+                                                                  width: 80, height: 120,
+                                                                  child: ListWheelScrollView.useDelegate(
+                                                                    itemExtent: 40, diameterRatio: 1.2,
+                                                                    physics: const FixedExtentScrollPhysics(),
+                                                                    controller: FixedExtentScrollController(initialItem: pickedM ~/ 15),
+                                                                    onSelectedItemChanged: (i) => setPickerState(() => pickedM = i * 15),
+                                                                    childDelegate: ListWheelChildBuilderDelegate(
+                                                                      childCount: 4,
+                                                                      builder: (ctx, i) {
+                                                                        final m = i * 15;
+                                                                        final isSelected = m == pickedM;
+                                                                        return Container(
+                                                                          alignment: Alignment.center,
+                                                                          decoration: BoxDecoration(color: isSelected ? _brandLight : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+                                                                          child: Text('${m.toString().padLeft(2, '0')} min', style: TextStyle(fontSize: 18, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400, color: isSelected ? _brand : const Color(0xFF9CA3AF))),
+                                                                        );
+                                                                      },
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(height: 16),
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFFF0FDF4),
+                                                            borderRadius: BorderRadius.circular(10),
+                                                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                                                          ),
+                                                          child: Text('${pickedH}h ${pickedM.toString().padLeft(2, '0')}min = ${(pickedH + pickedM / 60.0).toStringAsFixed(2)} heures', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF16A34A))),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    actions: [
+                                                      TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Annuler')),
+                                                      ElevatedButton(
+                                                        onPressed: () => Navigator.pop(dCtx, pickedH + pickedM / 60.0),
+                                                        style: ElevatedButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                                        child: const Text('Confirmer'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                              if (result != null) setState(() => weeklyHours = result);
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF9FAFB),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(color: const Color(0xFFE5E7EB)),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.schedule, size: 18, color: _brand),
+                                                  const SizedBox(width: 10),
+                                                  Text(
+                                                    '${weeklyHours.floor()}h ${((weeklyHours - weeklyHours.floor()) * 60).round().toString().padLeft(2, '0')}min',
+                                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+                                                  ),
+                                                  const Spacer(),
+                                                  Icon(Icons.edit_outlined, size: 16, color: Colors.grey.shade400),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 20),
+                                // ── Divider ──
+                                Divider(height: 1, color: Colors.grey.shade200),
+                                const SizedBox(height: 20),
+
+                                // ── Section: Options ──
+                                _buildSectionTitle('Options'),
+                                const SizedBox(height: 14),
+
+                                // Main subject toggle
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: isMainSubject ? _brandLight : const Color(0xFFF9FAFB),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: isMainSubject ? _brand.withOpacity(0.3) : const Color(0xFFE5E7EB)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 36, height: 36,
+                                        decoration: BoxDecoration(
+                                          color: isMainSubject ? _brand : Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(Icons.star_rounded, color: isMainSubject ? Colors.white : Colors.grey.shade400, size: 20),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text('Matière principale', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                                            Text(
+                                              'Cette matière est la principale pour cette filière',
+                                              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: isMainSubject,
+                                        onChanged: (v) => setState(() => isMainSubject = v),
+                                        activeColor: Colors.white,
+                                        activeTrackColor: _brand,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Suggested subjects button
+                                if (gradeId != null && assignment == null) ...[
+                                  const SizedBox(height: 14),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _showSuggestedSubjectsForAssignment(state, gradeId!, sectionId),
+                                      icon: const Icon(Icons.lightbulb_outline, size: 18),
+                                      label: const Text('Voir matières suggérées', style: TextStyle(fontWeight: FontWeight.w600)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: _brand,
+                                        side: const BorderSide(color: _brand, width: 1),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // ═══ FOOTER ═══
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(28, 16, 24, 20),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border(top: BorderSide(color: Color(0xFFF0F0F5))),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                height: 40,
+                                child: TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF6B7280),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                                  ),
+                                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              SizedBox(
+                                height: 40,
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (subjectId == null || gradeId == null) {
+                                      _showError('Veuillez sélectionner une matière et un niveau');
+                                      return;
+                                    }
+                                    final newAssignment = SubjectAssignmentModel(
+                                      id: assignment?.id ?? '',
+                                      subjectId: subjectId!,
+                                      gradeLevelId: gradeId!,
+                                      sectionId: sectionId,
+                                      coefficient: coefficient,
+                                      weeklyHours: weeklyHours,
+                                      isMainSubject: isMainSubject,
+                                    );
+                                    try {
+                                      if (assignment == null) {
+                                        await ref.read(subjectsManagementProvider.notifier).addAssignment(newAssignment);
+                                      } else {
+                                        await ref.read(subjectsManagementProvider.notifier).updateAssignment(assignment.id, newAssignment);
+                                      }
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                      _showSuccess(assignment == null ? 'Affectation ajoutée' : 'Affectation modifiée');
+                                    } catch (e) {
+                                      _showError('Erreur: $e');
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _brand,
+                                    foregroundColor: Colors.white,
+                                    elevation: 2,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                                  ),
+                                  child: Text(
+                                    assignment == null ? 'Ajouter' : 'Enregistrer',
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (subjectId == null || gradeId == null) {
-                  _showError('Veuillez sélectionner une matière et un niveau');
-                  return;
-                }
-                final newAssignment = SubjectAssignmentModel(
-                  id: assignment?.id ?? '',
-                  subjectId: subjectId!,
-                  gradeLevelId: gradeId!,
-                  sectionId: sectionId,
-                  coefficient: coefficient,
-                  weeklyHours: weeklyHours,
-                  isMainSubject: isMainSubject,
-                );
-                try {
-                  if (assignment == null) {
-                    await ref
-                        .read(subjectsManagementProvider.notifier)
-                        .addAssignment(newAssignment);
-                  } else {
-                    await ref
-                        .read(subjectsManagementProvider.notifier)
-                        .updateAssignment(assignment.id, newAssignment);
-                  }
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  _showSuccess(
-                    assignment == null
-                        ? 'Affectation ajoutée'
-                        : 'Affectation modifiée',
-                  );
-                } catch (e) {
-                  _showError('Erreur: $e');
-                }
-              },
-              child: Text(assignment == null ? 'Ajouter' : 'Enregistrer'),
             ),
           ],
         ),
@@ -7157,637 +6278,6 @@ class _SubjectsManagementScreenState
     );
   }
 
-  // ==================== TEACHERS TAB ====================
-  Widget _buildTeachersTab(
-    BuildContext context,
-    SubjectsManagementState state,
-  ) {
-    final teachersGrouped = state.teachersWithAssignments;
-    final assignedTeacherIds = teachersGrouped.map((t) => t.teacherId).toSet();
-    final unassignedTeachers = state.teachers
-        .where((t) => t.isActive) // only show active teachers in unassigned list
-        .where((t) => !assignedTeacherIds.contains(t.id))
-        .where((t) {
-          if (state.teacherSearchQuery.isEmpty) return true;
-          final q = state.teacherSearchQuery.trim().toLowerCase();
-          return t.fullName.toLowerCase().contains(q) ||
-              t.email.toLowerCase().contains(q);
-        })
-        .toList();
-
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Section header exactly like image
-          Row(
-            children: [
-              Container(
-                width: 4, 
-                height: 24, 
-                decoration: BoxDecoration(
-                  color: const Color(0xFF7C3AED),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                margin: const EdgeInsets.only(right: 12),
-              ),
-              const Text(
-                'Liste des Professeurs',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${teachersGrouped.length + unassignedTeachers.length} enseignant(s)',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Icon(Icons.filter_list, color: Color(0xFF94A3B8), size: 22),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3E8FF), 
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE9D5FF)),
-                ),
-                child: const Icon(
-                  Icons.view_list, 
-                  color: Color(0xFF7C3AED), 
-                  size: 20
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // Teachers list
-          Expanded(
-            child: (teachersGrouped.isEmpty && unassignedTeachers.isEmpty)
-                ? _buildEmptyState(
-                    'Aucun professeur trouvé',
-                    Icons.people_outline,
-                    () => _showTeacherAssignmentDialog(state),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    children: [
-                      ...teachersGrouped.map(
-                        (teacher) => _buildTeacherCard(teacher, state),
-                      ),
-                      ...unassignedTeachers.map(
-                        (t) => _buildUnassignedTeacherCard(t, state),
-                      ),
-                      const SizedBox(height: 8),
-                      // Add teacher card – styled like "Nouvelle Matière"
-                      InkWell(
-                        onTap: () => _showCreateTeacherDialog(state),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 28),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: const Color(0xFFE3E5EE),
-                              width: 2,
-                              strokeAlign: BorderSide.strokeAlignInside,
-                            ),
-                            color: const Color(0xFFFAFAFB),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFFF3F4F6),
-                                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                                ),
-                                child: const Icon(
-                                  Icons.person_add_outlined,
-                                  color: Color(0xFF9CA3AF),
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              const Text(
-                                'Nouveau Professeur',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Enregistrer un nouvel enseignant\ndans le système',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF9CA3AF),
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Color> _generateAvatarGradient(String name) {
-    final hash = name.hashCode.abs();
-    final palettes = [
-      [const Color(0xFFA7F3D0), const Color(0xFF9CA3AF)],
-      [const Color(0xFFFDBA74), const Color(0xFFD1D5DB)],
-      [const Color(0xFFFDE047), const Color(0xFF9CA3AF)],
-      [const Color(0xFF93C5FD), const Color(0xFF94A3B8)],
-      [const Color(0xFFC4B5FD), const Color(0xFFCBD5E1)],
-    ];
-    return palettes[hash % palettes.length];
-  }
-
-  Color _generateStatusColor(String name) {
-    final hash = name.hashCode.abs();
-    final colors = [
-      const Color(0xFF22C55E), // Online green
-      const Color(0xFFF59E0B), // Away orange
-      const Color(0xFF9CA3AF), // Offline grey
-    ];
-    return colors[hash % colors.length];
-  }
-
-  String _getContractType(String name) {
-    final hash = name.hashCode.abs();
-    if (hash % 3 == 0) return '• Titulaire';
-    if (hash % 3 == 1) return '• Vacataire';
-    return '• Remplaçant';
-  }
-
-  Widget _buildTeacherCard(
-    TeacherWithAssignments teacher,
-    SubjectsManagementState state,
-  ) {
-    final contractType = _getContractType(teacher.teacherName);
-    final teacherModel = state.teachers
-        .where((t) => t.id == teacher.teacherId)
-        .firstOrNull;
-    final photoUrl = teacherModel?.photoUrl;
-    final gender = teacherModel?.gender;
-
-    final mainSubject = teacher.subjectNames.isNotEmpty ? teacher.subjectNames.first : 'Aucune Matière';
-    final mainSubjectCode = teacher.assignments.isNotEmpty ? teacher.assignments.first.subjectCode : null;
-    Color subjectColor = _getSubjectColor(mainSubjectCode ?? mainSubject);
-    if (subjectColor.computeLuminance() > 0.9) subjectColor = _brand;
-
-    // Derive niveaux: from assignment niveauName, or from class's grade level
-    Set<String> derivedNiveaux = Set<String>.from(teacher.niveauNames);
-    if (derivedNiveaux.isEmpty) {
-      for (final a in teacher.assignments) {
-        if (a.niveauId != null) {
-          final gl = state.gradeLevels.where((g) => g.id == a.niveauId).firstOrNull;
-          if (gl != null) derivedNiveaux.add(gl.name);
-        }
-        if (a.classId != null) {
-          final cls = state.classes.where((c) => c.id == a.classId).firstOrNull;
-          if (cls != null && cls.gradeLevelName != null) {
-            derivedNiveaux.add(cls.gradeLevelName!);
-          }
-        }
-      }
-    }
-
-    return InkWell(
-      onTap: () => context.go('/teachers/${teacher.teacherId}'),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          UserAvatar(
-            name: teacher.teacherName,
-            photoUrl: photoUrl,
-            gender: gender,
-            radius: 28,
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  teacher.teacherName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: subjectColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: subjectColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            mainSubject,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: subjectColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      contractType,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF94A3B8),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 180,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'NIVEAUX',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF94A3B8),
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: derivedNiveaux.isEmpty
-                      ? [
-                          const Text(
-                            '-',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF64748B),
-                            ),
-                          )
-                        ]
-                      : derivedNiveaux.take(3).map((n) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              _shortenNiveau(n),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF475569),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 100,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'CLASSES',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF94A3B8),
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.school, size: 16, color: Color(0xFF7C3AED)),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${teacher.classNames.length} classes',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 36,
-            child: PopupMenuButton<String>(
-              onSelected: (action) {
-                if (action == 'edit') {
-                  _showTeacherAssignmentDialog(state, editTeacherId: teacher.teacherId);
-                }
-                if (action == 'delete') {
-                  _confirmDeleteTeacherAssignments(teacher);
-                }
-              },
-
-              icon: Icon(Icons.more_horiz_rounded, size: 20, color: AppColors.textTertiary),
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 8,
-              shadowColor: Colors.black.withOpacity(0.12),
-              color: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              offset: const Offset(0, 8),
-              itemBuilder: (ctx) => [
-                PopupMenuItem(
-                  value: 'edit',
-                  height: 48,
-                  child: Row(children: [
-                    Container(width: 32, height: 32, decoration: BoxDecoration(color: const Color(0xFFF0F1F5), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF5A5B6A))),
-                    const SizedBox(width: 12),
-                    const Text('Modifier', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                  ]),
-                ),
-                const PopupMenuDivider(height: 8),
-                PopupMenuItem(
-                  value: 'delete',
-                  height: 48,
-                  child: Row(children: [
-                    Container(width: 32, height: 32, decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error)),
-                    const SizedBox(width: 12),
-                    Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.error)),
-                  ]),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ));
-  }
-
-  Widget _buildUnassignedTeacherCard(
-    UserModel teacher,
-    SubjectsManagementState state,
-  ) {
-    return InkWell(
-      onTap: () => context.go('/teachers/${teacher.id}'),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          UserAvatar(
-            name: teacher.fullName,
-            photoUrl: teacher.photoUrl,
-            gender: teacher.gender,
-            radius: 28,
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  teacher.fullName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF94A3B8),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Non affecté',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      '• En attente',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF94A3B8),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Text(
-                  'NIVEAUX',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF94A3B8),
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '-',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Text(
-                  'CLASSES',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF94A3B8),
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '-',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 40,
-            child: PopupMenuButton<String>(
-              onSelected: (action) {
-                if (action == 'assign') {
-                  _showTeacherAssignmentDialog(
-                    state,
-                    editTeacherId: teacher.id,
-                  );
-                }
-              },
-              icon: Icon(Icons.more_horiz_rounded, size: 20, color: AppColors.textTertiary),
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 8,
-              shadowColor: Colors.black.withOpacity(0.12),
-              color: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              offset: const Offset(0, 8),
-              itemBuilder: (ctx) => [
-                PopupMenuItem(
-                  value: 'assign',
-                  height: 48,
-                  child: Row(children: [
-                    Container(width: 32, height: 32, decoration: BoxDecoration(color: const Color(0xFFF0F1F5), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.add_link, size: 16, color: Color(0xFF5A5B6A))),
-                    const SizedBox(width: 12),
-                    const Text('Affecter une matière', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                  ]),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ));
-  }
-
   String _getInitials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.length >= 2) {
@@ -7796,45 +6286,6 @@ class _SubjectsManagementScreenState
       return parts[0].substring(0, parts[0].length > 1 ? 2 : 1).toUpperCase();
     }
     return '?';
-  }
-
-  void _confirmDeleteTeacherAssignments(TeacherWithAssignments teacher) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text(
-          'Voulez-vous retirer toutes les affectations de ${teacher.teacherName} ?\n\n'
-          'Matières: ${teacher.subjectNames.join(", ")}\n'
-          'Niveaux: ${teacher.niveauNames.join(", ")}\n'
-          'Classes: ${teacher.classNames.join(", ")}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await ref
-                    .read(subjectsManagementProvider.notifier)
-                    .deleteAllTeacherAssignments(teacher.teacherId);
-                _showSuccess('Affectations supprimées');
-              } catch (e) {
-                _showError('Erreur: $e');
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text(
-              'Supprimer',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   // ==================== TEACHER ASSIGNMENT DIALOG ====================

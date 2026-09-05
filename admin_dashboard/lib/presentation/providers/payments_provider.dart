@@ -1,4 +1,5 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/supabase_config.dart';
 import 'package:intl/intl.dart';
 
@@ -45,7 +46,9 @@ enum PaymentStatus {
 /// Payment plan type
 enum PaymentPlanType {
   monthly('Mensuel'),
+  trimester('Trimestriel'),
   semester('Semestriel'),
+  semesterly('Semestriel'),
   annual('Annuel');
 
   final String label;
@@ -53,7 +56,9 @@ enum PaymentPlanType {
 
   static PaymentPlanType fromString(String s) {
     switch (s) {
-      case 'semester': return PaymentPlanType.semester;
+      case 'trimester':
+      case 'semester': return PaymentPlanType.trimester;
+      case 'semesterly': return PaymentPlanType.semesterly;
       case 'annual': return PaymentPlanType.annual;
       default: return PaymentPlanType.monthly;
     }
@@ -174,6 +179,7 @@ class PaymentPlan {
   final double amountTotal;
   final String currency;
   final String? description;
+  final String? category;
   final DateTime createdAt;
   final List<Payment> payments;
   // Related data
@@ -189,6 +195,7 @@ class PaymentPlan {
     required this.amountTotal,
     required this.currency,
     this.description,
+    this.category,
     required this.createdAt,
     this.payments = const [],
     this.studentId,
@@ -209,12 +216,45 @@ class PaymentPlan {
       amountTotal: (json['amount_total'] as num?)?.toDouble() ?? 0,
       currency: json['currency']?.toString() ?? 'TND',
       description: json['description']?.toString(),
+      category: json['category']?.toString(),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
       payments: (json['payments'] as List?)?.map((e) => Payment.fromJson(e)).toList() ?? [],
       studentId: user?['id']?.toString(),
       studentName: user?['full_name']?.toString(),
       classId: classData?['id']?.toString(),
       className: classData?['name']?.toString(),
+    );
+  }
+
+  PaymentPlan copyWith({
+    String? id,
+    String? enrollmentId,
+    PaymentPlanType? planType,
+    double? amountTotal,
+    String? currency,
+    String? description,
+    String? category,
+    DateTime? createdAt,
+    List<Payment>? payments,
+    String? studentId,
+    String? studentName,
+    String? classId,
+    String? className,
+  }) {
+    return PaymentPlan(
+      id: id ?? this.id,
+      enrollmentId: enrollmentId ?? this.enrollmentId,
+      planType: planType ?? this.planType,
+      amountTotal: amountTotal ?? this.amountTotal,
+      currency: currency ?? this.currency,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      createdAt: createdAt ?? this.createdAt,
+      payments: payments ?? this.payments,
+      studentId: studentId ?? this.studentId,
+      studentName: studentName ?? this.studentName,
+      classId: classId ?? this.classId,
+      className: className ?? this.className,
     );
   }
 
@@ -463,7 +503,6 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
             .from('payment_plans')
             .select('''
               *,
-              payments(*),
               enrollments(
                 id,
                 users(id, full_name, email, school_id),
@@ -476,11 +515,32 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
             .map((e) => PaymentPlan.fromJson(e))
             .toList();
 
-        paymentPlans = filteredPlans;
+        // Attach real payments to each plan
+        final paymentsByPlan = <String, List<Payment>>{};
+        for (final p in payments) {
+          paymentsByPlan.putIfAbsent(p.paymentPlanId, () => []).add(p);
+        }
+        paymentPlans = filteredPlans
+            .map((plan) => plan.copyWith(
+                  payments: paymentsByPlan[plan.id] ?? [],
+                ))
+            .toList();
 
-        // Build student summaries
+        // Build student summaries — keep only the latest plan per enrollment per category
+        // Sort by createdAt desc so the newest plan comes first
+        final sortedPlans = List<PaymentPlan>.from(filteredPlans)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        final latestPlanByKey = <String, PaymentPlan>{};
+        for (final plan in sortedPlans) {
+          if (plan.studentId == null) continue;
+          final key = '${plan.enrollmentId}_${plan.category ?? plan.description ?? 'scolarite'}';
+          // Keep the latest (first in sorted list)
+          latestPlanByKey.putIfAbsent(key, () => plan);
+        }
+
         final studentMap = <String, StudentPaymentSummary>{};
-        for (final plan in filteredPlans) {
+        for (final plan in latestPlanByKey.values) {
           if (plan.studentId == null) continue;
           
           if (!studentMap.containsKey(plan.studentId)) {
@@ -521,6 +581,7 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
 
       } catch (e) {
         // Table might not exist or empty - use demo data
+        debugPrint('PaymentsProvider inner error: $e');
         payments = _generateDemoPayments();
         studentSummaries = _generateDemoStudentSummaries();
       }
@@ -557,6 +618,7 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
       );
     } catch (e) {
       // Return demo data on error
+      debugPrint('PaymentsProvider outer error: $e');
       final demoPayments = _generateDemoPayments();
       return PaymentsState(
         payments: demoPayments,

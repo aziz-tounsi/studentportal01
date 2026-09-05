@@ -1,5 +1,5 @@
 /// Dynamic Semester Navigator Widget
-/// 
+///
 /// This widget displays semester tabs dynamically based on the semesters
 /// available in the database. No hardcoded "Semestre 1/2" logic.
 library;
@@ -13,7 +13,7 @@ import '../providers/student_context_provider.dart';
 import 'ios_loader.dart';
 
 /// Dynamic Semester Navigator - iOS 26 Style
-/// 
+///
 /// Fetches semesters from the database and displays them dynamically.
 /// Supports 2, 3, or any number of semesters per academic year.
 class DynamicSemesterNav extends ConsumerStatefulWidget {
@@ -38,12 +38,12 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-  int _previousIndex = 0;
+  int _previousSemesterNumber = 1;
 
   @override
   void initState() {
     super.initState();
-    _previousIndex = widget.selectedSemesterNumber - 1;
+    _previousSemesterNumber = widget.selectedSemesterNumber;
     _controller = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
@@ -59,7 +59,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
   void didUpdateWidget(DynamicSemesterNav oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selectedSemesterNumber != widget.selectedSemesterNumber) {
-      _previousIndex = oldWidget.selectedSemesterNumber - 1;
+      _previousSemesterNumber = oldWidget.selectedSemesterNumber;
       _controller.forward(from: 0.0);
     }
   }
@@ -101,9 +101,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
             color: Colors.white.withOpacity(0.8),
             borderRadius: BorderRadius.circular(28),
           ),
-          child: const Center(
-            child: IosLoader(),
-          ),
+          child: const Center(child: IosLoader()),
         ),
       ),
     );
@@ -117,7 +115,10 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
     // Sort by number
     semesters.sort((a, b) => a.number.compareTo(b.number));
     final count = semesters.length;
-    final currentIndex = (widget.selectedSemesterNumber - 1).clamp(0, count - 1);
+    final currentIndex = _resolveSelectedIndex(
+      semesters,
+      widget.selectedSemesterNumber,
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
@@ -147,10 +148,14 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                   AnimatedBuilder(
                     animation: _animation,
                     builder: (context, child) {
-                      final previousIdx = _previousIndex.clamp(0, count - 1);
+                      final previousIdx = _resolveSelectedIndex(
+                        semesters,
+                        _previousSemesterNumber,
+                      );
                       final startPos = previousIdx * tabWidth;
                       final endPos = currentIndex * tabWidth;
-                      final currentPos = startPos + (endPos - startPos) * _animation.value;
+                      final currentPos =
+                          startPos + (endPos - startPos) * _animation.value;
 
                       return Positioned(
                         left: currentPos,
@@ -163,16 +168,19 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                             gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [widget.accentColor, widget.secondaryColor],
+                              colors: [
+                                widget.accentColor,
+                                widget.secondaryColor,
+                              ],
                             ),
                             borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: widget.accentColor.withOpacity(0.5),
-                                  blurRadius: 24,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
+                            boxShadow: [
+                              BoxShadow(
+                                color: widget.accentColor.withOpacity(0.5),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -180,8 +188,10 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                   ),
                   // Tab labels - dynamic from semesters
                   Row(
-                    children: semesters.map((semester) {
-                      final isSelected = widget.selectedSemesterNumber == semester.number;
+                    children: semesters.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final semester = entry.value;
+                      final isSelected = index == currentIndex;
                       return Expanded(
                         child: _SemesterTab(
                           label: semester.name,
@@ -198,6 +208,18 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
         ),
       ),
     );
+  }
+
+  int _resolveSelectedIndex(List<SemesterInfo> semesters, int selectedNumber) {
+    final selectedIndex = semesters.indexWhere(
+      (s) => s.number == selectedNumber,
+    );
+    if (selectedIndex != -1) return selectedIndex;
+
+    final currentIndex = semesters.indexWhere((s) => s.isCurrent);
+    if (currentIndex != -1) return currentIndex;
+
+    return 0;
   }
 }
 
@@ -226,6 +248,15 @@ class _SemesterTab extends StatelessWidget {
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             color: isSelected ? Colors.white : Colors.grey[600],
             letterSpacing: -0.2,
+            shadows: isSelected
+                ? [
+                    const Shadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 1),
+                    ),
+                  ]
+                : null,
           ),
           child: Text(label),
         ),
@@ -264,10 +295,8 @@ class SemesterTabBar extends ConsumerWidget {
         semesters.sort((a, b) => a.number.compareTo(b.number));
         return _buildTabs(semesters, color);
       },
-      loading: () => const SizedBox(
-        height: 40,
-        child: Center(child: IosLoader()),
-      ),
+      loading: () =>
+          const SizedBox(height: 40, child: Center(child: IosLoader())),
       error: (_, __) => _buildTabs([
         SemesterInfo(id: '1', name: 'Sem. 1', number: 1, isCurrent: false),
         SemesterInfo(id: '2', name: 'Sem. 2', number: 2, isCurrent: false),
@@ -276,6 +305,7 @@ class SemesterTabBar extends ConsumerWidget {
   }
 
   Widget _buildTabs(List<SemesterInfo> semesters, Color color) {
+    const selectedTextColor = Colors.white;
     return Container(
       height: 40,
       decoration: BoxDecoration(
@@ -301,7 +331,7 @@ class SemesterTabBar extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? Colors.white : Colors.grey[700],
+                    color: isSelected ? selectedTextColor : Colors.grey[700],
                   ),
                 ),
               ),

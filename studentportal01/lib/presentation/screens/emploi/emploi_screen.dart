@@ -11,6 +11,25 @@ import '../../widgets/ios_loader.dart';
 
 final emploiSemesterProvider = StateProvider<int>((ref) => 1);
 
+// Detect if currently in an exam period
+final isExamPeriodProvider = FutureProvider<bool>((ref) async {
+  try {
+    final contextAsync = await ref.watch(studentContextProvider.future);
+    if (contextAsync == null) return false;
+
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    final examCheck = await Supabase.instance.client.rpc('get_active_exam_period', params: {
+      'p_school_id': contextAsync.schoolId,
+      'p_date': todayStr,
+    });
+    return examCheck != null;
+  } catch (_) {
+    return false;
+  }
+});
+
 String _parseTime(String time) {
   if (time.length >= 5) {
     return time.substring(0, 5);
@@ -48,7 +67,28 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
   if (contextAsync == null || contextAsync.classId == null) return [];
 
   try {
-    final offeringsResp = await Supabase.instance.client
+    final supabase = Supabase.instance.client;
+
+    // Check if today falls in an exam period
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    String timetableType = 'regular';
+    String? activeExamPeriodId;
+
+    try {
+      final examCheck = await supabase.rpc('get_active_exam_period', params: {
+        'p_school_id': contextAsync.schoolId ?? '',
+        'p_date': todayStr,
+      });
+      if (examCheck != null) {
+        timetableType = 'exam';
+        activeExamPeriodId = examCheck as String;
+      }
+    } catch (e) {
+      debugPrint('Exam period check error (non-critical): $e');
+    }
+
+    final offeringsResp = await supabase
         .from('subject_offerings')
         .select('id')
         .eq('class_id', contextAsync.classId!)
@@ -57,27 +97,68 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
     final offeringIds = (offeringsResp as List).map((o) => o['id'] as String).toList();
     if (offeringIds.isEmpty) return [];
 
-    final slotsResp = await Supabase.instance.client
+    var slotsQuery = supabase
         .from('timetable_slots')
         .select('''
           *, subject_offerings!inner(
             subject_id, teacher_id, semester_id,
-            subjects(name, code),
-            users!teacher_id(full_name, photo_url)
+            subjects(name, code)
           )
         ''')
         .inFilter('subject_offering_id', offeringIds)
+        .eq('timetable_type', timetableType);
+
+    if (timetableType == 'exam' && activeExamPeriodId != null) {
+      slotsQuery = slotsQuery.eq('exam_period_id', activeExamPeriodId);
+    }
+
+    final slotsResp = await slotsQuery
         .order('day_of_week')
         .order('start_time');
 
-      return (slotsResp as List).map((json) {
-        final offering = json['subject_offerings'] as Map<String, dynamic>?;
-        final subject = offering?['subjects'] as Map<String, dynamic>?;
-        final teacher = offering?['users'] as Map<String, dynamic>?;
-        
-        debugPrint('Slot: ${subject?['name']} teacher=$teacher');
+    // Resolve teachers from teacher_assignments (subject_offerings.teacher_id may be NULL)
+    final Map<String, String> subjectClassTeacherMap = {};
+    final Map<String, String> subjectClassTeacherPhotoMap = {};
+    try {
+      final teacherAssResp = await Supabase.instance.client
+          .from('teacher_assignments')
+          .select('subject_id, class_id, teacher_id, users!teacher_id(full_name, photo_url)')
+          .eq('is_active', true);
 
-        return TimetableSlotModel(
+      for (final ta in (teacherAssResp as List)) {
+        final subjectId = ta['subject_id'] as String?;
+        final clsId = ta['class_id'] as String?;
+        final teacherUserId = ta['teacher_id'] as String?;
+        final teacherData = ta['users'] as Map<String, dynamic>?;
+        if (subjectId != null && clsId != null) {
+          subjectClassTeacherMap['${subjectId}_$clsId'] = teacherData?['full_name'] as String? ?? '';
+          subjectClassTeacherPhotoMap['${subjectId}_$clsId'] = teacherData?['photo_url'] as String? ?? '';
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching teacher_assignments: $e');
+    }
+
+    final classId = contextAsync.classId!;
+
+    return (slotsResp as List).map((json) {
+      final offering = json['subject_offerings'] as Map<String, dynamic>?;
+      final subject = offering?['subjects'] as Map<String, dynamic>?;
+      
+      final subjectId = offering?['subject_id'] as String?;
+      final teacherKey = subjectId != null ? '${subjectId}_$classId' : null;
+      
+      final teacherNameFromAssignment = teacherKey != null ? subjectClassTeacherMap[teacherKey] : null;
+      final teacherPhotoFromAssignment = teacherKey != null ? subjectClassTeacherPhotoMap[teacherKey] : null;
+      
+      final teacherName = (teacherNameFromAssignment?.isNotEmpty == true)
+          ? teacherNameFromAssignment
+          : (json['teacher_name'] as String?);
+      final teacherPhoto = (teacherPhotoFromAssignment?.isNotEmpty == true)
+          ? teacherPhotoFromAssignment
+          : null;
+
+      return TimetableSlotModel(
         id: json['id'] as String,
         subjectOfferingId: json['subject_offering_id'] as String,
         groupId: json['group_id'] as String?,
@@ -85,9 +166,8 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
         startTime: _parseTime(json['start_time'] as String),
         endTime: _parseTime(json['end_time'] as String),
         room: json['room'] as String?,
-        teacherName: (teacher?['full_name'] as String?) ??
-            (json['teacher_name'] as String?),
-        teacherPhotoUrl: teacher?['photo_url'] as String?,
+        teacherName: teacherName,
+        teacherPhotoUrl: teacherPhoto,
         sessionType: json['session_type'] as String? ?? 'CI',
         createdAt: DateTime.parse(json['created_at'] as String),
         subjectName: subject?['name'] as String?,
@@ -121,6 +201,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
     final l10n = AppLocalizations.of(context);
     final timetableAsync = ref.watch(timetableProvider);
     final selectedSemester = ref.watch(emploiSemesterProvider);
+    final isExamPeriod = ref.watch(isExamPeriodProvider);
 
     return Material(
       type: MaterialType.transparency,
@@ -209,6 +290,36 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                         secondaryColor: const Color(0xFF059669),
                         onChanged: (v) => ref.read(emploiSemesterProvider.notifier).state = v,
                       ),
+                    ),
+                    // Exam period banner
+                    isExamPeriod.when(
+                      data: (isExam) => isExam
+                          ? Container(
+                              margin: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFEA580C), Color(0xFFF97316)],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(color: const Color(0xFFEA580C).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3)),
+                                ],
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.school, color: Colors.white, size: 18),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Emploi d\'examen en cours',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
                     ),
                     const SizedBox(height: 20),
                     Expanded(

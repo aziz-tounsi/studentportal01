@@ -17,6 +17,8 @@ class AbsenceModel {
   final String? classId;
   final String? subjectName;
   final String? subjectCode;
+  final String? teacherName;
+  final String? teacherPhotoUrl;
   final DateTime date;
   final double hoursAbsent;
   final String? sessionType; // CI, TD, TP
@@ -38,6 +40,8 @@ class AbsenceModel {
     this.classId,
     this.subjectName,
     this.subjectCode,
+    this.teacherName,
+    this.teacherPhotoUrl,
     required this.date,
     this.hoursAbsent = 2.0,
     this.sessionType,
@@ -53,6 +57,7 @@ class AbsenceModel {
     final niveau = classes?['niveaux'] as Map<String, dynamic>?;
     final subjectOffering = json['subject_offerings'] as Map<String, dynamic>?;
     final subject = subjectOffering?['subjects'] as Map<String, dynamic>?;
+    final teacher = subjectOffering?['users'] as Map<String, dynamic>?;
 
     return AbsenceModel(
       id: json['id'] as String,
@@ -68,6 +73,8 @@ class AbsenceModel {
       classId: classes?['id'] as String?,
       subjectName: subject?['name'] as String?,
       subjectCode: subject?['code'] as String?,
+      teacherName: teacher?['full_name'] as String?,
+      teacherPhotoUrl: teacher?['photo_url'] as String?,
       date: DateTime.parse(json['date'] as String),
       hoursAbsent: (json['hours_absent'] as num?)?.toDouble() ?? 2.0,
       sessionType: json['session_type'] as String?,
@@ -84,6 +91,8 @@ class AbsenceModel {
     bool? justified,
     double? hoursAbsent,
     String? sessionType,
+    String? teacherName,
+    String? teacherPhotoUrl,
   }) {
     return AbsenceModel(
       id: id,
@@ -99,6 +108,8 @@ class AbsenceModel {
       classId: classId,
       subjectName: subjectName,
       subjectCode: subjectCode,
+      teacherName: teacherName ?? this.teacherName,
+      teacherPhotoUrl: teacherPhotoUrl ?? this.teacherPhotoUrl,
       date: date,
       hoursAbsent: hoursAbsent ?? this.hoursAbsent,
       sessionType: sessionType ?? this.sessionType,
@@ -858,6 +869,36 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
 
+  Future<String?> _currentSchoolId() async {
+    final user = SupabaseConfig.client.auth.currentUser;
+    if (user == null) return null;
+    final profile = await SupabaseConfig.client
+        .from('users')
+        .select('school_id')
+        .eq('id', user.id)
+        .single();
+    return profile['school_id']?.toString();
+  }
+
+  Future<List<({DateTime start, DateTime end})>> _loadVacationRanges(String schoolId) async {
+    final resp = await SupabaseConfig.client
+        .from('vacation_periods')
+        .select('start_date, end_date')
+        .eq('school_id', schoolId);
+    return (resp as List).map((r) => (
+      start: DateTime.parse(r['start_date'].toString()),
+      end: DateTime.parse(r['end_date'].toString()),
+    )).toList();
+  }
+
+  bool _isDateInVacation(DateTime date, List<({DateTime start, DateTime end})> vacations) {
+    final d = DateTime(date.year, date.month, date.day);
+    for (final v in vacations) {
+      if (!d.isBefore(v.start) && !d.isAfter(v.end)) return true;
+    }
+    return false;
+  }
+
   /// Create absences based on timetable for a single day
   /// Returns count of absences created
   Future<int> createAbsencesFromTimetable({
@@ -869,6 +910,11 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     bool justified = false,
   }) async {
     final supabase = SupabaseConfig.client;
+
+    final schoolId = await _currentSchoolId();
+    if (schoolId == null) return 0;
+    final vacations = await _loadVacationRanges(schoolId);
+    if (_isDateInVacation(date, vacations)) return 0;
 
     // Get timetable slots for that day
     final dayIndex = date.weekday; // 1=Monday, 7=Sunday
@@ -917,6 +963,11 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     bool justified = false,
   }) async {
     final supabase = SupabaseConfig.client;
+
+    final schoolId = await _currentSchoolId();
+    if (schoolId == null) return 0;
+    final vacations = await _loadVacationRanges(schoolId);
+
     var slots = getTimetableSlotsForClass(classId);
 
     // Filter to only selected slots if provided
@@ -937,6 +988,10 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     var currentDate = startDate;
 
     while (!currentDate.isAfter(endDate)) {
+      if (_isDateInVacation(currentDate, vacations)) {
+        currentDate = currentDate.add(const Duration(days: 1));
+        continue;
+      }
       final daySlots = slotsByDay[currentDate.weekday] ?? [];
       for (final eid in enrollmentIds) {
         for (final slot in daySlots) {
@@ -971,3 +1026,78 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
 final absencesProvider = AsyncNotifierProvider<AbsencesNotifier, AbsencesState>(
   AbsencesNotifier.new,
 );
+
+/// Data holder for the student absence history screen
+class StudentAbsencesData {
+  final Map<String, dynamic> user;
+  final List<AbsenceModel> absences;
+  final int totalAbsences;
+  final int justifiedCount;
+  final int unjustifiedCount;
+  final double totalHours;
+
+  StudentAbsencesData({
+    required this.user,
+    required this.absences,
+    required this.totalAbsences,
+    required this.justifiedCount,
+    required this.unjustifiedCount,
+    required this.totalHours,
+  });
+}
+
+/// Loads a single student's profile info and absence history
+final studentAbsencesProvider = FutureProvider.family<StudentAbsencesData, String>((ref, studentId) async {
+  final supabase = SupabaseConfig.adminClient;
+
+  // Load user basic info
+  final userResp = await supabase
+      .from('users')
+      .select('''
+        id, full_name, email, phone, photo_url, student_code, gender,
+        date_of_birth, nationality, address,
+        enrollments(
+          id,
+          classes(id, name, niveaux(id, name, code))
+        )
+      ''')
+      .eq('id', studentId)
+      .maybeSingle();
+
+  final user = userResp ?? <String, dynamic>{};
+
+  // Load absence records for this student
+  final absencesResp = await supabase
+      .from('absence_records')
+      .select('''
+        *,
+        enrollments(
+          id,
+          users(id, full_name, email, phone, student_code),
+          classes(id, name, niveaux(id, name, code))
+        ),
+        subject_offerings(
+          id,
+          subjects(id, name, code),
+          users!teacher_id(id, full_name, photo_url)
+        )
+      ''')
+      .eq('student_id', studentId)
+      .order('date', ascending: false);
+
+  final absences = (absencesResp as List)
+      .map((json) => AbsenceModel.fromJson(json))
+      .toList();
+
+  final justifiedCount = absences.where((a) => a.justified).length;
+  final totalHours = absences.fold<double>(0, (sum, a) => sum + a.hoursAbsent);
+
+  return StudentAbsencesData(
+    user: user,
+    absences: absences,
+    totalAbsences: absences.length,
+    justifiedCount: justifiedCount,
+    unjustifiedCount: absences.length - justifiedCount,
+    totalHours: totalHours,
+  );
+});

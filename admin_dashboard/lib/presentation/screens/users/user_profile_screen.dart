@@ -492,13 +492,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                   children: [
                     _buildStatsGrid(data),
                     const SizedBox(height: 32),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _buildPresenceCalendar(data)),
-                        const SizedBox(width: 32),
-                        Expanded(child: _buildPaymentsCard(data)),
-                      ],
+                    SizedBox(
+                      height: 440,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: _buildPresenceCalendar(data)),
+                          const SizedBox(width: 32),
+                          Expanded(child: _buildPaymentsCard(data)),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 32),
                     _buildActivityLog(data),
@@ -899,37 +902,74 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: AlertDialog(
-          title: const Text('Mot de passe non enregistré'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Le mot de passe de $fullName n\'est pas enregistré.',
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Voulez-vous réinitialiser son mot de passe pour pouvoir vous connecter ?',
-              style: TextStyle(fontSize: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.lock_reset, color: Color(0xFFD97706), size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Mot de passe non enregistré', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Le mot de passe de $fullName n\'est pas enregistré.'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.slate50,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 16, color: AppColors.textTertiary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Voulez-vous réinitialiser son mot de passe pour pouvoir vous connecter ?',
+                        style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  icon: const Icon(Icons.vpn_key, size: 16),
+                  label: const Text('Réinitialiser et connecter', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Réinitialiser et connecter'),
-          ),
-        ],
         ),
       ),
     );
@@ -1184,7 +1224,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           ),
           const SizedBox(height: 16),
           // Name
-          Text(fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate800), textAlign: TextAlign.center),
+          GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: fullName));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Nom copié!'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+              );
+            },
+            child: Text(fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate800), textAlign: TextAlign.center),
+          ),
           const SizedBox(height: 6),
           // Role badge
           Container(
@@ -1198,7 +1246,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           ),
           if (studentCode != null) ...[
             const SizedBox(height: 6),
-            Text(studentCode, style: TextStyle(color: AppColors.slate400, fontSize: 12, fontWeight: FontWeight.w500)),
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: studentCode!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('ID copié!'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+                );
+              },
+              child: Text(studentCode, style: TextStyle(color: AppColors.slate400, fontSize: 12, fontWeight: FontWeight.w500)),
+            ),
           ],
           const SizedBox(height: 24),
           // Info Rows
@@ -1246,23 +1302,49 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             width: 100,
             child: Text(label, style: TextStyle(color: AppColors.slate400, fontSize: 13, fontWeight: FontWeight.w500)),
           ),
-          Expanded(child: Text(value, style: const TextStyle(color: AppColors.slate700, fontSize: 13, fontWeight: FontWeight.w600))),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$label copié!'), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+                );
+              },
+              child: Row(
+                children: [
+                  Expanded(child: Text(value, style: const TextStyle(color: AppColors.slate700, fontSize: 13, fontWeight: FontWeight.w600))),
+                  const SizedBox(width: 4),
+                  Icon(Icons.copy, size: 12, color: AppColors.slate300),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _contactRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, size: 14, color: AppColors.primary),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, style: TextStyle(color: AppColors.slate600, fontSize: 13), overflow: TextOverflow.ellipsis)),
-      ],
+    return GestureDetector(
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: text));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$text copié!'), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+        );
+      },
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, size: 14, color: AppColors.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: TextStyle(color: AppColors.slate600, fontSize: 13), overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 4),
+          Icon(Icons.copy, size: 12, color: AppColors.slate300),
+        ],
+      ),
     );
   }
 
@@ -1381,23 +1463,35 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     return Container(
       decoration: _cardDecoration(),
       padding: const EdgeInsets.all(24),
-      child: Column(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header: title + Voir tout (same style as payment card)
           Row(
             children: [
               const Text('Présence ce mois', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
               const Spacer(),
+              GestureDetector(
+                onTap: () => context.go('/absences'),
+                child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Month switcher on its own row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
               _miniIconBtn(icon: Icons.chevron_left_rounded, onTap: () => setState(() => _selectedMonthOffset--)),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Text(monthLabel, style: TextStyle(color: AppColors.slate500, fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               _miniIconBtn(icon: Icons.chevron_right_rounded, onTap: _selectedMonthOffset < 0 ? () => setState(() => _selectedMonthOffset++) : null),
             ],
           ),
-          const SizedBox(height: 16),
-          _buildCalendarGrid(data, targetDate),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Expanded(child: _buildCalendarGrid(data, targetDate)),
+          const SizedBox(height: 12),
           // Legend
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1449,6 +1543,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         GridView.count(
           crossAxisCount: 7,
           shrinkWrap: true,
+          childAspectRatio: 1.5,
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 4,
           crossAxisSpacing: 4,
@@ -1528,9 +1623,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('Paiements', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
-          const SizedBox(height: 24),
+          Row(
+            children: [
+              const Text('Paiements', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => context.go('/payments'),
+                child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           // Donut chart
           Center(
             child: SizedBox(

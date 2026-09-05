@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -101,7 +101,11 @@ class AdminSidebar extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.hexagon_outlined, color: Colors.white, size: 22),
+                      child: const Icon(
+                        Icons.hexagon_outlined,
+                        color: Colors.white,
+                        size: 22,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -161,7 +165,9 @@ class AdminSidebar extends ConsumerWidget {
                   },
                   child: ListView(
                     key: const PageStorageKey('admin_sidebar_scroll'),
-                    controller: ScrollController(initialScrollOffset: _savedOffset),
+                    controller: ScrollController(
+                      initialScrollOffset: _savedOffset,
+                    ),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     children: [
                       _SectionTitle(title: 'PRINCIPAL'),
@@ -199,7 +205,7 @@ class AdminSidebar extends ConsumerWidget {
                       ),
                       _NavItem(
                         icon: Icons.date_range_outlined,
-                        label: 'Semestres',
+                        label: 'Périodes',
                         route: '/semesters',
                         currentRoute: currentRoute,
                       ),
@@ -294,7 +300,9 @@ class AdminSidebar extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: AppColors.error.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.error.withOpacity(0.12)),
+                        border: Border.all(
+                          color: AppColors.error.withOpacity(0.12),
+                        ),
                       ),
                       child: Material(
                         color: Colors.transparent,
@@ -302,7 +310,10 @@ class AdminSidebar extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(14),
                           onTap: () => context.go('/login'),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
                             child: Row(
                               children: [
                                 Container(
@@ -312,8 +323,11 @@ class AdminSidebar extends ConsumerWidget {
                                     color: AppColors.error.withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: Icon(Icons.power_settings_new_rounded,
-                                      color: AppColors.error.withOpacity(0.9), size: 17),
+                                  child: Icon(
+                                    Icons.power_settings_new_rounded,
+                                    color: AppColors.error.withOpacity(0.9),
+                                    size: 17,
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 const Text(
@@ -380,7 +394,8 @@ class _NavItem extends StatefulWidget {
   State<_NavItem> createState() => _NavItemState();
 }
 
-class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin {
+class _NavItemState extends State<_NavItem>
+    with SingleTickerProviderStateMixin {
   bool _isHovered = false;
   late final AnimationController _controller;
   late final Animation<double> _scaleAnim;
@@ -392,9 +407,10 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
       vsync: this,
       duration: const Duration(milliseconds: 180),
     );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.97).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _scaleAnim = Tween<double>(
+      begin: 1.0,
+      end: 0.97,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override
@@ -405,7 +421,8 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
 
   @override
   Widget build(BuildContext context) {
-    final isActive = widget.currentRoute == widget.route ||
+    final isActive =
+        widget.currentRoute == widget.route ||
         (widget.route == '/dashboard' && widget.currentRoute == '/');
 
     return MouseRegion(
@@ -450,7 +467,9 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
                   height: isActive ? 24 : 0,
                   margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
-                    color: isActive ? const Color(0xFF60A5FA) : Colors.transparent,
+                    color: isActive
+                        ? const Color(0xFF60A5FA)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(2),
                     boxShadow: isActive
                         ? [
@@ -468,8 +487,8 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
                   color: isActive
                       ? const Color(0xFF60A5FA)
                       : _isHovered
-                          ? Colors.white70
-                          : Colors.white38,
+                      ? Colors.white70
+                      : Colors.white38,
                   size: 19,
                 ),
                 const SizedBox(width: 12),
@@ -572,10 +591,17 @@ class _NavItemWithBadgeState extends State<_NavItemWithBadge> {
                 height: isActive ? 24 : 0,
                 margin: const EdgeInsets.only(right: 10),
                 decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFF60A5FA) : Colors.transparent,
+                  color: isActive
+                      ? const Color(0xFF60A5FA)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(2),
                   boxShadow: isActive
-                      ? [BoxShadow(color: const Color(0xFF60A5FA).withOpacity(0.6), blurRadius: 8)]
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF60A5FA).withOpacity(0.6),
+                            blurRadius: 8,
+                          ),
+                        ]
                       : [],
                 ),
               ),
@@ -585,8 +611,8 @@ class _NavItemWithBadgeState extends State<_NavItemWithBadge> {
                 color: isActive
                     ? const Color(0xFF60A5FA)
                     : _isHovered
-                        ? Colors.white70
-                        : Colors.white38,
+                    ? Colors.white70
+                    : Colors.white38,
                 size: 19,
               ),
               const SizedBox(width: 12),
@@ -605,7 +631,10 @@ class _NavItemWithBadgeState extends State<_NavItemWithBadge> {
               // ── Badge ──
               if (widget.badgeCount > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFF97316), Color(0xFFFB923C)],
