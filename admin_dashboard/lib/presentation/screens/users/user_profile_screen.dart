@@ -160,7 +160,7 @@ final userProfileDataProvider = FutureProvider.family<UserProfileData?, String>(
           .length;
     } catch (_) {}
 
-    // Get payments and calculate accuracy
+    // Get payments and calculate accuracy (filtered to this student's enrollments)
     List<Map<String, dynamic>> payments = [];
     double paymentAccuracy = 0;
     int onTimePayments = 0;
@@ -169,11 +169,25 @@ final userProfileDataProvider = FutureProvider.family<UserProfileData?, String>(
     double totalDue = 0;
 
     try {
-      final resp = await supabase
-          .from('payments')
-          .select('amount, status, due_date, paid_at, description, created_at')
-          .order('created_at', ascending: false);
-      payments = (resp as List).cast<Map<String, dynamic>>();
+      final enrollmentsResp = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', userId);
+      final enrollmentIds = (enrollmentsResp as List)
+          .map((e) => e['id'] as String)
+          .toList();
+
+      if (enrollmentIds.isNotEmpty) {
+        final resp = await supabase
+            .from('payments')
+            .select('*, payment_plans!inner(id, plan_type, category, enrollment_id)')
+            .inFilter('payment_plans.enrollment_id', enrollmentIds)
+            .order('created_at', ascending: false);
+        payments = (resp as List).cast<Map<String, dynamic>>();
+        debugPrint('Profile: loaded ${payments.length} payments for $userId, enrollmentIds=$enrollmentIds');
+      } else {
+        debugPrint('Profile: no enrollments found for $userId');
+      }
 
       for (final p in payments) {
         final amount = (p['amount'] as num?)?.toDouble() ?? 0;
@@ -199,7 +213,11 @@ final userProfileDataProvider = FutureProvider.family<UserProfileData?, String>(
 
       final total = onTimePayments + latePayments;
       if (total > 0) paymentAccuracy = (onTimePayments / total) * 100;
-    } catch (_) {}
+      debugPrint('Profile: totals for $userId -> totalPaid=$totalPaid, totalDue=$totalDue, payments=${payments.length}, accuracy=$paymentAccuracy');
+    } catch (e, st) {
+      debugPrint('Profile: error loading payments for $userId: $e');
+      debugPrint('$st');
+    }
 
     // Get grades
     List<Map<String, dynamic>> grades = [];
@@ -1303,19 +1321,22 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             child: Text(label, style: TextStyle(color: AppColors.slate400, fontSize: 13, fontWeight: FontWeight.w500)),
           ),
           Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: value));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$label copié!'), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
-                );
-              },
-              child: Row(
-                children: [
-                  Expanded(child: Text(value, style: const TextStyle(color: AppColors.slate700, fontSize: 13, fontWeight: FontWeight.w600))),
-                  const SizedBox(width: 4),
-                  Icon(Icons.copy, size: 12, color: AppColors.slate300),
-                ],
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: value));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$label copié!'), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Expanded(child: Text(value, style: const TextStyle(color: AppColors.slate700, fontSize: 13, fontWeight: FontWeight.w600))),
+                    const SizedBox(width: 4),
+                    Icon(Icons.copy, size: 12, color: AppColors.slate300),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1325,25 +1346,28 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   }
 
   Widget _contactRow(IconData icon, String text) {
-    return GestureDetector(
-      onTap: () {
-        Clipboard.setData(ClipboardData(text: text));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$text copié!'), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
-        );
-      },
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, size: 14, color: AppColors.primary),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text, style: TextStyle(color: AppColors.slate600, fontSize: 13), overflow: TextOverflow.ellipsis)),
-          const SizedBox(width: 4),
-          Icon(Icons.copy, size: 12, color: AppColors.slate300),
-        ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: text));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$text copié!'), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+          );
+        },
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, size: 14, color: AppColors.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: TextStyle(color: AppColors.slate600, fontSize: 13), overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 4),
+            Icon(Icons.copy, size: 12, color: AppColors.slate300),
+          ],
+        ),
       ),
     );
   }
@@ -1471,9 +1495,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             children: [
               const Text('Présence ce mois', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
               const Spacer(),
-              GestureDetector(
-                onTap: () => context.go('/absences'),
-                child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => context.push('/student-absences/${widget.userId}'),
+                  child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
               ),
             ],
           ),
@@ -1489,7 +1516,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               _miniIconBtn(icon: Icons.chevron_right_rounded, onTap: _selectedMonthOffset < 0 ? () => setState(() => _selectedMonthOffset++) : null),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 32),
           Expanded(child: _buildCalendarGrid(data, targetDate)),
           const SizedBox(height: 12),
           // Legend
@@ -1616,7 +1643,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   Widget _buildPaymentsCard(UserProfileData data) {
     final totalDue = data.totalDue;
     final totalPaid = data.totalPaid;
-    final pct = totalDue > 0 ? (totalPaid / totalDue * 100).clamp(0.0, 100.0) : 0.0;
+    final totalAmount = totalPaid + totalDue;
+    final pct = totalAmount > 0 ? (totalPaid / totalAmount * 100).clamp(0.0, 100.0) : 0.0;
 
     return Container(
       decoration: _cardDecoration(),
@@ -1629,9 +1657,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             children: [
               const Text('Paiements', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
               const Spacer(),
-              GestureDetector(
-                onTap: () => context.go('/payments'),
-                child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+onTap: () => _showStudentPaymentsSheet(data),
+                  child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
               ),
             ],
           ),
@@ -1660,7 +1691,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           const SizedBox(height: 8),
           _paymentItem('Total payé', '${totalPaid.toStringAsFixed(0)} DH', AppColors.success),
           const SizedBox(height: 8),
-          _paymentItem('Reste', '${(totalDue - totalPaid).toStringAsFixed(0)} DH', AppColors.error),
+          _paymentItem('Reste', '${(totalDue - totalPaid).clamp(0.0, double.infinity).toStringAsFixed(0)} DH', AppColors.error),
           const SizedBox(height: 8),
           _paymentItem('À temps', '${data.onTimePayments}', AppColors.primary),
           const SizedBox(height: 8),
@@ -1671,9 +1702,29 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   }
 
   Widget _paymentItem(String label, String value, Color color) {
+    IconData icon;
+    switch (label) {
+      case 'Total dû':
+        icon = Icons.account_balance_wallet_outlined;
+        break;
+      case 'Total payé':
+        icon = Icons.check_circle_outline_rounded;
+        break;
+      case 'Reste':
+        icon = Icons.error_outline_rounded;
+        break;
+      case 'À temps':
+        icon = Icons.access_time_rounded;
+        break;
+      case 'En retard':
+        icon = Icons.warning_amber_rounded;
+        break;
+      default:
+        icon = Icons.circle_outlined;
+    }
     return Row(
       children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Icon(icon, size: 18, color: color),
         const SizedBox(width: 10),
         Text(label, style: TextStyle(color: AppColors.slate500, fontSize: 13)),
         const Spacer(),
@@ -2028,6 +2079,1067 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     final date = DateTime.tryParse(dateStr);
     if (date == null) return dateStr;
     return DateFormat('dd/MM/yyyy').format(date);
+  }
+
+  // ==================== STUDENT PAYMENTS DIALOG ====================
+  void _showStudentPaymentsSheet(UserProfileData data) {
+    final userId = widget.userId;
+    final studentName = data.user['full_name'] as String? ?? 'Étudiant';
+    final className = data.className;
+
+    final paidAmount = data.totalPaid;
+    final totalAmount = data.totalPaid + data.totalDue;
+    final paidPayments = data.payments.where((p) => p['status'] == 'paid').length;
+    final totalPayments = data.payments.length;
+    final progressPercent = totalAmount > 0 ? (paidAmount / totalAmount * 100) : 0.0;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => _StudentPaymentsSheet(
+        studentId: userId,
+        studentName: studentName,
+        className: className,
+        paidAmount: paidAmount,
+        totalAmount: totalAmount,
+        paidPayments: paidPayments,
+        totalPayments: totalPayments,
+        progressPercent: progressPercent,
+      ),
+    );
+  }
+}
+
+// ==================== STUDENT PAYMENTS DIALOG WIDGET ====================
+class _StudentPaymentsSheet extends StatefulWidget {
+  final String studentId;
+  final String studentName;
+  final String? className;
+  final double paidAmount;
+  final double totalAmount;
+  final int paidPayments;
+  final int totalPayments;
+  final double progressPercent;
+
+  const _StudentPaymentsSheet({
+    required this.studentId,
+    required this.studentName,
+    required this.className,
+    required this.paidAmount,
+    required this.totalAmount,
+    required this.paidPayments,
+    required this.totalPayments,
+    required this.progressPercent,
+  });
+
+  @override
+  State<_StudentPaymentsSheet> createState() => _StudentPaymentsSheetState();
+}
+
+class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
+  List<Map<String, dynamic>> _payments = [];
+  List<Map<String, dynamic>> _paymentPlans = [];
+  bool _isLoading = true;
+  String _selectedCategory = 'all';
+  final Set<String> _selectedPaymentIds = {};
+  double _paidAmount = 0;
+  double _totalAmount = 0;
+  int _paidPayments = 0;
+  int _totalPayments = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudentPayments();
+  }
+
+  Future<void> _loadStudentPayments() async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      final enrollments = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', widget.studentId);
+      final enrollmentIds =
+          (enrollments as List).map((e) => e['id'] as String).toList();
+
+      if (enrollmentIds.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final plansResponse = await supabase
+          .from('payment_plans')
+          .select(
+              'id, plan_type, category, enrollment_id, amount_total, created_at')
+          .inFilter('enrollment_id', enrollmentIds)
+          .order('created_at', ascending: false);
+
+      final paymentsResponse = await supabase
+          .from('payments')
+          .select(
+              '*, payment_plans!inner(id, plan_type, category, enrollment_id)')
+          .inFilter('payment_plans.enrollment_id', enrollmentIds)
+          .order('due_date', ascending: true);
+
+      final seenIds = <String>{};
+      final uniquePayments = <Map<String, dynamic>>[];
+      for (final p in paymentsResponse as List) {
+        final id = p['id']?.toString() ?? '';
+        if (id.isNotEmpty && !seenIds.contains(id)) {
+          seenIds.add(id);
+          uniquePayments.add(Map<String, dynamic>.from(p));
+        }
+      }
+
+      final paidAmount = uniquePayments
+          .where((p) => p['status'] == 'paid')
+          .fold<double>(0, (sum, p) => sum + (p['amount'] as num? ?? 0).toDouble());
+      final totalAmount = uniquePayments
+          .fold<double>(0, (sum, p) => sum + (p['amount'] as num? ?? 0).toDouble());
+      final paidPayments = uniquePayments.where((p) => p['status'] == 'paid').length;
+      final totalPayments = uniquePayments.length;
+
+      setState(() {
+        _paymentPlans = List<Map<String, dynamic>>.from(plansResponse);
+        _payments = uniquePayments;
+        _paidAmount = paidAmount;
+        _totalAmount = totalAmount;
+        _paidPayments = paidPayments;
+        _totalPayments = totalPayments;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      debugPrint('StudentPaymentsSheet: error loading payments: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: SizedBox(
+          width: 880,
+          height: 680,
+          child: Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 40,
+                      offset: const Offset(0, 20),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    Expanded(
+                      child: _isLoading
+                          ? const Center(child: IosLoader())
+                          : _buildMonthlyTimelineView(),
+                    ),
+                  ],
+                ),
+              ),
+              if (_selectedPaymentIds.isNotEmpty)
+                Positioned(
+                  bottom: 16,
+                  left: 0,
+                  right: 0,
+                  child: Center(child: _buildFloatingBulkBar()),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingBulkBar() {
+    final count = _selectedPaymentIds.length;
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Sélectionnés',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _buildSelectionAction(
+              Icons.check_circle_outline_rounded,
+              'Marquer payé',
+              Colors.white70,
+              () => _bulkMarkPaid(),
+            ),
+            _buildSelectionAction(
+              Icons.cancel_outlined,
+              'Annuler',
+              Colors.white70,
+              () => _bulkCancel(),
+            ),
+            _buildSelectionAction(
+              Icons.delete_outline,
+              'Supprimer',
+              const Color(0xFFFCA5A5),
+              () => _bulkDelete(),
+            ),
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: () => setState(() => _selectedPaymentIds.clear()),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionAction(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _bulkMarkPaid() async {
+    final ids = _selectedPaymentIds.toList();
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('payments')
+          .update({
+            'status': 'paid',
+            'paid_at': DateTime.now().toIso8601String(),
+          })
+          .filter('id', 'in', '(${ids.join(',')})');
+      if (mounted) {
+        setState(() => _selectedPaymentIds.clear());
+        await _loadStudentPayments();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Paiements marqués comme payés'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _bulkCancel() async {
+    final ids = _selectedPaymentIds.toList();
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('payments')
+          .update({'status': 'cancelled'})
+          .filter('id', 'in', '(${ids.join(',')})');
+      if (mounted) {
+        setState(() => _selectedPaymentIds.clear());
+        await _loadStudentPayments();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Paiements annulés'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _bulkDelete() async {
+    final ids = _selectedPaymentIds.toList();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Supprimer les paiements ?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text('Voulez-vous vraiment supprimer ${ids.length} paiement(s) ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('payments').delete().filter('id', 'in', '(${ids.join(',')})');
+      if (mounted) {
+        setState(() => _selectedPaymentIds.clear());
+        await _loadStudentPayments();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Paiements supprimés'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Widget _buildHeader() {
+    final progress = _totalAmount > 0 ? (_paidAmount / _totalAmount) * 100 : 0.0;
+    final isComplete = progress >= 100;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 16, 32),
+      child: Row(
+        children: [
+          UserAvatar(
+            name: widget.studentName,
+            radius: 22,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.studentName,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Text(
+                      widget.className ?? 'Non assigné',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.slate400,
+                      ),
+                    ),
+                    if (_paymentPlans.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      _buildPaymentModeBadge(),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          _headerPill(
+            '${_paidAmount.toStringAsFixed(0)} TND',
+            'payé sur ${_totalAmount.toStringAsFixed(0)}',
+          ),
+          const SizedBox(width: 6),
+          _headerPill(
+            '$_paidPayments/$_totalPayments',
+            'paiements',
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: isComplete
+                  ? const Color(0xFF10B981).withOpacity(0.08)
+                  : AppColors.slate50,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isComplete
+                      ? Icons.check_circle_rounded
+                      : Icons.schedule_rounded,
+                  size: 12,
+                  color: isComplete
+                      ? const Color(0xFF10B981)
+                      : AppColors.slate400,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isComplete ? 'Soldé' : '${progress.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isComplete
+                        ? const Color(0xFF10B981)
+                        : AppColors.slate600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(Icons.close_rounded, size: 20, color: AppColors.slate400),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerPill(String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.slate50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.slate800,
+              ),
+            ),
+            TextSpan(
+              text: ' $label',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.slate400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentModeBadge() {
+    String planType = 'monthly';
+    for (final p in _paymentPlans) {
+      if (p['is_active'] != false) {
+        planType = p['plan_type']?.toString() ?? 'monthly';
+        break;
+      }
+    }
+    if (_paymentPlans.isNotEmpty) {
+      planType = _paymentPlans.first['plan_type']?.toString() ?? planType;
+    }
+
+    final String label;
+    switch (planType) {
+      case 'annual':
+        label = 'Annuel';
+        break;
+      case 'semester':
+      case 'trimester':
+        label = 'Trimestriel';
+        break;
+      case 'semesterly':
+        label = 'Semestriel';
+        break;
+      case 'monthly':
+      default:
+        label = 'Mensuel';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.slate100,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.slate200),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
+  static const _monthNames = [
+    '',
+    'janvier',
+    'février',
+    'mars',
+    'avril',
+    'mai',
+    'juin',
+    'juillet',
+    'août',
+    'septembre',
+    'octobre',
+    'novembre',
+    'décembre',
+  ];
+
+  String _monthName(int month) =>
+      month >= 1 && month <= 12 ? _monthNames[month] : '';
+
+  String _monthNameCapital(int month) {
+    final n = _monthName(month);
+    if (n.isEmpty) return '';
+    return n[0].toUpperCase() + n.substring(1);
+  }
+
+  Widget _buildMonthlyTimelineView() {
+    final filteredPayments = _selectedCategory == 'all'
+        ? _payments
+        : _payments.where((p) {
+            final plan = p['payment_plans'] as Map<String, dynamic>?;
+            return plan?['category'] == _selectedCategory;
+          }).toList();
+
+    filteredPayments.sort((a, b) {
+      final dateA = DateTime.tryParse(a['due_date'] ?? '') ?? DateTime(1970);
+      final dateB = DateTime.tryParse(b['due_date'] ?? '') ?? DateTime(1970);
+      return dateA.compareTo(dateB);
+    });
+
+    if (filteredPayments.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: _buildCategoryFilter(),
+          ),
+          const SizedBox(height: 20),
+          Expanded(child: _buildEmptyState('Aucun paiement programmé', Icons.calendar_today)),
+        ],
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCategoryFilter(),
+          const SizedBox(height: 16),
+          ...filteredPayments.map(
+            (payment) => _buildPaymentTimelineCard(payment),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilter() {
+    final categories = [
+      ('scolarite', 'Scolarité', Icons.school),
+      ('transport', 'Transport', Icons.directions_bus),
+      ('cantine', 'Cantine', Icons.restaurant),
+      ('activites', 'Activités', Icons.sports_soccer),
+      ('autres', 'Autres', Icons.more_horiz),
+    ];
+
+    final visiblePayments = _payments
+        .where((p) => _selectedCategory == 'all' ||
+            (p['payment_plans']?['category'] == _selectedCategory))
+        .toList();
+    final allSelected = visiblePayments.isNotEmpty &&
+        visiblePayments.every((p) => _selectedPaymentIds.contains(p['id']?.toString()));
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: allSelected,
+            tristate: false,
+            onChanged: (v) {
+              setState(() {
+                if (v == true) {
+                  _selectedPaymentIds.addAll(
+                    visiblePayments.map((p) => p['id']?.toString() ?? ''),
+                  );
+                } else {
+                  for (final p in visiblePayments) {
+                    _selectedPaymentIds.remove(p['id']?.toString());
+                  }
+                }
+              });
+            },
+            activeColor: const Color(0xFF655DD5),
+            side: BorderSide(color: AppColors.slate300),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: categories.map((cat) {
+                final isSelected = _selectedCategory == cat.$1;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    selected: isSelected,
+                    showCheckmark: false,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(cat.$3, size: 15),
+                        const SizedBox(width: 5),
+                        Text(cat.$2),
+                      ],
+                    ),
+                    selectedColor: const Color(0xFF655DD5).withOpacity(0.1),
+                    checkmarkColor: const Color(0xFF655DD5),
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      color: isSelected
+                          ? const Color(0xFF655DD5)
+                          : AppColors.slate600,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                    side: BorderSide(
+                      color: isSelected
+                          ? const Color(0xFF655DD5).withOpacity(0.3)
+                          : AppColors.slate200,
+                    ),
+                    onSelected: (_) => setState(() {
+                      _selectedCategory =
+                          _selectedCategory == cat.$1 ? 'all' : cat.$1;
+                    }),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentTimelineCard(Map<String, dynamic> payment) {
+    final status = payment['status'] ?? 'pending';
+    final amount = (payment['amount'] as num? ?? 0).toDouble();
+    final dueDate = DateTime.tryParse(payment['due_date'] ?? '');
+    final paidAt = payment['paid_at'] != null
+        ? DateTime.tryParse(payment['paid_at'])
+        : null;
+    final plan = payment['payment_plans'] as Map<String, dynamic>?;
+    final category = plan?['category'] ?? 'scolarite';
+
+    final isOverdue = status == 'pending' &&
+        dueDate != null &&
+        dueDate.isBefore(DateTime.now());
+    final isPaid = status == 'paid';
+
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+
+    if (isPaid) {
+      statusColor = const Color(0xFF10B981);
+      statusIcon = Icons.check_circle;
+      statusText = 'Payé';
+    } else if (isOverdue) {
+      statusColor = const Color(0xFFEF4444);
+      statusIcon = Icons.warning_rounded;
+      statusText = 'En retard';
+    } else {
+      statusColor = const Color(0xFFF59E0B);
+      statusIcon = Icons.access_time;
+      statusText = 'En attente';
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _selectedPaymentIds.contains(payment['id']?.toString())
+                ? const Color(0xFF655DD5).withOpacity(0.4)
+                : isPaid
+                    ? AppColors.slate100
+                    : statusColor.withOpacity(0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value:
+                    _selectedPaymentIds.contains(payment['id']?.toString()),
+                onChanged: (value) {
+                  final id = payment['id']?.toString();
+                  if (id == null) return;
+                  setState(() {
+                    if (value == true) {
+                      _selectedPaymentIds.add(id);
+                    } else {
+                      _selectedPaymentIds.remove(id);
+                    }
+                  });
+                },
+                activeColor: const Color(0xFF655DD5),
+                side: BorderSide(color: AppColors.slate300),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+            const SizedBox(width: 2),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _getCategoryColor(category).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _getCategoryIcon(category),
+                color: _getCategoryColor(category),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _getCategoryName(category),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: AppColors.slate800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    dueDate != null
+                        ? 'Échéance: ${dueDate.day} ${_monthName(dueDate.month)} ${dueDate.year}'
+                        : 'Date non définie',
+                    style: TextStyle(
+                      color: AppColors.slate400, fontSize: 12),
+                  ),
+                  if (paidAt != null)
+                    Text(
+                      'Payé le: ${paidAt.day} ${_monthName(paidAt.month)} ${paidAt.year}',
+                      style: TextStyle(
+                        color: AppColors.slate400,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${amount.toStringAsFixed(0)} TND',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: AppColors.slate700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 11, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 6),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_horiz, size: 18, color: AppColors.slate400),
+              tooltip: 'Actions',
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 8,
+              offset: const Offset(-8, 32),
+              onSelected: (action) => _handlePaymentAction(action, payment),
+              itemBuilder: (context) => [
+                _buildPopupItem('mark_paid', Icons.check_circle_outline_rounded, 'Marquer payé', const Color(0xFF10B981)),
+                _buildPopupItem('edit', Icons.edit_outlined, 'Modifier', const Color(0xFF655DD5)),
+                const PopupMenuDivider(height: 1),
+                _buildPopupItem('cancel', Icons.close_rounded, 'Annuler', AppColors.error),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _buildPopupItem(String value, IconData icon, String label, Color color) {
+    return PopupMenuItem(
+      value: value,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: color),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: value == 'cancel' ? AppColors.error : AppColors.slate700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handlePaymentAction(String action, Map<String, dynamic> payment) async {
+    final paymentId = payment['id']?.toString();
+    if (paymentId == null) return;
+
+    try {
+      final supabase = Supabase.instance.client;
+      switch (action) {
+        case 'mark_paid':
+          await supabase
+              .from('payments')
+              .update({
+                'status': 'paid',
+                'paid_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', paymentId);
+          if (mounted) {
+            await _loadStudentPayments();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Paiement marqué comme payé'),
+                backgroundColor: Color(0xFF10B981),
+              ),
+            );
+          }
+          break;
+        case 'edit':
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Édition à venir')),
+            );
+          }
+          break;
+        case 'cancel':
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (dCtx) => AlertDialog(
+              title: const Text('Confirmer l\'annulation'),
+              content: const Text('Voulez-vous vraiment annuler ce paiement ?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Non')),
+                TextButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('Oui, annuler')),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            await supabase
+                .from('payments')
+                .update({'status': 'cancelled'})
+                .eq('id', paymentId);
+            if (mounted) {
+              await _loadStudentPayments();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Paiement annulé'),
+                  backgroundColor: AppColors.warning,
+                ),
+              );
+            }
+          }
+          break;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Color _getCategoryColor(String category) {
+    return const Color(0xFF64748B);
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case 'scolarite':
+        return Icons.school;
+      case 'transport':
+        return Icons.directions_bus;
+      case 'cantine':
+        return Icons.restaurant;
+      case 'inscription':
+        return Icons.assignment;
+      case 'uniforme':
+        return Icons.checkroom;
+      case 'activites':
+        return Icons.sports_soccer;
+      default:
+        return Icons.more_horiz;
+    }
+  }
+
+  String _getCategoryName(String category) {
+    switch (category) {
+      case 'scolarite':
+        return 'Scolarité';
+      case 'transport':
+        return 'Transport';
+      case 'cantine':
+        return 'Cantine';
+      case 'inscription':
+        return 'Inscription';
+      case 'uniforme':
+        return 'Uniforme';
+      case 'activites':
+        return 'Activités';
+      default:
+        return 'Autres';
+    }
+  }
+
+  Widget _buildEmptyState(String message, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 64, color: AppColors.slate200),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 16),
+          ),
+        ],
+      ),
+    );
   }
 }
 

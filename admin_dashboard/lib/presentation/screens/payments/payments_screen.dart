@@ -1777,11 +1777,6 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                                 offset: const Offset(0, 2),
                               ),
                           ],
-                          border: Border.all(
-                            color: isExpanded
-                                ? brand.withOpacity(0.18)
-                                : const Color(0xFFE5E7EB),
-                          ),
                         ),
                         child: Column(
                           children: [
@@ -4449,6 +4444,10 @@ class _StudentPaymentDetailDialogState
   bool _isLoading = true;
   String _selectedCategory = 'all';
   final Set<String> _selectedPaymentIds = {};
+  double _paidAmount = 0;
+  double _totalAmount = 0;
+  int _paidPayments = 0;
+  int _totalPayments = 0;
 
   @override
   void initState() {
@@ -4502,9 +4501,21 @@ class _StudentPaymentDetailDialogState
         }
       }
 
+      final paidAmount = uniquePayments
+          .where((p) => p['status'] == 'paid')
+          .fold<double>(0, (sum, p) => sum + (p['amount'] as num? ?? 0).toDouble());
+      final totalAmount = uniquePayments
+          .fold<double>(0, (sum, p) => sum + (p['amount'] as num? ?? 0).toDouble());
+      final paidPayments = uniquePayments.where((p) => p['status'] == 'paid').length;
+      final totalPayments = uniquePayments.length;
+
       setState(() {
         _paymentPlans = List<Map<String, dynamic>>.from(plansResponse);
         _payments = uniquePayments;
+        _paidAmount = paidAmount;
+        _totalAmount = totalAmount;
+        _paidPayments = paidPayments;
+        _totalPayments = totalPayments;
         _isLoading = false;
       });
     } catch (e) {
@@ -4573,12 +4584,11 @@ class _StudentPaymentDetailDialogState
   }
 
   Widget _buildHeader() {
-    final s = widget.student;
-    final progress = s.progressPercent;
+    final progress = _totalAmount > 0 ? (_paidAmount / _totalAmount) * 100 : 0.0;
     final isComplete = progress >= 100;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
+      padding: const EdgeInsets.fromLTRB(24, 20, 16, 32),
       child: Row(
         children: [
           UserAvatar(
@@ -4619,12 +4629,12 @@ class _StudentPaymentDetailDialogState
           ),
           // Summary pills inline
           _headerPill(
-            '${s.paidAmount.toStringAsFixed(0)} TND',
-            'payé sur ${s.totalAmount.toStringAsFixed(0)}',
+            '${_paidAmount.toStringAsFixed(0)} TND',
+            'payé sur ${_totalAmount.toStringAsFixed(0)}',
           ),
           const SizedBox(width: 6),
           _headerPill(
-            '${s.paidPayments}/${s.totalPayments}',
+            '$_paidPayments/$_totalPayments',
             'paiements',
           ),
           const SizedBox(width: 6),
