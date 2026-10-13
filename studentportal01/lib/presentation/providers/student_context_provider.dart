@@ -42,47 +42,74 @@ final _semestersRefreshProvider = StreamProvider<int>((ref) {
 
 final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
   final context = await ref.watch(studentContextProvider.future);
-  if (context?.academicYearId == null) return [];
-  
   final service = ref.watch(coreDataServiceProvider);
-  final semesters = await service.getSemestersForAcademicYear(context!.academicYearId!);
-  
-  // Debug logging
-  // ignore: avoid_print
-  print('semestersProvider: Fetched ${semesters.length} semesters for year ${context.academicYearId}');
-  for (final s in semesters) {
-    // ignore: avoid_print
-    print('  - ${s.name} (#${s.number}) isCurrent=${s.isCurrent}');
+  final supabase = Supabase.instance.client;
+
+  final schoolId = context?.schoolId;
+  String? activeYearId;
+
+  // 1. Always check for active academic_year (is_current = true)
+  try {
+    var query = supabase
+        .from('academic_years')
+        .select('id')
+        .eq('is_current', true);
+    if (schoolId != null && schoolId.isNotEmpty) {
+      query = query.eq('school_id', schoolId);
+    }
+    final activeYearResp = await query.maybeSingle();
+    if (activeYearResp != null) {
+      activeYearId = activeYearResp['id'] as String?;
+    }
+  } catch (_) {}
+
+  final targetYearId = activeYearId ?? context?.academicYearId;
+
+  // 2. Fetch semesters for the target academic year
+  if (targetYearId != null && targetYearId.isNotEmpty) {
+    final semesters =
+        await service.getSemestersForAcademicYear(targetYearId);
+    if (semesters.isNotEmpty) {
+      return semesters;
+    }
   }
-  
-  return semesters;
+
+  // 3. Fallback: Query all semesters for schoolId or generally
+  try {
+    var semQuery = supabase
+        .from('semesters')
+        .select('id, name, number, is_current, start_date, end_date');
+    if (schoolId != null && schoolId.isNotEmpty) {
+      semQuery = semQuery.eq('school_id', schoolId);
+    }
+    final semestersResp = await semQuery.order('number');
+    if (semestersResp != null && (semestersResp as List).isNotEmpty) {
+      return (semestersResp as List)
+          .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+  } catch (_) {}
+
+  // 4. Default fallback
+  return [
+    SemesterInfo(id: '1', name: 'Semestre 1', number: 1, isCurrent: true),
+  ];
 });
 
 // Selected semester state (by number, not hardcoded)
 final selectedSemesterNumberProvider = StateProvider<int>((ref) => 1);
 
-// Selected semester info (resolved from semesters list)
+// Selected semester info (resolved from semesters list without side-effects)
 final selectedSemesterProvider = Provider<SemesterInfo?>((ref) {
   final semesters = ref.watch(semestersProvider).valueOrNull ?? [];
   final selectedNumber = ref.watch(selectedSemesterNumberProvider);
   
   if (semesters.isEmpty) return null;
 
-  try {
-    final current = semesters.firstWhere((s) => s.isCurrent);
-    if (current.number != selectedNumber) {
-      ref.read(selectedSemesterNumberProvider.notifier).state = current.number;
-    }
-    return current;
-  } catch (_) {
-    // No flagged current semester; fall back to selected number or first.
-  }
+  final matched = semesters.where((s) => s.number == selectedNumber).firstOrNull;
+  if (matched != null) return matched;
 
-  try {
-    return semesters.firstWhere((s) => s.number == selectedNumber);
-  } catch (_) {
-    return semesters.isNotEmpty ? semesters.first : null;
-  }
+  return semesters.where((s) => s.isCurrent).firstOrNull ?? semesters.first;
 });
 
 // ============================================================

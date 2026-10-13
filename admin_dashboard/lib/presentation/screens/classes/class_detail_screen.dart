@@ -11,6 +11,7 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 
 const _brand = Color(0xFF655DD5);
 const _brandLight = Color(0xFFEEECFB);
@@ -213,7 +214,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           const AdminSidebar(currentRoute: '/classes'),
           Expanded(
             child: dataAsync.when(
-              loading: () => const Center(child: IosLoader(color: _brand)),
+              loading: () => const ClassDetailSkeletonLoader(),
               error: (e, _) => _buildErrorState(e),
               data: (data) => _buildContent(context, data),
             ),

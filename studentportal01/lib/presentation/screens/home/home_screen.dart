@@ -14,6 +14,7 @@ import '../../providers/suggestions_provider.dart';
 import '../../providers/school_provider.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/student_card.dart';
+import '../../widgets/student_card_skeleton.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -25,8 +26,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
+  bool _isDrawerOpen = false;
   late AnimationController _expandCtrl;
   late Animation<double> _expandAnim;
+  late ScrollController _scrollController;
   Offset _expandDragOffset = Offset.zero;
   Rect? _cardRect;
   final GlobalKey _cardKey = GlobalKey();
@@ -34,6 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _expandCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -48,6 +52,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void dispose() {
     ref.read(navBarHiddenProvider.notifier).state = false;
+    _scrollController.dispose();
     _expandCtrl.dispose();
     super.dispose();
   }
@@ -90,15 +95,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       extendBody: true,
+      drawerScrimColor: Colors.black.withOpacity(0.25),
       drawer: _buildDrawer(context, l10n, ref),
       onDrawerChanged: (isOpen) {
+        if (_isDrawerOpen != isOpen) {
+          setState(() {
+            _isDrawerOpen = isOpen;
+          });
+        }
         ref.read(navBarHiddenProvider.notifier).state = isOpen;
       },
       body: LayoutBuilder(
         builder: (context, constraints) {
           final screenHeight = constraints.maxHeight;
-          return Stack(
+          final screenWidth = constraints.maxWidth;
+          final safeTop = MediaQuery.of(context).padding.top;
+
+          // Calculate student card dimensions to obtain precise layout heights
+          final baseCardWidth =
+              (screenWidth - 48).clamp(1.0, 720.0).toDouble();
+          final baseCardHeight = baseCardWidth * (480 / 720);
+
+          // Menu button vertical offset: 24 (top) + 48 (icon height) + 32 (spacing)
+          final cardTopPosition = safeTop + 104;
+          final cardAreaHeight = baseCardHeight + 24;
+
+          final bodyStack = Stack(
             children: [
+              // 1. Background Gradient
               Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -115,6 +139,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
               ),
+
+              // 2. Ambient Blurred Orb
               Positioned(
                 top: -60,
                 right: -60,
@@ -136,6 +162,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
               ),
+
+              // 3. Receding Payment Card Layer (Behind scrolling content)
+              Positioned(
+                top: cardTopPosition,
+                left: 0,
+                right: 0,
+                child: AnimatedBuilder(
+                  animation: _scrollController,
+                  builder: (context, child) {
+                    final double rawOffset = _scrollController.hasClients
+                        ? _scrollController.offset
+                        : 0.0;
+
+                    final double maxExtent =
+                        (baseCardHeight + 50.0).clamp(240.0, 360.0);
+                    final double overscroll =
+                        rawOffset < 0 ? -rawOffset : 0.0;
+                    final double progress =
+                        (rawOffset / maxExtent).clamp(0.0, 1.0);
+
+                    // 3.1 Scale: shrinks smoothly down to 0.84 or expands on overscroll
+                    final double scale = rawOffset < 0
+                        ? (1.0 + (overscroll / 650.0)).clamp(1.0, 1.15)
+                        : (1.0 - (0.16 * progress));
+
+                    // 3.2 Opacity: stays highly visible through middle of scroll, fading to 0.0 only when fully covered
+                    final double opacity = rawOffset < 0
+                        ? 1.0
+                        : (1.0 - math.pow(progress, 2.5)).clamp(0.0, 1.0).toDouble();
+
+                    // 3.3 Blur: gradually blurs up to 8.0 sigma as card recedes
+                    final double blurSigma =
+                        (8.0 * math.pow(progress, 1.8)).clamp(0.0, 8.0).toDouble();
+
+                    // 3.4 Parallax translation: moves deeper into background space
+                    final double translateY =
+                        rawOffset < 0 ? 0.0 : -rawOffset * 0.30;
+
+                    // 3.5 3D Tilt perspective: thrown backward top-first
+                    final double rotateX =
+                        rawOffset < 0 ? 0.0 : -0.12 * progress;
+
+                    Widget cardContent = child!;
+
+                    if (blurSigma > 0.3) {
+                      cardContent = ImageFiltered(
+                        imageFilter: ImageFilter.blur(
+                          sigmaX: blurSigma,
+                          sigmaY: blurSigma,
+                        ),
+                        child: cardContent,
+                      );
+                    }
+
+                    return Transform(
+                      alignment: Alignment.topCenter,
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, 0.0012)
+                        ..translate(0.0, translateY, 0.0)
+                        ..scale(scale, scale, 1.0)
+                        ..rotateX(rotateX),
+                      child: Opacity(
+                        opacity: opacity,
+                        child: cardContent,
+                      ),
+                    );
+                  },
+                  child: _buildHeader(
+                    context,
+                    ref,
+                    user,
+                    enrollment,
+                  ),
+                ),
+              ),
+
+              // 4. Scrollable Foreground Layer (Feature Cards section sliding OVER payment card)
               ScrollConfiguration(
                 behavior: ScrollConfiguration.of(
                   context,
@@ -144,8 +247,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   onRefresh: () async {
                     await ref.read(authProvider.notifier).refreshUserData();
                   },
-                  color: const Color(0xFF6366F1),
+                  color: const Color(0xFFFF2D78),
                   child: SingleChildScrollView(
+                    controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
@@ -153,70 +257,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       constraints: BoxConstraints(minHeight: screenHeight),
                       child: Column(
                         children: [
-                          SafeArea(
-                            bottom: false,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const SizedBox(height: 24),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () =>
-                                            Scaffold.of(context).openDrawer(),
-                                        child: Container(
-                                          width: 48,
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: const LinearGradient(
-                                              colors: [
-                                                Color(0xFFFF2D78),
-                                                Color(0xFFFF5CA0),
-                                              ],
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: const Color(
-                                                  0xFFFF2D78,
-                                                ).withValues(alpha: 0.3),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
-                                          ),
-                                          child: const Icon(
-                                            Icons.menu_rounded,
-                                            color: Colors.white,
-                                            size: 26,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 32),
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: _buildHeader(
-                                    context,
-                                    ref,
-                                    user,
-                                    enrollment,
-                                  ),
-                                ),
-                              ],
+                          SizedBox(height: cardTopPosition),
+
+                          // Transparent tap target area for the card to restore full screen expansion tap
+                          GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTap: _expandCard,
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: cardAreaHeight,
                             ),
                           ),
-                          const SizedBox(height: 20),
 
-                          // Frosted glass content area with rounded top
+                          // Frosted glass content area sliding over payment card
                           ClipRRect(
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(40),
@@ -225,27 +278,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             child: Container(
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.15),
+                                color: Colors.white.withValues(alpha: 0.15),
                                 borderRadius: const BorderRadius.only(
                                   topLeft: Radius.circular(40),
                                   topRight: Radius.circular(40),
                                 ),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.1),
+                                  color: Colors.white.withValues(alpha: 0.1),
                                   width: 0.5,
                                 ),
                               ),
                               child: Column(
                                 children: [
+                                  const SizedBox(height: 24),
                                   // Grid Section
                                   Transform.translate(
                                     offset: const Offset(0, -2),
                                     child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        24,
-                                        0,
-                                        24,
-                                        0,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 24,
                                       ),
                                       child: GridView.count(
                                         shrinkWrap: true,
@@ -274,6 +325,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
               ),
+
+              // 5. Pinned Menu Button Row (Top Layer)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        GestureDetector(
+                          onTap: () => Scaffold.of(context).openDrawer(),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFFFF2D78),
+                                  Color(0xFFFF5CA0),
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFFFF2D78,
+                                  ).withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.menu_rounded,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
               if (_expanded && user != null)
                 _ExpandedStudentCard(
                   listenable: _expandAnim,
@@ -294,6 +394,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
             ],
           );
+
+          if (_isDrawerOpen) {
+            return ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: bodyStack,
+            );
+          }
+          return bodyStack;
         },
       ),
     );
@@ -305,12 +413,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     dynamic user,
     dynamic enrollment,
   ) {
+    final authState = ref.watch(authProvider);
     final schoolAsync = ref.watch(schoolProvider);
     final userModel = user as UserModel?;
     final enrollmentModel = enrollment as EnrollmentModel?;
 
-    if (userModel == null) {
-      return const SizedBox.shrink();
+    if (authState.isLoading || userModel == null) {
+      return const StudentCardSkeleton();
     }
 
     return schoolAsync.when(
@@ -355,7 +464,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _CardData(
         icon: Icons.lightbulb_rounded,
         label: l10n.suggestions,
-        subtitle: 'Partagez vos suggestions',
+        subtitle: l10n.homeSubtitleSuggestions,
         route: '/suggestions',
         gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
         iconAlignment: Alignment.topLeft,
@@ -364,7 +473,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _CardData(
         icon: Icons.event_busy_rounded,
         label: l10n.absences,
-        subtitle: 'Consultez vos absences',
+        subtitle: l10n.homeSubtitleAbsences,
         route: '/absences',
         gradientColors: const [Color(0xFFEC4899), Color(0xFFF43F5E)],
         iconAlignment: Alignment.topLeft,
@@ -372,7 +481,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _CardData(
         icon: Icons.bar_chart_rounded,
         label: l10n.resultats,
-        subtitle: 'Vérifiez vos résultats',
+        subtitle: l10n.homeSubtitleResults,
         route: '/resultats',
         gradientColors: const [Color(0xFF06B6D4), Color(0xFF3B82F6)],
         iconAlignment: Alignment.topLeft,
@@ -380,7 +489,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _CardData(
         icon: Icons.calendar_month_rounded,
         label: l10n.emploi,
-        subtitle: 'Votre emploi du temps',
+        subtitle: l10n.homeSubtitleTimetable,
         route: '/emploi',
         gradientColors: const [Color(0xFF10B981), Color(0xFF14B8A6)],
         iconAlignment: Alignment.topLeft,
@@ -388,7 +497,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _CardData(
         icon: Icons.payment_rounded,
         label: l10n.monSolde,
-        subtitle: 'Gérez vos paiements',
+        subtitle: l10n.homeSubtitleSolde,
         route: '/mon-solde',
         gradientColors: const [Color(0xFFF59E0B), Color(0xFFF97316)],
         iconAlignment: Alignment.topLeft,
@@ -396,7 +505,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _CardData(
         icon: Icons.folder_rounded,
         label: l10n.documents,
-        subtitle: 'Accédez aux documents',
+        subtitle: l10n.homeSubtitleDocuments,
         route: '/documents',
         gradientColors: const [Color(0xFF7C3AED), Color(0xFF8B5CF6)],
         iconAlignment: Alignment.topLeft,
@@ -444,9 +553,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   const SizedBox(height: 24),
                   _DrawerItem(
                     icon: Icons.person_rounded,
-                    label: 'Mon Profil',
+                    label: l10n.monProfil,
                     onTap: () {
-                      Navigator.pop(context);
                       context.push('/profile');
                     },
                   ),
@@ -455,7 +563,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     icon: Icons.settings_rounded,
                     label: l10n.settings,
                     onTap: () {
-                      Navigator.pop(context);
                       context.push('/settings');
                     },
                   ),
@@ -463,7 +570,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     icon: Icons.contact_support_rounded,
                     label: l10n.contactUs,
                     onTap: () {
-                      Navigator.pop(context);
                       context.push('/contact');
                     },
                   ),
@@ -471,7 +577,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     icon: Icons.info_rounded,
                     label: l10n.about,
                     onTap: () {
-                      Navigator.pop(context);
                       context.push('/about');
                     },
                   ),
@@ -522,7 +627,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 60),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -544,10 +649,11 @@ class _DrawerItem extends StatelessWidget {
     required this.onTap,
   });
 
-  @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Container(
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        leading: Container(
         width: 44,
         height: 44,
         decoration: BoxDecoration(
@@ -565,6 +671,7 @@ class _DrawerItem extends StatelessWidget {
         ),
       ),
       onTap: onTap,
+      ),
     );
   }
 }

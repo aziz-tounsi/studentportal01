@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui';
 
@@ -7,9 +8,10 @@ import '../../../data/models/grade_model.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/resultats_skeleton.dart';
 
 // Import providers from the original file
-import 'resultats_screen.dart' show gradesProvider, resultatsSemesterProvider;
+import 'resultats_screen.dart' show gradesProvider, resultatsSemesterProvider, resultatsRefreshingProvider;
 
 /// Premium Redesigned Results Screen - iOS 26 Style with Navbar
 class ResultatsScreenV2 extends ConsumerStatefulWidget {
@@ -73,6 +75,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     final l10n = AppLocalizations.of(context);
     final selectedSemester = ref.watch(resultatsSemesterProvider);
     final gradesAsync = ref.watch(gradesProvider(selectedSemester));
+    final isRefreshing = ref.watch(resultatsRefreshingProvider);
 
     return Material(
       type: MaterialType.transparency,
@@ -93,8 +96,20 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
         ),
         child: SafeArea(
           bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+          child: RefreshIndicator(
+            color: const Color(0xFFFF2D78),
+            onRefresh: () async {
+              ref.read(resultatsRefreshingProvider.notifier).state = true;
+              try {
+                await ref.refresh(gradesProvider(selectedSemester).future);
+              } finally {
+                ref.read(resultatsRefreshingProvider.notifier).state = false;
+              }
+            },
+            child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             slivers: [
               // Header with animated search
               SliverToBoxAdapter(
@@ -119,12 +134,13 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
               // Content
+              if (isRefreshing)
+                const ResultatsCardsSkeleton()
+              else
               gradesAsync.when(
                 data: (grades) =>
                     _buildContent(context, grades, selectedSemester, l10n),
-                loading: () => const SliverFillRemaining(
-                  child: Center(child: IosLoader(color: Color(0xFF06B6D4))),
-                ),
+                loading: () => const ResultatsCardsSkeleton(),
                 error: (error, stack) => SliverFillRemaining(
                   child: Center(
                     child: Column(
@@ -143,6 +159,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),
@@ -212,9 +229,9 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                               ),
                             ),
                             const SizedBox(height: 2),
-                            const Text(
-                              'Suivi de vos notes',
-                              style: TextStyle(
+                            Text(
+                              l10n.resultsSubtitle,
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: Color(0xFF1F2937),
@@ -320,7 +337,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
-                                    hintText: 'Rechercher une matière...',
+                                    hintText: AppLocalizations.of(context).search,
                                     hintStyle: TextStyle(
                                       color: Colors.grey[400],
                                       fontSize: 15,
@@ -411,7 +428,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
 
           // Section title
           Text(
-            'Détails par matière',
+            l10n.translate('details_par_matiere'),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -485,6 +502,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     BuildContext context,
     List<SubjectGradesSummary> grades,
   ) {
+    final l10n = AppLocalizations.of(context);
     final completedCount = grades.where((g) => g.average != null).length;
     final totalCount = grades.length;
     final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
@@ -520,7 +538,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Progression Semestre',
+                            l10n.translate('progression_semestre'),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -563,7 +581,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Matières complètes',
+                                l10n.translate('matieres_completes'),
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontStyle: FontStyle.italic,
@@ -793,12 +811,18 @@ class _TrimesterTab extends StatelessWidget {
           child: AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-              color: isSelected ? selectedTextColor : Colors.grey.shade600,
-              letterSpacing: -0.2,
-            ),
+            style: Localizations.localeOf(context).languageCode == 'ar'
+                ? GoogleFonts.cairo(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: isSelected ? selectedTextColor : Colors.grey.shade600,
+                  )
+                : TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isSelected ? selectedTextColor : Colors.grey.shade600,
+                    letterSpacing: -0.2,
+                  ),
             child: Text(label),
           ),
         ),
@@ -989,6 +1013,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final hasAverage = widget.subject.average != null;
     final grade = widget.subject.average ?? 0;
     final gradeColor = !hasAverage
@@ -1106,7 +1131,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    'Coef. ${widget.subject.coefficient.toStringAsFixed(0)}',
+                                    '${l10n.coeffLabel} ${widget.subject.coefficient.toStringAsFixed(0)}',
                                     style: const TextStyle(
                                       fontSize: 11,
                                       color: Color(0xFF0066FF),
@@ -1198,6 +1223,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
   }
 
   Widget _buildExpandedContent(Color gradeColor) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       child: Column(
@@ -1275,7 +1301,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          component.componentName,
+                          l10n.formatGradeComponentName(component.componentName),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -1283,7 +1309,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                           ),
                         ),
                         Text(
-                          'Poids: ${component.weightPercent.toStringAsFixed(0)}%',
+                          '${l10n.translate('weight_label')}: ${component.weightPercent.toStringAsFixed(0)}%',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade500,
@@ -1317,7 +1343,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        'À venir',
+                        l10n.translate('badge_upcoming'),
                         style: TextStyle(
                           fontSize: 10,
                           color: Colors.grey.shade500,

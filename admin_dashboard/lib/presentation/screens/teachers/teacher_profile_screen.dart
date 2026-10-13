@@ -8,6 +8,7 @@ import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 
 const _brand = Color(0xFF655DD5);
@@ -157,7 +158,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         const AdminSidebar(currentRoute: '/users'),
         Expanded(
           child: _loading
-              ? const Center(child: IosLoader(color: _brand))
+              ? const TeacherProfileSkeletonLoader()
               : _user == null
                   ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [

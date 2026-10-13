@@ -5,6 +5,7 @@ import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
 import '../../../core/config/supabase_config.dart';
@@ -242,14 +243,19 @@ final classSubjectOfferingsProvider =
               (c['weekly_hours'] as num?)?.toDouble() ?? 0;
         }
 
-        // Don't filter by semester - show all offerings for the class
-        final data = await supabase
+        var offeringsQuery = supabase
             .from('subject_offerings')
             .select(
               'id, subject_id, teacher_id, subjects(name, code), users(full_name)',
             )
             .eq('class_id', classId)
             .eq('is_active', true);
+
+        if (semesterId != null) {
+          offeringsQuery = offeringsQuery.eq('semester_id', semesterId);
+        }
+
+        final data = await offeringsQuery;
 
         return (data as List).map((e) {
           final subjectId = e['subject_id']?.toString() ?? '';
@@ -298,11 +304,17 @@ final classSubjectOfferingsProvider =
                 (c['weekly_hours'] as num?)?.toDouble() ?? 0;
           }
 
-          final offerings = await supabase
+          var fallbackOfferingsQuery = supabase
               .from('subject_offerings')
               .select('id, subject_id, teacher_id')
               .eq('class_id', classId)
               .eq('is_active', true);
+
+          if (semesterId != null) {
+            fallbackOfferingsQuery = fallbackOfferingsQuery.eq('semester_id', semesterId);
+          }
+
+          final offerings = await fallbackOfferingsQuery;
 
           if ((offerings as List).isEmpty) return [];
 
@@ -374,11 +386,17 @@ final classTimetableSlotsProvider =
       final examPeriodId = ref.watch(selectedExamPeriodFilterProvider);
 
       try {
-        // Get all subject_offerings for this class first (no semester filter to be safe)
-        final offeringsResp = await supabase
+        // Query subject_offerings for this class, filtered by the effective semester
+        var offeringsQuery = supabase
             .from('subject_offerings')
             .select('id, subject_id, teacher_id, subjects(name, code)')
             .eq('class_id', classId);
+
+        if (semesterId != null) {
+          offeringsQuery = offeringsQuery.eq('semester_id', semesterId);
+        }
+
+        final offeringsResp = await offeringsQuery;
 
         final offerings = offeringsResp as List;
         if (offerings.isEmpty) return [];
@@ -665,12 +683,83 @@ final selectedDayFilterProvider = StateProvider<int?>(
 ); // 1-6 for Mon-Sat
 final selectedSubjectFilterProvider = StateProvider<String?>((ref) => null);
 
-// Global current semester — reads from the Semestres page (is_current)
-final currentSemesterIdProvider = Provider<String?>((ref) {
+// Selected semester view/target filter for timetable:
+// null = default to current active semester
+// <id> = selected semester
+final selectedSemesterOverrideProvider = StateProvider<String?>((ref) => null);
+
+// Current active semester ID (from semesters where is_current == true or date range fallback)
+final currentActiveSemesterIdProvider = Provider<String?>((ref) {
   final semestersAsync = ref.watch(semestersProvider);
   return semestersAsync.whenOrNull(
-    data: (state) => state.current?.id,
+    data: (state) {
+      if (state.current != null) return state.current!.id;
+      final list = state.filteredSemesters.isNotEmpty
+          ? state.filteredSemesters
+          : state.semesters;
+      final now = DateTime.now();
+      final byDate = list.firstWhereOrNull(
+        (s) => !now.isBefore(s.startDate) && !now.isAfter(s.endDate),
+      );
+      if (byDate != null) return byDate.id;
+      final currentFlag = list.firstWhereOrNull((s) => s.isCurrent);
+      if (currentFlag != null) return currentFlag.id;
+      return list.isNotEmpty ? list.first.id : null;
+    },
   );
+});
+
+// Effective Semester ID selected for timetable grid and slot actions
+final effectiveSemesterIdProvider = Provider<String?>((ref) {
+  final override = ref.watch(selectedSemesterOverrideProvider);
+  if (override != null) return override;
+  return ref.watch(currentActiveSemesterIdProvider);
+});
+
+// Alias for backwards compatibility
+final currentSemesterIdProvider = effectiveSemesterIdProvider;
+
+enum TimetableSemesterStatus { past, current, future }
+
+// Status of the selected semester
+final selectedSemesterStatusProvider = Provider<TimetableSemesterStatus>((ref) {
+  final effectiveId = ref.watch(effectiveSemesterIdProvider);
+  final activeId = ref.watch(currentActiveSemesterIdProvider);
+  final semestersAsync = ref.watch(semestersProvider);
+
+  if (effectiveId == null || activeId == null) {
+    return TimetableSemesterStatus.current;
+  }
+  if (effectiveId == activeId) {
+    return TimetableSemesterStatus.current;
+  }
+
+  final semestersState = semestersAsync.asData?.value;
+  if (semestersState == null) return TimetableSemesterStatus.current;
+
+  final allSemesters = semestersState.filteredSemesters.isNotEmpty
+      ? semestersState.filteredSemesters
+      : semestersState.semesters;
+
+  final currentSem = allSemesters.firstWhereOrNull((s) => s.id == activeId || s.isCurrent);
+  final selectedSem = allSemesters.firstWhereOrNull((s) => s.id == effectiveId);
+
+  if (currentSem == null || selectedSem == null) {
+    return TimetableSemesterStatus.current;
+  }
+
+  if (selectedSem.number < currentSem.number) {
+    return TimetableSemesterStatus.past;
+  } else if (selectedSem.number > currentSem.number) {
+    return TimetableSemesterStatus.future;
+  }
+  return TimetableSemesterStatus.current;
+});
+
+// Editable if status is current or future (past semester is read-only)
+final isSemesterEditableProvider = Provider<bool>((ref) {
+  final status = ref.watch(selectedSemesterStatusProvider);
+  return status != TimetableSemesterStatus.past;
 });
 
 // Exam periods from semestersProvider
@@ -1739,6 +1828,8 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     final examPeriods = ref.watch(examPeriodsListProvider);
     final currentTimetableType = ref.watch(timetableTypeFilterProvider);
     final selectedExamPeriodId = ref.watch(selectedExamPeriodFilterProvider);
+    final isEditable = ref.watch(isSemesterEditableProvider);
+    final semesterStatus = ref.watch(selectedSemesterStatusProvider);
 
     return Container(
       decoration: BoxDecoration(
@@ -1857,6 +1948,118 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                           ],
                         ),
                       ),
+                      // Semester selector dropdown
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final semestersAsync = ref.watch(semestersProvider);
+                          final activeSemesterId = ref.watch(currentActiveSemesterIdProvider);
+                          final currentSelectedId = ref.watch(effectiveSemesterIdProvider);
+
+                          return semestersAsync.when(
+                            data: (semestersState) {
+                              final rawSemesters = semestersState.filteredSemesters.isNotEmpty
+                                  ? semestersState.filteredSemesters
+                                  : semestersState.semesters;
+
+                              if (rawSemesters.isEmpty) return const SizedBox.shrink();
+
+                              final Map<String, SemesterModel> uniqueMap = {};
+                              for (final sem in rawSemesters) {
+                                uniqueMap[sem.id] = sem;
+                              }
+                              final semesters = uniqueMap.values.toList()
+                                ..sort((a, b) => a.number.compareTo(b.number));
+
+                              String? effectiveSelectedId;
+                              if (currentSelectedId != null && uniqueMap.containsKey(currentSelectedId)) {
+                                effectiveSelectedId = currentSelectedId;
+                              } else if (activeSemesterId != null && uniqueMap.containsKey(activeSemesterId)) {
+                                effectiveSelectedId = activeSemesterId;
+                              } else if (semesters.isNotEmpty) {
+                                effectiveSelectedId = semesters.first.id;
+                              }
+
+                              final periodLabel = semestersState.periodLabel;
+
+                              return Container(
+                                height: 38,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.slate100,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: AppColors.borderLight),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String?>(
+                                    value: effectiveSelectedId,
+                                    borderRadius: BorderRadius.circular(16),
+                                    dropdownColor: Colors.white,
+                                    elevation: 6,
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      color: Color(0xFF8B5CF6),
+                                      size: 18,
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                    items: semesters.map((sem) {
+                                      final now = DateTime.now();
+                                      final isSemCurrent = sem.id == activeSemesterId ||
+                                          sem.isCurrent ||
+                                          (!now.isBefore(sem.startDate) && !now.isAfter(sem.endDate));
+
+                                      return DropdownMenuItem<String?>(
+                                        value: sem.id,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              sem.name.isNotEmpty
+                                                  ? sem.name
+                                                  : '$periodLabel ${sem.number}',
+                                              style: TextStyle(
+                                                fontWeight: isSemCurrent ? FontWeight.bold : FontWeight.w500,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                            ),
+                                            if (isSemCurrent) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF3F0FF),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: const Text(
+                                                  'En cours',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF6D4CF6),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      ref.read(selectedSemesterOverrideProvider.notifier).state = val;
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          );
+                        },
+                      ),
                       // Timetable type toggle
                       Container(
                         decoration: BoxDecoration(
@@ -1946,16 +2149,24 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                       const SizedBox(width: 8),
                       // Bulk upload button (icon only)
                       Tooltip(
-                        message: 'Import CSV',
+                        message: !isEditable
+                            ? 'Ce semestre archivé est en lecture seule'
+                            : 'Import CSV',
                         child: Material(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.10),
+                          color: !isEditable
+                              ? AppColors.slate300.withOpacity(0.12)
+                              : const Color(0xFF8B5CF6).withOpacity(0.10),
                           borderRadius: BorderRadius.circular(10),
                           child: InkWell(
-                            onTap: () => _showBulkUploadDialog(selectedClass, offerings),
+                            onTap: !isEditable ? null : () => _showBulkUploadDialog(selectedClass, offerings),
                             borderRadius: BorderRadius.circular(10),
-                            child: const SizedBox(
+                            child: SizedBox(
                               width: 36, height: 36,
-                              child: Icon(Icons.upload_file, size: 18, color: Color(0xFF8B5CF6)),
+                              child: Icon(
+                                Icons.upload_file,
+                                size: 18,
+                                color: !isEditable ? AppColors.textSecondary : const Color(0xFF8B5CF6),
+                              ),
                             ),
                           ),
                         ),
@@ -1963,16 +2174,24 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                       const SizedBox(width: 6),
                       // Delete all button (icon only)
                       Tooltip(
-                        message: 'Supprimer tout',
+                        message: !isEditable
+                            ? 'Ce semestre archivé est en lecture seule'
+                            : 'Supprimer tout',
                         child: Material(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.10),
+                          color: !isEditable
+                              ? AppColors.slate300.withOpacity(0.12)
+                              : const Color(0xFF8B5CF6).withOpacity(0.10),
                           borderRadius: BorderRadius.circular(10),
                           child: InkWell(
-                            onTap: () => _showDeleteAllDialog(selectedClass),
+                            onTap: !isEditable ? null : () => _showDeleteAllDialog(selectedClass),
                             borderRadius: BorderRadius.circular(10),
-                            child: const SizedBox(
+                            child: SizedBox(
                               width: 36, height: 36,
-                              child: Icon(Icons.delete_sweep, size: 18, color: Color(0xFF8B5CF6)),
+                              child: Icon(
+                                Icons.delete_sweep,
+                                size: 18,
+                                color: !isEditable ? AppColors.textSecondary : const Color(0xFF8B5CF6),
+                              ),
                             ),
                           ),
                         ),
@@ -1980,23 +2199,29 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                       const SizedBox(width: 6),
                       // Add course button (icon only)
                       Tooltip(
-                        message: offerings.isEmpty
-                            ? 'Aucune matière configurée pour cette classe'
-                            : 'Ajouter un nouveau cours',
+                        message: !isEditable
+                            ? 'Ce semestre archivé est en lecture seule'
+                            : offerings.isEmpty
+                                ? 'Aucune matière configurée pour cette classe'
+                                : 'Ajouter un nouveau cours',
                         child: Material(
-                          color: offerings.isEmpty
+                          color: (!isEditable || offerings.isEmpty)
                               ? AppColors.slate300.withOpacity(0.12)
                               : const Color(0xFF8B5CF6).withOpacity(0.10),
                           borderRadius: BorderRadius.circular(10),
                           child: InkWell(
-                            onTap: offerings.isEmpty ? null : () => _showAddSlotDialog(selectedClass, offerings),
+                            onTap: (!isEditable || offerings.isEmpty)
+                                ? null
+                                : () => _showAddSlotDialog(selectedClass, offerings),
                             borderRadius: BorderRadius.circular(10),
                             child: SizedBox(
                               width: 36, height: 36,
                               child: Icon(
                                 Icons.add,
                                 size: 18,
-                                color: offerings.isEmpty ? AppColors.textSecondary : const Color(0xFF8B5CF6),
+                                color: (!isEditable || offerings.isEmpty)
+                                    ? AppColors.textSecondary
+                                    : const Color(0xFF8B5CF6),
                               ),
                             ),
                           ),
@@ -2171,6 +2396,12 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
               ),
             ),
             const Divider(height: 1),
+            if (semesterStatus == TimetableSemesterStatus.past)
+              _buildPastSemesterBanner(
+                ref: ref,
+                selectedClass: selectedClass,
+                semesterState: semesterState,
+              ),
             // Timetable grid
             Expanded(
               child: allSlotsAsync.when(
@@ -2185,6 +2416,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                     selectedClass,
                     offerings,
                     highlightSlots: hasFilters ? filteredSlots : null,
+                    isEditable: isEditable,
                   );
                 },
               ),
@@ -2231,11 +2463,84 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     );
   }
 
+  Widget _buildPastSemesterBanner({
+    required WidgetRef ref,
+    required ClassInfo selectedClass,
+    required SemestersState? semesterState,
+  }) {
+    final activeId = ref.watch(currentActiveSemesterIdProvider);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border(
+          bottom: BorderSide(color: AppColors.slate200, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.archive_outlined,
+              size: 18,
+              color: Color(0xFF475569),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  'Semestre archivé (Mode consultation uniquement)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Cet emploi du temps appartient à un semestre passé. Il est consultable mais non modifiable.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (activeId != null)
+            TextButton.icon(
+              onPressed: () {
+                ref.read(selectedSemesterOverrideProvider.notifier).state = activeId;
+              },
+              icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+              label: const Text('Revenir au semestre actuel'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF8B5CF6),
+                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGrid(
     List<TimetableSlotAdmin> slots,
     ClassInfo selectedClass,
     List<SubjectOfferingInfo> offerings, {
     List<TimetableSlotAdmin>? highlightSlots,
+    bool isEditable = true,
   }) {
     // Proportional grid: Days as ROWS, Time positioned proportionally
     const dayColumnWidth = 55.0;
@@ -2399,29 +2704,30 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                               color: gridLineColor,
                                             ),
                                           ),
-                                        // Click areas for adding slots (between hours)
-                                        for (
-                                          int i = 0;
-                                          i < _gridHourLabels.length - 1;
-                                          i++
-                                        )
-                                          Positioned(
-                                            left:
-                                                (i / (_gridHourLabels.length - 1)) *
-                                                timelineWidth,
-                                            top: 0,
-                                            width:
-                                                timelineWidth /
-                                                (_gridHourLabels.length - 1),
-                                            height: cellHeight,
-                                            child: _buildEmptySlotArea(
-                                              selectedClass,
-                                              offerings,
-                                              dayNum,
-                                              _gridHourLabels[i],
-                                              daySlots,
+                                        // Click areas for adding slots (between hours) - only when editable
+                                        if (isEditable)
+                                          for (
+                                            int i = 0;
+                                            i < _gridHourLabels.length - 1;
+                                            i++
+                                          )
+                                            Positioned(
+                                              left:
+                                                  (i / (_gridHourLabels.length - 1)) *
+                                                  timelineWidth,
+                                              top: 0,
+                                              width:
+                                                  timelineWidth /
+                                                  (_gridHourLabels.length - 1),
+                                              height: cellHeight,
+                                              child: _buildEmptySlotArea(
+                                                selectedClass,
+                                                offerings,
+                                                dayNum,
+                                                _gridHourLabels[i],
+                                                daySlots,
+                                              ),
                                             ),
-                                          ),
                                         // Slots - proportionally positioned
                                         for (final slot in daySlots)
                                           _buildProportionalSlot(
@@ -2430,6 +2736,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                             rowHeight: cellHeight,
                                             dayStartMinutes: dayStartMinutes,
                                             totalMinutes: totalMinutes,
+                                            isEditable: isEditable,
                                           ),
                                       ],
                                     ),
@@ -2500,6 +2807,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     required double rowHeight,
     required int dayStartMinutes,
     required int totalMinutes,
+    bool isEditable = true,
   }) {
     final startMinutes = _timeToMinutes(slot.startTime);
     final endMinutes = _timeToMinutes(slot.endTime);
@@ -2529,7 +2837,11 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       width: slotWidth,
       height: rowHeight - 6,
       child: GestureDetector(
-        onTapDown: (details) => _showSlotOptions(slot, details.globalPosition),
+        onTapDown: (details) => _showSlotOptions(
+          slot,
+          details.globalPosition,
+          isEditable: isEditable,
+        ),
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -2672,29 +2984,28 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     return hours * 60 + minutes;
   }
 
-  void _showSlotOptions(TimetableSlotAdmin slot, Offset tapPosition) {
+  void _showSlotOptions(
+    TimetableSlotAdmin slot,
+    Offset tapPosition, {
+    bool isEditable = true,
+  }) {
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    showMenu<String>(
-      context: context,
-      elevation: 8,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      position: RelativeRect.fromRect(
-        tapPosition & const Size(48, 48),
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        PopupMenuItem<String>(
-          value: 'view',
-          height: 44,
-          child: Row(
-            children: const [
-              Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF3B82F6)),
-              SizedBox(width: 12),
-              Text('Voir', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937))),
-            ],
-          ),
+    final items = <PopupMenuEntry<String>>[
+      PopupMenuItem<String>(
+        value: 'view',
+        height: 44,
+        child: Row(
+          children: const [
+            Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF3B82F6)),
+            SizedBox(width: 12),
+            Text('Voir', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937))),
+          ],
         ),
+      ),
+    ];
+
+    if (isEditable) {
+      items.addAll([
         const PopupMenuDivider(height: 1),
         PopupMenuItem<String>(
           value: 'edit',
@@ -2719,7 +3030,19 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
             ],
           ),
         ),
-      ],
+      ]);
+    }
+
+    showMenu<String>(
+      context: context,
+      elevation: 8,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      position: RelativeRect.fromRect(
+        tapPosition & const Size(48, 48),
+        Offset.zero & overlay.size,
+      ),
+      items: items,
     ).then((value) {
       if (value == 'view') _showSlotDetailsDialog(slot);
       if (value == 'edit') _showEditSlotDialog(slot);
@@ -3544,6 +3867,33 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     String endTime,
     String? room,
   ) async {
+    final selectedClass = ref.read(selectedClassProvider);
+    if (selectedClass != null) {
+      final currentSlots = ref.read(filteredTimetableSlotsProvider(selectedClass.id)).asData?.value ?? [];
+      final newStartMin = _timeToMinutes(startTime);
+      final newEndMin = _timeToMinutes(endTime);
+
+      final classConflict = currentSlots.firstWhereOrNull((s) {
+        if (s.id == slotId) return false; // skip self
+        if (s.dayOfWeek != dayOfWeek) return false;
+        final sStart = _timeToMinutes(s.startTime);
+        final sEnd = _timeToMinutes(s.endTime);
+        return newStartMin < sEnd && newEndMin > sStart;
+      });
+
+      if (classConflict != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Impossible : chevauchement avec ${classConflict.subjectName ?? "un cours"} (${classConflict.startTime} - ${classConflict.endTime})'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     try {
       await SupabaseConfig.adminClient.from('timetable_slots').update({
         'day_of_week': _dayToEnum(dayOfWeek),
@@ -3591,243 +3941,335 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
   }
 
   void _showDeleteAllDialog(ClassInfo selectedClass) {
-    // Fetch all classes for multi-select
-    _showDeleteClassesDialog([selectedClass]);
+    // Fetch classes for current niveau that have timetable slots
+    _showDeleteClassesDialog(selectedClass);
   }
 
-  void _showDeleteClassesDialog(List<ClassInfo> preSelectedClasses) async {
-    // Fetch all classes that have timetable slots
+  void _showDeleteClassesDialog(ClassInfo selectedClass) async {
     List<ClassInfo> allClasses = [];
     try {
-      // First get class IDs that have timetable slots
-      final timetableResponse = await SupabaseConfig.client
-          .from('timetable_slots')
-          .select('subject_offerings!inner(class_id)')
-          .limit(1000);
+      final cachedClasses = ref.read(classesListProvider).asData?.value;
+      List<ClassInfo> sourceClasses = [];
+      if (cachedClasses != null && cachedClasses.isNotEmpty) {
+        sourceClasses = cachedClasses;
+      } else {
+        final data = await SupabaseConfig.adminClient
+            .from('classes')
+            .select('id, name, niveau_id, niveaux(name, code, cycle, has_sections), sections(code)')
+            .order('name');
+        sourceClasses = (data as List).map((e) => ClassInfo.fromJson(e)).toList();
+      }
 
+      // Filter classes to the same niveau as selectedClass
+      final targetNiveauId = selectedClass.gradeLevelId;
+      final targetCode = selectedClass.gradeLevelCode?.toUpperCase();
+      final targetPrefix = selectedClass.name.contains('-') ? selectedClass.name.split('-').first.trim().toUpperCase() : '';
+
+      final classesInNiveau = sourceClasses.where((c) {
+        if (targetNiveauId != null && c.gradeLevelId == targetNiveauId) return true;
+        if (targetCode != null && c.gradeLevelCode?.toUpperCase() == targetCode) return true;
+        if (targetPrefix.isNotEmpty && c.name.toUpperCase().startsWith(targetPrefix)) return true;
+        return false;
+      }).toList();
+
+      // Check which of these classes have timetable slots
+      final classIds = (classesInNiveau.isNotEmpty ? classesInNiveau : [selectedClass]).map((c) => c.id).toList();
+      final offerings = await SupabaseConfig.adminClient
+          .from('subject_offerings')
+          .select('id, class_id')
+          .inFilter('class_id', classIds);
+
+      final offeringIds = (offerings as List).map((o) => o['id'].toString()).toList();
       final classIdsWithTimetable = <String>{};
-      for (final slot in timetableResponse as List) {
-        final offering = slot['subject_offerings'] as Map<String, dynamic>?;
-        if (offering != null && offering['class_id'] != null) {
-          classIdsWithTimetable.add(offering['class_id'] as String);
+
+      if (offeringIds.isNotEmpty) {
+        final slots = await SupabaseConfig.adminClient
+            .from('timetable_slots')
+            .select('subject_offering_id')
+            .inFilter('subject_offering_id', offeringIds);
+
+        final offMap = <String, String>{};
+        for (final o in offerings) {
+          offMap[o['id'].toString()] = o['class_id'].toString();
+        }
+
+        for (final s in (slots as List)) {
+          final cId = offMap[s['subject_offering_id']?.toString()];
+          if (cId != null) classIdsWithTimetable.add(cId);
         }
       }
 
-      if (classIdsWithTimetable.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Aucune classe n\'a d\'emploi du temps à supprimer',
-              ),
-              backgroundColor: AppColors.warning,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Fetch only classes that have timetables
-      final response = await SupabaseConfig.client
-          .from('classes')
-          .select(
-            'id, name, niveaux:niveau_id(code, cycle, has_sections), sections:section_id(code)',
-          )
-          .inFilter('id', classIdsWithTimetable.toList())
-          .order('name');
-
-      allClasses = (response as List)
-          .map((c) => ClassInfo.fromJson(c as Map<String, dynamic>))
+      allClasses = classesInNiveau
+          .where((c) => classIdsWithTimetable.contains(c.id) || c.id == selectedClass.id)
           .toList();
+
+      if (allClasses.isEmpty) {
+        allClasses = classesInNiveau.isNotEmpty ? classesInNiveau : [selectedClass];
+      }
     } catch (e) {
-      debugPrint('Error fetching classes: $e');
+      debugPrint('Error fetching delete classes: $e');
+      allClasses = [selectedClass];
     }
 
     if (!mounted) return;
 
-    // Selected classes set
+    // Selected classes set (default: preselect selectedClass)
     final selectedClassIds = <String>{};
-    for (final c in preSelectedClasses) {
-      selectedClassIds.add(c.id);
+    if (allClasses.any((c) => c.id == selectedClass.id)) {
+      selectedClassIds.add(selectedClass.id);
+    } else if (allClasses.isNotEmpty) {
+      selectedClassIds.add(allClasses.first.id);
     }
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.errorSoft,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.delete_sweep, color: AppColors.error),
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isAllSelected = allClasses.isNotEmpty && selectedClassIds.length == allClasses.length;
+            final isIndeterminate = selectedClassIds.isNotEmpty && selectedClassIds.length < allClasses.length;
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Supprimer emplois du temps',
-                  style: TextStyle(fontSize: 16),
-                ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorSoft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.delete_sweep, color: AppColors.error),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Supprimer emplois du temps',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sélectionnez les classes dont vous voulez supprimer l\'emploi du temps:',
-                  style: TextStyle(color: AppColors.slate700, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                // Class selection list
-                Container(
-                  height: 250,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.slate300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ListView.builder(
-                    itemCount: allClasses.length,
-                    itemBuilder: (context, index) {
-                      final classInfo = allClasses[index];
-                      final isSelected = selectedClassIds.contains(
-                        classInfo.id,
-                      );
-                      return CheckboxListTile(
-                        value: isSelected,
-                        onChanged: (val) {
-                          setDialogState(() {
-                            if (val == true) {
-                              selectedClassIds.add(classInfo.id);
-                            } else {
-                              selectedClassIds.remove(classInfo.id);
-                            }
-                          });
-                        },
-                        title: Text(
-                          classInfo.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${classInfo.gradeLevelCode ?? ''} ${classInfo.sectionCode ?? ''}'
-                              .trim(),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        dense: true,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        activeColor: AppColors.error,
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Select all / None buttons
-                Row(
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextButton(
-                      onPressed: () {
-                        setDialogState(() {
-                          selectedClassIds.addAll(allClasses.map((c) => c.id));
-                        });
-                      },
-                      child: const Text(
-                        'Tout sélectionner',
-                        style: TextStyle(fontSize: 12),
+                    Text(
+                      'Sélectionnez les classes dont vous voulez supprimer l\'emploi du temps:',
+                      style: TextStyle(color: AppColors.slate700, fontSize: 13),
+                    ),
+                    const SizedBox(height: 14),
+                    // Class selection list container with master checkbox header
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: AppColors.slate200),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Master Checkbox Header
+                          Container(
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.only(
+                                topLeft: Radius.circular(11),
+                                topRight: Radius.circular(11),
+                              ),
+                              border: Border(bottom: BorderSide(color: AppColors.slate200)),
+                            ),
+                            child: CheckboxListTile(
+                              value: isAllSelected ? true : (isIndeterminate ? null : false),
+                              tristate: true,
+                              onChanged: (val) {
+                                setDialogState(() {
+                                  if (isAllSelected) {
+                                    selectedClassIds.clear();
+                                  } else {
+                                    selectedClassIds.addAll(allClasses.map((c) => c.id));
+                                  }
+                                });
+                              },
+                              title: Text(
+                                'Tout sélectionner (${selectedClassIds.length}/${allClasses.length})',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                              ),
+                              dense: true,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              activeColor: AppColors.error,
+                            ),
+                          ),
+                          // Class items
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 220),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: allClasses.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                              itemBuilder: (context, index) {
+                                final classInfo = allClasses[index];
+                                final isSelected = selectedClassIds.contains(classInfo.id);
+                                return CheckboxListTile(
+                                  value: isSelected,
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      if (val == true) {
+                                        selectedClassIds.add(classInfo.id);
+                                      } else {
+                                        selectedClassIds.remove(classInfo.id);
+                                      }
+                                    });
+                                  },
+                                  title: Text(
+                                    classInfo.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '${classInfo.gradeLevelCode ?? ''} ${classInfo.sectionCode ?? ''}'.trim(),
+                                    style: const TextStyle(fontSize: 11, color: AppColors.slate500),
+                                  ),
+                                  dense: true,
+                                  controlAffinity: ListTileControlAffinity.leading,
+                                  activeColor: AppColors.error,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        setDialogState(() {
-                          selectedClassIds.clear();
-                        });
-                      },
-                      child: const Text(
-                        'Aucun',
-                        style: TextStyle(fontSize: 12),
+                    const SizedBox(height: 14),
+                    // Borderless warning banner
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Color(0xFFDC2626),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Cette action est irréversible !',
+                              style: TextStyle(
+                                color: Color(0xFFDC2626),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.errorSoft,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.error.withOpacity(0.2)),
+              ),
+              actions: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.warning_amber,
-                        color: AppColors.error,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Cette action est irréversible !',
-                          style: TextStyle(
-                            color: AppColors.error,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
+                ),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: selectedClassIds.isEmpty
+                        ? null
+                        : () async {
+                            final classesToDelete = allClasses
+                                .where((c) => selectedClassIds.contains(c.id))
+                                .toList();
+
+                            // Confirmation Popup with Blur
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              barrierColor: Colors.black.withOpacity(0.4),
+                              builder: (confirmCtx) => BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                                child: AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  backgroundColor: Colors.white,
+                                  title: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEF2F2),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(Icons.delete_forever, color: Color(0xFFDC2626), size: 24),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text('Confirmer la suppression', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                  content: Text(
+                                    'Êtes-vous sûr de vouloir supprimer définitivement l\'emploi du temps de ${classesToDelete.length} classe(s) ?\n\nCette action est irréversible.',
+                                    style: const TextStyle(fontSize: 13, color: AppColors.slate700, height: 1.5),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(confirmCtx, false),
+                                      child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.pop(confirmCtx, true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFDC2626),
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      child: const Text('Oui, supprimer', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+
+                            if (confirmed == true && mounted) {
+                              Navigator.pop(context);
+                              _deleteMultipleClassSlots(classesToDelete);
+                            }
+                          },
+                    icon: const Icon(Icons.delete_sweep, size: 18),
+                    label: Text('Supprimer (${selectedClassIds.length})'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: AppColors.slate300,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            SizedBox(
-              height: 40,
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF6B7280),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                ),
-                child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              ),
-            ),
-            SizedBox(
-              height: 40,
-              child: ElevatedButton.icon(
-                onPressed: selectedClassIds.isEmpty
-                    ? null
-                    : () {
-                        Navigator.pop(context);
-                        final classesToDelete = allClasses
-                            .where((c) => selectedClassIds.contains(c.id))
-                            .toList();
-                        _deleteMultipleClassSlots(classesToDelete);
-                      },
-                icon: const Icon(Icons.delete_sweep, size: 18),
-                label: Text('Supprimer (${selectedClassIds.length})'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.error,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppColors.slate300,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -4532,6 +4974,32 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     String endTime,
     String? room,
   ) async {
+    final selectedClass = ref.read(selectedClassProvider);
+    if (selectedClass != null) {
+      final currentSlots = ref.read(filteredTimetableSlotsProvider(selectedClass.id)).asData?.value ?? [];
+      final newStartMin = _timeToMinutes(startTime);
+      final newEndMin = _timeToMinutes(endTime);
+
+      final classConflict = currentSlots.firstWhereOrNull((s) {
+        if (s.dayOfWeek != dayOfWeek) return false;
+        final sStart = _timeToMinutes(s.startTime);
+        final sEnd = _timeToMinutes(s.endTime);
+        return newStartMin < sEnd && newEndMin > sStart;
+      });
+
+      if (classConflict != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Impossible : ${classConflict.subjectName ?? "Un cours"} est déjà planifié (${classConflict.startTime} - ${classConflict.endTime}) pour cette classe.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     try {
       final data = <String, dynamic>{
         'subject_offering_id': subjectOfferingId,
@@ -5065,16 +5533,16 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
         semesters = List<Map<String, dynamic>>.from(semData);
 
-        // Pre-select current semester, or first available
+      final activeViewSemId = ref.read(effectiveSemesterIdProvider) ?? ref.read(currentActiveSemesterIdProvider);
+      selectedSemesterId = activeViewSemId;
+      if (selectedSemesterId == null) {
         final current = semesters
             .where((s) => s['is_current'] == true)
             .firstOrNull;
         selectedSemesterId =
             current?['id'] ??
             (semesters.isNotEmpty ? semesters.first['id'] : null);
-        debugPrint(
-          'Selected semester: $selectedSemesterId from ${semesters.length} semesters',
-        );
+      }
 
         // Fetch all subjects
         final subData = await SupabaseConfig.client
@@ -5101,405 +5569,370 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final hasFile = parsedRows.isNotEmpty;
-          final fileName = hasFile ? 'Données chargées (${parsedRows.length} lignes)' : 'Aucun fichier prêt';
-          final fileSub = hasFile ? 'PRÊT POUR L\'IMPORTATION' : 'SÉLECTIONNEZ UN DOCUMENT';
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            final hasFile = parsedRows.isNotEmpty;
+            final fileName = hasFile ? 'Données chargées (${parsedRows.length} lignes)' : 'Aucun fichier prêt';
+            final fileSub = hasFile ? 'PRÊT POUR L\'IMPORTATION' : 'SÉLECTIONNEZ UN DOCUMENT';
 
-          return Dialog(
-            backgroundColor: const Color(0xFFF0EEFF),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 800,
-                maxHeight: MediaQuery.of(context).size.height * 0.88,
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                  // --- Header ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 800,
+                  maxHeight: MediaQuery.of(context).size.height * 0.88,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      // --- Header ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3F0FF),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(Icons.description, color: Color(0xFF6D4CF6), size: 24),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF3F0FF),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.description, color: Color(0xFF6D4CF6), size: 24),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Text(
+                                      'Importation en masse',
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1E1E1E),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(height: 16),
                                 const Text(
-                                  'Importation en masse',
+                                  'Ajoutez rapidement vos cours. Suivez les étapes pour garantir la qualité de vos\ndonnées.',
                                   style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1E1E1E),
+                                    fontSize: 14,
+                                    color: Color(0xFF6B7280),
+                                    height: 1.5,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Ajoutez rapidement vos cours. Suivez les étapes pour garantir la qualité de vos\ndonnées.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF6B7280),
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close, color: Color(0xFF9CA3AF)),
-                        splashRadius: 24,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-
-                  // --- Body ---
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Left Column: Step 1
-                      Expanded(
-                        flex: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFF3F4F6)),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF6D4CF6),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: const Text('1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  const Expanded(
-                                    child: Text(
-                                      'Télécharger le\nmodèle',
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E1E)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Téléchargez notre fichier structuré pour vous assurer que les colonnes sont correctement nommées et prêtes à l\'importation.',
-                                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
-                              ),
-                              const SizedBox(height: 24),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    // Generate CSV template and trigger download
-                                    final csv = StringBuffer();
-                                    csv.writeln('Matiere,Jour (1-6),Debut (HH:MM),Fin (HH:MM),Salle (optionnel)');
-                                    csv.writeln('MATH,1,08:00,09:30,Salle 1');
-                                    csv.writeln('FRANCAIS,2,08:00,09:30,Salle 2');
-                                    csv.writeln('PHYS,3,10:00,11:30,Labo 5');
-                                    final bytes = utf8.encode(csv.toString());
-                                    final blob = [bytes];
-                                    final url = html.Url.createObjectUrlFromBlob(html.Blob(blob, 'text/csv'));
-                                    html.AnchorElement(href: url)
-                                      ..setAttribute('download', 'emploi_modele.csv')
-                                      ..click();
-                                    html.Url.revokeObjectUrl(url);
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Modèle CSV téléchargé'), backgroundColor: AppColors.success),
-                                      );
-                                    }
-                                  },
-                                  icon: const Icon(Icons.download, size: 18, color: Colors.white),
-                                  label: const Text('Télécharger .CSV'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF6D4CF6),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(Icons.info, color: Color(0xFF6D4CF6), size: 18),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'Format CSV : Matière, Jour (1-6), Début (HH:MM), Fin (HH:MM), Salle (optionnel).\nLes heures peuvent être de 08:00 à 19:00 avec des incréments de 30 min (ex: 08:30, 10:30, 14:00).',
-                                      style: TextStyle(fontSize: 12, color: const Color(0xFF6D4CF6).withOpacity(0.8), height: 1.4),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close, color: Color(0xFF9CA3AF)),
+                            splashRadius: 24,
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 24),
+                      const SizedBox(height: 32),
 
-                      // Right Column: Step 2
-                      Expanded(
-                        flex: 6,
-                        child: Container(
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFF6D4CF6).withOpacity(0.3), width: 2), // dashed effect ideal but solid is a good fallback
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF3F0FF),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: const Text('2', style: TextStyle(color: Color(0xFF6D4CF6), fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  const Text(
-                                    'Téléverser le fichier',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E1E)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 32),
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFF3F0FF),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.cloud_upload, color: Color(0xFF6D4CF6), size: 32),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Glissez votre fichier ici',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E1E1E)),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Formats : .csv, .txt (Max 10 Mo)',
-                                style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                              ),
-                              const SizedBox(height: 24),
-                              OutlinedButton(
-                                onPressed: () async {
-                                  try {
-                                    final result = await FilePicker.platform.pickFiles(
-                                      type: FileType.custom,
-                                      allowedExtensions: ['csv', 'txt'],
-                                      withData: true,
-                                    );
-                                    if (result != null && result.files.single.bytes != null) {
-                                      final content = utf8.decode(result.files.single.bytes!);
-                                      final parseResult = _parseCSV(content, offerings);
-                                      setDialogState(() {
-                                        parsedRows = parseResult['rows'] as List<Map<String, dynamic>>;
-                                        parseError = parseResult['error'] as String?;
-                                      });
-                                    }
-                                  } catch (e) {
-                                    setDialogState(() {
-                                      parseError = 'Erreur lecture fichier: $e';
-                                    });
-                                  }
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF1E1E1E),
-                                  side: const BorderSide(color: Color(0xFFE5E7EB)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: const Text('Parcourir les fichiers', style: TextStyle(fontWeight: FontWeight.w600)),
-                              ),
-                              if (parseError != null) ...[
-                                const SizedBox(height: 16),
-                                Text(parseError!, style: const TextStyle(color: Colors.red, fontSize: 12), textAlign: TextAlign.center),
-                              ]
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Smart correction banner
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFF3F0FF)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.auto_awesome, color: Color(0xFF6D4CF6), size: 24),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Correction intelligente intégrée',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E1E1E)),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Notre système analysera chaque ligne. Si des données sont manquantes, vous pourrez les corriger directement après le téléversement.',
-                                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-                  const Divider(height: 1, color: Color(0xFFDDD6FE)),
-                  const SizedBox(height: 24),
-
-                  // Footer
-                  Row(
-                    children: [
-                      // File status
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                        ),
-                        child: const Icon(Icons.description_outlined, color: Color(0xFF9CA3AF), size: 24),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      // --- Body ---
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(
-                              fileName,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: hasFile ? const Color(0xFF1E1E1E) : const Color(0xFF9CA3AF),
+                            // Left Column: Step 1
+                            Expanded(
+                              flex: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAFAFD),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFF6D4CF6),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: const Text('1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            const Expanded(
+                                              child: Text(
+                                                'Télécharger le\nmodèle',
+                                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E1E)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        const Text(
+                                          'Téléchargez notre fichier structuré pour vous assurer que les colonnes sont correctement nommées et prêtes à l\'importation.',
+                                          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 24),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          // Generate CSV template and trigger download
+                                          final csv = StringBuffer();
+                                          csv.writeln('Matiere,Jour (1-6),Debut (HH:MM),Fin (HH:MM),Salle (optionnel)');
+                                          csv.writeln('MATH,1,08:00,09:30,Salle 1');
+                                          csv.writeln('FRANCAIS,2,08:00,09:30,Salle 2');
+                                          csv.writeln('PHYS,3,10:00,11:30,Labo 5');
+                                          final bytes = utf8.encode(csv.toString());
+                                          final blob = [bytes];
+                                          final url = html.Url.createObjectUrlFromBlob(html.Blob(blob, 'text/csv'));
+                                          html.AnchorElement(href: url)
+                                            ..setAttribute('download', 'emploi_modele.csv')
+                                            ..click();
+                                          html.Url.revokeObjectUrl(url);
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Modèle CSV téléchargé'), backgroundColor: AppColors.success),
+                                            );
+                                          }
+                                        },
+                                        icon: const Icon(Icons.download, size: 18, color: Colors.white),
+                                        label: const Text('Télécharger .CSV'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF6D4CF6),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(vertical: 16),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              fileSub,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: hasFile ? const Color(0xFF10B981) : const Color(0xFF9CA3AF),
-                                letterSpacing: 0.5,
+                            const SizedBox(width: 24),
+
+                            // Right Column: Step 2
+                            Expanded(
+                              flex: 6,
+                              child: Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAFAFD),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFF6D4CF6).withOpacity(0.3), width: 1.5),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFF3F0FF),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: const Text('2', style: TextStyle(color: Color(0xFF6D4CF6), fontWeight: FontWeight.bold)),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        const Text(
+                                          'Téléverser le fichier',
+                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E1E)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFF3F0FF),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.cloud_upload, color: Color(0xFF6D4CF6), size: 32),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Glissez votre fichier ici',
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E1E1E)),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'Formats : .csv, .txt (Max 10 Mo)',
+                                      style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    OutlinedButton(
+                                      onPressed: () async {
+                                        try {
+                                          final result = await FilePicker.platform.pickFiles(
+                                            type: FileType.custom,
+                                            allowedExtensions: ['csv', 'txt'],
+                                            withData: true,
+                                          );
+                                          if (result != null && result.files.single.bytes != null) {
+                                            final content = utf8.decode(result.files.single.bytes!);
+                                            final parseResult = _parseCSV(content, offerings);
+                                            setDialogState(() {
+                                              parsedRows = parseResult['rows'] as List<Map<String, dynamic>>;
+                                              parseError = parseResult['error'] as String?;
+                                            });
+                                          }
+                                        } catch (e) {
+                                          setDialogState(() {
+                                            parseError = 'Erreur lecture fichier: $e';
+                                          });
+                                        }
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF1E1E1E),
+                                        side: const BorderSide(color: Color(0xFFE5E7EB)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      child: const Text('Parcourir les fichiers', style: TextStyle(fontWeight: FontWeight.w600)),
+                                    ),
+                                    if (parseError != null) ...[
+                                      const SizedBox(height: 12),
+                                      Text(parseError!, style: const TextStyle(color: Colors.red, fontSize: 12), textAlign: TextAlign.center),
+                                    ]
+                                  ],
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      
-                      // Action buttons
-                      SizedBox(
-                        height: 40,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF6B7280),
-                            side: const BorderSide(color: Color(0xFFD1D5DB)),
-                            backgroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      const SizedBox(height: 32),
+                      const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                      const SizedBox(height: 24),
+
+                      // Footer
+                      Row(
+                        children: [
+                          // File status
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: const Icon(Icons.description_outlined, color: Color(0xFF9CA3AF), size: 24),
                           ),
-                          child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        height: 40,
-                        child: ElevatedButton(
-                          onPressed: (parsedRows.isEmpty || isUploading || parseError != null || selectedSemesterId == null)
-                              ? null
-                              : () async {
-                                  setDialogState(() => isUploading = true);
-                                  try {
-                                    await _bulkCreateSlots(parsedRows, selectedClass.id, selectedSemesterId!);
-                                    if (context.mounted) Navigator.pop(context);
-                                  } catch (e) {
-                                    debugPrint('Import error: $e');
-                                    setDialogState(() => isUploading = false);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
-                                      );
-                                    }
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6D4CF6),
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: const Color(0xFFC4B5FD),
-                            disabledForegroundColor: Colors.white,
-                            elevation: 2,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  fileName,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: hasFile ? const Color(0xFF1E1E1E) : const Color(0xFF9CA3AF),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  fileSub,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: hasFile ? const Color(0xFF10B981) : const Color(0xFF9CA3AF),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: isUploading
-                              ? const IosLoader.small(color: Colors.white)
-                              : const Text('Lancer l\'importation', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
-                        ),
+                          
+                          // Action buttons
+                          SizedBox(
+                            height: 40,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF6B7280),
+                                side: const BorderSide(color: Color(0xFFD1D5DB)),
+                                backgroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 40,
+                            child: ElevatedButton(
+                              onPressed: (parsedRows.isEmpty || isUploading || parseError != null || selectedSemesterId == null)
+                                  ? null
+                                  : () async {
+                                      setDialogState(() => isUploading = true);
+                                      try {
+                                        await _bulkCreateSlots(parsedRows, selectedClass.id, selectedSemesterId!);
+                                        if (context.mounted) Navigator.pop(context);
+                                      } catch (e) {
+                                        debugPrint('Import error: $e');
+                                        setDialogState(() => isUploading = false);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+                                          );
+                                        }
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6D4CF6),
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: const Color(0xFFC4B5FD),
+                                disabledForegroundColor: Colors.white,
+                                elevation: 2,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+                              ),
+                              child: isUploading
+                                  ? const IosLoader.small(color: Colors.white)
+                                  : const Text('Lancer l\'importation', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -5510,6 +5943,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
   ) {
     final rows = <Map<String, dynamic>>[];
     final lines = csv
+        .replaceAll('\r', '')
         .trim()
         .split('\n')
         .where((l) => l.trim().isNotEmpty)
@@ -5519,7 +5953,20 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       return {'rows': rows, 'error': 'Aucune donnée'};
     }
 
-    for (int i = 0; i < lines.length; i++) {
+    int startIndex = 0;
+    // Skip header row if present
+    final firstParts = lines[0].split(',').map((p) => p.trim()).toList();
+    if (firstParts.isNotEmpty) {
+      final firstCol = firstParts[0].toLowerCase();
+      final secondCol = firstParts.length > 1 ? firstParts[1] : '';
+      if (firstCol.contains('mati') ||
+          firstCol.contains('subject') ||
+          int.tryParse(secondCol) == null) {
+        startIndex = 1;
+      }
+    }
+
+    for (int i = startIndex; i < lines.length; i++) {
       final line = lines[i].trim();
       final parts = line.split(',').map((p) => p.trim()).toList();
 
@@ -5570,6 +6017,22 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         };
       }
 
+      // Check for overlap within the CSV rows themselves
+      final currentStartMin = _timeToMinutes(start);
+      final currentEndMin = _timeToMinutes(end);
+      for (final existingRow in rows) {
+        if (existingRow['day'] == day) {
+          final existStartMin = _timeToMinutes(existingRow['start'] as String);
+          final existEndMin = _timeToMinutes(existingRow['end'] as String);
+          if (currentStartMin < existEndMin && currentEndMin > existStartMin) {
+            return {
+              'rows': <Map<String, dynamic>>[],
+              'error': 'Conflit dans le CSV (Ligne ${i + 1}) : chevauchement d\'horaire le même jour (Jour $dayStr) entre $start-$end et ${existingRow['start']}-${existingRow['end']}',
+            };
+          }
+        }
+      }
+
       rows.add({
         'offering_id': offering.id.isNotEmpty ? offering.id : null,
         'subject_code': subjectCode,
@@ -5579,7 +6042,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         'day': day,
         'start': start,
         'end': end,
-        'room': room?.isEmpty == true ? null : room,
+        'room': (room == null || room.isEmpty) ? null : room,
       });
     }
 
@@ -5601,15 +6064,17 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
       // Create subject_offerings for missing subjects
       if (subjectCodesToCreate.isNotEmpty) {
-        // First, find subject IDs by code
+        // Find subject IDs by code or name
         final subjectsData = await SupabaseConfig.client
             .from('subjects')
-            .select('id, code, name')
-            .inFilter('code', subjectCodesToCreate);
+            .select('id, code, name');
 
         final subjectsMap = <String, Map<String, dynamic>>{};
-        for (final s in subjectsData) {
-          subjectsMap[s['code'].toString().toUpperCase()] = s;
+        for (final s in (subjectsData as List)) {
+          final c = s['code']?.toString().toUpperCase();
+          final n = s['name']?.toString().toUpperCase();
+          if (c != null && c.isNotEmpty) subjectsMap[c] = s;
+          if (n != null && n.isNotEmpty) subjectsMap[n] = s;
         }
 
         // Create subject_offerings for each unique subject
@@ -5643,16 +6108,16 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         // Re-fetch offerings to get the new IDs
         final newOfferings = await SupabaseConfig.client
             .from('subject_offerings')
-            .select('id, subjects(code)')
+            .select('id, subjects(code, name)')
             .eq('class_id', classId)
             .eq('semester_id', semesterId);
 
         final offeringsByCode = <String, String>{};
         for (final o in newOfferings) {
           final code = o['subjects']?['code']?.toString().toUpperCase();
-          if (code != null) {
-            offeringsByCode[code] = o['id'].toString();
-          }
+          final name = o['subjects']?['name']?.toString().toUpperCase();
+          if (code != null) offeringsByCode[code] = o['id'].toString();
+          if (name != null) offeringsByCode[name] = o['id'].toString();
         }
 
         // Update rows with new offering IDs
@@ -5669,6 +6134,24 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
       if (validRows.isEmpty) {
         throw Exception('Aucune matière valide trouvée dans le système');
+      }
+
+      // Delete existing timetable slots for this class and semester so old slots never overlap with new imported ones
+      final allOfferingsForClassSem = await SupabaseConfig.client
+          .from('subject_offerings')
+          .select('id')
+          .eq('class_id', classId)
+          .eq('semester_id', semesterId);
+
+      final offeringIdsToClear = (allOfferingsForClassSem as List)
+          .map((o) => o['id'].toString())
+          .toList();
+
+      if (offeringIdsToClear.isNotEmpty) {
+        await SupabaseConfig.adminClient
+            .from('timetable_slots')
+            .delete()
+            .inFilter('subject_offering_id', offeringIdsToClear);
       }
 
       // Convert day integer to day_of_week enum string

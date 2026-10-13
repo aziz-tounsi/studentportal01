@@ -360,7 +360,7 @@ class _NoteInfoScreenState extends ConsumerState<NoteInfoScreen> {
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Rechercher (type, date, contenu...)',
+                hintText: AppLocalizations.of(context).search,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(

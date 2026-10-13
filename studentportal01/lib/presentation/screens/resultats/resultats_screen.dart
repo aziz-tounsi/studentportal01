@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -36,6 +37,9 @@ final semestersProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async
 
 // Selected semester provider
 final resultatsSemesterProvider = StateProvider<int>((ref) => 1);
+
+// Loading state for resultats refresh
+final resultatsRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Grades provider - fetches real data
 final gradesProvider = FutureProvider.family<List<SubjectGradesSummary>, int>((ref, semesterNumber) async {
@@ -542,10 +546,16 @@ class _SemesterTab extends StatelessWidget {
         child: Center(
           child: Text(
             label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : AppColors.textSecondary,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
+            style: Localizations.localeOf(context).languageCode == 'ar'
+                ? GoogleFonts.cairo(
+                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    fontSize: 13,
+                  )
+                : TextStyle(
+                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
           ),
         ),
       ),

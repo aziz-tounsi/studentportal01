@@ -204,12 +204,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CourseDetailScreen(courseId: courseId);
         },
       ),
-      GoRoute(
+            GoRoute(
         path: '/absences/:offeringId',
         name: 'absence-detail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final offeringId = state.pathParameters['offeringId']!;
-          return AbsenceDetailScreen(subjectOfferingId: offeringId);
+          return NoTransitionPage(
+            child: AbsenceDetailScreen(subjectOfferingId: offeringId),
+          );
         },
       ),
     ],

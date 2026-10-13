@@ -10,6 +10,7 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 
 // Comprehensive student profile provider
 final studentProfileProvider =
@@ -341,7 +342,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           const AdminSidebar(currentRoute: '/users'),
           Expanded(
             child: profileAsync.when(
-              loading: () => const Center(child: IosLoader()),
+              loading: () => const StudentProfileSkeletonLoader(),
               error: (e, _) => Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

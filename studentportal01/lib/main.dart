@@ -1,8 +1,11 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/config/supabase_config.dart';
 import 'core/router/app_router.dart';
@@ -17,6 +20,7 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      await initializeDateFormatting();
 
       // Catch all unhandled Flutter framework errors (prevent crashes)
       FlutterError.onError = (details) {
@@ -59,8 +63,24 @@ void main() {
   );
 }
 
+
+
 class StudentPortalApp extends ConsumerWidget {
   const StudentPortalApp({super.key});
+
+  ThemeData _applyLocaleFont(ThemeData theme, Locale? locale) {
+    if (locale?.languageCode == 'ar') {
+      return theme.copyWith(
+        textTheme: GoogleFonts.cairoTextTheme(theme.textTheme),
+        appBarTheme: theme.appBarTheme.copyWith(
+          titleTextStyle: GoogleFonts.cairo(
+            textStyle: theme.appBarTheme.titleTextStyle,
+          ),
+        ),
+      );
+    }
+    return theme;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,8 +93,8 @@ class StudentPortalApp extends ConsumerWidget {
       child: MaterialApp.router(
         title: 'PythaOne',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
+        theme: _applyLocaleFont(AppTheme.lightTheme, locale),
+        darkTheme: _applyLocaleFont(AppTheme.darkTheme, locale),
         themeMode: themeNotifier.themeMode,
         locale: locale,
         supportedLocales: AppLocalizations.supportedLocales,

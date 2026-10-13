@@ -42,6 +42,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _showForgotPasswordDialog(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final emailController = TextEditingController();
     bool isSubmitting = false;
     bool isSubmitted = false;
@@ -72,8 +73,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Demande envoyée !',
+                  Text(
+                    l10n.translate('request_sent_title'),
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -82,7 +83,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Votre demande de réinitialisation a été envoyée à l\'administrateur.',
+                    l10n.translate('request_sent_desc'),
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
@@ -103,7 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Vous recevrez un nouveau mot de passe une fois votre demande approuvée.',
+                            l10n.translate('request_sent_note'),
                             style: TextStyle(
                               fontSize: 12,
                               color: const Color(0xFFFF2D78).withValues(alpha: 0.8),
@@ -127,7 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
-                  child: const Text('Compris'),
+                  child: Text(l10n.translate('btn_understood')),
                 ),
               ],
             );
@@ -142,8 +143,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 const Icon(Icons.lock_reset, color: Color(0xFFFF2D78)),
                 const SizedBox(width: 12),
-                const Text(
-                  'Mot de passe oublié',
+                Text(
+                  l10n.translate('forgot_password_title'),
                   style: TextStyle(
                     color: Colors.black87,
                     fontWeight: FontWeight.w600,
@@ -156,7 +157,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Entrez votre email pour demander une réinitialisation de mot de passe.',
+                  l10n.translate('forgot_password_desc'),
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 16),
@@ -215,7 +216,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'L\'administrateur traitera votre demande dans les plus brefs délais.',
+                          l10n.translate('admin_process_notice'),
                           style: TextStyle(
                             fontSize: 12,
                             color: const Color(0xFFFF2D78).withValues(alpha: 0.8),
@@ -233,7 +234,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFFFF2D78),
                 ),
-                child: const Text('Annuler'),
+                child: Text(l10n.cancel),
               ),
               ElevatedButton(
                 onPressed: isSubmitting
@@ -242,8 +243,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         if (emailController.text.isEmpty ||
                             !emailController.text.contains('@')) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Veuillez entrer un email valide'),
+                            SnackBar(
+                              content: Text(l10n.translate('email_invalid')),
                             ),
                           );
                           return;
@@ -283,7 +284,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 child: isSubmitting
                     ? const IosLoader(size: 20, color: Colors.white)
-                    : const Text('Envoyer la demande'),
+                    : Text(l10n.translate('btn_send_request')),
               ),
             ],
           );
@@ -342,7 +343,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 24),
                               child: Text(
-                                'Bienvenue sur EduPortail',
+                                l10n.translate('welcome_portal'),
                                 style: TextStyle(
                                   fontSize: 34,
                                   fontWeight: FontWeight.w700,
@@ -366,7 +367,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       Padding(
                                         padding: const EdgeInsets.only(left: 20, bottom: 8),
                                         child: Text(
-                                          'Adresse e-mail',
+                                          l10n.translate('email_address'),
                                           style: TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
@@ -383,7 +384,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           fontSize: 16,
                                         ),
                                         decoration: InputDecoration(
-                                          hintText: 'votre@email.com',
+                                          hintText: l10n.translate('email_hint'),
                                           hintStyle: TextStyle(
                                             color: Colors.grey.shade400,
                                           ),
@@ -425,10 +426,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           ),
                                         validator: (value) {
                                           if (value == null || value.isEmpty) {
-                                            return 'Veuillez entrer votre email';
+                                            return l10n.translate('email_required');
                                           }
                                           if (!value.contains('@')) {
-                                            return 'Email invalide';
+                                            return l10n.translate('email_invalid');
                                           }
                                           return null;
                                         },
@@ -443,7 +444,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       Padding(
                                         padding: const EdgeInsets.only(left: 20, bottom: 8),
                                         child: Text(
-                                          'Mot de passe',
+                                          l10n.password,
                                           style: TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
@@ -519,7 +520,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           ),
                                           validator: (value) {
                                             if (value == null || value.isEmpty) {
-                                              return 'Veuillez entrer votre mot de passe';
+                                              return l10n.translate('password_required');
                                             }
                                             return null;
                                           },
@@ -539,7 +540,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                         ),
                                         child: Text(
-                                          'Mot de passe oublié ?',
+                                          l10n.translate('forgot_password_q'),
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
@@ -579,7 +580,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                               const SizedBox(width: 8),
                                               Expanded(
                                                 child: Text(
-                                                  'Accès Refusé',
+                                                  l10n.translate('access_denied'),
                                                   style: TextStyle(
                                                     color: Colors.orange.shade700,
                                                     fontWeight: FontWeight.bold,
@@ -591,12 +592,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           const SizedBox(height: 8),
                                           Text(
                                             authState.errorMessage ??
-                                                'Cette application est réservée aux étudiants uniquement.',
+                                                l10n.translate('access_denied_student_only'),
                                             style: TextStyle(color: Colors.orange.shade800),
                                           ),
                                           const SizedBox(height: 8),
                                           Text(
-                                            'Si vous êtes administrateur, veuillez utiliser le tableau de bord admin.',
+                                            l10n.translate('access_denied_admin_dashboard'),
                                             style: TextStyle(
                                               color: Colors.orange.shade600,
                                               fontSize: 12,

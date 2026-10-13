@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/payments_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../users/user_profile_screen.dart';
 
@@ -258,9 +259,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                     _buildHeader(paymentsAsync),
                     Expanded(
                       child: paymentsAsync.when(
-                        loading: () => const Center(
-                          child: IosLoader(color: Color(0xFF10B981)),
-                        ),
+                        loading: () => const PaymentsSkeletonLoader(),
                         error: (e, _) => Center(
                           child: Padding(
                             padding: const EdgeInsets.all(40),
@@ -841,35 +840,19 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                       items: const [
                         DropdownMenuItem(
                           value: 'paid',
-                          child: Row(children: [
-                            Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981)),
-                            SizedBox(width: 8),
-                            Text('Payés'),
-                          ]),
+                          child: Text('Payés'),
                         ),
                         DropdownMenuItem(
                           value: 'pending',
-                          child: Row(children: [
-                            Icon(Icons.access_time, size: 14, color: Color(0xFFF59E0B)),
-                            SizedBox(width: 8),
-                            Text('En attente'),
-                          ]),
+                          child: Text('En attente'),
                         ),
                         DropdownMenuItem(
                           value: 'overdue',
-                          child: Row(children: [
-                            Icon(Icons.warning, size: 14, color: Color(0xFFEF4444)),
-                            SizedBox(width: 8),
-                            Text('En retard'),
-                          ]),
+                          child: Text('En retard'),
                         ),
                         DropdownMenuItem(
                           value: 'cancelled',
-                          child: Row(children: [
-                            Icon(Icons.cancel, size: 14, color: Color(0xFF64748B)),
-                            SizedBox(width: 8),
-                            Text('Annulés'),
-                          ]),
+                          child: Text('Annulés'),
                         ),
                       ],
                       onChanged: (v) => ref
@@ -1128,11 +1111,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                     child: Container(
                       height: 48,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
+                        color: const Color(0xFF655DD5),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF10B981).withOpacity(0.3),
+                            color: const Color(0xFF655DD5).withOpacity(0.3),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -1169,11 +1152,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   Widget _filterLabel(String label) {
     return Text(
       label.toUpperCase(),
-      style: TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        color: AppColors.slate500,
-        letterSpacing: 0.8,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textTertiary,
+        letterSpacing: 1.0,
       ),
     );
   }
@@ -1656,9 +1639,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
 
   Widget _buildClassesLayout(BuildContext context, PaymentsState state) {
     if (_isLoadingHierarchy) {
-      return const Center(
-        child: IosLoader(color: Color(0xFF10B981)),
-      );
+      return const PaymentsSkeletonLoader();
     }
 
     return Row(
@@ -2269,38 +2250,9 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3.5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFF1F5F9)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.people_outline_rounded,
-                          size: 13,
-                          color: Color(0xFF64748B),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$studentCount',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF475569),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
+              const SizedBox(height: 12),
 
               // Amounts Row: Déjà payé (left) & Total à payer (right)
               Row(
@@ -2352,6 +2304,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 6),
 
               // Progress Bar + Percentage
               Row(
@@ -2380,26 +2333,6 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                   ),
                 ],
               ),
-
-              // Bottom Status (Reste / Paiements soldés)
-              if (remaining > 0)
-                Text(
-                  'Reste: $formattedRemaining TND',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFD97706),
-                  ),
-                )
-              else
-                const Text(
-                  'Paiements soldés',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF059669),
-                  ),
-                ),
             ],
           ),
         ),
@@ -2541,8 +2474,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                               horizontalMargin: 0,
                               dataRowMinHeight: 56,
                               dataRowMaxHeight: 60,
-                              headingRowHeight: 42,
-                              headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                              headingRowHeight: 44,
+                              headingRowColor: WidgetStateProperty.all(Colors.white),
                               headingTextStyle: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textTertiary,
@@ -2876,8 +2809,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
         child: IntrinsicHeight(
           child: Row(
             children: [
-              // Left accent bar (status color)
-              Container(width: 4, color: statusColor),
+              // Left accent bar (grey)
+              Container(width: 4, color: const Color(0xFFE9EAF2)),
 
               // Card content
               Expanded(
@@ -5125,7 +5058,7 @@ class _StudentPaymentDetailDialogState
           border: Border.all(
             color: _selectedPaymentIds.contains(payment['id']?.toString())
                 ? const Color(0xFF655DD5).withOpacity(0.4)
-                : isPaid ? AppColors.slate100 : statusColor.withOpacity(0.2),
+                : AppColors.slate100,
           ),
         ),
         child: Row(

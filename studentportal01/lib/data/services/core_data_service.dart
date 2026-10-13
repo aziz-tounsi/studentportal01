@@ -668,24 +668,30 @@ class CoreDataService {
   /// Get semesters for academic year (dynamic, no hardcoded)
   Future<List<SemesterInfo>> getSemestersForAcademicYear(String academicYearId) async {
     try {
-      final result = await _client.rpc('get_semesters_for_academic_year', params: {
-        'p_academic_year_id': academicYearId,
-      });
-      if (result == null) return [];
-      return (result as List)
-          .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      // Fallback
       final response = await _client
           .from('semesters')
           .select()
           .eq('academic_year_id', academicYearId)
           .order('number');
-      return (response as List)
-          .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
-          .toList();
-    }
+      if ((response as List).isNotEmpty) {
+        return (response as List)
+            .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+
+    try {
+      final result = await _client.rpc('get_semesters_for_academic_year', params: {
+        'p_academic_year_id': academicYearId,
+      });
+      if (result != null) {
+        return (result as List)
+            .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+
+    return [];
   }
 
   /// Live semesters for academic year (realtime + periodic poll fallback)

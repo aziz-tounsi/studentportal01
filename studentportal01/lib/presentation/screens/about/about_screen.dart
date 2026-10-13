@@ -10,9 +10,9 @@ class AboutScreen extends ConsumerWidget {
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
+    try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    } catch (_) {}
   }
 
   @override
@@ -20,6 +20,7 @@ class AboutScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -36,305 +37,185 @@ class AboutScreen extends ConsumerWidget {
           ),
         ),
         child: SafeArea(
+          bottom: false,
           child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             slivers: [
-              // Custom App Bar
+              // Custom Header with Circular Back Button
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 10,
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                  child: Builder(
+                    builder: (ctx) {
+                      final isRtl = Directionality.of(ctx) == TextDirection.rtl;
+                      return Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
-                            ],
+                              child: Center(
+                                child: Icon(
+                                  isRtl ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_new_rounded,
+                                  size: 18,
+                                  color: const Color(0xFF1F2937),
+                                ),
+                              ),
+                            ),
                           ),
-                          child: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1F2937)),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        l10n.about,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                    ],
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                  Text(
+                                    l10n.about,
+                                    style: const TextStyle(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.6,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    l10n.aboutSubtitle,
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                    },
                   ),
                 ),
               ),
 
               // Content
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 150),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    // App Logo Card - Glassmorphism white low opacity
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                        child: Container(
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.7),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.5),
-                              width: 1.5,
+                    // 1. Logo and Intro Card
+                    Container(
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(26),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              shape: BoxShape.circle,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
+                            child: const Icon(
+                              Icons.school_rounded,
+                              size: 64,
+                              color: Color(0xFF3B82F6),
+                            ),
                           ),
-                          child: Column(
-                            children: [
-                              // Logo
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(24),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 10),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: Image.asset(
-                                    'assets/pythaonelogo.png',
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) =>
-                                        const Icon(Icons.school, size: 50, color: Color(0xFF6366F1)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              const Text(
-                                'PythaOne',
-                                style: TextStyle(
-                                  color: Color(0xFF1F2937),
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -1,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF6366F1).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Text(
-                                  'Version 1.0.0',
-                                  style: TextStyle(
-                                    color: Color(0xFF6366F1),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Lycée Pythagore',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1E293B),
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          Text(
+                            l10n.aboutDesc,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                              height: 1.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 20),
 
-                    // School Info Card - Square under logo with low opacity glass
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Column(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF3B82F6).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: const Icon(
-                                  Icons.location_city_outlined,
-                                  color: Color(0xFF3B82F6),
-                                  size: 28,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Lycée Pilote Privé Pythagore',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.3,
-                                  color: Color(0xFF1F2937),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Kairouan, Tunisie',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.aboutDesc,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
-                                  height: 1.6,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Features Card
-                    _PremiumInfoCard(
-                      icon: Icons.star_outline,
-                      iconColor: const Color(0xFFF59E0B),
+                    // 2. Features
+                    _UnifiedInfoCard(
                       title: l10n.features,
-                      child: Column(
-                        children: [
-                          _PremiumFeatureItem(
-                            icon: Icons.campaign_outlined,
-                            color: const Color(0xFF3B82F6),
-                            text: l10n.featureAnnouncements,
-                          ),
-                          _PremiumFeatureItem(
-                            icon: Icons.grade_outlined,
-                            color: const Color(0xFF10B981),
-                            text: l10n.featureGrades,
-                          ),
-                          _PremiumFeatureItem(
-                            icon: Icons.event_busy_outlined,
-                            color: const Color(0xFFEF4444),
-                            text: l10n.featureAbsences,
-                          ),
-                          _PremiumFeatureItem(
-                            icon: Icons.calendar_month_outlined,
-                            color: const Color(0xFF8B5CF6),
-                            text: l10n.featureTimetable,
-                          ),
-                          _PremiumFeatureItem(
-                            icon: Icons.payment_outlined,
-                            color: const Color(0xFFF59E0B),
-                            text: l10n.featurePayments,
-                          ),
-                          _PremiumFeatureItem(
-                            icon: Icons.folder_outlined,
-                            color: const Color(0xFF06B6D4),
-                            text: l10n.featureDocuments,
+                      icon: Icons.star_rounded,
+                      iconColor: const Color(0xFF8B5CF6),
+                      description: '- ${l10n.featureAnnouncements}\n- ${l10n.featureGrades}\n- ${l10n.featureAbsences}\n- ${l10n.featureTimetable}',
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 3. App Info
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(26),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Developer Card
-                    _PremiumInfoCard(
-                      icon: Icons.code_outlined,
-                      iconColor: const Color(0xFF10B981),
-                      title: l10n.developedBy,
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          GestureDetector(
-                            onTap: () => _launchUrl('https://aziz-tounsi.github.io/'),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                                ),
-                                borderRadius: BorderRadius.circular(30),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF3B82F6).withOpacity(0.3),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.public, color: Colors.white, size: 18),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Visiter le site',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Copyright
-                    Center(
-                      child: Column(
-                        children: [
+                          const Icon(Icons.code_rounded, color: Color(0xFF10B981), size: 32),
+                          const SizedBox(height: 12),
                           Text(
-                            '© 2025 PythaOne',
-                            style: TextStyle(
+                            '${l10n.developedWithLove} par Aziz Tounsi',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E293B),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${l10n.appVersion} \u200E1.2.0',
+                            style: const TextStyle(
                               fontSize: 13,
-                              color: Colors.grey[500],
                               fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            l10n.allRightsReserved,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[400],
+                              color: Color(0xFF94A3B8),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 40),
                   ]),
                 ),
               ),
@@ -346,107 +227,67 @@ class AboutScreen extends ConsumerWidget {
   }
 }
 
-class _PremiumInfoCard extends StatelessWidget {
+class _UnifiedInfoCard extends StatelessWidget {
+  final String title;
+  final String description;
   final IconData icon;
   final Color iconColor;
-  final String title;
-  final Widget child;
 
-  const _PremiumInfoCard({
+  const _UnifiedInfoCard({
+    required this.title,
+    required this.description,
     required this.icon,
     required this.iconColor,
-    required this.title,
-    required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: iconColor, size: 20),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Text(
                 title,
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                  color: Color(0xFF1F2937),
+                  color: Color(0xFF1E293B),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _PremiumFeatureItem extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String text;
-
-  const _PremiumFeatureItem({
-    required this.icon,
-    required this.color,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 14),
+          Text(
+            description,
+            style: const TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+              height: 1.5,
             ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1F2937),
-              ),
-            ),
-          ),
-          Icon(
-            Icons.check_circle,
-            color: color,
-            size: 20,
           ),
         ],
       ),

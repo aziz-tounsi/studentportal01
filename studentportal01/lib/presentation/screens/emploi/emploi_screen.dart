@@ -1,30 +1,51 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/timetable_model.dart';
 import '../../providers/student_context_provider.dart';
+import '../../providers/nav_bar_provider.dart';
 import '../../widgets/semester_navigator.dart';
-import '../../widgets/ios_loader.dart';
+import '../../widgets/emploi_skeleton.dart';
 
 final emploiSemesterProvider = StateProvider<int>((ref) => 1);
+
+// Timetable type selection provider: 'regular' vs 'exam'
+final emploiTypeProvider = StateProvider<String>((ref) => 'regular');
+
+// Loading state for emploi refresh
+final emploiRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Detect if currently in an exam period
 final isExamPeriodProvider = FutureProvider<bool>((ref) async {
   try {
     final contextAsync = await ref.watch(studentContextProvider.future);
-    if (contextAsync == null) return false;
+    if (contextAsync == null || contextAsync.schoolId.isEmpty) return false;
 
     final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
-    final examCheck = await Supabase.instance.client.rpc('get_active_exam_period', params: {
+    final examCheck = await Supabase.instance.client
+        .rpc('get_active_exam_period', params: {
       'p_school_id': contextAsync.schoolId,
       'p_date': todayStr,
     });
-    return examCheck != null;
+    if (examCheck != null) return true;
+
+    // Fallback direct query on exam_periods table
+    final directCheck = await Supabase.instance.client
+        .from('exam_periods')
+        .select('id')
+        .eq('school_id', contextAsync.schoolId)
+        .or('is_active.eq.true,and(start_date.lte.$todayStr,end_date.gte.$todayStr)')
+        .maybeSingle();
+
+    return directCheck != null;
   } catch (_) {
     return false;
   }
@@ -34,31 +55,60 @@ String _parseTime(String time) {
   if (time.length >= 5) {
     return time.substring(0, 5);
   }
-  // Pad with leading zero if needed
   if (time.length == 4) {
     return '0$time';
   }
   return time;
 }
 
-final Map<String, Color> _subjectColors = {};
+final Map<String, Color> _presetSubjectColors = {
+  'ARABE': const Color(0xFFF59E0B), // Orange / Amber like Pic 2
+  'AR': const Color(0xFFF59E0B),
+  'MATH': const Color(0xFF10B981),  // Emerald Green like Pic 2
+  'FRANCAIS': const Color(0xFFEC4899), // Pink like Pic 2
+  'FR': const Color(0xFFEC4899),
+  'ANGLAIS': const Color(0xFFEA580C), // Orange like Pic 2
+  'ANG': const Color(0xFFEA580C),
+  'EN': const Color(0xFFEA580C),
+  'PHYSIQUE': const Color(0xFF06B6D4), // Cyan like Pic 2
+  'PHYS': const Color(0xFF06B6D4),
+  'SVT': const Color(0xFF3B82F6),   // Blue like Pic 2
+  'HISTOIRE': const Color(0xFFE11D48), // Magenta / Rose like Pic 2
+  'HIST': const Color(0xFFE11D48),
+  'GEO': const Color(0xFFEF4444),   // Crimson Red like Pic 2
+  'INFO': const Color(0xFF84CC16),  // Lime Green like Pic 2
+  'TECH': const Color(0xFFF59E0B),  // Amber like Pic 2
+  'ED_ISL': const Color(0xFF14B8A6), // Teal like Pic 2
+  'ISL': const Color(0xFF14B8A6),
+  'ED_CIV': const Color(0xFF6366F1), // Indigo like Pic 2
+  'CIV': const Color(0xFF6366F1),
+  'SPORT': const Color(0xFF8B5CF6), // Purple like Pic 2
+};
+
+final List<Color> _appColorPalette = const [
+  Color(0xFFF59E0B), // Amber
+  Color(0xFF10B981), // Emerald
+  Color(0xFFEC4899), // Pink
+  Color(0xFFEA580C), // Orange
+  Color(0xFF06B6D4), // Cyan
+  Color(0xFF3B82F6), // Blue
+  Color(0xFFE11D48), // Rose
+  Color(0xFFEF4444), // Red
+  Color(0xFF84CC16), // Lime
+  Color(0xFF14B8A6), // Teal
+  Color(0xFF8B5CF6), // Violet
+  Color(0xFF6366F1), // Indigo
+];
 
 Color _getSubjectColor(String subjectCode) {
-  if (!_subjectColors.containsKey(subjectCode)) {
-    final palette = [
-      const Color(0xFFE53935), const Color(0xFFD81B60), const Color(0xFF8E24AA),
-      const Color(0xFF5E35B1), const Color(0xFF3949AB), const Color(0xFF1E88E5),
-      const Color(0xFF039BE5), const Color(0xFF00ACC1), const Color(0xFF00897B),
-      const Color(0xFF43A047), const Color(0xFF7CB342), const Color(0xFFC0CA33),
-      const Color(0xFFFDD835), const Color(0xFFFFB300), const Color(0xFFFB8C00),
-      const Color(0xFFF4511E), const Color(0xFF6D4C41), const Color(0xFF757575),
-      const Color(0xFF546E7A), const Color(0xFFC2185B), const Color(0xFF512DA8),
-      const Color(0xFF303F9F), const Color(0xFF1976D2), const Color(0xFF0097A7),
-      const Color(0xFF388E3C), const Color(0xFFF57C00), const Color(0xFFE64A19),
-    ];
-    _subjectColors[subjectCode] = palette[_subjectColors.length % palette.length];
+  final codeUpper = subjectCode.trim().toUpperCase();
+  for (final entry in _presetSubjectColors.entries) {
+    if (codeUpper == entry.key || codeUpper.startsWith(entry.key) || codeUpper.contains(entry.key)) {
+      return entry.value;
+    }
   }
-  return _subjectColors[subjectCode]!;
+  final hash = codeUpper.codeUnits.fold(0, (prev, elem) => prev + elem);
+  return _appColorPalette[hash % _appColorPalette.length];
 }
 
 final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
@@ -66,91 +116,85 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
 
   if (contextAsync == null || contextAsync.classId == null) return [];
 
+  final classId = contextAsync.classId!;
+  final supabase = Supabase.instance.client;
+
   try {
-    final supabase = Supabase.instance.client;
+    final isExamPeriodActive = await ref.watch(isExamPeriodProvider.future);
+    final selectedType = isExamPeriodActive ? 'exam' : 'regular';
+    final selectedSemesterNumber = ref.watch(emploiSemesterProvider);
 
-    // Check if today falls in an exam period
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    String timetableType = 'regular';
-    String? activeExamPeriodId;
-
-    try {
-      final examCheck = await supabase.rpc('get_active_exam_period', params: {
-        'p_school_id': contextAsync.schoolId ?? '',
-        'p_date': todayStr,
-      });
-      if (examCheck != null) {
-        timetableType = 'exam';
-        activeExamPeriodId = examCheck as String;
-      }
-    } catch (e) {
-      debugPrint('Exam period check error (non-critical): $e');
-    }
-
-    final offeringsResp = await supabase
-        .from('subject_offerings')
-        .select('id')
-        .eq('class_id', contextAsync.classId!)
-        .eq('is_active', true);
-
-    final offeringIds = (offeringsResp as List).map((o) => o['id'] as String).toList();
-    if (offeringIds.isEmpty) return [];
-
-    var slotsQuery = supabase
+    // Direct, canonical and resilient query for timetable slots of this student's class
+    var query = supabase
         .from('timetable_slots')
         .select('''
-          *, subject_offerings!inner(
-            subject_id, teacher_id, semester_id,
-            subjects(name, code)
+          *,
+          subject_offerings!inner (
+            id, class_id, subject_id, teacher_id, semester_id,
+            subjects (name, code),
+            semesters (id, name, number, is_current)
           )
         ''')
-        .inFilter('subject_offering_id', offeringIds)
-        .eq('timetable_type', timetableType);
+        .eq('subject_offerings.class_id', classId);
 
-    if (timetableType == 'exam' && activeExamPeriodId != null) {
-      slotsQuery = slotsQuery.eq('exam_period_id', activeExamPeriodId);
+    if (selectedType == 'exam') {
+      query = query.inFilter('timetable_type', ['exam', 'examen', 'Exam', 'Examen']);
+    } else {
+      query = query.or('timetable_type.eq.regular,timetable_type.is.null');
     }
 
-    final slotsResp = await slotsQuery
+    final slotsResp = await query
         .order('day_of_week')
         .order('start_time');
 
-    // Resolve teachers from teacher_assignments (subject_offerings.teacher_id may be NULL)
+    final allSlotsList = slotsResp as List;
+    if (allSlotsList.isEmpty) return [];
+
+    // Filter strictly by selected semester number
+    final activeSlots = allSlotsList.where((slot) {
+      final sem = slot['subject_offerings']?['semesters'] as Map<String, dynamic>?;
+      if (sem == null) return false;
+      final num = sem['number'] as int?;
+      return num == selectedSemesterNumber;
+    }).toList();
+
+    if (activeSlots.isEmpty) return [];
+
+    // Resolve teacher names/photos from teacher_assignments
     final Map<String, String> subjectClassTeacherMap = {};
     final Map<String, String> subjectClassTeacherPhotoMap = {};
     try {
-      final teacherAssResp = await Supabase.instance.client
+      final teacherAssResp = await supabase
           .from('teacher_assignments')
-          .select('subject_id, class_id, teacher_id, users!teacher_id(full_name, photo_url)')
+          .select(
+              'subject_id, class_id, teacher_id, users!teacher_id(full_name, photo_url)')
           .eq('is_active', true);
 
       for (final ta in (teacherAssResp as List)) {
         final subjectId = ta['subject_id'] as String?;
         final clsId = ta['class_id'] as String?;
-        final teacherUserId = ta['teacher_id'] as String?;
         final teacherData = ta['users'] as Map<String, dynamic>?;
         if (subjectId != null && clsId != null) {
-          subjectClassTeacherMap['${subjectId}_$clsId'] = teacherData?['full_name'] as String? ?? '';
-          subjectClassTeacherPhotoMap['${subjectId}_$clsId'] = teacherData?['photo_url'] as String? ?? '';
+          subjectClassTeacherMap['${subjectId}_$clsId'] =
+              teacherData?['full_name'] as String? ?? '';
+          subjectClassTeacherPhotoMap['${subjectId}_$clsId'] =
+              teacherData?['photo_url'] as String? ?? '';
         }
       }
-    } catch (e) {
-      debugPrint('Error fetching teacher_assignments: $e');
-    }
+    } catch (_) {}
 
-    final classId = contextAsync.classId!;
-
-    return (slotsResp as List).map((json) {
+    return activeSlots.map((json) {
       final offering = json['subject_offerings'] as Map<String, dynamic>?;
       final subject = offering?['subjects'] as Map<String, dynamic>?;
-      
+
       final subjectId = offering?['subject_id'] as String?;
       final teacherKey = subjectId != null ? '${subjectId}_$classId' : null;
-      
-      final teacherNameFromAssignment = teacherKey != null ? subjectClassTeacherMap[teacherKey] : null;
-      final teacherPhotoFromAssignment = teacherKey != null ? subjectClassTeacherPhotoMap[teacherKey] : null;
-      
+
+      final teacherNameFromAssignment =
+          teacherKey != null ? subjectClassTeacherMap[teacherKey] : null;
+      final teacherPhotoFromAssignment =
+          teacherKey != null ? subjectClassTeacherPhotoMap[teacherKey] : null;
+
       final teacherName = (teacherNameFromAssignment?.isNotEmpty == true)
           ? teacherNameFromAssignment
           : (json['teacher_name'] as String?);
@@ -158,23 +202,34 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
           ? teacherPhotoFromAssignment
           : null;
 
+      final subjectName = (json['subject_name'] as String?) ??
+          (subject?['name'] as String?) ??
+          (json['title'] as String?) ??
+          'Matière';
+      final subjectCode = (json['subject_code'] as String?) ??
+          (subject?['code'] as String?) ??
+          subjectName;
+
       return TimetableSlotModel(
-        id: json['id'] as String,
-        subjectOfferingId: json['subject_offering_id'] as String,
+        id: (json['id'] as String?) ?? '',
+        subjectOfferingId: (json['subject_offering_id'] as String?) ?? '',
         groupId: json['group_id'] as String?,
-        dayOfWeek: json['day_of_week'] as String,
-        startTime: _parseTime(json['start_time'] as String),
-        endTime: _parseTime(json['end_time'] as String),
+        dayOfWeek: (json['day_of_week'] as String?) ?? 'monday',
+        startTime: _parseTime((json['start_time'] as String?) ?? '08:00'),
+        endTime: _parseTime((json['end_time'] as String?) ?? '09:00'),
         room: json['room'] as String?,
         teacherName: teacherName,
         teacherPhotoUrl: teacherPhoto,
         sessionType: json['session_type'] as String? ?? 'CI',
-        createdAt: DateTime.parse(json['created_at'] as String),
-        subjectName: subject?['name'] as String?,
-        subjectCode: subject?['code'] as String?,
+        createdAt: json['created_at'] != null
+            ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
+            : DateTime.now(),
+        subjectName: subjectName,
+        subjectCode: subjectCode,
       );
     }).toList();
   } catch (e) {
+    debugPrint('timetableProvider error: $e');
     return [];
   }
 });
@@ -184,6 +239,24 @@ const List<String> _timeSlots = [
 ];
 const List<String> _dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const List<String> _dayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+const List<String> _fullDayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+
+String _getDayLabel(int dayIndex, bool isFullScreen, String langCode) {
+  if (langCode == 'ar') {
+    const arShort = ['إثن', 'ثلا', 'أرب', 'خمي', 'جمع', 'سبت'];
+    const arFull = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    if (dayIndex >= 0 && dayIndex < 6) {
+      return isFullScreen ? arFull[dayIndex] : arShort[dayIndex];
+    }
+  } else if (langCode == 'en') {
+    const enShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const enFull = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    if (dayIndex >= 0 && dayIndex < 6) {
+      return isFullScreen ? enFull[dayIndex] : enShort[dayIndex];
+    }
+  }
+  return isFullScreen ? _fullDayLabels[dayIndex] : _dayLabels[dayIndex];
+}
 
 class EmploiScreen extends ConsumerStatefulWidget {
   const EmploiScreen({super.key});
@@ -193,15 +266,36 @@ class EmploiScreen extends ConsumerStatefulWidget {
 }
 
 class _EmploiScreenState extends ConsumerState<EmploiScreen> {
-  String? _expandedSlotId;
   bool _isExpanded = false;
+
+  void _setExpanded(bool expanded) {
+    if (_isExpanded != expanded) {
+      setState(() {
+        _isExpanded = expanded;
+      });
+      ref.read(navBarHiddenProvider.notifier).state = expanded;
+    }
+  }
+
+  @override
+  void dispose() {
+    // Reset navbar visibility if disposed while expanded
+    if (_isExpanded) {
+      Future.microtask(() {
+        ref.read(navBarHiddenProvider.notifier).state = false;
+      });
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final timetableAsync = ref.watch(timetableProvider);
     final selectedSemester = ref.watch(emploiSemesterProvider);
-    final isExamPeriod = ref.watch(isExamPeriodProvider);
+    final isExamPeriodActive = ref.watch(isExamPeriodProvider).valueOrNull ?? false;
+    final selectedType = isExamPeriodActive ? 'exam' : 'regular';
+    final isRefreshing = ref.watch(emploiRefreshingProvider);
 
     return Material(
       type: MaterialType.transparency,
@@ -224,135 +318,188 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
           canPop: !_isExpanded,
           onPopInvoked: (didPop) {
             if (didPop) return;
-            setState(() {
-              _isExpanded = false;
-            });
+            _setExpanded(false);
           },
           child: Stack(
             children: [
               SafeArea(
                 bottom: false,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                      child: SizedBox(
-                        height: 64,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [Color(0xFF10B981), Color(0xFF059669)],
+                child: RefreshIndicator(
+                  color: const Color(0xFFFF2D78),
+                  onRefresh: () async {
+                    ref.read(emploiRefreshingProvider.notifier).state = true;
+                    try {
+                      await ref.refresh(timetableProvider.future);
+                    } finally {
+                      ref.read(emploiRefreshingProvider.notifier).state = false;
+                    }
+                  },
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                          child: SizedBox(
+                            height: 64,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: selectedType == 'exam'
+                                          ? const [Color(0xFFEA580C), Color(0xFFF97316)]
+                                          : const [Color(0xFF10B981), Color(0xFF059669)],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: (selectedType == 'exam'
+                                                ? const Color(0xFFEA580C)
+                                                : const Color(0xFF10B981))
+                                            .withValues(alpha: 0.4),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    selectedType == 'exam'
+                                        ? Icons.school_rounded
+                                        : Icons.calendar_month_rounded,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 8),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        selectedType == 'exam'
+                                            ? (Localizations.localeOf(context).languageCode == 'ar'
+                                                ? 'جدول الامتحانات'
+                                                : (Localizations.localeOf(context).languageCode == 'en'
+                                                    ? 'Exam Timetable'
+                                                    : 'Emploi d\'examen'))
+                                            : l10n.emploi,
+                                        style: const TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w900,
+                                            color: Color(0xFF1F2937),
+                                            letterSpacing: -0.8),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        selectedType == 'exam'
+                                            ? l10n.examTimetableSubtitle
+                                            : l10n.emploiSubtitle,
+                                        style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: Color(0xFF1F2937)),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              child: const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 28),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    l10n.emploi,
-                                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1F2937), letterSpacing: -0.8),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  const Text(
-                                    'Emploi du temps de la classe',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF1F2937)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: DynamicSemesterNav(
-                        selectedSemesterNumber: selectedSemester,
-                        accentColor: const Color(0xFF10B981),
-                        secondaryColor: const Color(0xFF059669),
-                        onChanged: (v) => ref.read(emploiSemesterProvider.notifier).state = v,
-                      ),
-                    ),
-                    // Exam period banner
-                    isExamPeriod.when(
-                      data: (isExam) => isExam
-                          ? Container(
-                              margin: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFEA580C), Color(0xFFF97316)],
                                 ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(color: const Color(0xFFEA580C).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3)),
-                                ],
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.school, color: Colors.white, size: 18),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Emploi d\'examen en cours',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                                const SizedBox(width: 12),
+                                GestureDetector(
+                                  onTap: () => _setExpanded(true),
+                                  child: Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.08),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Icon(
+                                      Icons.fullscreen_rounded,
+                                      color: selectedType == 'exam'
+                                          ? const Color(0xFFEA580C)
+                                          : const Color(0xFF10B981),
+                                      size: 24,
+                                    ),
                                   ),
-                                ],
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: timetableAsync.when(
-                        loading: () => const Center(child: IosLoader(color: Color(0xFF10B981))),
-                        error: (e, _) => Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-                              const SizedBox(height: 16),
-                              Text('Erreur: $e', style: TextStyle(color: Colors.grey.shade600)),
-                            ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        data: (slots) {
-                          if (slots.isEmpty) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.event_busy_rounded, size: 64, color: Colors.grey.shade300),
-                                  const SizedBox(height: 16),
-                                  Text('Aucun cours planifié', style: TextStyle(fontSize: 16, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            );
-                          }
-                          return _buildScrollableTimetable(context, slots);
-                        },
                       ),
-                    ),
-                  ],
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: DynamicSemesterNav(
+                            selectedSemesterNumber: selectedSemester,
+                            accentColor: selectedType == 'exam'
+                                ? const Color(0xFFEA580C)
+                                : const Color(0xFF10B981),
+                            secondaryColor: selectedType == 'exam'
+                                ? const Color(0xFFF97316)
+                                : const Color(0xFF059669),
+                            onChanged: (v) => ref
+                                .read(emploiSemesterProvider.notifier)
+                                .state = v,
+                          ),
+                        ),
+                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: isRefreshing
+                            ? const EmploiSkeleton()
+                            : timetableAsync.when(
+                          loading: () => const EmploiSkeleton(),
+                          error: (e, _) => Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error_outline,
+                                    size: 48, color: Colors.red.shade300),
+                                const SizedBox(height: 16),
+                                Text('Erreur: $e',
+                                    style: TextStyle(color: Colors.grey.shade600)),
+                              ],
+                            ),
+                          ),
+                          data: (slots) {
+                            if (slots.isEmpty) {
+                              final semestersAsync = ref.watch(semestersProvider);
+                              final semObj = semestersAsync.valueOrNull
+                                  ?.where((s) => s.number == selectedSemester)
+                                  .firstOrNull;
+                              final now = DateTime.now();
+                              final isFuture = semObj != null &&
+                                  !semObj.isCurrent &&
+                                  semObj.startDate != null &&
+                                  now.isBefore(semObj.startDate!);
+
+                              return _buildEmptyState(
+                                context,
+                                isExam: selectedType == 'exam',
+                                isFuture: isFuture,
+                                startDate: semObj?.startDate,
+                              );
+                            }
+                            return _buildScrollableTimetable(context, slots);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (_isExpanded)
@@ -374,7 +521,9 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                         ),
                       ),
                       child: SafeArea(
-                        child: _buildScrollableTimetable(context, slots, isFullScreen: true),
+                        child: Center(
+                          child: _buildScrollableTimetable(context, slots, isFullScreen: true),
+                        ),
                       ),
                     ),
                   ),
@@ -389,10 +538,12 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
   }
 
   Widget _buildScrollableTimetable(BuildContext context, List<TimetableSlotModel> slots, {bool isFullScreen = false}) {
-    final container = Container(
+    final container = Directionality(
+      textDirection: TextDirection.ltr,
+      child: Container(
       margin: isFullScreen 
-          ? const EdgeInsets.fromLTRB(16, 60, 16, 16)
-          : const EdgeInsets.fromLTRB(20, 0, 20, 140),
+          ? const EdgeInsets.fromLTRB(16, 100, 16, 20)
+          : const EdgeInsets.fromLTRB(24, 0, 24, 140),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -411,10 +562,15 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
           final availableHeight = constraints.maxHeight;
 
           const timeColWidth = 35.0;
-          const headerHeight = 40.0;
+          final headerHeight = isFullScreen ? 75.0 : 40.0;
           
           final dayColWidth = (availableWidth - timeColWidth) / _dayKeys.length;
-          final gridHeight = availableHeight - headerHeight;
+          final calculatedHeight = isFullScreen
+              ? MediaQuery.of(context).size.height - 100
+              : (MediaQuery.of(context).size.height * 0.68).clamp(580.0, 750.0);
+          final gridHeight = (availableHeight.isInfinite || availableHeight <= 0)
+              ? calculatedHeight - headerHeight
+              : availableHeight - headerHeight;
           final rowHeight = gridHeight / _timeSlots.length;
 
           return Column(
@@ -536,9 +692,9 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                           child: RotatedBox(
                             quarterTurns: 3,
                             child: Text(
-                              _dayLabels[dayIndex],
+                              _getDayLabel(dayIndex, isFullScreen, Localizations.localeOf(context).languageCode),
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: isFullScreen ? 12 : 13,
                                 fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
                                 color: isToday ? const Color(0xFF10B981) : Colors.grey.shade600,
                               ),
@@ -554,31 +710,32 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
           );
         },
       ),
-    );
+    ));
 
     if (isFullScreen) {
       return Stack(
         children: [
           Positioned.fill(child: container),
           Positioned(
-            top: 10,
-            right: 24,
+            top: 12,
+            right: 20,
             child: GestureDetector(
-              onTap: () => setState(() => _isExpanded = false),
+              onTap: () => _setExpanded(false),
               child: Container(
-                padding: const EdgeInsets.all(8),
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
-                child: Icon(Icons.close, size: 24, color: Colors.grey.shade500),
+                child: Icon(Icons.close_rounded, size: 22, color: Colors.grey.shade700),
               ),
             ),
           ),
@@ -586,136 +743,167 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 20.0, bottom: 12.0),
-          child: InkWell(
-            onTap: () => setState(() => _isExpanded = true),
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF10B981), Color(0xFF059669)], // Green gradient
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24), // Pill shape
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "Plein écran", 
-                    style: TextStyle(
-                      fontSize: 13, 
-                      fontWeight: FontWeight.w700, 
-                      color: Colors.white
-                    )
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.fullscreen, size: 20, color: Colors.white),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Expanded(child: container),
-      ],
+    return SizedBox(
+      height: (MediaQuery.of(context).size.height * 0.68).clamp(580.0, 750.0),
+      child: container,
     );
   }
 
-  Widget _buildSlotCell(TimetableSlotModel slot, double height, double width) {
-    final color = _getSubjectColor(slot.subjectCode ?? 'DEFAULT');
-    final isExpanded = _expandedSlotId == slot.id;
-    final timeRange = '${_formatTime(slot.startTime)}-${_formatTime(slot.endTime)}';
+  String _cleanRoomName(String? room) {
+    if (room == null || room.trim().isEmpty) return '';
+    String text = room.trim();
+    // If it contains "Salle", "Labo", "Atelier", "Amphi", extract that part:
+    final match = RegExp(
+      r'(Salle\s*[A-Z0-9]+|Labo\s*[A-Z0-9]+|Atelier\s*[A-Z0-9]+|Amphi\s*[A-Z0-9]+)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (match != null) {
+      return match.group(1)!;
+    }
+    // Remove Block prefix (e.g. "Bloc A - ", "Bloc B - ")
+    text = text.replaceAll(RegExp(r'^Bloc\s+[A-Z0-9]+\s*[-·]\s*', caseSensitive: false), '');
+    // Remove "Principal - " or "Principal · "
+    text = text.replaceAll(RegExp(r'^Principal\s*[-·]\s*', caseSensitive: false), '');
+    // Remove prefixes like "S1 · ", "S2 · "
+    text = text.replaceAll(RegExp(r'^S\d+\s*[-·]\s*', caseSensitive: false), '');
+    if (text.contains('·')) {
+      return text.split('·').last.trim();
+    }
+    return text.trim();
+  }
 
-    return GestureDetector(
+  String _formatDetailLocation(String? room) {
+    if (room == null || room.trim().isEmpty) return '';
+    String text = room.trim();
+    if (text.toLowerCase().startsWith('salle:')) {
+      text = text.substring(6).trim();
+    }
+    // Remove "Principal" or "- Principal" or "· Principal"
+    text = text.replaceAll(RegExp(r'[-·]?\s*\bPrincipal\b\s*[-·]?', caseSensitive: false), '·');
+    // Shorten "Xème étage" or "Xer étage" to "Xème" / "Xer"
+    text = text.replaceAllMapped(
+      RegExp(r'(\d+(?:ème|er))\s+étage', caseSensitive: false),
+      (match) => match.group(1)!,
+    );
+    // Clean double separators like "· ·" or "- ·"
+    text = text.replaceAll(RegExp(r'\s*[-·]\s*[-·]\s*'), ' · ');
+    text = text.replaceAll(RegExp(r'^\s*[-·]\s*|\s*[-·]\s*$'), '');
+    return text.trim();
+  }
+
+  String _getSubjectDisplay(TimetableSlotModel slot) {
+    if (slot.subjectName != null && slot.subjectName!.trim().isNotEmpty) {
+      final name = slot.subjectName!.trim();
+      if (name.length <= 14) return name.toUpperCase();
+    }
+    if (slot.subjectCode != null && slot.subjectCode!.trim().isNotEmpty) {
+      return slot.subjectCode!.trim().toUpperCase();
+    }
+    return (slot.subjectName ?? '').toUpperCase();
+  }
+
+  Widget _buildSlotCell(TimetableSlotModel slot, double height, double width) {
+    final color = _getSubjectColor(slot.subjectCode ?? slot.subjectName ?? 'DEFAULT');
+    final timeRange = '${_formatTime(slot.startTime)}–${_formatTime(slot.endTime)}';
+    final roomText = _cleanRoomName(slot.room);
+    final subjectText = _getSubjectDisplay(slot);
+    final teacherText = slot.teacherName?.trim();
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: GestureDetector(
       onTap: () {
         _showSlotDetails(context, slot, color, timeRange);
       },
       child: Container(
-        margin: const EdgeInsets.all(2),
-        padding: const EdgeInsets.all(6),
+        margin: const EdgeInsets.all(2.5),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
         decoration: BoxDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.25),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: RotatedBox(
-          quarterTurns: 3,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  slot.subjectCode ?? '',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  timeRange,
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (slot.teacherName != null && slot.teacherName!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+        child: ClipRect(
+          child: RotatedBox(
+            quarterTurns: 3,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 1. Subject Name (FIRST / TOP)
                   Text(
-                    slot.teacherName!,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.white.withValues(alpha: 0.9),
+                    subjectText,
+                    style: const TextStyle(
+                      fontSize: 12.0,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.2,
                     ),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ],
-                if (slot.room != null && slot.room!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                  // 2. Room Name (SECOND)
+                  if (roomText.isNotEmpty) ...[
+                    const SizedBox(height: 1.5),
+                    Text(
+                      roomText,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.95),
+                      ),
+                      maxLines: 1,
+                    ),
+                  ],
+                  // 3. Teacher Name (THIRD, if present)
+                  if (teacherText != null && teacherText.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      teacherText,
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                      maxLines: 1,
+                    ),
+                  ],
+                  // 4. Time Range (FOURTH / BOTTOM)
+                  const SizedBox(height: 1.5),
                   Text(
-                    slot.room!,
+                    timeRange,
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: 8.5,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: Colors.white.withValues(alpha: 0.85),
                     ),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
       ),
-    );
+    ));
   }
 
   void _showSlotDetails(BuildContext context, TimetableSlotModel slot, Color color, String timeRange) {
+    final l10n = AppLocalizations.of(context);
+    final fullName = (slot.subjectName != null && slot.subjectName!.trim().isNotEmpty)
+        ? slot.subjectName!.trim()
+        : (slot.subjectCode ?? 'Matière');
+    final detailLocation = _formatDetailLocation(slot.room);
+
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -730,103 +918,113 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    slot.subjectCode ?? 'Matière',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: color,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      fullName,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                if (slot.subjectName != null && slot.subjectName!.isNotEmpty) ...[
-                  Text(
-                    slot.subjectName!,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.access_time_filled, size: 20, color: Colors.grey),
-                    const SizedBox(width: 8),
-                    Text(
-                      timeRange,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-                if (slot.room != null && slot.room!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.room, size: 20, color: Colors.grey),
+                      const Icon(Icons.access_time_filled, size: 20, color: Colors.grey),
                       const SizedBox(width: 8),
                       Text(
-                        'Salle: ${slot.room}',
+                        timeRange,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
-                ],
-                const SizedBox(height: 24),
-                const Divider(),
-                const SizedBox(height: 16),
-                const Text(
-                  'Enseignant',
-                  style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.grey.shade200,
-                      backgroundImage: slot.teacherPhotoUrl != null
-                          ? NetworkImage(slot.teacherPhotoUrl!)
-                          : null,
-                      child: slot.teacherPhotoUrl == null
-                          ? const Icon(Icons.person, color: Colors.grey)
-                          : null,
-                    ),
-                    const SizedBox(width: 16),
-                    Text(
-                      slot.teacherName ?? 'Non assigné',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  if (detailLocation.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Icon(Icons.location_on_rounded, size: 18, color: Colors.grey),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            detailLocation,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: color,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: const Text('Fermer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.translate('teacher'),
+                    style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
                   ),
-                ),
-            ],
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: slot.teacherPhotoUrl != null
+                            ? NetworkImage(slot.teacherPhotoUrl!)
+                            : null,
+                        child: slot.teacherPhotoUrl == null
+                            ? const Icon(Icons.person, color: Colors.grey)
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        slot.teacherName ?? l10n.translate('not_assigned'),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text(
+                        l10n.closeLabel,
+                        style: (Localizations.localeOf(dialogContext).languageCode == 'ar'
+                            ? GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.bold)
+                            : const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
-    );
+        );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         return BackdropFilter(
@@ -873,5 +1071,122 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
     final currentHour = now.hour;
     final slotHour = _timeToMinutes(_timeSlots[slotIndex]) ~/ 60;
     return currentHour == slotHour;
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required bool isExam,
+    bool isFuture = false,
+    DateTime? startDate,
+  }) {
+    final String title;
+    final String subtitle;
+    if (isFuture) {
+      final lang = Localizations.localeOf(context).languageCode;
+      final formattedDate = startDate != null
+          ? DateFormat('d MMMM yyyy', lang).format(startDate)
+          : null;
+      title = 'Semestre à venir';
+      subtitle = formattedDate != null
+          ? 'L\'emploi du temps sera disponible à partir du $formattedDate.'
+          : 'L\'emploi du temps sera disponible dès le début du semestre.';
+    } else if (isExam) {
+      title = 'Aucun examen planifié';
+      subtitle =
+          'Les horaires des examens pour ce semestre n\'ont pas encore été publiés par l\'administration.';
+    } else {
+      title = 'Emploi du temps non disponible';
+      subtitle =
+          'L\'emploi du temps de la classe pour ce semestre n\'a pas encore été créé par l\'administration.';
+    }
+
+    return Align(
+      alignment: const Alignment(0, -0.45),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: isFuture
+                        ? const [Color(0xFFFF2B6D), Color(0xFFE11D48)]
+                        : isExam
+                            ? const [Color(0xFFEA580C), Color(0xFFF97316)]
+                            : const [Color(0xFF10B981), Color(0xFF059669)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isFuture
+                              ? const Color(0xFFFF2B6D)
+                              : isExam
+                                  ? const Color(0xFFEA580C)
+                                  : const Color(0xFF10B981))
+                          .withValues(alpha: 0.3),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  isFuture
+                      ? Icons.calendar_month_rounded
+                      : isExam
+                          ? Icons.school_rounded
+                          : Icons.calendar_today_rounded,
+                  size: 34,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1F2937),
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF6B7280),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

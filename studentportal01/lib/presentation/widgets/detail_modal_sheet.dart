@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 /// A detail modal sheet with two fixed states: partial (tap to open)
@@ -139,10 +140,20 @@ class _DetailModalSheetState extends State<DetailModalSheet>
 
         return Stack(
           children: [
-            // scrim — tap to toggle / dismiss
+            // scrim — tap to toggle / dismiss with blur
             GestureDetector(
               onTap: _isFullScreen ? _toggle : _dismiss,
-              child: Container(color: Colors.black.withOpacity(0.25 * e)),
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: 10.0 * e,
+                    sigmaY: 10.0 * e,
+                  ),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.25 * e),
+                  ),
+                ),
+              ),
             ),
             // sheet
             Positioned(

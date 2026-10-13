@@ -9,6 +9,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/skeleton_loader.dart';
+
 
 // ── Speciality Color Helper ───────────────────────────────────────────────
 
@@ -208,20 +210,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     _buildStatusFilterBar(context, professorsAsync),
                     Expanded(
                       child: professorsAsync.when(
-                        loading: () => Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: AppShadows.card,
-                            ),
-                            child: const SizedBox(
-                              width: 36, height: 36,
-                              child: IosLoader(color: AppColors.primary),
-                            ),
-                          ),
-                        ),
+                        loading: () => const TableSkeletonLoader(),
                         error: (e, _) => Center(
                           child: Container(
                             padding: const EdgeInsets.all(36),
@@ -444,6 +433,76 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Status Filter Bar (Tous / Actifs / Archivés) ────────────────────────
+  Widget _buildStatusFilterBar(BuildContext context, AsyncValue<List<Map<String, dynamic>>> professorsAsync) {
+    final allProfs = professorsAsync.whenOrNull(data: (p) => p) ?? [];
+    final totalCount = allProfs.length;
+    final activeCount = allProfs.where((p) => p['is_active'] == true).length;
+    final archivedCount = allProfs.where((p) => p['is_active'] != true).length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.slate100.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              children: [
+                _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; })),
+                _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; })),
+                _buildStatusChip('Archivés', archivedCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; })),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String label, int count, bool isActive, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] : null,
+        ),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: isActive ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1087,83 +1146,15 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     );
   }
 
-  // ── Status Filter Bar (Tous / Actifs / Archivés) ─────────────────────────
 
-  Widget _buildStatusFilterBar(BuildContext context, AsyncValue<List<Map<String, dynamic>>> professorsAsync) {
-    final allProfs = professorsAsync.whenOrNull(data: (p) => p) ?? [];
-    final totalCount = allProfs.length;
-    final activeCount = allProfs.where((p) => p['is_active'] == true).length;
-    final archivedCount = allProfs.where((p) => p['is_active'] != true).length;
-
+  Widget _headerLabel(String text, {Alignment alignment = Alignment.centerLeft, TextAlign textAlign = TextAlign.left}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: AppColors.slate100.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; })),
-                _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; })),
-                _buildStatusChip('Archivés', archivedCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; })),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String label, int count, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] : null,
-        ),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: isActive ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _headerLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Text(
         text,
-        style: TextStyle(
+        textAlign: textAlign,
+        style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: AppColors.textTertiary,
@@ -1259,12 +1250,12 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ),
                     ),
                     DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
-                    DataColumn(label: SizedBox(width: specialityW, child: _headerLabel('SPÉCIALITÉ'))),
-                    DataColumn(label: SizedBox(width: niveauxW, child: _headerLabel('NIVEAUX'))),
-                    DataColumn(label: SizedBox(width: classesW, child: _headerLabel('CLASSES'))),
-                    DataColumn(label: SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE'))),
-                    DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT'))),
-                    DataColumn(label: SizedBox(width: dateJoinedW, child: _headerLabel('CRÉÉ LE'))),
+                    DataColumn(label: SizedBox(width: specialityW, child: _headerLabel('SPÉCIALITÉ', alignment: Alignment.center, textAlign: TextAlign.center))),
+                    DataColumn(label: SizedBox(width: niveauxW, child: _headerLabel('NIVEAUX', alignment: Alignment.center, textAlign: TextAlign.center))),
+                    DataColumn(label: SizedBox(width: classesW, child: _headerLabel('CLASSES', alignment: Alignment.center, textAlign: TextAlign.center))),
+                    DataColumn(label: SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE', alignment: Alignment.center, textAlign: TextAlign.center))),
+                    DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT', alignment: Alignment.center, textAlign: TextAlign.center))),
+                    DataColumn(label: SizedBox(width: dateJoinedW, child: _headerLabel('CRÉÉ LE', alignment: Alignment.center, textAlign: TextAlign.center))),
                     DataColumn(label: SizedBox(width: actionsW, child: Container())),
                   ],
                   rows: professors.map((prof) {
@@ -1364,7 +1355,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                                         decoration: BoxDecoration(
                                           color: specColor.withOpacity(0.10),
                                           borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: specColor.withOpacity(0.25)),
                                         ),
                                         child: Text(
                                           speciality,
@@ -1397,7 +1387,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                                           decoration: BoxDecoration(
                                             color: nColor.withOpacity(0.10),
                                             borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(color: nColor.withOpacity(0.25)),
                                           ),
                                           child: Text(n, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: nColor), overflow: TextOverflow.ellipsis),
                                         );
@@ -1416,12 +1405,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                                     child: Wrap(
                                       spacing: 4,
                                       runSpacing: 2,
-                                      children: profClasses.take(2).map((c) => Container(
+                                       children: profClasses.take(2).map((c) => Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: AppColors.successSoft,
                                           borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: AppColors.success.withOpacity(0.2)),
                                         ),
                                         child: Text(c, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis),
                                       )).toList(),
@@ -1444,12 +1432,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           SizedBox(
                             width: statusW,
                             child: Center(
-                              child: Container(
+                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: isActiveProf ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
                                   borderRadius: BorderRadius.circular(AppRadius.xs),
-                                  border: Border.all(color: isActiveProf ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA)),
                                 ),
                                 child: Text(
                                   isActiveProf ? 'Actif' : 'Inactif',

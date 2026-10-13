@@ -189,11 +189,19 @@ class SemestersState {
       ? academicYears.where((y) => y.id == selectedAcademicYearId).firstOrNull
       : currentAcademicYear;
 
-  List<SemesterModel> get filteredSemesters => selectedAcademicYearId != null
-      ? semesters
-            .where((s) => s.academicYearId == selectedAcademicYearId)
-            .toList()
-      : semesters;
+  List<SemesterModel> get filteredSemesters {
+    final list = selectedAcademicYearId != null
+        ? semesters
+              .where((s) => s.academicYearId == selectedAcademicYearId)
+              .toList()
+        : semesters.toList();
+    list.sort((a, b) {
+      final numCompare = a.number.compareTo(b.number);
+      if (numCompare != 0) return numCompare;
+      return a.startDate.compareTo(b.startDate);
+    });
+    return list;
+  }
 
   List<VacationPeriodModel> filteredVacations(String? yearId) => yearId == null
       ? vacationPeriods
@@ -252,17 +260,57 @@ class SemestersState {
   /// Generate auto name for next period
   String get nextSemesterName => '$periodLabel $nextSemesterNumber';
 
-  /// Check if a date range overlaps with any existing period.
+  /// Strip time to avoid any timezone/hour discrepancies
+  static DateTime stripTime(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Check if the selected/current academic year is already fully covered by periods
+  bool get isCurrentYearFullyCovered {
+    final year = selectedAcademicYear;
+    if (year == null) return false;
+    final list = filteredSemesters;
+    if (list.isEmpty) return false;
+    final latestEnd = list.map((s) => s.endDate).reduce((a, b) => a.isAfter(b) ? a : b);
+    final yEnd = stripTime(year.endDate);
+    final lEnd = stripTime(latestEnd);
+    return !lEnd.isBefore(yEnd);
+  }
+
+  /// Check if a date range overlaps with or duplicates any existing period.
   String? validateOverlap(DateTime start, DateTime end, {String? excludeId}) {
+    final sStart = stripTime(start);
+    final sEnd = stripTime(end);
+
     for (final s in filteredSemesters) {
       if (excludeId != null && s.id == excludeId) continue;
-      // Two ranges overlap if one starts before the other ends AND vice versa
-      if (!start.isAfter(s.endDate) && !end.isBefore(s.startDate)) {
-        return 'Chevauche avec ${s.name} (du ${DateFormat('dd/MM/yyyy').format(s.startDate)} au ${DateFormat('dd/MM/yyyy').format(s.endDate)})';
+      final existStart = stripTime(s.startDate);
+      final existEnd = stripTime(s.endDate);
+
+      // Exact duplicate check
+      if (sStart == existStart && sEnd == existEnd) {
+        return 'Une période existe déjà avec ces dates exactes : "${s.name}" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
+      }
+
+      // Overlap check
+      if (!sStart.isAfter(existEnd) && !sEnd.isBefore(existStart)) {
+        return 'Chevauche avec "${s.name}" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
       }
     }
     return null;
   }
+
+  /// Check if a name is already used by another semester in this academic year
+  String? validateName(String name, {String? excludeId}) {
+    final trimmed = name.trim().toLowerCase();
+    if (trimmed.isEmpty) return null;
+    for (final s in filteredSemesters) {
+      if (excludeId != null && s.id == excludeId) continue;
+      if (s.name.trim().toLowerCase() == trimmed) {
+        return 'Une période nommée "${s.name}" existe déjà pour cette année scolaire.';
+      }
+    }
+    return null;
+  }
+
 
   /// Get the minimum start date for new semester (must be after previous semester ends)
   DateTime? get minStartDateForNewSemester {
@@ -272,6 +320,26 @@ class SemestersState {
     final sorted = [...filtered]
       ..sort((a, b) => b.endDate.compareTo(a.endDate));
     return sorted.first.endDate.add(const Duration(days: 1));
+  }
+
+  /// Get the minimum start date for editing a specific semester
+  /// Returns the day after the previous semester's end date
+  DateTime? minStartDateForEditingSemester(String? semesterId) {
+    final filtered = filteredSemesters;
+    if (filtered.isEmpty) return null;
+    
+    // Find the current semester being edited
+    final currentSemester = filtered.where((s) => s.id == semesterId).firstOrNull;
+    if (currentSemester == null) return null;
+    
+    // Find the semester that ends just before this one starts
+    final previousSemesters = filtered
+        .where((s) => s.id != semesterId && s.endDate.isBefore(currentSemester.startDate))
+        .toList()
+      ..sort((a, b) => b.endDate.compareTo(a.endDate));
+    
+    if (previousSemesters.isEmpty) return null;
+    return previousSemesters.first.endDate.add(const Duration(days: 1));
   }
 
   SemestersState copyWith({
@@ -291,6 +359,9 @@ class SemestersState {
 }
 
 class SemestersNotifier extends AsyncNotifier<SemestersState> {
+  bool _isMutating = false;
+  bool get isMutating => _isMutating;
+
   @override
   Future<SemestersState> build() async => _load();
 
@@ -338,12 +409,12 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
           .toList();
     }
 
-    // Load semesters with academic year info (now with correct is_current)
+    // Load semesters with academic year info (ordered chronologically ascending)
     final data = await admin
         .from('semesters')
         .select('*, academic_years(id, name)')
         .eq('school_id', schoolId)
-        .order('start_date', ascending: false);
+        .order('start_date', ascending: true);
 
     final semesters = (data as List)
         .map((e) => SemesterModel.fromJson(e))
@@ -480,101 +551,210 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     List<({DateTime start, DateTime end})> manualVacations = const [],
     List<({DateTime start, DateTime end})> examPeriods = const [],
   }) async {
-    final admin = SupabaseConfig.adminClient;
-    final user = SupabaseConfig.client.auth.currentUser;
-    if (user == null) throw Exception('Non connecté');
+    if (_isMutating) {
+      throw Exception('Une création de période est déjà en cours. Veuillez patienter.');
+    }
+    _isMutating = true;
+    try {
+      final admin = SupabaseConfig.adminClient;
+      final user = SupabaseConfig.client.auth.currentUser;
+      if (user == null) throw Exception('Non connecté');
 
-    final profile = await admin
-        .from('users')
-        .select('school_id')
-        .eq('id', user.id)
-        .single();
-    final schoolId = profile['school_id'];
+      final profile = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .single();
+      final schoolId = profile['school_id'];
 
-    final year = state.asData?.value.currentAcademicYear;
-    if (year == null) throw Exception('Aucune année scolaire active');
+      final currentState = state.asData?.value;
+      final currentYear = currentState?.selectedAcademicYear ?? currentState?.currentAcademicYear;
+      if (currentYear == null) throw Exception('Aucune année scolaire active');
 
-    // Check if semesters already exist for this academic year
-    final existingSemesters = await admin
-        .from('semesters')
-        .select('id')
-        .eq('academic_year_id', year.id)
-        .limit(1);
+      // Fetch fresh academic year directly from DB to verify bounds
+      final yearRes = await admin
+          .from('academic_years')
+          .select('id, name, start_date, end_date')
+          .eq('id', currentYear.id)
+          .single();
+      final yearStart = SemestersState.stripTime(DateTime.parse(yearRes['start_date']));
+      final yearEnd = SemestersState.stripTime(DateTime.parse(yearRes['end_date']));
 
-    // Only insert semesters if none exist yet (prevents duplication)
-    if ((existingSemesters as List).isEmpty) {
+      if (ranges.isEmpty) throw Exception('Aucune période à créer');
+
+      // 1. Validate each range format and bounds
+      for (var i = 0; i < ranges.length; i++) {
+        final rStart = SemestersState.stripTime(ranges[i].start);
+        final rEnd = SemestersState.stripTime(ranges[i].end);
+
+        if (!rStart.isBefore(rEnd)) {
+          throw Exception('La date de début doit être strictement antérieure à la date de fin pour la période ${i + 1}.');
+        }
+        if (rStart.isBefore(yearStart) || rEnd.isAfter(yearEnd)) {
+          throw Exception('La période ${i + 1} doit être comprise dans l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yearStart)} au ${DateFormat('dd/MM/yyyy').format(yearEnd)}).');
+        }
+      }
+
+      // 2. Validate ranges among themselves (no internal overlaps)
+      for (var i = 0; i < ranges.length; i++) {
+        final rStartI = SemestersState.stripTime(ranges[i].start);
+        final rEndI = SemestersState.stripTime(ranges[i].end);
+        for (var j = i + 1; j < ranges.length; j++) {
+          final rStartJ = SemestersState.stripTime(ranges[j].start);
+          final rEndJ = SemestersState.stripTime(ranges[j].end);
+          if (!rStartI.isAfter(rEndJ) && !rEndI.isBefore(rStartJ)) {
+            throw Exception('Les périodes à créer se chevauchent entre elles (période ${i + 1} et période ${j + 1}).');
+          }
+        }
+      }
+
+      // 3. FETCH LIVE SEMESTERS FROM DB (never rely solely on client cache)
+      final existingDbSemesters = await admin
+          .from('semesters')
+          .select('id, name, number, start_date, end_date')
+          .eq('school_id', schoolId)
+          .eq('academic_year_id', currentYear.id)
+          .order('start_date', ascending: true);
+
+      final existingList = (existingDbSemesters as List);
+
+      // Check for exact duplicates or overlaps against live database
+      for (var i = 0; i < ranges.length; i++) {
+        final rStart = SemestersState.stripTime(ranges[i].start);
+        final rEnd = SemestersState.stripTime(ranges[i].end);
+
+        for (final existing in existingList) {
+          final existStart = SemestersState.stripTime(DateTime.parse(existing['start_date']));
+          final existEnd = SemestersState.stripTime(DateTime.parse(existing['end_date']));
+          final existName = existing['name'] ?? 'Période';
+
+          if (rStart == existStart && rEnd == existEnd) {
+            throw Exception('Impossible de créer la période : une période existe déjà avec ces dates exactes ("$existName" du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+          }
+
+          if (!rStart.isAfter(existEnd) && !rEnd.isBefore(existStart)) {
+            throw Exception('Impossible de créer la période : elle chevauche avec "$existName" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+          }
+        }
+      }
+
+      // Calculate semester numbers and unique names
+      int maxNumber = existingList.isEmpty
+          ? 0
+          : existingList
+              .map((s) => (s['number'] as num?)?.toInt() ?? 0)
+              .reduce((a, b) => a > b ? a : b);
+
       final label = type == 'trimestre' ? 'Trimestre' : type == 'single' ? 'Période' : 'Semestre';
 
       final rows = <Map<String, dynamic>>[];
+      final existingNames = existingList.map((s) => (s['name'] as String? ?? '').trim().toLowerCase()).toSet();
+
       for (var i = 0; i < ranges.length; i++) {
         final range = ranges[i];
+        final num = maxNumber + i + 1;
+        String name = type == 'single'
+            ? 'Semestre $num'
+            : (ranges.length == 1 && maxNumber == 0 ? label : '$label $num');
+
+        // Ensure unique name
+        int nameSuffix = 1;
+        String finalName = name;
+        while (existingNames.contains(finalName.toLowerCase())) {
+          nameSuffix++;
+          finalName = '$name ($nameSuffix)';
+        }
+        existingNames.add(finalName.toLowerCase());
+
         rows.add({
-          'name': ranges.length == 1 ? label : '$label ${i + 1}',
-          'number': i + 1,
+          'name': finalName,
+          'number': num,
           'school_id': schoolId,
-          'academic_year_id': year.id,
+          'academic_year_id': currentYear.id,
           'start_date': range.start.toIso8601String().split('T')[0],
           'end_date': range.end.toIso8601String().split('T')[0],
           'is_current': false,
         });
       }
 
-      await admin.from('semesters').insert(rows);
+      if (rows.isNotEmpty) {
+        await admin.from('semesters').insert(rows);
+      }
 
-      // Rebuild auto-gap vacations for this academic year
-      await _rebuildAutoGapVacations(schoolId, year.id, ranges);
+      // Save manual vacations (delete existing manual ones first to avoid duplicates)
+      await admin
+          .from('vacation_periods')
+          .delete()
+          .eq('academic_year_id', currentYear.id)
+          .eq('type', 'manual');
+
+      if (manualVacations.isNotEmpty) {
+        final vacationRows = manualVacations.map((v) => {
+          'school_id': schoolId,
+          'academic_year_id': currentYear.id,
+          'name': 'Vacances',
+          'start_date': v.start.toIso8601String().split('T')[0],
+          'end_date': v.end.toIso8601String().split('T')[0],
+          'type': 'manual',
+        }).toList();
+        await admin.from('vacation_periods').insert(vacationRows);
+      }
+
+      // Save exam periods (delete existing ones first to avoid duplicates)
+      await admin
+          .from('exam_periods')
+          .delete()
+          .eq('academic_year_id', currentYear.id);
+
+      if (examPeriods.isNotEmpty) {
+        final examRows = examPeriods.map((e) => {
+          'school_id': schoolId,
+          'academic_year_id': currentYear.id,
+          'name': 'Période d\'examens',
+          'start_date': e.start.toIso8601String().split('T')[0],
+          'end_date': e.end.toIso8601String().split('T')[0],
+        }).toList();
+        await admin.from('exam_periods').insert(examRows);
+      }
+
+      // Rebuild auto-gap vacations for this academic year from database
+      await _rebuildAutoGapVacations(schoolId, currentYear.id);
+
+      await _refreshCurrentSemester(schoolId);
+      ref.invalidateSelf();
+    } finally {
+      _isMutating = false;
     }
-
-    // Save manual vacations (delete existing manual ones first to avoid duplicates)
-    await admin
-        .from('vacation_periods')
-        .delete()
-        .eq('academic_year_id', year.id)
-        .eq('type', 'manual');
-
-    if (manualVacations.isNotEmpty) {
-      final vacationRows = manualVacations.map((v) => {
-        'school_id': schoolId,
-        'academic_year_id': year.id,
-        'name': 'Vacances',
-        'start_date': v.start.toIso8601String().split('T')[0],
-        'end_date': v.end.toIso8601String().split('T')[0],
-        'type': 'manual',
-      }).toList();
-      await admin.from('vacation_periods').insert(vacationRows);
-    }
-
-    // Save exam periods (delete existing ones first to avoid duplicates)
-    await admin
-        .from('exam_periods')
-        .delete()
-        .eq('academic_year_id', year.id);
-
-    if (examPeriods.isNotEmpty) {
-      final examRows = examPeriods.map((e) => {
-        'school_id': schoolId,
-        'academic_year_id': year.id,
-        'name': 'Examen',
-        'start_date': e.start.toIso8601String().split('T')[0],
-        'end_date': e.end.toIso8601String().split('T')[0],
-      }).toList();
-      await admin.from('exam_periods').insert(examRows);
-    }
-
-    await _refreshCurrentSemester(schoolId);
-    ref.invalidateSelf();
   }
 
   Future<void> _rebuildAutoGapVacations(
     String schoolId,
     String yearId,
-    List<({DateTime start, DateTime end})> ranges,
   ) async {
     final admin = SupabaseConfig.adminClient;
-    final year = state.asData?.value.academicYears
-        .where((y) => y.id == yearId)
-        .firstOrNull;
-    if (year == null) return;
+    final yearRes = await admin
+        .from('academic_years')
+        .select('*')
+        .eq('id', yearId)
+        .maybeSingle();
+    if (yearRes == null) return;
+
+    final yearStart = DateTime.parse(yearRes['start_date']);
+    final yearEnd = DateTime.parse(yearRes['end_date']);
+
+    // Fetch all semesters for this year sorted by start_date
+    final semestersData = await admin
+        .from('semesters')
+        .select('*')
+        .eq('academic_year_id', yearId)
+        .order('start_date', ascending: true);
+
+    final sortedSemesters = (semestersData as List)
+        .map((s) => (
+              start: DateTime.parse(s['start_date']),
+              end: DateTime.parse(s['end_date']),
+            ))
+        .toList();
 
     // Delete existing auto-gap vacations for this year
     await admin
@@ -583,25 +763,22 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
         .eq('academic_year_id', yearId)
         .eq('type', 'auto_gap');
 
-    if (ranges.isEmpty) return;
-
-    final sorted = [...ranges]
-      ..sort((a, b) => a.start.compareTo(b.start));
+    if (sortedSemesters.isEmpty) return;
 
     final gaps = <({DateTime start, DateTime end})>[];
 
-    // Gap before first range
-    if (sorted.first.start.isAfter(year.startDate)) {
-      gaps.add((
-        start: year.startDate,
-        end: sorted.first.start.subtract(const Duration(days: 1)),
-      ));
+    // Gap before first semester
+    if (sortedSemesters.first.start.isAfter(yearStart)) {
+      final gapEnd = sortedSemesters.first.start.subtract(const Duration(days: 1));
+      if (!gapEnd.isBefore(yearStart)) {
+        gaps.add((start: yearStart, end: gapEnd));
+      }
     }
 
-    // Gaps between ranges
-    for (var i = 0; i < sorted.length - 1; i++) {
-      final nextStart = sorted[i + 1].start;
-      final prevEnd = sorted[i].end;
+    // Gaps between semesters
+    for (var i = 0; i < sortedSemesters.length - 1; i++) {
+      final nextStart = sortedSemesters[i + 1].start;
+      final prevEnd = sortedSemesters[i].end;
       if (nextStart.isAfter(prevEnd.add(const Duration(days: 1)))) {
         gaps.add((
           start: prevEnd.add(const Duration(days: 1)),
@@ -610,12 +787,12 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       }
     }
 
-    // Gap after last range
-    if (sorted.last.end.isBefore(year.endDate)) {
-      gaps.add((
-        start: sorted.last.end.add(const Duration(days: 1)),
-        end: year.endDate,
-      ));
+    // Gap after last semester
+    if (sortedSemesters.last.end.isBefore(yearEnd)) {
+      final gapStart = sortedSemesters.last.end.add(const Duration(days: 1));
+      if (!gapStart.isAfter(yearEnd)) {
+        gaps.add((start: gapStart, end: yearEnd));
+      }
     }
 
     if (gaps.isEmpty) return;
@@ -639,29 +816,83 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     required DateTime endDate,
     required String academicYearId,
   }) async {
-    final admin = SupabaseConfig.adminClient;
-    final user = SupabaseConfig.client.auth.currentUser;
-    if (user == null) throw Exception('Non connecté');
+    if (_isMutating) {
+      throw Exception('Une opération est déjà en cours. Veuillez patienter.');
+    }
+    _isMutating = true;
+    try {
+      final admin = SupabaseConfig.adminClient;
+      final user = SupabaseConfig.client.auth.currentUser;
+      if (user == null) throw Exception('Non connecté');
 
-    final profile = await admin
-        .from('users')
-        .select('school_id')
-        .eq('id', user.id)
-        .single();
-    final schoolId = profile['school_id'];
+      final profile = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .single();
+      final schoolId = profile['school_id'];
 
-    await admin.from('semesters').insert({
-      'name': name,
-      'number': number,
-      'school_id': schoolId,
-      'academic_year_id': academicYearId,
-      'start_date': startDate.toIso8601String().split('T')[0],
-      'end_date': endDate.toIso8601String().split('T')[0],
-      'is_current': false,
-    });
+      final sStart = SemestersState.stripTime(startDate);
+      final sEnd = SemestersState.stripTime(endDate);
 
-    await _refreshCurrentSemester(schoolId);
-    ref.invalidateSelf();
+      if (!sStart.isBefore(sEnd)) {
+        throw Exception('La date de début doit être strictement antérieure à la date de fin.');
+      }
+
+      // Fetch academic year bounds
+      final yearRes = await admin
+          .from('academic_years')
+          .select('start_date, end_date')
+          .eq('id', academicYearId)
+          .single();
+      final yStart = SemestersState.stripTime(DateTime.parse(yearRes['start_date']));
+      final yEnd = SemestersState.stripTime(DateTime.parse(yearRes['end_date']));
+
+      if (sStart.isBefore(yStart) || sEnd.isAfter(yEnd)) {
+        throw Exception('La période doit être comprise dans les limites de l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yStart)} au ${DateFormat('dd/MM/yyyy').format(yEnd)}).');
+      }
+
+      // Live DB check
+      final existingDb = await admin
+          .from('semesters')
+          .select('id, name, start_date, end_date')
+          .eq('school_id', schoolId)
+          .eq('academic_year_id', academicYearId);
+
+      for (final existing in (existingDb as List)) {
+        final existStart = SemestersState.stripTime(DateTime.parse(existing['start_date']));
+        final existEnd = SemestersState.stripTime(DateTime.parse(existing['end_date']));
+        final existName = existing['name'] ?? '';
+
+        if (sStart == existStart && sEnd == existEnd) {
+          throw Exception('Une période existe déjà avec ces dates exactes : "$existName".');
+        }
+
+        if (!sStart.isAfter(existEnd) && !sEnd.isBefore(existStart)) {
+          throw Exception('La période chevauche avec la période existante "$existName" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+        }
+
+        if ((existName as String).trim().toLowerCase() == name.trim().toLowerCase()) {
+          throw Exception('Une période nommée "$name" existe déjà pour cette année scolaire.');
+        }
+      }
+
+      await admin.from('semesters').insert({
+        'name': name.trim(),
+        'number': number,
+        'school_id': schoolId,
+        'academic_year_id': academicYearId,
+        'start_date': startDate.toIso8601String().split('T')[0],
+        'end_date': endDate.toIso8601String().split('T')[0],
+        'is_current': false,
+      });
+
+      await _rebuildAutoGapVacations(schoolId, academicYearId);
+      await _refreshCurrentSemester(schoolId);
+      ref.invalidateSelf();
+    } finally {
+      _isMutating = false;
+    }
   }
 
   Future<void> updateSemester({
@@ -671,27 +902,85 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-    final admin = SupabaseConfig.adminClient;
-    final user = SupabaseConfig.client.auth.currentUser;
-    if (user == null) throw Exception('Non connecté');
+    if (_isMutating) {
+      throw Exception('Une opération est déjà en cours. Veuillez patienter.');
+    }
+    _isMutating = true;
+    try {
+      final admin = SupabaseConfig.adminClient;
+      final user = SupabaseConfig.client.auth.currentUser;
+      if (user == null) throw Exception('Non connecté');
 
-    await admin
-        .from('semesters')
-        .update({
-          'name': name,
-          'number': number,
-          'start_date': startDate.toIso8601String().split('T')[0],
-          'end_date': endDate.toIso8601String().split('T')[0],
-        })
-        .eq('id', id);
+      final semester = await admin
+          .from('semesters')
+          .select('school_id, academic_year_id')
+          .eq('id', id)
+          .single();
+      final schoolId = semester['school_id'];
+      final yearId = semester['academic_year_id'];
 
-    final profile = await admin
-        .from('users')
-        .select('school_id')
-        .eq('id', user.id)
-        .single();
-    await _refreshCurrentSemester(profile['school_id']);
-    ref.invalidateSelf();
+      final sStart = SemestersState.stripTime(startDate);
+      final sEnd = SemestersState.stripTime(endDate);
+
+      if (!sStart.isBefore(sEnd)) {
+        throw Exception('La date de début doit être strictement antérieure à la date de fin.');
+      }
+
+      // Check academic year bounds
+      final yearRes = await admin
+          .from('academic_years')
+          .select('start_date, end_date')
+          .eq('id', yearId)
+          .single();
+      final yStart = SemestersState.stripTime(DateTime.parse(yearRes['start_date']));
+      final yEnd = SemestersState.stripTime(DateTime.parse(yearRes['end_date']));
+
+      if (sStart.isBefore(yStart) || sEnd.isAfter(yEnd)) {
+        throw Exception('La période doit être comprise dans les limites de l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yStart)} au ${DateFormat('dd/MM/yyyy').format(yEnd)}).');
+      }
+
+      // Check live database against other semesters
+      final otherSemesters = await admin
+          .from('semesters')
+          .select('id, name, start_date, end_date')
+          .eq('school_id', schoolId)
+          .eq('academic_year_id', yearId)
+          .neq('id', id);
+
+      for (final existing in (otherSemesters as List)) {
+        final existStart = SemestersState.stripTime(DateTime.parse(existing['start_date']));
+        final existEnd = SemestersState.stripTime(DateTime.parse(existing['end_date']));
+        final existName = existing['name'] ?? '';
+
+        if (sStart == existStart && sEnd == existEnd) {
+          throw Exception('Une autre période a déjà exactement ces dates : "$existName".');
+        }
+
+        if (!sStart.isAfter(existEnd) && !sEnd.isBefore(existStart)) {
+          throw Exception('La période chevauche avec la période existante "$existName" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+        }
+
+        if ((existName as String).trim().toLowerCase() == name.trim().toLowerCase()) {
+          throw Exception('Une autre période avec le nom "$name" existe déjà pour cette année scolaire.');
+        }
+      }
+
+      await admin
+          .from('semesters')
+          .update({
+            'name': name.trim(),
+            'number': number,
+            'start_date': startDate.toIso8601String().split('T')[0],
+            'end_date': endDate.toIso8601String().split('T')[0],
+          })
+          .eq('id', id);
+
+      await _rebuildAutoGapVacations(schoolId, yearId);
+      await _refreshCurrentSemester(schoolId);
+      ref.invalidateSelf();
+    } finally {
+      _isMutating = false;
+    }
   }
 
   Future<void> delete(String id) async {
@@ -699,15 +988,21 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     final user = SupabaseConfig.client.auth.currentUser;
     if (user == null) throw Exception('Non connecté');
 
-    final profile = await admin
-        .from('users')
-        .select('school_id')
-        .eq('id', user.id)
-        .single();
-    final schoolId = profile['school_id'];
+    final semester = await admin
+        .from('semesters')
+        .select('school_id, academic_year_id')
+        .eq('id', id)
+        .maybeSingle();
 
     await admin.from('semesters').delete().eq('id', id);
-    await _refreshCurrentSemester(schoolId);
+
+    if (semester != null) {
+      final schoolId = semester['school_id'];
+      final yearId = semester['academic_year_id'];
+      await _rebuildAutoGapVacations(schoolId, yearId);
+      await _refreshCurrentSemester(schoolId);
+    }
+
     ref.invalidateSelf();
   }
 

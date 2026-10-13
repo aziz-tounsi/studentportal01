@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/absences_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 
 bool _dateFormattingInitialized = false;
@@ -33,11 +34,37 @@ class StudentAbsencesScreen extends ConsumerStatefulWidget {
 
 class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
   String _searchQuery = '';
+  String _sortField = 'date'; // 'date', 'matiere', 'status'
+  bool _sortAscending = false;
   int _selectedMonthOffset = 0;
   final _searchController = TextEditingController();
   final Set<String> _selectedAbsences = {};
   int _page = 0;
   int _perPage = 10;
+
+  Widget _buildHeaderIconButton({
+    required IconData icon,
+    required String tooltip,
+    VoidCallback? onPressed,
+    bool isActive = false,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      color: isActive ? const Color(0xFF655DD5) : AppColors.textTertiary,
+      style: IconButton.styleFrom(
+        backgroundColor: isActive ? const Color(0xFFF5F3FF) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: isActive ? const Color(0xFF655DD5).withOpacity(0.2) : Colors.transparent,
+          ),
+        ),
+      ),
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+    );
+  }
 
   @override
   void initState() {
@@ -62,17 +89,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
           const AdminSidebar(currentRoute: '/absences'),
           Expanded(
             child: asyncData.when(
-              loading: () => Center(
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: AppShadows.card,
-                  ),
-                  child: const IosLoader(color: AppColors.primary),
-                ),
-              ),
+              loading: () => const StudentAbsencesSkeletonLoader(),
               error: (e, _) => Center(
                 child: Container(
                   padding: const EdgeInsets.all(32),
@@ -126,6 +143,20 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
           (a.reason?.toLowerCase().contains(q) ?? false) ||
           DateFormat('dd/MM/yyyy').format(a.date).contains(q);
     }).toList();
+
+    filteredAbsences.sort((a, b) {
+      int comparison = 0;
+      if (_sortField == 'date') {
+        comparison = a.date.compareTo(b.date);
+      } else if (_sortField == 'matiere') {
+        comparison = (a.subjectName ?? '').compareTo(b.subjectName ?? '');
+      } else if (_sortField == 'status') {
+        final aJust = a.justified ? 1 : 0;
+        final bJust = b.justified ? 1 : 0;
+        comparison = aJust.compareTo(bJust);
+      }
+      return _sortAscending ? comparison : -comparison;
+    });
 
     return Stack(
       children: [
@@ -960,6 +991,94 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 12),
+                PopupMenuButton<String>(
+                  tooltip: 'Trier',
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 8,
+                  offset: const Offset(0, 40),
+                  onSelected: (value) {
+                    setState(() {
+                      if (_sortField == value) {
+                        _sortAscending = !_sortAscending;
+                      } else {
+                        _sortField = value;
+                        _sortAscending = true;
+                      }
+                      _page = 0;
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'date',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            size: 16,
+                            color: _sortField == 'date' ? const Color(0xFF655DD5) : AppColors.textTertiary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Date ${_sortField == 'date' ? (_sortAscending ? '↑' : '↓') : ''}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _sortField == 'date' ? FontWeight.bold : FontWeight.normal,
+                              color: _sortField == 'date' ? const Color(0xFF655DD5) : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'matiere',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.book_rounded,
+                            size: 16,
+                            color: _sortField == 'matiere' ? const Color(0xFF655DD5) : AppColors.textTertiary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Matière ${_sortField == 'matiere' ? (_sortAscending ? '↑' : '↓') : ''}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _sortField == 'matiere' ? FontWeight.bold : FontWeight.normal,
+                              color: _sortField == 'matiere' ? const Color(0xFF655DD5) : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'status',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 16,
+                            color: _sortField == 'status' ? const Color(0xFF655DD5) : AppColors.textTertiary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Statut ${_sortField == 'status' ? (_sortAscending ? '↑' : '↓') : ''}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _sortField == 'status' ? FontWeight.bold : FontWeight.normal,
+                              color: _sortField == 'status' ? const Color(0xFF655DD5) : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  child: _buildHeaderIconButton(
+                    icon: Icons.filter_list_rounded,
+                    tooltip: 'Trier',
+                    isActive: true,
+                  ),
+                ),
               ],
             ),
           ),
@@ -974,7 +1093,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
                 vertical: 10,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
+                color: Colors.white,
                 border: Border(
                   bottom: BorderSide(
                     color: AppColors.border.withOpacity(0.3),

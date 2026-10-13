@@ -52,7 +52,8 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
   }
 
   Widget _buildCourseDetail(BuildContext context, CourseModel course) {
-    final dateFormat = DateFormat('dd MMMM yyyy à HH:mm', 'fr');
+    final lang = Localizations.localeOf(context).languageCode;
+    final dateFormat = DateFormat('dd MMMM yyyy HH:mm', lang);
 
     return CustomScrollView(
       slivers: [

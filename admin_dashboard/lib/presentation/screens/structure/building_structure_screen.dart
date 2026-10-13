@@ -6,6 +6,7 @@ import '../../../data/models/building_models.dart';
 import '../../providers/building_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../../core/theme/app_theme.dart';
 
 class BuildingStructureScreen extends ConsumerStatefulWidget {
@@ -110,8 +111,7 @@ class _BuildingStructureScreenState
                 _buildTopBar(context, stateAsync),
                 Expanded(
                   child: stateAsync.when(
-                    loading: () =>
-                        const Center(child: IosLoader()),
+                    loading: () => const BuildingStructureSkeletonLoader(),
                     error: (e, _) => _buildErrorState(e),
                     data: (state) => _buildContent(context, state),
                   ),

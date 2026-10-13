@@ -17,6 +17,8 @@ import 'user_profile_screen.dart';
 import 'bulk_photo_upload_screen.dart';
 import 'simple_bulk_import_screen.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
+
 
 class UsersScreen extends ConsumerStatefulWidget {
   const UsersScreen({super.key});
@@ -121,17 +123,17 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                         _buildStatusFilterBar(context, usersAsync),
                         Expanded(
                           child: usersAsync.when(
-                            loading: () => Center(
-                              child: Container(
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: AppShadows.card,
-                            ),
-                            child: const IosLoader(size: 36, color: Color(0xFF655DD5)),
-                          ),
-                        ),
+                            loading: () => const TableSkeletonLoader(),
+
+
+
+
+
+
+
+
+
+
                         error: (e, _) => Center(
                           child: Container(
                             padding: const EdgeInsets.all(36),
@@ -535,7 +537,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   color: AppColors.slate100.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(24),
                 ),
                 child: Row(
                   children: [
@@ -568,7 +570,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: isActive ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] : null,
         ),
         child: Row(
@@ -883,7 +885,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     ),
                   )),
                   // Niveau
-                  DataCell(SizedBox(
+                   DataCell(SizedBox(
                     width: niveauW,
                     child: Align(
                       alignment: Alignment.centerLeft,
@@ -892,7 +894,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                         decoration: BoxDecoration(
                           color: const Color(0xFFF5F3FF),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFE9D5FF)),
                         ),
                         child: Text(
                           _formatNiveauDisplay(u),
@@ -903,7 +904,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     ),
                   )),
                   // Classe
-                  DataCell(SizedBox(
+                   DataCell(SizedBox(
                     width: classeW,
                     child: Align(
                       alignment: Alignment.centerLeft,
@@ -912,7 +913,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                         decoration: BoxDecoration(
                           color: const Color(0xFFECFDF5),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
                         ),
                         child: Text(
                           u.className ?? '-',
@@ -941,7 +941,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                           decoration: BoxDecoration(
                             color: AppColors.slate50,
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: AppColors.border),
                           ),
                           child: Text(
                             u.studentCode ?? '-',

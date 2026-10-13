@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +10,8 @@ import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
+
 import 'class_form_dialog.dart';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -51,10 +53,10 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
           const AdminSidebar(currentRoute: '/classes'),
           Expanded(
             child: classesAsync.when(
-              loading: () => const Center(child: IosLoader()),
+              loading: () => const ClassesSkeletonLoader(),
               error: (e, _) => _buildErrorState(e),
               data: (state) => gradeLevelsAsync.when(
-                loading: () => const Center(child: IosLoader()),
+                loading: () => const ClassesSkeletonLoader(),
                 error: (e, _) => _buildErrorState(e),
                 data: (glState) => _buildBody(context, state, glState),
               ),

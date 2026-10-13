@@ -128,6 +128,9 @@ Future<Map<String, List<AnnouncementAttachment>>> _fetchAttachments(
   return attachmentsMap;
 }
 
+/// Loading state for notifications refresh
+final notificationsRefreshingProvider = StateProvider<bool>((ref) => false);
+
 /// Provider for global announcements (Notifications)
 final globalAnnouncementsProvider = FutureProvider<List<StudentAnnouncement>>((
   ref,
@@ -235,6 +238,9 @@ final globalAnnouncementsProvider = FutureProvider<List<StudentAnnouncement>>((
     return [];
   }
 });
+
+/// Loading state for messages refresh
+final messagesRefreshingProvider = StateProvider<bool>((ref) => false);
 
 /// Provider for class messages
 final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((

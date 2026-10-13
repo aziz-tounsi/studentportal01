@@ -1,3 +1,4 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -9,9 +10,13 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../data/services/core_data_service.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/mon_solde_skeleton.dart';
 
 // Semester state provider for this screen
 final soldeSemesterProvider = StateProvider<int>((ref) => 1);
+
+// Loading state for mon solde refresh
+final soldeRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Payment categories for Tunisia
 enum PaymentCategory {
@@ -27,6 +32,25 @@ enum PaymentCategory {
   final IconData icon;
   final Color color;
   const PaymentCategory(this.label, this.icon, this.color);
+
+  String getLocalizedLabel(AppLocalizations l10n) {
+    switch (this) {
+      case PaymentCategory.scolarite:
+        return l10n.translate('cat_scolarite');
+      case PaymentCategory.transport:
+        return l10n.translate('cat_transport');
+      case PaymentCategory.inscription:
+        return l10n.translate('cat_inscription');
+      case PaymentCategory.uniforme:
+        return l10n.translate('cat_uniforme');
+      case PaymentCategory.cantine:
+        return l10n.translate('cat_cantine');
+      case PaymentCategory.activites:
+        return l10n.translate('cat_activites');
+      case PaymentCategory.autres:
+        return l10n.translate('cat_autres');
+    }
+  }
 }
 
 // Payment breakdown by category
@@ -244,6 +268,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     final semestersAsync = ref.watch(monSoldeSemestersProvider);
     final yearDates = ref.watch(academicYearDatesProvider);
     final pricingAsync = ref.watch(pricingFallbackProvider);
+    final isRefreshing = ref.watch(soldeRefreshingProvider);
 
     return Material(
       type: MaterialType.transparency,
@@ -264,8 +289,20 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
         ),
         child: SafeArea(
           bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+          child: RefreshIndicator(
+            color: const Color(0xFFFF2D78),
+            onRefresh: () async {
+              ref.read(soldeRefreshingProvider.notifier).state = true;
+              try {
+                await ref.refresh(paymentsDataProvider.future);
+              } finally {
+                ref.read(soldeRefreshingProvider.notifier).state = false;
+              }
+            },
+            child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             slivers: [
               // Header
               SliverToBoxAdapter(
@@ -276,6 +313,9 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
               ),
 
               // Content
+              if (isRefreshing)
+                const MonSoldeSkeleton()
+              else
               paymentDataAsync.when(
                 data: (plans) {
                   try {
@@ -311,9 +351,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                     );
                   }
                 },
-                loading: () => const SliverFillRemaining(
-                  child: Center(child: IosLoader(color: Color(0xFFF59E0B))),
-                ),
+                loading: () => const MonSoldeSkeleton(),
                 error: (error, stack) => SliverFillRemaining(
                   child: Center(
                     child: Column(
@@ -332,6 +370,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),
@@ -380,9 +419,9 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                 ),
               ),
               const SizedBox(height: 2),
-              const Text(
-                'Suivi des paiements',
-                style: TextStyle(
+              Text(
+                l10n.soldeSubtitle,
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF1F2937),
@@ -505,7 +544,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
 
           // Categories Section Title
           Text(
-            'Répartition par catégorie',
+            l10n.translate('repartition_categorie'),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -518,7 +557,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           ...nonScolariteCategories.map(
             (cat) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _GlassyCategoryCard(category: cat),
+              child: _GlassyCategoryCard(category: cat, currency: l10n.translate('currency_tnd')),
             ),
           ),
         ]),
@@ -550,7 +589,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           ...displayPayments.map(
             (payment) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _GlassyPaymentCard(payment: payment, currency: 'TND'),
+              child: _GlassyPaymentCard(payment: payment, currency: l10n.translate('currency_tnd')),
             ),
           ),
         const SizedBox(height: 28),
@@ -562,6 +601,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     List<PaymentInfo> payments,
     SemesterInfo? currentSemester,
   ) {
+    final l10n = AppLocalizations.of(context);
     final now = DateTime.now();
 
     // Always find the payment matching the actual current month first
@@ -611,7 +651,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
 
     return _PaymentCarousel(
       payments: payments,
-      currency: 'TND',
+      currency: l10n.translate('currency_tnd'),
       initialIndex: initialIndex,
       currentMonthIndex: currentMonthIdx,
     );
@@ -868,6 +908,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     double total,
     double progressPercent,
   ) {
+    final l10n = AppLocalizations.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: Container(
@@ -891,7 +932,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Solde restant',
+              l10n.translate('solde_restant'),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.9),
                 fontSize: 14,
@@ -911,10 +952,10 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                     height: 1,
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 4, left: 6),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4, left: 6, right: 6),
                   child: Text(
-                    'TND',
+                    l10n.translate('currency_tnd'),
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 16,
@@ -939,7 +980,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Payé: ${_formatCurrency(paid)} TND',
+                  '${l10n.statusPaid}: ${_formatCurrency(paid)} ${l10n.translate('currency_tnd')}',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
@@ -947,7 +988,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                   ),
                 ),
                 Text(
-                  'Total: ${_formatCurrency(total)} TND',
+                  '${l10n.translate('total')}: ${_formatCurrency(total)} ${l10n.translate('currency_tnd')}',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
@@ -1165,7 +1206,9 @@ class _PaymentCircleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final monthFormat = DateFormat.MMM('fr_FR');
+    final l10n = AppLocalizations.of(context);
+    final lang = l10n.locale.languageCode;
+    final monthFormat = DateFormat.MMM(lang);
     final monthLabel = payment.dueDate != null
         ? monthFormat.format(payment.dueDate!).replaceAll('.', '').toUpperCase()
         : '';
@@ -1179,13 +1222,13 @@ class _PaymentCircleCard extends StatelessWidget {
     final String statusText;
     if (isPaid) {
       statusColor = const Color(0xFF22C55E);
-      statusText = 'Payé';
+      statusText = l10n.statusPaid;
     } else if (isOverdue) {
       statusColor = const Color(0xFFEF4444);
-      statusText = 'En retard';
+      statusText = l10n.statusOverdue;
     } else {
       statusColor = const Color(0xFFFF6B9D);
-      statusText = 'En attente';
+      statusText = l10n.statusPending;
     }
 
     final monthColor = Color.lerp(
@@ -1295,8 +1338,8 @@ class _PaymentCircleCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Text(
-                  'Actuel',
+                child: Text(
+                  l10n.translate('badge_current'),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -1323,163 +1366,311 @@ class _PaymentCircleCard extends StatelessWidget {
 // Glassy Category Card
 class _GlassyCategoryCard extends StatelessWidget {
   final PaymentCategoryData category;
+  final String currency;
 
-  const _GlassyCategoryCard({required this.category});
+  const _GlassyCategoryCard({required this.category, required this.currency});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final cat = category.category;
     final isPaid = category.remaining <= 0;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.5),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: cat.color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: cat.color.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Icon(cat.icon, color: cat.color, size: 24),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showCategoryDetailsDialog(context, category, currency),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.5),
+              width: 1,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          cat.label,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: Colors.grey.shade800,
-                          ),
-                        ),
-                      ),
-                      if (isPaid)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF10B981,
-                            ).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.check_circle_rounded,
-                                size: 12,
-                                color: Color(0xFF10B981),
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Payé',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF10B981),
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Progress bar with gradient
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Stack(
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: cat.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cat.color.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(cat.icon, color: cat.color, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Container(
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: cat.color.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(4),
+                        Expanded(
+                          child: Text(
+                            cat.getLocalizedLabel(l10n),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Colors.grey.shade800,
+                            ),
                           ),
                         ),
-                        FractionallySizedBox(
-                          widthFactor: (category.progressPercent / 100).clamp(
-                            0.0,
-                            1.0,
-                          ),
-                          child: Container(
-                            height: 6,
+                        if (isPaid)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  cat.color,
-                                  cat.color.withValues(alpha: 0.7),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: cat.color.withValues(alpha: 0.4),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
+                              color: const Color(
+                                0xFF10B981,
+                              ).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 12,
+                                  color: Color(0xFF10B981),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  l10n.statusPaid,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF10B981),
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${_formatCurrency(category.paid)} / ${_formatCurrency(category.amount)} TND',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                        ),
+                    const SizedBox(height: 8),
+                    // Progress bar
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: category.progressPercent / 100,
+                        minHeight: 6,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation<Color>(cat.color),
                       ),
-                      if (!isPaid)
+                    ),
+                    const SizedBox(height: 8),
+                    // Amounts
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
                         Text(
-                          'Reste: ${_formatCurrency(category.remaining)} TND',
+                          ' /  ',
                           style: TextStyle(
-                            fontSize: 11,
-                            color: cat.color,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
                           ),
                         ),
-                    ],
+                        if (!isPaid)
+                          Text(
+                            ':  ',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cat.color,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCategoryDetailsDialog(BuildContext context, PaymentCategoryData catData, String currency) {
+    final l10n = AppLocalizations.of(context);
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final cat = catData.category;
+    final isPaid = catData.remaining <= 0;
+    final statusColor = isPaid ? const Color(0xFF10B981) : cat.color;
+    final statusText = isPaid ? l10n.statusPaid : l10n.translate('incomplete');
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Center(
+          child: Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(32),
+            ),
+            backgroundColor: Colors.white,
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: cat.color.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(cat.icon, color: cat.color, size: 36),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    cat.getLocalizedLabel(l10n),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildDetailRow(
+                    l10n.translate('total_amount'),
+                    ' ',
+                    Icons.account_balance_wallet_rounded,
+                    cat.color,
+                  ),
+                  _buildDetailRow(
+                    l10n.translate('paid_amount'),
+                    ' ',
+                    Icons.check_circle_rounded,
+                    const Color(0xFF10B981),
+                  ),
+                  _buildDetailRow(
+                    l10n.translate('remaining_amount'),
+                    ' ',
+                    Icons.pending_actions_rounded,
+                    cat.color,
+                  ),
+                  _buildDetailRow(
+                    l10n.translate('progress'),
+                    '%',
+                    Icons.pie_chart_rounded,
+                    cat.color,
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: cat.color,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        l10n.closeLabel,
+                        style: isArabic
+                            ? GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)
+                            : const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: 8 * animation.value,
+            sigmaY: 8 * animation.value,
+          ),
+          child: FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1499,6 +1690,7 @@ class _GlassyPaymentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final dateFormat = DateFormat('dd/MM/yyyy');
     final isPaid = payment.status == 'paid';
     final isOverdue =
@@ -1513,15 +1705,15 @@ class _GlassyPaymentCard extends StatelessWidget {
     if (isPaid) {
       statusColor = const Color(0xFF10B981);
       statusIcon = Icons.check_circle_rounded;
-      statusText = 'Payé';
+      statusText = l10n.statusPaid;
     } else if (isOverdue) {
       statusColor = const Color(0xFFEF4444);
       statusIcon = Icons.warning_rounded;
-      statusText = 'En retard';
+      statusText = l10n.statusOverdue;
     } else {
       statusColor = const Color(0xFFF59E0B);
       statusIcon = Icons.schedule_rounded;
-      statusText = 'En attente';
+      statusText = l10n.statusPending;
     }
 
     return GestureDetector(
@@ -1557,7 +1749,7 @@ class _GlassyPaymentCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Échéance',
+                    l10n.dueDateLabel,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -1619,6 +1811,7 @@ class _GlassyPaymentCard extends StatelessWidget {
     String currency,
     DateFormat dateFormat,
   ) {
+    final l10n = AppLocalizations.of(context);
     final isPaid = payment.status == 'paid';
     final isOverdue =
         !isPaid &&
@@ -1632,15 +1825,15 @@ class _GlassyPaymentCard extends StatelessWidget {
     if (isPaid) {
       statusColor = const Color(0xFF10B981);
       statusIcon = Icons.check_circle_rounded;
-      statusText = 'Payé';
+      statusText = l10n.statusPaid;
     } else if (isOverdue) {
       statusColor = const Color(0xFFEF4444);
       statusIcon = Icons.warning_rounded;
-      statusText = 'En retard';
+      statusText = l10n.statusOverdue;
     } else {
       statusColor = const Color(0xFFF59E0B);
       statusIcon = Icons.schedule_rounded;
-      statusText = 'En attente';
+      statusText = l10n.statusPending;
     }
 
     // Calculate delay duration for overdue payments
@@ -1649,7 +1842,13 @@ class _GlassyPaymentCard extends StatelessWidget {
       final delay = DateTime.now().difference(payment.dueDate!);
       final days = delay.inDays;
       if (days > 0) {
-        delayText = '$days jour${days > 1 ? 's' : ''} de retard';
+        if (l10n.locale.languageCode == 'ar') {
+          delayText = '$days يوم تأخير';
+        } else if (l10n.locale.languageCode == 'en') {
+          delayText = '$days day${days > 1 ? 's' : ''} overdue';
+        } else {
+          delayText = '$days jour${days > 1 ? 's' : ''} de retard';
+        }
       }
     }
 
@@ -1691,7 +1890,9 @@ class _GlassyPaymentCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Détails du paiement',
+                    l10n.locale.languageCode == 'ar'
+                        ? 'تفاصيل الدفع'
+                        : (l10n.locale.languageCode == 'en' ? 'Payment Details' : 'Détails du paiement'),
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -1721,7 +1922,7 @@ class _GlassyPaymentCard extends StatelessWidget {
                   if (delayText != null) ...[
                     const SizedBox(height: 24),
                     _buildDetailRow(
-                      'Retard',
+                      l10n.delayLabel,
                       delayText,
                       Icons.timer_off_rounded,
                       statusColor,
@@ -1730,7 +1931,7 @@ class _GlassyPaymentCard extends StatelessWidget {
                   if (delayText == null) const SizedBox(height: 24),
                   // Amount
                   _buildDetailRow(
-                    'Montant',
+                    l10n.amountLabel,
                     '${_formatCurrency(payment.amount)} $currency',
                     Icons.attach_money_rounded,
                     statusColor,
@@ -1738,7 +1939,7 @@ class _GlassyPaymentCard extends StatelessWidget {
                   // Due date
                   if (payment.dueDate != null)
                     _buildDetailRow(
-                      'Date d\'échéance',
+                      l10n.dueDateLabel,
                       dateFormat.format(payment.dueDate!),
                       Icons.calendar_today_rounded,
                       statusColor,
@@ -1746,7 +1947,7 @@ class _GlassyPaymentCard extends StatelessWidget {
                   // Paid date
                   if (payment.paidAt != null)
                     _buildDetailRow(
-                      'Date de paiement',
+                      l10n.paymentDateLabel,
                       dateFormat.format(payment.paidAt!),
                       Icons.event_available_rounded,
                       statusColor,
@@ -1754,14 +1955,16 @@ class _GlassyPaymentCard extends StatelessWidget {
                   // Payment method
                   if (payment.method != null)
                     _buildDetailRow(
-                      'Méthode',
+                      l10n.methodLabel,
                       payment.displayMethod,
                       Icons.payment_rounded,
                       statusColor,
                     ),
                   // Reference
                   _buildDetailRow(
-                    'Référence',
+                    l10n.locale.languageCode == 'ar'
+                        ? 'المرجع'
+                        : (l10n.locale.languageCode == 'en' ? 'Reference' : 'Référence'),
                     reference,
                     Icons.receipt_rounded,
                     statusColor,
@@ -1769,7 +1972,9 @@ class _GlassyPaymentCard extends StatelessWidget {
                   // Notes
                   if (payment.notes != null && payment.notes!.isNotEmpty)
                     _buildDetailRow(
-                      'Notes',
+                      l10n.locale.languageCode == 'ar'
+                          ? 'ملاحظات'
+                          : (l10n.locale.languageCode == 'en' ? 'Notes' : 'Notes'),
                       payment.notes!,
                       Icons.note_rounded,
                       statusColor,
@@ -1789,12 +1994,11 @@ class _GlassyPaymentCard extends StatelessWidget {
                         ),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        'Fermer',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                      child: Text(
+                        l10n.closeLabel,
+                        style: (l10n.locale.languageCode == 'ar'
+                            ? GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)
+                            : const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       ),
                     ),
                   ),

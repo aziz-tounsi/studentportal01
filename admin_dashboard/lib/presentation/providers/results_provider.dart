@@ -28,7 +28,7 @@ class ResultsProvider extends ChangeNotifier {
     : _repository = ResultsRepository(client);
 
   // State
-  bool _isLoading = false;
+  bool _isLoading = true;
   String? _error;
 
   // Filters
@@ -150,11 +150,20 @@ class ResultsProvider extends ChangeNotifier {
 
   /// Initialize provider
   Future<void> initialize() async {
-    await loadAcademicYears();
-    await loadNiveaux();
-    await loadClasses();
-    await loadEnrolledStudents(); // Load all students for search
-    await loadAllEnrolledStudents(); // Separate list for global search
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await loadAcademicYears();
+      await loadNiveaux();
+      await loadClasses();
+      await loadEnrolledStudents(); // Load all students for search
+      await loadAllEnrolledStudents(); // Separate list for global search
+    } catch (e) {
+      debugPrint('❌ Error initializing results provider: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   /// Load ALL enrolled students regardless of class (for global search)
@@ -488,12 +497,25 @@ class ResultsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setClass(String? classId) {
+  Future<void> setClass(String? classId) async {
     _selectedClassId = classId;
     _classResult = null;
-    loadGradingConfig();
-    loadSubjectOfferings();
-    loadEnrolledStudents();
+    if (classId != null) {
+      _isLoading = true;
+      notifyListeners();
+      try {
+        await Future.wait([
+          loadGradingConfig(),
+          loadSubjectOfferings(),
+          loadEnrolledStudents(),
+        ]);
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
+    } else {
+      notifyListeners();
+    }
   }
 
   void setSearchQuery(String query) {

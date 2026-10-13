@@ -6,7 +6,9 @@ library;
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/l10n/app_localizations.dart';
 
 import '../../data/services/core_data_service.dart';
 import '../providers/student_context_provider.dart';
@@ -82,10 +84,9 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
   }
 
   List<SemesterInfo> _getDefaultSemesters() {
-    // Default fallback: 2 semesters
+    // Default fallback: 1 semester
     return [
-      SemesterInfo(id: '1', name: 'Semestre 1', number: 1, isCurrent: false),
-      SemesterInfo(id: '2', name: 'Semestre 2', number: 2, isCurrent: false),
+      SemesterInfo(id: '1', name: 'Semestre 1', number: 1, isCurrent: true),
     ];
   }
 
@@ -188,13 +189,15 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                   ),
                   // Tab labels - dynamic from semesters
                   Row(
+                    textDirection: TextDirection.ltr,
                     children: semesters.asMap().entries.map((entry) {
                       final index = entry.key;
                       final semester = entry.value;
+                      final localizedName = semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester);
                       final isSelected = index == currentIndex;
                       return Expanded(
                         child: _SemesterTab(
-                          label: semester.name,
+                          label: localizedName,
                           isSelected: isSelected,
                           onTap: () => widget.onChanged(semester.number),
                         ),
@@ -236,6 +239,7 @@ class _SemesterTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -243,21 +247,33 @@ class _SemesterTab extends StatelessWidget {
         alignment: Alignment.center,
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 200),
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? Colors.white : Colors.grey[600],
-            letterSpacing: -0.2,
-            shadows: isSelected
-                ? [
-                    const Shadow(
-                      color: Colors.black26,
-                      blurRadius: 4,
-                      offset: Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
+          style: isArabic
+              ? TextStyle(fontFamily: GoogleFonts.cairo().fontFamily, fontSize: 13, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600, color: isSelected ? Colors.white : Colors.grey[600],
+                  shadows: isSelected
+                      ? [
+                          const Shadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ]
+                      : null,
+                )
+              : TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? Colors.white : Colors.grey[600],
+                  letterSpacing: -0.2,
+                  shadows: isSelected
+                      ? [
+                          const Shadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ]
+                      : null,
+                ),
           child: Text(label),
         ),
       ),
@@ -287,24 +303,24 @@ class SemesterTabBar extends ConsumerWidget {
       data: (semesters) {
         if (semesters.isEmpty) {
           // Fallback
-          return _buildTabs([
+          return _buildTabs(context, [
             SemesterInfo(id: '1', name: 'Sem. 1', number: 1, isCurrent: false),
             SemesterInfo(id: '2', name: 'Sem. 2', number: 2, isCurrent: false),
           ], color);
         }
         semesters.sort((a, b) => a.number.compareTo(b.number));
-        return _buildTabs(semesters, color);
+        return _buildTabs(context, semesters, color);
       },
       loading: () =>
           const SizedBox(height: 40, child: Center(child: IosLoader())),
-      error: (_, __) => _buildTabs([
+      error: (_, __) => _buildTabs(context, [
         SemesterInfo(id: '1', name: 'Sem. 1', number: 1, isCurrent: false),
         SemesterInfo(id: '2', name: 'Sem. 2', number: 2, isCurrent: false),
       ], color),
     );
   }
 
-  Widget _buildTabs(List<SemesterInfo> semesters, Color color) {
+  Widget _buildTabs(BuildContext context, List<SemesterInfo> semesters, Color color) {
     const selectedTextColor = Colors.white;
     return Container(
       height: 40,
@@ -327,12 +343,15 @@ class SemesterTabBar extends ConsumerWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  semester.name,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? selectedTextColor : Colors.grey[700],
-                  ),
+                  semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester),
+                  style: Localizations.localeOf(context).languageCode == 'ar'
+                      ? TextStyle(fontFamily: GoogleFonts.cairo().fontFamily, fontSize: 12.5, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600, color: isSelected ? selectedTextColor : Colors.grey[700],
+                        )
+                      : TextStyle(
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected ? selectedTextColor : Colors.grey[700],
+                        ),
                 ),
               ),
             ),

@@ -256,7 +256,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Rechercher...',
+                hintText: AppLocalizations.of(context).search,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -344,6 +344,7 @@ class _MessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
 
     return Card(
@@ -397,8 +398,8 @@ class _MessageCard extends StatelessWidget {
                                   color: AppColors.error,
                                   borderRadius: BorderRadius.circular(AppSizes.radiusXS),
                                 ),
-                                child: const Text(
-                                  'Important',
+                                child: Text(
+                                  l10n.translate('important'),
                                   style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
                                 ),
                               ),
@@ -841,6 +842,7 @@ class _MessageCard extends StatelessWidget {
   }
 
   void _showDetail(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
 
     showModalBottomSheet(
@@ -910,8 +912,8 @@ class _MessageCard extends StatelessWidget {
                                   color: AppColors.error,
                                   borderRadius: BorderRadius.circular(AppSizes.radiusXS),
                                 ),
-                                child: const Text(
-                                  'Important',
+                                child: Text(
+                                  l10n.translate('important'),
                                   style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                                 ),
                               ),
@@ -961,7 +963,7 @@ class _MessageCard extends StatelessWidget {
               // File attachments in detail view
               if (message.fileAttachments.isNotEmpty) ...[
                 const SizedBox(height: AppSizes.paddingL),
-                const Text('Fichiers joints:', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text('${l10n.attachment}:', style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: AppSizes.paddingS),
                 ...message.fileAttachments.map((f) => Padding(
                   padding: const EdgeInsets.only(bottom: AppSizes.paddingS),

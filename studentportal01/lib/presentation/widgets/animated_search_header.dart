@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/l10n/app_localizations.dart';
 
 /// Reusable animated search header component
 /// Used across Notifications, Messages, and Suggestions screens
@@ -201,7 +202,7 @@ class AnimatedSearchHeader extends StatelessWidget {
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
-                                    hintText: 'Rechercher...',
+                                    hintText: AppLocalizations.of(context).search,
                                     hintStyle: TextStyle(
                                       color: Colors.grey[400],
                                       fontSize: 15,

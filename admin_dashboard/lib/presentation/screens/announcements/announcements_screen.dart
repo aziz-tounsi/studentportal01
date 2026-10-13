@@ -20,6 +20,7 @@ import '../../../data/models/building_models.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 
 /// Text formatter that capitalizes the first letter of each word
 class CapitalizeWordsFormatter extends TextInputFormatter {
@@ -404,8 +405,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                     if (!_selectionMode) _buildTabBar(announcementsAsync),
                     Expanded(
                       child: announcementsAsync.when(
-                        loading: () =>
-                            const Center(child: IosLoader()),
+                        loading: () => const AnnouncementsSkeletonLoader(),
                         error: (e, _) => Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -1514,19 +1514,40 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     final endIdx = (startIdx + _pageSize).clamp(0, list.length);
     final pageItems = list.sublist(startIdx, endIdx);
 
-    return Column(
-      children: [
-        if (_selectionMode) _buildSelectAllBar(list),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(24),
-            itemCount: pageItems.length,
-            itemBuilder: (ctx, i) =>
-                _buildAnnouncementCard(pageItems[i]),
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            children: [
+              if (_selectionMode) _buildSelectAllBar(list),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: pageItems.length,
+                  itemBuilder: (ctx, i) =>
+                      _buildAnnouncementCard(pageItems[i]),
+                ),
+              ),
+              _buildPaginationBar(list.length, totalPages),
+            ],
           ),
         ),
-        _buildPaginationBar(list.length, totalPages),
-      ],
+      ),
     );
   }
 
@@ -1534,9 +1555,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     return Container(
       padding:
           const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.3))),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
       ),
       child: Row(
         children: [
@@ -1660,7 +1685,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         color: isSelected
             ? AppColors.primarySoft
             : AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isSelected
               ? AppColors.primary
@@ -1676,7 +1701,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         ],
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         onTap: _selectionMode
             ? () => _toggleSelection(a.id)
             : () =>

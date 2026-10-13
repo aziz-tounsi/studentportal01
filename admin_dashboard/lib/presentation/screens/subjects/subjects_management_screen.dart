@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/subjects_management_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../data/models/academic_models.dart';
 import '../../../data/models/school_models.dart';
@@ -200,7 +201,7 @@ class _SubjectsManagementScreenState
                       Expanded(
                         child: stateAsync.when(
                           loading: () =>
-                              const Center(child: IosLoader()),
+                              const SubjectsSkeletonLoader(),
                           error: (e, _) => _buildErrorState(e),
                           data: (state) => TabBarView(
                             controller: _tabController,

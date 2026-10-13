@@ -109,6 +109,9 @@ class Suggestion {
   }
 }
 
+/// Loading state for suggestions refresh
+final suggestionsRefreshingProvider = StateProvider<bool>((ref) => false);
+
 /// Provider for user's suggestions
 final suggestionsProvider = FutureProvider.autoDispose<List<Suggestion>>((ref) async {
   final supabase = Supabase.instance.client;

@@ -9,6 +9,7 @@ import '../widgets/results/bulk_grade_entry_dialog.dart';
 import '../widgets/results/single_student_grade_entry.dart';
 import '../widgets/admin_sidebar.dart';
 import '../widgets/ios_loader.dart';
+import '../widgets/skeleton_loader.dart';
 import '../widgets/user_avatar.dart';
 
 /// View mode for the results screen
@@ -39,6 +40,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   /// Students selected for bulk grade entry (full enrollment objects)
   List<Map<String, dynamic>> _bulkStudentObjects = [];
+
+  // Pagination state
+  int _currentPage = 1;
+  int _itemsPerPage = 20;
+  static const List<int> _perPageOptions = [10, 20, 50, 100, -1];
+
 
   @override
   void initState() {
@@ -569,30 +576,41 @@ class _ResultsScreenState extends State<ResultsScreen> {
           }).toList();
 
     return Container(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Text(
-              'Résultats pour "${provider.searchQuery}" (${students.length})',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            children: [
+              Expanded(
+                child: students.isEmpty
+                    ? _buildEmptyState('Aucun élève trouvé', Icons.search_off)
+                    : _buildStudentDataTable(context, provider, students),
+              ),
+              _buildPagination(students.length),
+            ],
           ),
-          Expanded(
-            child: students.isEmpty
-                ? _buildEmptyState('Aucun élève trouvé', Icons.search_off)
-                : _buildStudentDataTable(context, provider, students),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   /// Main content area
   Widget _buildMainContent(BuildContext context, ResultsProvider provider) {
-    if (provider.isLoading) return _buildLoadingState();
+    if (provider.isLoading) return _buildLoadingState(provider);
 
     if (provider.searchQuery.isNotEmpty) {
       return _buildSearchResults(context, provider);
@@ -683,25 +701,32 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
 
     return Container(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Sélectionner un élève', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                const SizedBox(height: 4),
-                Text('Cliquez sur un élève pour saisir ses notes', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-              ],
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            children: [
+              Expanded(
+                child: _buildStudentDataTable(context, provider, students),
+              ),
+              _buildPagination(students.length),
+            ],
           ),
-          Expanded(
-            child: _buildStudentDataTable(context, provider, students),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -715,159 +740,264 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
 
     return Container(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
-            child: Text(
-              'Élèves de la classe (${students.length}) — Cliquez sur un élève pour saisir ses notes',
-              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            children: [
+              Expanded(
+                child: _buildStudentDataTable(context, provider, students),
+              ),
+              _buildPagination(students.length),
+            ],
           ),
-          Expanded(
-            child: _buildStudentDataTable(context, provider, students),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   // Shared student table — every row navigates directly to grade entry
   Widget _buildStudentDataTable(BuildContext context, ResultsProvider provider, List<Map<String, dynamic>> students) {
-    final allSelected = students.isNotEmpty && _selectedStudentsForBulk.length == students.length;
-    
+    final totalPages = _itemsPerPage == -1 ? 1 : (students.length / _itemsPerPage).ceil();
+    if (_currentPage > totalPages && totalPages > 0) _currentPage = totalPages;
+    final startIndex = _itemsPerPage == -1 ? 0 : (_currentPage - 1) * _itemsPerPage;
+    final endIndex = _itemsPerPage == -1 ? students.length : (startIndex + _itemsPerPage).clamp(0, students.length);
+    final pageStudents = students.sublist(startIndex, endIndex);
+    final allPageSelected = pageStudents.isNotEmpty && pageStudents.every((s) => _selectedStudentsForBulk.contains(s['id'].toString()));
+
     return Stack(
       children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8).copyWith(bottom: 100),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(11),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 320 - 64),
-                  child: DataTable(
-                    showCheckboxColumn: false,
-                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                    dataRowMinHeight: 60,
-                    dataRowMaxHeight: 60,
-                    horizontalMargin: 24,
-                    columnSpacing: 24,
-                    dividerThickness: 1,
-                    border: TableBorder(horizontalInside: BorderSide(color: AppColors.border.withOpacity(0.5))),
-                    columns: [
-                      DataColumn(
-                        label: Checkbox(
-                          value: allSelected,
-                          onChanged: (val) {
-                            setState(() {
-                              if (val == true) {
-                                _selectedStudentsForBulk.addAll(students.map((s) => s['id'].toString()));
-                              } else {
-                                _selectedStudentsForBulk.clear();
-                              }
-                            });
-                          },
-                          activeColor: const Color(0xFF6D4CF6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          side: const BorderSide(color: Color(0xFFD1D5DB)),
-                        ),
-                      ),
-                      const DataColumn(label: Text('#', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
-                      const DataColumn(label: Text('NOM COMPLET', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
-                      const DataColumn(label: Text('MATRICULE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
-                      const DataColumn(label: Text('CLASSE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5))),
-                      const DataColumn(label: Text('', style: TextStyle())),
-                    ],
-                    rows: List.generate(students.length, (index) {
-                      final student = students[index];
-                      final studentId = student['id'].toString();
-                      final isSelected = _selectedStudentsForBulk.contains(studentId);
-                      final user = student['users'] as Map<String, dynamic>? ?? {};
-                      final fullName = user['full_name']?.toString() ?? 'Nom inconnu';
-                      final code = (student['student_code'] ?? user['student_code'] ?? '—').toString();
-                      final className = student['classes']?['name']?.toString() ?? _getSelectedClassName(provider);
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final availableWidth = constraints.maxWidth;
+            const checkboxW = 44.0;
+            const indexW = 40.0;
+            const codeW = 120.0;
+            const classeW = 85.0;
+            const actionsW = 44.0;
 
-                      return DataRow(
-                        color: WidgetStateProperty.resolveWith<Color?>((states) {
-                          if (isSelected) return const Color(0xFF6D4CF6).withOpacity(0.04);
-                          if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
-                          return null;
-                        }),
-                        cells: [
-                          DataCell(
-                            Checkbox(
-                              value: isSelected,
+            final fixedW = checkboxW + indexW + codeW + classeW + actionsW;
+            final nameW = (availableWidth - fixedW).clamp(180.0, 350.0);
+
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: availableWidth),
+                child: DataTable(
+                  columnSpacing: 0,
+                  horizontalMargin: 0,
+                  dataRowMinHeight: 60,
+                  dataRowMaxHeight: 64,
+                  headingRowHeight: 44,
+                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                  headingTextStyle: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textTertiary,
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                  showCheckboxColumn: false,
+                  columns: [
+                    DataColumn(
+                      label: SizedBox(
+                        width: checkboxW,
+                        child: Center(
+                          child: SizedBox(
+                            width: 16, height: 16,
+                            child: Checkbox(
+                              value: allPageSelected && pageStudents.isNotEmpty,
+                              tristate: false,
                               onChanged: (val) {
                                 setState(() {
-                                  if (val == true) {
-                                    _selectedStudentsForBulk.add(studentId);
+                                  if (allPageSelected) {
+                                    for (final s in pageStudents) _selectedStudentsForBulk.remove(s['id'].toString());
                                   } else {
-                                    _selectedStudentsForBulk.remove(studentId);
+                                    for (final s in pageStudents) _selectedStudentsForBulk.add(s['id'].toString());
                                   }
                                 });
                               },
-                              activeColor: const Color(0xFF6D4CF6),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              side: const BorderSide(color: Color(0xFFD1D5DB)),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                              side: BorderSide(color: AppColors.slate300, width: 1.5),
+                              activeColor: const Color(0xFF655DD5),
                             ),
                           ),
-                          DataCell(
-                            InkWell(
-                              onTap: () => _navigateToStudentGradeEntry(provider, student),
-                              child: Text('${index + 1}', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
-                            ),
-                          ),
-                          DataCell(
-                            InkWell(
-                              onTap: () => _navigateToStudentGradeEntry(provider, student),
-                              child: Row(
-                                children: [
-                                  UserAvatar(name: fullName, photoUrl: user['photo_url']?.toString(), radius: 16),
-                                  const SizedBox(width: 12),
-                                  Text(fullName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                                ],
+                        ),
+                      ),
+                    ),
+                    DataColumn(label: SizedBox(width: indexW, child: _headerLabel('#'))),
+                    DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
+                    DataColumn(label: SizedBox(width: codeW, child: _headerLabel('MATRICULE'))),
+                    DataColumn(label: SizedBox(width: classeW, child: _headerLabel('CLASSE'))),
+                    DataColumn(label: SizedBox(width: actionsW, child: Container())),
+                  ],
+                  rows: List.generate(pageStudents.length, (i) {
+                    final student = pageStudents[i];
+                    final studentId = student['id'].toString();
+                    final isSelected = _selectedStudentsForBulk.contains(studentId);
+                    final user = student['users'] as Map<String, dynamic>? ?? {};
+                    final fullName = user['full_name']?.toString() ?? 'Nom inconnu';
+                    final email = user['email']?.toString() ?? 'Élève';
+                    final code = (student['student_code'] ?? user['student_code'] ?? '—').toString();
+                    final className = student['classes']?['name']?.toString() ?? _getSelectedClassName(provider);
+                    final globalIndex = startIndex + i + 1;
+
+                    return DataRow(
+                      color: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (isSelected) return const Color(0xFFF5F3FF).withOpacity(0.4);
+                        if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                        return null;
+                      }),
+                      cells: [
+                        // Checkbox
+                        DataCell(
+                          SizedBox(
+                            width: checkboxW,
+                            child: Center(
+                              child: SizedBox(
+                                width: 16, height: 16,
+                                child: Checkbox(
+                                  value: isSelected,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      if (val == true) {
+                                        _selectedStudentsForBulk.add(studentId);
+                                      } else {
+                                        _selectedStudentsForBulk.remove(studentId);
+                                      }
+                                    });
+                                  },
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                  side: BorderSide(color: AppColors.slate300, width: 1.5),
+                                  activeColor: const Color(0xFF655DD5),
+                                ),
                               ),
                             ),
                           ),
-                          DataCell(
-                            InkWell(
-                              onTap: () => _navigateToStudentGradeEntry(provider, student),
-                              child: Text(code, style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                        ),
+                        // Index #
+                        DataCell(
+                          SizedBox(
+                            width: indexW,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text('$globalIndex', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
                             ),
                           ),
-                          DataCell(
-                            InkWell(
-                              onTap: () => _navigateToStudentGradeEntry(provider, student),
-                              child: Text(className, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          onTap: () => _navigateToStudentGradeEntry(provider, student),
+                        ),
+                        // Name + Subtitle
+                        DataCell(
+                          SizedBox(
+                            width: nameW,
+                            child: Row(
+                              children: [
+                                UserAvatar(name: fullName, photoUrl: user['photo_url']?.toString(), radius: 17),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        fullName,
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        email,
+                                        style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          DataCell(
-                            InkWell(
-                              onTap: () => _navigateToStudentGradeEntry(provider, student),
-                              child: Icon(Icons.arrow_forward_ios, size: 13, color: AppColors.textTertiary),
+                          onTap: () => _navigateToStudentGradeEntry(provider, student),
+                        ),
+                        // Matricule
+                        DataCell(
+                          SizedBox(
+                            width: codeW,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.slate50,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  code,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontFamily: 'monospace',
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ),
                           ),
-                        ],
-                      );
-                    }),
-                  ),
+                          onTap: () => _navigateToStudentGradeEntry(provider, student),
+                        ),
+                        // Classe
+                        DataCell(
+                          SizedBox(
+                            width: classeW,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFECFDF5),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  className,
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF059669)),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ),
+                          onTap: () => _navigateToStudentGradeEntry(provider, student),
+                        ),
+                        // Chevron Action
+                        DataCell(
+                          SizedBox(
+                            width: actionsW,
+                            child: Center(
+                              child: Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.textTertiary),
+                            ),
+                          ),
+                          onTap: () => _navigateToStudentGradeEntry(provider, student),
+                        ),
+                      ],
+                    );
+                  }),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
-        
-        // ── Floating Action Bar (matches users page exactly) ── //
         if (_selectedStudentsForBulk.isNotEmpty)
           Positioned(
             left: 0, right: 0, bottom: 24,
@@ -881,7 +1011,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Count badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         margin: const EdgeInsets.only(right: 6),
@@ -905,29 +1034,27 @@ class _ResultsScreenState extends State<ResultsScreen> {
                           ],
                         ),
                       ),
-                      // Action: Saisie groupée
                       InkWell(
                         onTap: () {
-                           if (provider.subjectOfferings.isEmpty) {
-                             ScaffoldMessenger.of(context).showSnackBar(
-                               const SnackBar(content: Text('Aucune matière pour cette classe.')),
-                             );
-                             return;
-                           }
-                           if (provider.selectedSemesterId == null) {
-                             ScaffoldMessenger.of(context).showSnackBar(
-                               const SnackBar(content: Text('Veuillez sélectionner un semestre.')),
-                             );
-                             return;
-                           }
-                           // Collect full student objects for selected IDs
-                           final selectedObjs = provider.enrolledStudents
-                               .where((s) => _selectedStudentsForBulk.contains(s['id'].toString()))
-                               .toList();
-                           setState(() {
-                             _bulkStudentObjects = selectedObjs;
-                             _viewState = ResultsViewState.bulkGradeEntry;
-                           });
+                          if (provider.subjectOfferings.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Aucune matière pour cette classe.')),
+                            );
+                            return;
+                          }
+                          if (provider.selectedSemesterId == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Veuillez sélectionner un semestre.')),
+                            );
+                            return;
+                          }
+                          final selectedObjs = provider.enrolledStudents
+                              .where((s) => _selectedStudentsForBulk.contains(s['id'].toString()))
+                              .toList();
+                          setState(() {
+                            _bulkStudentObjects = selectedObjs;
+                            _viewState = ResultsViewState.bulkGradeEntry;
+                          });
                         },
                         borderRadius: BorderRadius.circular(8),
                         child: Padding(
@@ -942,7 +1069,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
                           ),
                         ),
                       ),
-                      // Close button
                       Container(
                         margin: const EdgeInsets.only(left: 4),
                         decoration: BoxDecoration(
@@ -962,6 +1088,103 @@ class _ResultsScreenState extends State<ResultsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _headerLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textTertiary,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPagination(int totalItems) {
+    final totalPages = _itemsPerPage == -1 ? 1 : (totalItems / _itemsPerPage).ceil();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.3))),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text('Afficher par ', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _itemsPerPage,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: AppColors.textTertiary),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                items: _perPageOptions.map((v) => DropdownMenuItem(
+                  value: v,
+                  child: Text(v == -1 ? 'All' : '$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                )).toList(),
+                onChanged: (v) => setState(() {
+                  _itemsPerPage = v!;
+                  _currentPage = 1;
+                }),
+              ),
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Page $_currentPage sur ${totalPages == 0 ? 1 : totalPages}',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_left, size: 18, color: _currentPage > 1 ? AppColors.textSecondary : AppColors.textTertiary),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: AppColors.border),
+                InkWell(
+                  onTap: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_right, size: 18, color: _currentPage < totalPages ? AppColors.textSecondary : AppColors.textTertiary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -987,7 +1210,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // NIVEAUX BROWSE VIEW — exact grade_levels design
   // ═══════════════════════════════════════════════════
   Widget _buildNiveauxCardsView(BuildContext context, ResultsProvider provider) {
-    if (provider.isLoading) return _buildLoadingState();
+    if (provider.isLoading) return _buildLoadingState(provider);
     if (provider.niveaux.isEmpty) {
       return _buildEmptyState('Aucun niveau trouvé', Icons.school_outlined,
           subtitle: 'Configurez vos niveaux dans la section Niveaux & Filières');
@@ -1133,23 +1356,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
     );
   }
 
-  Widget _buildLoadingState() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IosLoader(color: Color(0xFF3B82F6)),
-          SizedBox(height: 24),
-          Text(
-            'Calcul des résultats...',
-            style: TextStyle(
-              color: Color(0xFF64748B),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildLoadingState([ResultsProvider? provider]) {
+    if (provider != null && provider.selectedClassId != null) {
+      return const ResultsStudentListSkeletonLoader();
+    }
+    return const ResultsSkeletonLoader();
   }
 
   // Helper methods

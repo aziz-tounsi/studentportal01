@@ -11,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
@@ -353,17 +354,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     final profileAsync = ref.watch(userProfileDataProvider(widget.userId));
 
     final content = profileAsync.when(
-      loading: () => Center(
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: AppShadows.card,
-          ),
-          child: const IosLoader(color: AppColors.primary),
-        ),
-      ),
+      loading: () => const StudentProfileSkeletonLoader(),
       error: (e, _) => Center(
         child: Container(
           padding: const EdgeInsets.all(32),

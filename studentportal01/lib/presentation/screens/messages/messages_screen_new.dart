@@ -2,9 +2,11 @@
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/messages_screen_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/announcements_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -126,7 +128,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'Messages',
+                              AppLocalizations.of(context).messages,
                               style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w900,
@@ -136,7 +138,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Messages de classe',
+                              AppLocalizations.of(context).messagesSubtitle,
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -246,7 +248,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
-                                    hintText: 'Rechercher...',
+                                    hintText: AppLocalizations.of(context).search,
                                     hintStyle: TextStyle(
                                       color: Colors.grey[400],
                                       fontSize: 16,
@@ -270,7 +272,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                     setState(() => _searchQuery = '');
                                   },
                                   child: Container(
-                                    margin: const EdgeInsets.only(right: 8),
+                                    margin: const EdgeInsetsDirectional.only(end: 8),
                                     padding: const EdgeInsets.all(6),
                                     decoration: BoxDecoration(
                                       color: Colors.grey[200],
@@ -332,7 +334,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Messages',
+                AppLocalizations.of(context).messages,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
@@ -342,7 +344,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                'Messages de classe',
+                AppLocalizations.of(context).messagesSubtitle,
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -395,7 +397,9 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
-              Icons.arrow_back_rounded,
+              Directionality.of(context) == TextDirection.rtl
+                  ? Icons.arrow_forward_rounded
+                  : Icons.arrow_back_rounded,
               color: _accentColor,
               size: 24,
             ),
@@ -435,7 +439,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                       color: Colors.grey[800],
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Rechercher un message...',
+                      hintText: AppLocalizations.of(context).search,
                       hintStyle: TextStyle(
                         color: Colors.grey[400],
                         fontSize: 15,
@@ -454,7 +458,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                       setState(() => _searchQuery = '');
                     },
                     child: Padding(
-                      padding: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsetsDirectional.only(end: 12),
                       child: Icon(
                         Icons.cancel_rounded,
                         color: Colors.grey[400],
@@ -472,8 +476,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final authState = ref.watch(authProvider);
     final messagesAsync = ref.watch(classMessagesProvider);
+    final isRefreshing = ref.watch(messagesRefreshingProvider);
 
     // Show loading if auth is still loading
     final isAuthLoading = authState.isLoading;
@@ -495,8 +501,20 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
       ),
       child: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
+        child: RefreshIndicator(
+          color: const Color(0xFFFF2D78),
+          onRefresh: () async {
+            ref.read(messagesRefreshingProvider.notifier).state = true;
+            try {
+              await ref.refresh(classMessagesProvider.future);
+            } finally {
+              ref.read(messagesRefreshingProvider.notifier).state = false;
+            }
+          },
+          child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           slivers: [
             // Header
             SliverToBoxAdapter(
@@ -517,16 +535,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                   ),
                 ),
               )
+            else if (isRefreshing)
+              const MessagesCardsSkeleton()
             else
             messagesAsync.when(
-              loading: () => const SliverToBoxAdapter(
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(40),
-                    child: IosLoader(),
-                  ),
-                ),
-              ),
+              loading: () => const MessagesCardsSkeleton(),
               error: (e, _) => SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
@@ -540,7 +553,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Erreur: $e',
+                          '${l10n.error}: $e',
                           style: TextStyle(color: Colors.grey[600]),
                         ),
                       ],
@@ -554,8 +567,34 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                 if (_searchQuery.isNotEmpty) {
                   final query = _searchQuery.toLowerCase();
                   filtered = messages.where((m) {
+                    final localizedTitle = l10n
+                        .localizeAnnouncementTitle(m.announcementType, m.title)
+                        .toLowerCase();
+                    final localizedBody = l10n
+                        .localizeAnnouncementBody(
+                          m.announcementType,
+                          m.payload,
+                          m.body,
+                        )
+                        .toLowerCase();
+                    final localizedKeyInfo = _extractKeyInfo(
+                      m.announcementType,
+                      m.payload,
+                      m.body,
+                    ).toLowerCase();
+                    final localizedType = _getTypeLabel(
+                      m.announcementType,
+                    ).toLowerCase();
+                    final localizedSender = l10n
+                        .localizeSenderLabel(m.senderLabel)
+                        .toLowerCase();
                     return m.title.toLowerCase().contains(query) ||
                         m.body.toLowerCase().contains(query) ||
+                        localizedTitle.contains(query) ||
+                        localizedBody.contains(query) ||
+                        localizedKeyInfo.contains(query) ||
+                        localizedType.contains(query) ||
+                        localizedSender.contains(query) ||
                         (m.senderLabel?.toLowerCase().contains(query) ??
                             false) ||
                         (m.announcementType?.toLowerCase().contains(query) ??
@@ -567,24 +606,49 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                   return SliverToBoxAdapter(
                     child: Center(
                       child: Padding(
-                        padding: const EdgeInsets.all(40),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.mail_outline,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Aucun message',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey[600],
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(28),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.mail_outline_rounded,
+                                    size: 40,
+                                    color: const Color(0xFF94A3B8),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    l10n.noMessages,
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF94A3B8),
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    l10n.messagesAppearHere,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: const Color(0xFF94A3B8).withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -604,14 +668,30 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             ),
           ],
         ),
+        ),
       ),
     );
   }
 
   Widget _buildMessageCard(StudentAnnouncement message) {
+    final l10n = AppLocalizations.of(context);
     final typeColor = _getTypeColor(message.announcementType);
     final typeIcon = _getTypeIcon(message.announcementType);
     final typeLabel = _getTypeLabel(message.announcementType);
+    final localizedTitle = l10n.localizeAnnouncementTitle(
+      message.announcementType,
+      message.title,
+    );
+    final localizedBody = l10n.localizeAnnouncementBody(
+      message.announcementType,
+      message.payload,
+      message.body,
+    );
+    final keyInfo = _extractKeyInfo(
+      message.announcementType,
+      message.payload,
+      message.body,
+    );
     final isImportant = message.isImportant;
     final isPinned = message.isPinned;
     final hasAttachment = message.hasAttachment;
@@ -692,7 +772,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                               ),
                             ),
                             Text(
-                              message.title,
+                              localizedTitle,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
@@ -704,15 +784,15 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                               overflow: TextOverflow.ellipsis,
                             ),
                             // Key info subtitle - only show if not empty
-                            if (isPinned || _extractKeyInfo(message.announcementType, message.payload, message.body).isNotEmpty)
+                            if (isPinned || keyInfo.isNotEmpty)
                               Transform.translate(
                                 offset: const Offset(0, -10),
                                 child: Row(
                                   children: [
-                                    if (_extractKeyInfo(message.announcementType, message.payload, message.body).isNotEmpty)
+                                    if (keyInfo.isNotEmpty)
                                       Expanded(
                                         child: Text(
-                                          _extractKeyInfo(message.announcementType, message.payload, message.body),
+                                          keyInfo,
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
@@ -724,7 +804,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                         ),
                                       ),
                                     if (isPinned)
-                                      _buildBadge('Épinglé', const Color(0xFFFF2D78), Icons.push_pin),
+                                      _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
                                   ],
                                 ),
                               ),
@@ -742,13 +822,13 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                       children: [
                         if (isImportant)
                           _buildBadge(
-                            'Important',
+                            l10n.importantLabel,
                             Colors.red,
                             Icons.priority_high,
                           ),
                         if (hasDocumentAttachment)
                           _buildBadge(
-                            'Pièce jointe',
+                            l10n.attachment,
                             Colors.purple,
                             Icons.attach_file,
                           ),
@@ -762,7 +842,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                     children: [
                       Expanded(
                         child: Text(
-                          message.body,
+                          localizedBody,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -867,7 +947,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            message.senderLabel!,
+                            l10n.localizeSenderLabel(message.senderLabel),
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -932,6 +1012,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
   }
 
   Widget _buildAttachmentPreview(String url, String? name) {
+    final l10n = AppLocalizations.of(context);
     final isImage = _isImageFile(url);
 
     return GestureDetector(
@@ -977,7 +1058,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                             Icon(Icons.broken_image, color: Colors.grey[400]),
                             const SizedBox(width: 8),
                             Text(
-                              'Image non disponible',
+                              l10n.imageUnavailable,
                               style: TextStyle(color: Colors.grey[500]),
                             ),
                           ],
@@ -1011,10 +1092,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                               color: Colors.white,
                             ),
                             const SizedBox(width: 6),
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Ouvrir',
-                                style: TextStyle(
+                                l10n.openLabel,
+                                style: const TextStyle(
                                   fontSize: 11,
                                   color: Colors.white,
                                   fontWeight: FontWeight.w500,
@@ -1086,6 +1167,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
   }
 
   Widget _buildDetailAttachment(String url, String? name) {
+    final l10n = AppLocalizations.of(context);
     final isImage = _isImageFile(url);
 
     return GestureDetector(
@@ -1128,7 +1210,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                       Icon(Icons.broken_image, color: Colors.grey[400]),
                       const SizedBox(width: 8),
                       Text(
-                        'Image non disponible',
+                        l10n.imageUnavailable,
                         style: TextStyle(color: Colors.grey[500]),
                       ),
                     ],
@@ -1142,7 +1224,6 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
               decoration: BoxDecoration(
                 color: Colors.purple.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.purple.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -1174,7 +1255,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Appuyez pour télécharger',
+                          l10n.tapToDownload,
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.purple[600],
@@ -1198,9 +1279,24 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
   }
 
   void _showMessageDetail(StudentAnnouncement message) {
+    final l10n = AppLocalizations.of(context);
     final typeColor = _getTypeColor(message.announcementType);
     final typeIcon = _getTypeIcon(message.announcementType);
     final typeLabel = _getTypeLabel(message.announcementType);
+    final localizedTitle = l10n.localizeAnnouncementTitle(
+      message.announcementType,
+      message.title,
+    );
+    final localizedBody = l10n.localizeAnnouncementBody(
+      message.announcementType,
+      message.payload,
+      message.body,
+    );
+    final keyInfo = _extractKeyInfo(
+      message.announcementType,
+      message.payload,
+      message.body,
+    );
 
     DetailModalSheet.show(
       context: context,
@@ -1255,10 +1351,9 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      DateFormat(
-                                        'd MMMM yyyy à HH:mm',
-                                        'fr_FR',
-                                      ).format(message.publishedAt),
+                                      l10n.formatAnnouncementDateTime(
+                                        message.publishedAt,
+                                      ),
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: Colors.grey[600],
@@ -1276,31 +1371,44 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                             runSpacing: 8,
                             children: [
                               if (message.isPinned)
-                                _buildBadge('Épinglé', Colors.orange, Icons.push_pin),
+                                _buildBadge(l10n.pinnedLabel, Colors.orange, Icons.push_pin),
                               if (message.isImportant)
                                 _buildBadge(
-                                  'Important',
+                                  l10n.importantLabel,
                                   Colors.red,
                                   Icons.priority_high,
                                 ),
                               if (message.attachments.any((att) => !_isImageFile(att.fileUrl)))
                                 _buildBadge(
-                                  'Pièce jointe',
+                                  l10n.attachment,
                                   Colors.purple,
                                   Icons.attach_file,
                                 ),
                             ],
                           ),
                           const SizedBox(height: 24),
+                          // Key info summary if available
+                          if (keyInfo.isNotEmpty) ...[
+                            Text(
+                              keyInfo,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[500],
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                           // Body content
-                                Text(
-                                  _extractKeyInfo(message.announcementType, message.payload, message.body),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[500],
-                                    height: 1.0,
-                                  ),
+                          Text(
+                            localizedBody,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[700],
+                              height: 1.6,
+                            ),
                           ),
                           // Attachments - show all from attachments list
                           if (message.attachments.isNotEmpty) ...[
@@ -1318,7 +1426,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           const SizedBox(height: 16),
                           // Title
                           Text(
-                            message.title,
+                            localizedTitle,
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
@@ -1351,26 +1459,30 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Envoyé par',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey[500],
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          l10n.sentByLabel,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[500],
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        message.senderLabel!,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[800],
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          l10n.localizeSenderLabel(
+                                            message.senderLabel,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey[800],
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1389,8 +1501,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Impossible d\'ouvrir le fichier'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context).cannotOpenFile),
             backgroundColor: Colors.red,
           ),
         );
@@ -1425,58 +1537,28 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
       final path = uri.pathSegments.last;
       return Uri.decodeComponent(path);
     } catch (e) {
-      return 'Fichier joint';
+      return AppLocalizations.of(context).attachedFile;
     }
   }
 
   /// Get clean display name for file attachments
   /// Uses custom name if provided, otherwise generates a friendly name based on file type
   String _getCleanFileName(String? customName, String url) {
-    // If admin provided a custom name and it's not a raw WhatsApp/auto-generated name
-    if (customName != null &&
-        customName.isNotEmpty &&
-        !customName.toLowerCase().contains('whatsapp') &&
-        !RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(customName) &&
-        !RegExp(
-          r'IMG_\d+|DSC_\d+|Screenshot',
-          caseSensitive: false,
-        ).hasMatch(customName)) {
-      return customName;
-    }
-
-    // Generate friendly name based on file type
-    final lower = url.toLowerCase();
-    if (lower.endsWith('.pdf')) return 'Document PDF';
-    if (lower.endsWith('.doc') || lower.endsWith('.docx'))
-      return 'Document Word';
-    if (lower.endsWith('.xls') || lower.endsWith('.xlsx'))
-      return 'Fichier Excel';
-    if (lower.endsWith('.ppt') || lower.endsWith('.pptx'))
-      return 'Présentation';
-    if (lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png') ||
-        lower.endsWith('.gif') ||
-        lower.endsWith('.webp'))
-      return 'Image';
-    if (lower.endsWith('.mp4') ||
-        lower.endsWith('.mov') ||
-        lower.endsWith('.avi'))
-      return 'Vidéo';
-    if (lower.endsWith('.mp3') || lower.endsWith('.wav')) return 'Audio';
-    if (lower.endsWith('.zip') || lower.endsWith('.rar')) return 'Archive';
-
-    return 'Fichier joint';
+    return AppLocalizations.of(context).getCleanAttachmentFileName(
+      customName,
+      url,
+    );
   }
 
   String _getSenderTypeLabel(String? senderType) {
+    final l10n = AppLocalizations.of(context);
     switch (senderType) {
       case 'teacher':
-        return 'Professeur';
+        return l10n.localizeSenderLabel('Professeur');
       case 'administration':
-        return 'Administration';
+        return l10n.localizeSenderLabel('Administration');
       default:
-        return 'Enseignant';
+        return l10n.localizeSenderLabel('Enseignant');
     }
   }
 
@@ -1543,172 +1625,47 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
   }
 
   String _getTypeLabel(String? type) {
-    switch (type) {
-      case 'teacher_absent':
-        return 'Absence prof';
-      case 'room_change':
-        return 'Changement salle';
-      case 'exam':
-        return 'Examen';
-      case 'reminder':
-        return 'Rappel';
-      case 'closure':
-        return 'Fermeture';
-      case 'trip':
-        return 'Sortie/Voyage';
-      case 'party':
-        return 'Événement';
-      case 'payment':
-        return 'Paiement';
-      default:
-        return 'Général';
-    }
+    return AppLocalizations.of(context).getAnnouncementTypeLabel(type);
   }
 
   /// Extracts key information from announcement based on type and payload
   String _extractKeyInfo(String? type, Map<String, dynamic> payload, String body) {
-    switch (type) {
-      case 'room_change':
-        // Use payload fields: old_room, new_room, subject, date_time
-        final oldRoom = payload['old_room'] as String?;
-        final newRoom = payload['new_room'] as String?;
-        final subject = payload['subject'] as String?;
-        
-        if (oldRoom != null && oldRoom.isNotEmpty && newRoom != null && newRoom.isNotEmpty) {
-          String info = 'Salle $oldRoom → Salle $newRoom';
-          if (subject != null && subject.isNotEmpty) {
-            info = '$subject: $info';
-          }
-          return info;
-        }
-        break;
-        
-      case 'teacher_absent':
-        // Use payload fields: teacher_name, start_date, end_date
-        final teacherName = payload['teacher_name'] as String?;
-        final startDate = payload['start_date'] as String?;
-        final endDate = payload['end_date'] as String?;
-        
-        if (teacherName != null && teacherName.isNotEmpty) {
-          String info = 'Prof. $teacherName';
-          if (startDate != null && startDate.isNotEmpty) {
-            if (endDate != null && endDate.isNotEmpty && startDate != endDate) {
-              info += ' • $startDate → $endDate';
-            } else {
-              info += ' • $startDate';
-            }
-          }
-          return info;
-        }
-        break;
-        
-      case 'exam':
-        // Use payload fields: subject, date_time, room
-        final subject = payload['subject'] as String?;
-        final dateTime = payload['date_time'] as String?;
-        final room = payload['room'] as String?;
-        
-        List<String> parts = [];
-        if (subject != null && subject.isNotEmpty) parts.add(subject);
-        if (dateTime != null && dateTime.isNotEmpty) parts.add(dateTime);
-        if (room != null && room.isNotEmpty) parts.add('Salle $room');
-        
-        if (parts.isNotEmpty) {
-          return parts.join(' • ');
-        }
-        break;
-        
-      case 'closure':
-        // Use payload fields: reason, closed_from, closed_to
-        final reason = payload['reason'] as String?;
-        final closedFrom = payload['closed_from'] as String?;
-        final closedTo = payload['closed_to'] as String?;
-        
-        List<String> parts = [];
-        if (closedFrom != null && closedFrom.isNotEmpty) {
-          if (closedTo != null && closedTo.isNotEmpty) {
-            parts.add('$closedFrom → $closedTo');
-          } else {
-            parts.add('À partir du $closedFrom');
-          }
-        }
-        if (reason != null && reason.isNotEmpty) {
-          parts.insert(0, reason);
-        }
-        
-        if (parts.isNotEmpty) {
-          return parts.join(' • ');
-        }
-        break;
-        
-      case 'reminder':
-        // Use payload fields: due_date, action_required
-        final dueDate = payload['due_date'] as String?;
-        final actionRequired = payload['action_required'] as String?;
-        
-        List<String> parts = [];
-        if (dueDate != null && dueDate.isNotEmpty) parts.add('Avant le $dueDate');
-        if (actionRequired != null && actionRequired.isNotEmpty) parts.add(actionRequired);
-        
-        if (parts.isNotEmpty) {
-          return parts.join(' • ');
-        }
-        break;
-        
-      case 'general':
-        // For general type, don't show subtitle - body is already displayed below
-        return '';
-        
-      case 'trip':
-        // Extract destination and date from body
-        final destPattern = RegExp(r'(?:sortie|à|vers|destination)\s+([A-Za-zÀ-ÿ\s]+?)(?:\s+(?:le|est|organis))', caseSensitive: false);
-        final datePattern = RegExp(r'(\d{1,2}/\d{1,2}/\d{2,4})');
-        final destMatch = destPattern.firstMatch(body);
-        final dateMatch = datePattern.firstMatch(body);
-        
-        List<String> tripParts = [];
-        if (destMatch != null) tripParts.add(destMatch.group(1)?.trim() ?? '');
-        if (dateMatch != null) tripParts.add('Le ${dateMatch.group(1)}');
-        if (tripParts.isNotEmpty) return tripParts.join(' • ');
-        break;
-        
-      case 'party':
-        // Extract event date and location from body
-        final eventDatePattern = RegExp(r'(\d{1,2}/\d{1,2}/\d{2,4})');
-        final locationPattern = RegExp(r'[Ll]ieu[:\s]+([A-Za-zÀ-ÿ0-9\s]+?)(?:\.|,|$)');
-        final eventDateMatch = eventDatePattern.firstMatch(body);
-        final locationMatch = locationPattern.firstMatch(body);
-        
-        List<String> eventParts = [];
-        if (eventDateMatch != null) eventParts.add('Le ${eventDateMatch.group(1)}');
-        if (locationMatch != null) eventParts.add(locationMatch.group(1)?.trim() ?? '');
-        if (eventParts.isNotEmpty) return eventParts.join(' • ');
-        break;
-        
-      case 'payment':
-        // Extract amount and due date from body
-        final dueDatePattern = RegExp(r'avant\s+le\s+(\d{1,2}/\d{1,2}/\d{2,4})', caseSensitive: false);
-        final modePattern = RegExp(r'[Mm]ode\s+de\s+paiement[:\s]+([A-Za-zÀ-ÿ0-9\s]+?)(?:\.|,|$)');
-        final dueDateMatch = dueDatePattern.firstMatch(body);
-        final modeMatch = modePattern.firstMatch(body);
-        
-        List<String> paymentParts = [];
-        if (dueDateMatch != null) paymentParts.add('Avant le ${dueDateMatch.group(1)}');
-        if (modeMatch != null) paymentParts.add(modeMatch.group(1)?.trim() ?? '');
-        if (paymentParts.isNotEmpty) return paymentParts.join(' • ');
-        break;
-        
-      default:
-        break;
-    }
-    
-    // Return empty for types without specific key info
-    return '';
+    return AppLocalizations.of(context).extractAnnouncementKeyInfo(
+      type,
+      payload,
+      body,
+    );
   }
 
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final difference = now.difference(time);
+    String lang = 'fr';
+    try {
+      lang = Localizations.localeOf(context).languageCode;
+    } catch (_) {}
+
+    if (lang == 'ar') {
+      if (difference.inMinutes < 60) {
+        return 'منذ ${difference.inMinutes} د';
+      } else if (difference.inHours < 24) {
+        return 'منذ ${difference.inHours} س';
+      } else if (difference.inDays < 7) {
+        return 'منذ ${difference.inDays} يوم';
+      } else {
+        return DateFormat('d MMM', 'ar').format(time);
+      }
+    } else if (lang == 'en') {
+      if (difference.inMinutes < 60) {
+        return '${difference.inMinutes}m ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours}h ago';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
+      } else {
+        return DateFormat('d MMM', 'en').format(time);
+      }
+    }
 
     if (difference.inMinutes < 60) {
       return 'Il y a ${difference.inMinutes} min';

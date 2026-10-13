@@ -13,6 +13,7 @@ import '../../providers/suggestions_provider.dart';
 import '../../widgets/detail_modal_sheet.dart';
 import 'write_suggestion_screen.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/suggestions_screen_skeleton.dart';
 
 class SuggestionsScreen extends ConsumerStatefulWidget {
   const SuggestionsScreen({super.key});
@@ -80,6 +81,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final suggestionsAsync = ref.watch(suggestionsProvider);
+    final isRefreshing = ref.watch(suggestionsRefreshingProvider);
 
     return Stack(
       children: [
@@ -100,8 +102,20 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
           ),
           child: SafeArea(
             bottom: false,
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
+            child: RefreshIndicator(
+              color: const Color(0xFFFF2D78),
+              onRefresh: () async {
+                ref.read(suggestionsRefreshingProvider.notifier).state = true;
+                try {
+                  await ref.refresh(suggestionsProvider.future);
+                } finally {
+                  ref.read(suggestionsRefreshingProvider.notifier).state = false;
+                }
+              },
+              child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
               slivers: [
                 // Header with animated search
                 SliverToBoxAdapter(
@@ -112,6 +126,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                 ),
 
                 // Content
+                if (isRefreshing) ...[
+                  const SuggestionsCardsSkeleton(),
+                ] else ...[
                 suggestionsAsync.when(
                   data: (suggestions) {
                     // Apply filters and search
@@ -137,8 +154,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                       if (_searchQuery.isNotEmpty) {
                         final typeLabel = _getTypeLabel(
                           s.suggestionType,
+                          l10n,
                         ).toLowerCase();
-                        final dateStr = _formatDate(s.createdAt).toLowerCase();
+                        final dateStr = _formatDate(s.createdAt, l10n.locale.languageCode).toLowerCase();
                         return matchesFilter &&
                             (s.title.toLowerCase().contains(_searchQuery) ||
                                 s.body.toLowerCase().contains(_searchQuery) ||
@@ -155,35 +173,98 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                         delegate: SliverChildListDelegate([
                           if (filtered.isNotEmpty) ...[
                             ...filtered.map(
-                              (suggestion) => _buildSuggestionCard(suggestion),
+                              (suggestion) => _buildSuggestionCard(suggestion, l10n),
                             ),
                           ] else if (suggestions.isEmpty) ...[
                             const SizedBox(height: 40),
                             Center(
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    Icons.lightbulb_outline,
-                                    size: 64,
-                                    color: Colors.black.withOpacity(0.3),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'Aucune suggestion',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black.withOpacity(0.6),
-                                      fontWeight: FontWeight.w600,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(28),
+                                  child: BackdropFilter(
+                                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.55),
+                                        borderRadius: BorderRadius.circular(28),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.lightbulb_outline,
+                                            size: 40,
+                                            color: const Color(0xFF94A3B8),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            l10n.noSuggestions,
+                                            style: TextStyle(
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w700,
+                                              color: const Color(0xFF94A3B8),
+                                              letterSpacing: -0.3,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            l10n.suggestionsSubtitle,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: const Color(0xFF94A3B8).withValues(alpha: 0.7),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 20),
+                                          GestureDetector(
+                                            onTap: () => context.go('/write-suggestion'),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                              decoration: BoxDecoration(
+                                                gradient: const LinearGradient(
+                                                  colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
+                                                ),
+                                                borderRadius: BorderRadius.circular(20),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: const Color(0xFFFF2D78).withValues(alpha: 0.4),
+                                                    blurRadius: 16,
+                                                    offset: const Offset(0, 6),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    l10n.newSuggestion,
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ] else ...[
                             const SizedBox(height: 40),
                             Center(
                               child: Text(
-                                'Aucun résultat',
+                                l10n.noResults,
                                 style: TextStyle(
                                   fontSize: 16,
                                   color: Colors.black.withOpacity(0.6),
@@ -196,11 +277,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                       ),
                     );
                   },
-                  loading: () => const SliverFillRemaining(
-                    child: Center(
-                      child: IosLoader(color: Colors.white),
-                    ),
-                  ),
+                  loading: () => const SuggestionsCardsSkeleton(),
                   error: (error, stack) => SliverFillRemaining(
                     child: Center(
                       child: Text(
@@ -210,40 +287,43 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                     ),
                   ),
                 ),
+                ],
               ],
             ),
           ),
         ),
-        // FloatingActionButton positioned manually
-        Positioned(
-          right: 24,
-          bottom: 160,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => context.go('/write-suggestion'),
-              borderRadius: BorderRadius.circular(32),
-              child: Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF2D78).withValues(alpha: 0.45),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
+        ),
+        // FloatingActionButton positioned manually - only show when there are suggestions
+        if (suggestionsAsync.hasValue && suggestionsAsync.value!.isNotEmpty)
+          Positioned(
+            right: 24,
+            bottom: 160,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => context.go('/write-suggestion'),
+                borderRadius: BorderRadius.circular(32),
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
                     ),
-                  ],
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF2D78).withValues(alpha: 0.45),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.add, color: Colors.white, size: 28),
                 ),
-                child: const Icon(Icons.add, color: Colors.white, size: 28),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -430,11 +510,13 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
   }
 
   Widget _buildSuggestionsListHeader(BuildContext context, int count) {
+    final l10n = AppLocalizations.of(context);
+    final isAr = l10n.locale.languageCode == 'ar';
     return Row(
       children: [
-        const Text(
-          'Mes suggestions',
-          style: TextStyle(
+        Text(
+          l10n.mySuggestions,
+          style: const TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: Colors.white,
@@ -449,7 +531,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
-            '$count suggestion${count > 1 ? 's' : ''}',
+            isAr ? '$count اقتراح' : '$count suggestion${count > 1 ? 's' : ''}',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
@@ -461,10 +543,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     );
   }
 
-  Widget _buildSuggestionCard(Suggestion suggestion) {
+  Widget _buildSuggestionCard(Suggestion suggestion, AppLocalizations l10n) {
     final color = _getTypeColor(suggestion.suggestionType);
     final icon = _getTypeIcon(suggestion.suggestionType);
-    final typeLabel = _getTypeLabel(suggestion.suggestionType);
+    final typeLabel = _getTypeLabel(suggestion.suggestionType, l10n, suggestion.title);
     final imageAttachments = suggestion.attachments
         .where(_isImageAttachment)
         .toList();
@@ -542,7 +624,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                              ),
                              const SizedBox(height: 6),
                              Text(
-                               _formatDate(suggestion.createdAt),
+                               _formatDate(suggestion.createdAt, l10n.locale.languageCode),
                                style: TextStyle(
                                  fontSize: 12,
                                  fontWeight: FontWeight.w600,
@@ -588,12 +670,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                     children: [
                       if (hasDocumentAttachment) ...[
                         _buildBadge(
-                          'Pièce jointe',
+                          l10n.attachment,
                           Colors.purple,
                         ),
                       ],
                       Text(
-                        _getRelativeTime(suggestion.createdAt),
+                        _getRelativeTime(suggestion.createdAt, l10n.locale.languageCode),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -611,18 +693,29 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     );
   }
 
-  String _getRelativeTime(DateTime date) {
+  String _getRelativeTime(DateTime date, [String? langCode]) {
     final now = DateTime.now();
     final diff = now.difference(date);
+    final lang = langCode ?? 'fr';
     if (diff.inMinutes < 60) {
-      if (diff.inMinutes <= 0) return 'À l\'instant';
+      if (diff.inMinutes <= 0) {
+        if (lang == 'ar') return 'الآن';
+        if (lang == 'en') return 'Just now';
+        return 'À l\'instant';
+      }
+      if (lang == 'ar') return 'منذ ${diff.inMinutes} د';
+      if (lang == 'en') return '${diff.inMinutes}m ago';
       return 'Il y a ${diff.inMinutes} min';
     } else if (diff.inHours < 24) {
+      if (lang == 'ar') return 'منذ ${diff.inHours} س';
+      if (lang == 'en') return '${diff.inHours}h ago';
       return 'Il y a ${diff.inHours} h';
     } else if (diff.inDays < 7) {
+      if (lang == 'ar') return 'منذ ${diff.inDays} ي';
+      if (lang == 'en') return '${diff.inDays}d ago';
       return 'Il y a ${diff.inDays} j';
     }
-    return ''; // Fallback, we already show the date above
+    return '';
   }
 
   // Helper methods
@@ -750,6 +843,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
   }
 
   void _showSuggestionDetail(Suggestion suggestion) {
+    final l10n = AppLocalizations.of(context);
     DetailModalSheet.show(
       context: context,
       child: Column(
@@ -760,7 +854,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
             children: [
               Expanded(
                 child: Text(
-                  suggestion.title,
+                  _getDetailTitle(suggestion, l10n),
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -771,7 +865,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
               ),
               const SizedBox(width: 12),
               Text(
-                _formatDate(suggestion.createdAt),
+                _formatDate(suggestion.createdAt, l10n.locale.languageCode),
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
@@ -800,9 +894,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
           // Replies
           if (suggestion.replies.isNotEmpty) ...[
             const SizedBox(height: 24),
-            const Text(
-              'Réponses de l\'administration',
-              style: TextStyle(
+            Text(
+              l10n.adminResponse,
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF1F2937),
@@ -816,9 +910,6 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                 decoration: BoxDecoration(
                   color: const Color(0xFF8B5CF6).withOpacity(0.05),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -841,9 +932,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Administration',
-                          style: TextStyle(
+                        Text(
+                          l10n.translate('administration'),
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF1F2937),
@@ -851,7 +942,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                         ),
                         const Spacer(),
                         Text(
-                          _formatDate(reply.createdAt),
+                          _formatDate(reply.createdAt, l10n.locale.languageCode),
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey[600],
@@ -1246,7 +1337,28 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     return 'Fichier joint';
   }
 
-  String _getTypeLabel(String type) {
+    String _getDetailTitle(Suggestion suggestion, AppLocalizations l10n) {
+    final typeCandidate = suggestion.suggestionType.isNotEmpty && suggestion.suggestionType != 'general'
+        ? suggestion.suggestionType
+        : suggestion.title;
+    final localized = l10n.getSuggestionType(typeCandidate);
+    if (localized.isNotEmpty && !localized.startsWith('st_')) {
+      return localized;
+    }
+    final localizedFromTitle = l10n.getSuggestionType(suggestion.title);
+    if (localizedFromTitle.isNotEmpty && !localizedFromTitle.startsWith('st_')) {
+      return localizedFromTitle;
+    }
+    return suggestion.title.isNotEmpty ? suggestion.title : l10n.suggestions;
+  }
+
+  String _getTypeLabel(String type, [AppLocalizations? l10n, String? fallbackTitle]) {
+    if (l10n != null) {
+      if ((type.isEmpty || type == 'general') && fallbackTitle != null && fallbackTitle.isNotEmpty) {
+        return l10n.getShortSuggestionType(fallbackTitle);
+      }
+      return l10n.getShortSuggestionType(type);
+    }
     switch (type) {
       case 'reclamation_note':
         return 'Note';
@@ -1355,18 +1467,29 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     }
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDate(DateTime date, [String? langCode]) {
     final now = DateTime.now();
     final diff = now.difference(date);
+    final lang = langCode ?? 'fr';
 
     if (diff.inDays == 0) {
       return DateFormat('HH:mm').format(date);
     } else if (diff.inDays == 1) {
+      if (lang == 'ar') return 'أمس';
+      if (lang == 'en') return 'Yesterday';
       return 'Hier';
     } else if (diff.inDays < 7) {
+      if (lang == 'ar') return '${diff.inDays} أيام';
+      if (lang == 'en') return '${diff.inDays}d';
       return '${diff.inDays}j';
     } else {
-      return DateFormat('dd/MM/yyyy').format(date);
+      if (lang == 'ar') {
+        return DateFormat('d MMMM yyyy', 'ar').format(date);
+      } else if (lang == 'en') {
+        return '\u200E${DateFormat('d MMMM yyyy', 'en').format(date)}\u200E';
+      } else {
+        return '\u200E${DateFormat('d MMMM yyyy', 'fr').format(date)}\u200E';
+      }
     }
   }
 
@@ -1492,9 +1615,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                               ),
                             ),
                             const SizedBox(height: 2),
-                            const Text(
-                              'Partagez vos idées',
-                              style: TextStyle(
+                            Text(
+                              l10n.shareIdeas,
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: Color(0xFF1F2937),
@@ -1602,7 +1725,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
-                                    hintText: 'Rechercher...',
+                                    hintText: AppLocalizations.of(context).search,
                                     hintStyle: TextStyle(
                                       color: Colors.grey[400],
                                       fontSize: 15,

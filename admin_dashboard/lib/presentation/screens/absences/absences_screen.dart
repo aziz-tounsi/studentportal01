@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +8,7 @@ import '../../providers/absences_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../../data/models/class_model.dart';
 
 class AbsencesScreen extends ConsumerStatefulWidget {
@@ -21,6 +22,12 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   final _searchController = TextEditingController();
   bool _showFilters = false;
   bool _isSelectionMode = false;
+
+  // Pagination state
+  int _currentPage = 1;
+  int _itemsPerPage = 20;
+  static const List<int> _perPageOptions = [10, 20, 50, 100, -1];
+
 
   @override
   void initState() {
@@ -94,17 +101,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                       _buildSelectionBar(context, absencesAsync),
                     Expanded(
                       child: absencesAsync.when(
-                        loading: () => Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: AppShadows.card,
-                            ),
-                            child: const IosLoader(color: Color(0xFF655DD5)),
-                          ),
-                        ),
+                        loading: () => const TableSkeletonLoader(),
                         error: (e, _) => _buildErrorState(e),
                         data: (state) => _buildContent(context, state),
                       ),
@@ -709,43 +706,60 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   }
 
   Widget _buildContent(BuildContext context, AbsencesState state) {
-    return Container(
-      color: Colors.white,
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Liste des absences',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${state.filtered.length} résultats',
-                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ],
+    final list = state.filtered;
+
+    return Stack(
+      children: [
+        Container(
+          color: const Color(0xFFF8FAFC),
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border.withOpacity(0.5)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
-              ),
-              Expanded(
-                child: _buildAbsenceDataTable(context, state),
-              ),
-            ],
-          ),
-          if (state.selectedIds.isNotEmpty)
-            Positioned(
-              bottom: 24,
-              left: 0,
-              right: 0,
-              child: Center(child: _buildFloatingSelectionBar(context, state)),
+              ],
             ),
-        ],
-      ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: list.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.event_available, size: 64, color: AppColors.slate300),
+                                const SizedBox(height: 16),
+                                const Text('Aucune absence trouvée', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 8),
+                                const Text('Modifiez vos filtres ou ajoutez une nouvelle absence', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                              ],
+                            ),
+                          )
+                        : _buildAbsenceDataTable(context, state),
+                  ),
+                  _buildPagination(list.length),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (state.selectedIds.isNotEmpty)
+          Positioned(
+            bottom: 24,
+            left: 0,
+            right: 0,
+            child: Center(child: _buildFloatingSelectionBar(context, state)),
+          ),
+      ],
     );
   }
 
@@ -861,237 +875,375 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   }
 
   Widget _buildAbsenceDataTable(BuildContext context, AbsencesState state) {
-    final list = state.filtered;
+    final absences = state.filtered;
     final dateFormat = DateFormat('dd/MM/yyyy');
 
-    if (list.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.event_available, size: 64, color: AppColors.slate300),
-            const SizedBox(height: 16),
-            const Text('Aucune absence trouvée', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            const Text('Modifiez vos filtres ou ajoutez une nouvelle absence', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          ],
-        ),
-      );
-    }
-
-    const rowHeight = 64.0;
-    const headerHeight = 52.0;
-    const colWidths = <double>[44, 180, 90, 130, 90, 70, 60, 160, 90];
-    const colLabels = ['', 'ÉTUDIANT', 'CLASSE', 'MATIÈRE', 'DATE', 'HEURES', 'TYPE', 'MOTIF', 'JUSTIFIÉ'];
-
-    Widget headerCell(String text, double width) {
-      return Expanded(
-        flex: width.round(),
-        child: text.isEmpty
-            ? Consumer(builder: (context, ref, _) {
-                final st = ref.watch(absencesProvider).asData?.value;
-                final list2 = st?.filtered ?? [];
-                final allSel = list2.isNotEmpty && list2.every((a) => st!.selectedIds.contains(a.id));
-                return Center(
-                  child: SizedBox(
-                    width: 16, height: 16,
-                    child: Checkbox(
-                      value: allSel,
-                      tristate: false,
-                      onChanged: (v) {
-                        if (allSel) {
-                          ref.read(absencesProvider.notifier).clearSelection();
-                        } else {
-                          for (final a in list2) ref.read(absencesProvider.notifier).toggleSelection(a.id);
-                        }
-                      },
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-                      side: const BorderSide(color: AppColors.slate300, width: 1.5),
-                      activeColor: const Color(0xFF655DD5),
-                    ),
-                  ),
-                );
-              })
-            : Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.5)),
-              ),
-      );
-    }
-
-    Widget dataCell(Widget child, double width) {
-      return Expanded(flex: width.round(), child: child);
-    }
+    final totalPages = _itemsPerPage == -1 ? 1 : (absences.length / _itemsPerPage).ceil();
+    if (_currentPage > totalPages && totalPages > 0) _currentPage = totalPages;
+    final startIndex = _itemsPerPage == -1 ? 0 : (_currentPage - 1) * _itemsPerPage;
+    final endIndex = _itemsPerPage == -1 ? absences.length : (startIndex + _itemsPerPage).clamp(0, absences.length);
+    final pageAbsences = absences.sublist(startIndex, endIndex);
+    final allPageSelected = pageAbsences.isNotEmpty && pageAbsences.every((a) => state.selectedIds.contains(a.id));
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-            ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(11),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: constraints.maxWidth - 64, maxHeight: constraints.maxHeight),
-                    child: SizedBox(
-                      width: constraints.maxWidth - 64,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Header
-                        Container(
-                          height: headerHeight,
-                          color: const Color(0xFFF8FAFC),
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Row(
-                            children: List.generate(colLabels.length, (i) => headerCell(colLabels[i], colWidths[i])),
-                          ),
+        final availableWidth = constraints.maxWidth;
+        const checkboxW = 44.0;
+        const actionsW = 44.0;
+        const classeW = 85.0;
+        const subjectW = 140.0;
+        const dateW = 100.0;
+        const hoursW = 80.0;
+        const justifW = 110.0;
+
+        final fixedW = checkboxW + classeW + subjectW + dateW + hoursW + justifW + actionsW;
+        final nameW = (availableWidth - fixedW).clamp(180.0, 320.0);
+
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: availableWidth),
+            child: DataTable(
+              columnSpacing: 0,
+              horizontalMargin: 0,
+              dataRowMinHeight: 60,
+              dataRowMaxHeight: 64,
+              headingRowHeight: 44,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+              headingTextStyle: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textTertiary,
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
+              showCheckboxColumn: false,
+              columns: [
+                DataColumn(
+                  label: SizedBox(
+                    width: checkboxW,
+                    child: Center(
+                      child: SizedBox(
+                        width: 16, height: 16,
+                        child: Checkbox(
+                          value: allPageSelected && pageAbsences.isNotEmpty,
+                          tristate: false,
+                          onChanged: (v) {
+                            if (allPageSelected) {
+                              for (final a in pageAbsences) ref.read(absencesProvider.notifier).toggleSelection(a.id);
+                            } else {
+                              for (final a in pageAbsences) {
+                                if (!state.selectedIds.contains(a.id)) {
+                                  ref.read(absencesProvider.notifier).toggleSelection(a.id);
+                                }
+                              }
+                            }
+                          },
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                          side: BorderSide(color: AppColors.slate300, width: 1.5),
+                          activeColor: const Color(0xFF655DD5),
                         ),
-                        Divider(height: 1, color: AppColors.border, indent: 24, endIndent: 24),
-                        // Virtualized rows
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: list.length,
-                            itemExtent: rowHeight,
-                            itemBuilder: (context, index) {
-                              final a = list[index];
-                              final isSelected = state.selectedIds.contains(a.id);
-                              return Container(
-                                height: rowHeight,
-                                color: isSelected ? AppColors.primarySoft : Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 24),
-                                child: Row(
-                                  children: [
-                                    dataCell(
-                                      Center(
-                                        child: Checkbox(
-                                          value: isSelected,
-                                          activeColor: const Color(0xFF655DD5),
-                                          onChanged: (v) => ref.read(absencesProvider.notifier).toggleSelection(a.id),
-                                        ),
-                                      ),
-                                      colWidths[0],
-                                    ),
-                                    dataCell(
-                                      InkWell(
-                                        onTap: () {
-                                          if (a.studentId.isNotEmpty) context.push('/student-absences/${a.studentId}');
-                                        },
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            UserAvatar(name: a.studentName, radius: 16),
-                                            const SizedBox(width: 12),
-                                            Flexible(child: Text(a.studentName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.textPrimary))),
-                                          ],
-                                        ),
-                                      ),
-                                      colWidths[1],
-                                    ),
-                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(a.className ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary))), colWidths[2]),
-                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(a.subjectName ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary))), colWidths[3]),
-                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(dateFormat.format(a.date), style: const TextStyle(color: AppColors.textSecondary))), colWidths[4]),
-                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('${a.hoursAbsent.toStringAsFixed(0)}h', style: const TextStyle(color: AppColors.textSecondary))), colWidths[5]),
-                                    dataCell(Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: _SessionTypeChip(type: a.sessionType)), colWidths[6]),
-                                    dataCell(
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                                        child: Tooltip(
-                                          message: a.reason ?? 'Aucun motif',
-                                          child: Text(
-                                            a.reason ?? '—',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(color: a.reason != null ? AppColors.textPrimary : AppColors.slate300),
-                                          ),
-                                        ),
-                                      ),
-                                      colWidths[7],
-                                    ),
-                                    dataCell(
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                                        child: _JustifiedBadge(
-                                          justified: a.justified,
-                                          onTap: () => ref.read(absencesProvider.notifier).toggleJustified(a.id, a.justified),
-                                        ),
-                                      ),
-                                      colWidths[8],
-                                    ),
-                                    PopupMenuButton<String>(
-                                      icon: const Icon(Icons.more_horiz, size: 18, color: AppColors.textTertiary),
-                                      tooltip: 'Actions',
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      elevation: 8,
-                                      offset: const Offset(-160, 40),
-                                      onSelected: (value) {
-                                        if (value == 'edit') {
-                                          _showEditDialog(context, a);
-                                        } else if (value == 'delete') {
-                                          _confirmDelete(context, a);
-                                        } else if (value == 'view_profile') {
-                                          if (a.studentId.isNotEmpty) context.push('/users/${a.studentId}');
-                                        }
-                                      },
-                                      itemBuilder: (context) => [
-                                        PopupMenuItem(
-                                          value: 'view_profile',
-                                          height: 40,
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.person_outline, size: 18, color: const Color(0xFF8B5CF6)),
-                                              const SizedBox(width: 12),
-                                              const Text('Voir le profil', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-                                            ],
-                                          ),
-                                        ),
-                                        PopupMenuItem(
-                                          value: 'edit',
-                                          height: 40,
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.edit_outlined, size: 18, color: const Color(0xFF655DD5)),
-                                              const SizedBox(width: 12),
-                                              const Text('Modifier', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-                                            ],
-                                          ),
-                                        ),
-                                        const PopupMenuDivider(),
-                                        PopupMenuItem(
-                                          value: 'delete',
-                                          height: 40,
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
-                                              const SizedBox(width: 12),
-                                              const Text('Supprimer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.error)),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+                DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / ÉTUDIANT'))),
+                DataColumn(label: SizedBox(width: classeW, child: _headerLabel('CLASSE'))),
+                DataColumn(label: SizedBox(width: subjectW, child: _headerLabel('MATIÈRE'))),
+                DataColumn(label: SizedBox(width: dateW, child: _headerLabel('DATE'))),
+                DataColumn(label: SizedBox(width: hoursW, child: _headerLabel('HEURES'))),
+                DataColumn(label: SizedBox(width: justifW, child: _headerLabel('JUSTIFIÉ'))),
+                DataColumn(label: SizedBox(width: actionsW, child: Container())),
+              ],
+              rows: pageAbsences.map((a) {
+                final isSelected = state.selectedIds.contains(a.id);
+                return DataRow(
+                  color: WidgetStateProperty.resolveWith<Color?>((states) {
+                    if (isSelected) return const Color(0xFFF5F3FF).withOpacity(0.4);
+                    if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                    return null;
+                  }),
+                  cells: [
+                    // Checkbox
+                    DataCell(
+                      SizedBox(
+                        width: checkboxW,
+                        child: Center(
+                          child: SizedBox(
+                            width: 16, height: 16,
+                            child: Checkbox(
+                              value: isSelected,
+                              onChanged: (v) => ref.read(absencesProvider.notifier).toggleSelection(a.id),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                              side: BorderSide(color: AppColors.slate300, width: 1.5),
+                              activeColor: const Color(0xFF655DD5),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Name + Subtitle
+                    DataCell(
+                      SizedBox(
+                        width: nameW,
+                        child: Row(
+                          children: [
+                            UserAvatar(name: a.studentName, radius: 17),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    a.studentName,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    a.className ?? 'Étudiant',
+                                    style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      onTap: () {
+                        if (a.studentId.isNotEmpty) context.push('/student-absences/${a.studentId}');
+                      },
+                    ),
+                    // Classe
+                    DataCell(SizedBox(
+                      width: classeW,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            a.className ?? '—',
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF059669)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    )),
+                    // Matière
+                    DataCell(SizedBox(
+                      width: subjectW,
+                      child: Text(
+                        a.subjectName ?? '—',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )),
+                    // Date
+                    DataCell(SizedBox(
+                      width: dateW,
+                      child: Text(
+                        dateFormat.format(a.date),
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    )),
+                    // Heures
+                    DataCell(SizedBox(
+                      width: hoursW,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.slate50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${a.hoursAbsent.toStringAsFixed(0)}h',
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, fontFamily: 'monospace', color: AppColors.textSecondary),
+                          ),
+                        ),
+                      ),
+                    )),
+                    // Justifié
+                    DataCell(SizedBox(
+                      width: justifW,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _JustifiedBadge(
+                          justified: a.justified,
+                          onTap: () => ref.read(absencesProvider.notifier).toggleJustified(a.id, a.justified),
+                        ),
+                      ),
+                    )),
+                    // Actions
+                    DataCell(SizedBox(
+                      width: actionsW,
+                      child: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_horiz, size: 18, color: AppColors.textTertiary),
+                        tooltip: 'Actions',
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 8,
+                        offset: const Offset(-160, 40),
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            _showEditDialog(context, a);
+                          } else if (value == 'delete') {
+                            _confirmDelete(context, a);
+                          } else if (value == 'view_profile') {
+                            if (a.studentId.isNotEmpty) context.push('/users/${a.studentId}');
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'view_profile',
+                            height: 40,
+                            child: Row(
+                              children: [
+                                Icon(Icons.person_outline, size: 18, color: const Color(0xFF8B5CF6)),
+                                const SizedBox(width: 12),
+                                const Text('Voir le profil', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'edit',
+                            height: 40,
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18, color: const Color(0xFF655DD5)),
+                                const SizedBox(width: 12),
+                                const Text('Modifier', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuDivider(),
+                          PopupMenuItem(
+                            value: 'delete',
+                            height: 40,
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
+                                const SizedBox(width: 12),
+                                const Text('Supprimer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.error)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                  ],
+                );
+              }).toList(),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _headerLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textTertiary,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPagination(int totalItems) {
+    final totalPages = _itemsPerPage == -1 ? 1 : (totalItems / _itemsPerPage).ceil();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.3))),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Items per page
+          Text('Afficher par ', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _itemsPerPage,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: AppColors.textTertiary),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                items: _perPageOptions.map((v) => DropdownMenuItem(
+                  value: v,
+                  child: Text(v == -1 ? 'All' : '$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                )).toList(),
+                onChanged: (v) => setState(() {
+                  _itemsPerPage = v!;
+                  _currentPage = 1;
+                }),
+              ),
+            ),
+          ),
+          const Spacer(),
+          // Page info
+          Text(
+            'Page $_currentPage sur ${totalPages == 0 ? 1 : totalPages}',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          const SizedBox(width: 12),
+          // Prev/Next
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_left, size: 18, color: _currentPage > 1 ? AppColors.textSecondary : AppColors.textTertiary),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: AppColors.border),
+                InkWell(
+                  onTap: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_right, size: 18, color: _currentPage < totalPages ? AppColors.textSecondary : AppColors.textTertiary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

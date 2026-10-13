@@ -6,6 +6,8 @@ import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
+
 import '../../../data/models/academic_models.dart';
 
 // =====================================================================
@@ -60,11 +62,10 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                 child: Column(
                   children: [
                     _buildHeader(context, stateAsync.asData?.value),
+                    _buildTabBar(),
                     Expanded(
                       child: stateAsync.when(
-                        loading: () => const Center(
-                          child: IosLoader(color: Color(0xFF655DD5)),
-                        ),
+                        loading: () => const GradeLevelsSkeletonLoader(),
                         error: (e, _) => _buildErrorState(e),
                         data: (state) => _buildContent(context, state),
                       ),
@@ -304,50 +305,81 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
     );
   }
 
+  Widget _buildTabBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          labelColor: const Color(0xFF6D4CF6),
+          unselectedLabelColor: const Color(0xFF6B7280),
+          indicatorColor: const Color(0xFF6D4CF6),
+          indicatorWeight: 2,
+          indicatorSize: TabBarIndicatorSize.label,
+          tabAlignment: TabAlignment.start,
+          dividerColor: Colors.transparent,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+          labelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          tabs: const [
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.layers_outlined, size: 16),
+                  SizedBox(width: 6),
+                  Text('Niveaux'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.account_tree_outlined, size: 16),
+                  SizedBox(width: 6),
+                  Text('Filières'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.description_outlined, size: 16),
+                  SizedBox(width: 6),
+                  Text('Types d\'examen'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ==================== CONTENT AREA ====================
   Widget _buildContent(BuildContext context, GradeLevelsState state) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      child: TabBarView(
+        controller: _tabController,
         children: [
-          const SizedBox(height: 24),
-          // Tabs
-          Container(
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.slate200)),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              labelColor: const Color(0xFF0F172A),
-              unselectedLabelColor: AppColors.slate500,
-              labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              unselectedLabelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              indicatorColor: const Color(0xFF655DD5),
-              indicatorWeight: 2,
-              labelPadding: const EdgeInsets.symmetric(horizontal: 16),
-              tabAlignment: TabAlignment.start,
-              dividerColor: Colors.transparent,
-              tabs: const [
-                Tab(text: 'Niveaux'),
-                Tab(text: 'Filières'),
-                Tab(text: 'Types d\'examen'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          // Tab Content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildGradesTab(context, state),
-                _buildSectionsTab(context, state),
-                _buildExamTypesTab(context, state),
-              ],
-            ),
-          ),
+          _buildGradesTab(context, state),
+          _buildSectionsTab(context, state),
+          _buildExamTypesTab(context, state),
         ],
       ),
     );

@@ -363,7 +363,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                                       cursorColor: Colors.grey[600],
                                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.grey[800]),
                                       decoration: InputDecoration(
-                                        hintText: 'Rechercher un document...',
+                                        hintText: AppLocalizations.of(context).search,
                                         hintStyle: TextStyle(color: Colors.grey[400], fontSize: 15),
                                         filled: false,
                                         border: InputBorder.none,
@@ -737,7 +737,8 @@ class _DocumentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd MMM yyyy', 'fr_FR');
+    final lang = Localizations.localeOf(context).languageCode;
+    final dateFormat = DateFormat('dd MMM yyyy', lang);
     final categoryColor = _getCategoryColor(document.category);
 
     return SlideTransition(
@@ -896,7 +897,9 @@ class _DocumentCard extends StatelessWidget {
   }
 
   void _showDocumentDetails(BuildContext context, DocumentModel document) {
-    final dateFormat = DateFormat('dd MMMM yyyy', 'fr_FR');
+    final l10n = AppLocalizations.of(context);
+    final lang = Localizations.localeOf(context).languageCode;
+    final dateFormat = DateFormat('dd MMMM yyyy', lang);
     final categoryColor = _getCategoryColor(document.category);
 
     showModalBottomSheet(
@@ -1005,18 +1008,18 @@ class _DocumentCard extends StatelessWidget {
             // Info rows
             _DetailRow(
               icon: Icons.calendar_today_outlined,
-              label: 'Date',
+              label: l10n.dateLabel,
               value: dateFormat.format(document.createdAt),
             ),
             if (document.fileSize != null)
               _DetailRow(
                 icon: Icons.storage_outlined,
-                label: 'Taille',
+                label: l10n.translate('size_label'),
                 value: document.displayFileSize,
               ),
             _DetailRow(
               icon: Icons.insert_drive_file_outlined,
-              label: 'Fichier',
+              label: l10n.translate('file_label'),
               value: document.fileName,
             ),
             
@@ -1029,7 +1032,7 @@ class _DocumentCard extends StatelessWidget {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Téléchargement en cours...'),
+                    content: Text(l10n.translate('downloading_status')),
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     backgroundColor: categoryColor,
@@ -1052,13 +1055,13 @@ class _DocumentCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.download_rounded, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
+                    const Icon(Icons.download_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
                     Text(
-                      'Télécharger',
+                      l10n.translate('download'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,

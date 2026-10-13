@@ -1,4 +1,4 @@
-﻿// ignore_for_file: unused_element
+// ignore_for_file: unused_element
 
 import 'dart:async';
 import 'dart:ui';
@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../users/user_profile_screen.dart';
 
@@ -240,6 +241,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
   final Set<String> _selectedIds = {};
   bool _selectionMode = false;
 
+  // Pagination state
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
+  static const List<int> _perPageOptions = [10, 20, 50, 100, -1];
+
+
   @override
   void initState() {
     super.initState();
@@ -367,8 +374,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                     _buildTopBar(context, suggestionsAsync),
                     Expanded(
                       child: suggestionsAsync.when(
-                        loading: () =>
-                            const Center(child: IosLoader()),
+                        loading: () => const SuggestionsSkeletonLoader(),
                         error: (e, _) => Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -934,8 +940,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     SuggestionsState state,
   ) {
     final searchQuery = state.searchQuery;
+    final list = state.filtered;
     
-    if (state.filtered.isEmpty) {
+    if (list.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -962,20 +969,139 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
       );
     }
 
-    return ListView.builder(
+    final totalPages = _itemsPerPage == -1 ? 1 : (list.length / _itemsPerPage).ceil();
+    if (_currentPage > totalPages && totalPages > 0) _currentPage = totalPages;
+    final startIndex = _itemsPerPage == -1 ? 0 : (_currentPage - 1) * _itemsPerPage;
+    final endIndex = _itemsPerPage == -1 ? list.length : (startIndex + _itemsPerPage).clamp(0, list.length);
+    final pageSuggestions = list.sublist(startIndex, endIndex);
+
+    return Container(
+      color: const Color(0xFFF8FAFC),
       padding: const EdgeInsets.all(24),
-      itemCount: state.filtered.length,
-      itemBuilder: (context, index) {
-        final s = state.filtered[index];
-        return _SuggestionCard(
-          suggestion: s,
-          searchQuery: searchQuery,
-          isSelected: _selectedIds.contains(s.id),
-          selectionMode: _selectionMode,
-          onSelect: () => _toggleSelection(s.id),
-          onAction: (action) => _handleAction(action, s),
-        );
-      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: pageSuggestions.length,
+                  itemBuilder: (context, index) {
+                    final s = pageSuggestions[index];
+                    return _SuggestionCard(
+                      suggestion: s,
+                      searchQuery: searchQuery,
+                      isSelected: _selectedIds.contains(s.id),
+                      selectionMode: _selectionMode,
+                      onSelect: () => _toggleSelection(s.id),
+                      onAction: (action) => _handleAction(action, s),
+                    );
+                  },
+                ),
+              ),
+              _buildPagination(list.length),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPagination(int totalItems) {
+    final totalPages = _itemsPerPage == -1 ? 1 : (totalItems / _itemsPerPage).ceil();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.3))),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Items per page
+          Text('Afficher par ', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _itemsPerPage,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: AppColors.textTertiary),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                items: _perPageOptions.map((v) => DropdownMenuItem(
+                  value: v,
+                  child: Text(v == -1 ? 'All' : '$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                )).toList(),
+                onChanged: (v) => setState(() {
+                  _itemsPerPage = v!;
+                  _currentPage = 1;
+                }),
+              ),
+            ),
+          ),
+          const Spacer(),
+          // Page info
+          Text(
+            'Page $_currentPage sur ${totalPages == 0 ? 1 : totalPages}',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          const SizedBox(width: 12),
+          // Prev/Next
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_left, size: 18, color: _currentPage > 1 ? AppColors.textSecondary : AppColors.textTertiary),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: AppColors.border),
+                InkWell(
+                  onTap: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_right, size: 18, color: _currentPage < totalPages ? AppColors.textSecondary : AppColors.textTertiary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1874,7 +2000,7 @@ class _SuggestionCard extends StatelessWidget {
         color: isSelected
             ? AppColors.primarySoft
             : AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isSelected
               ? AppColors.primary
@@ -1890,7 +2016,7 @@ class _SuggestionCard extends StatelessWidget {
         ],
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         onTap: selectionMode ? onSelect : () => onAction('view'),
         onLongPress: onSelect,
         child: Padding(

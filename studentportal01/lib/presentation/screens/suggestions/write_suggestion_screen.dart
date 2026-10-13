@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/ios_loader.dart';
 
@@ -133,9 +134,10 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors de la sélection des fichiers: $e'),
+            content: Text('${l10n.errorSelectingFiles}: $e'),
           ),
         );
       }
@@ -143,9 +145,10 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
   }
 
   Future<void> _submitSuggestion() async {
+    final l10n = AppLocalizations.of(context);
     if (_contentController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez remplir la description')),
+        SnackBar(content: Text(l10n.pleaseFillDescription)),
       );
       return;
     }
@@ -196,10 +199,11 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
       }
 
       // Create suggestion using repository
+      final typesMap = l10n.suggestionTypesList;
       await ref
           .read(suggestionRepositoryProvider)
           .createSuggestion(
-            title: suggestionTypes[_selectedType] ?? 'Suggestion',
+            title: typesMap[_selectedType] ?? l10n.suggestions,
             body: _contentController.text.trim(),
             suggestionType: _selectedType,
             attachmentUrls: attachmentUrls,
@@ -213,8 +217,8 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
       if (mounted) {
         context.go('/suggestions');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Suggestion envoyée avec succès!'),
+          SnackBar(
+            content: Text(l10n.suggestionSubmittedSuccess),
             backgroundColor: Colors.green,
           ),
         );
@@ -235,10 +239,11 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
   }
 
   /// Build premium dropdown type selector
-  Widget _buildTypeSelector() {
+  Widget _buildTypeSelector(AppLocalizations l10n) {
     final selectedColor = getTypeColor(_selectedType);
     final selectedIcon = getTypeIcon(_selectedType);
-    final selectedLabel = suggestionTypes[_selectedType] ?? 'Sélectionner';
+    final typesMap = l10n.suggestionTypesList;
+    final selectedLabel = typesMap[_selectedType] ?? l10n.selectType;
 
     return Container(
       decoration: BoxDecoration(
@@ -264,7 +269,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
         child: PopupMenuButton<String>(
           onSelected: (value) => setState(() => _selectedType = value),
           offset: const Offset(0, 56),
-          itemBuilder: (context) => suggestionTypes.entries.map((entry) {
+          itemBuilder: (context) => typesMap.entries.map((entry) {
             final typeColor = getTypeColor(entry.key);
             final typeIcon = getTypeIcon(entry.key);
             final isSelected = _selectedType == entry.key;
@@ -321,7 +326,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Type de suggestion',
+                        l10n.suggestionTypeLabel,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -362,6 +367,8 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -404,7 +411,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                           ],
                         ),
                         child: Icon(
-                          Icons.arrow_back_rounded,
+                          isRtl ? Icons.arrow_forward_rounded : Icons.arrow_back_rounded,
                           color: Colors.grey[700],
                           size: 22,
                         ),
@@ -416,7 +423,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Nouvelle suggestion',
+                            l10n.newSuggestion,
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
@@ -425,7 +432,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                             ),
                           ),
                           Text(
-                            'Partagez votre idée',
+                            l10n.shareIdeas,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -468,7 +475,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                           children: [
                             // Suggestion Type Selection - Modern Glassy Radio Grid
                             Text(
-                              'Type de suggestion',
+                              l10n.suggestionTypeLabel,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -477,11 +484,11 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            _buildTypeSelector(),
+                            _buildTypeSelector(l10n),
                             const SizedBox(height: 24),
                             // Description Field
                             Text(
-                              'Description',
+                              l10n.descriptionLabel,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -490,45 +497,28 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.04),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
+                            TextField(
+                              controller: _contentController,
+                              maxLines: 6,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[900],
+                                height: 1.5,
                               ),
-                              child: TextField(
-                                controller: _contentController,
-                                maxLines: 6,
-                                style: TextStyle(
+                              decoration: InputDecoration(
+                                hintText: l10n.describeSuggestionHint,
+                                hintStyle: TextStyle(
+                                  color: Colors.grey[400],
                                   fontSize: 15,
                                   fontWeight: FontWeight.w500,
-                                  color: Colors.grey[900],
-                                  height: 1.5,
                                 ),
-                                decoration: InputDecoration(
-                                  hintText:
-                                      'Décrivez votre suggestion en détail...',
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.all(20),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                ),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: const EdgeInsets.all(20),
                               ),
-                             ),
+                            ),
                              const SizedBox(height: 24),
                              // Attached files preview - show image previews for images, icons for documents
                              if (_attachedFiles.isNotEmpty) ...[
@@ -682,15 +672,18 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                                     mainAxisAlignment:
                                                         MainAxisAlignment.center,
                                                     children: [
-                                                      Icon(
-                                                        Icons.send_rounded,
-                                                        color: Colors.white,
-                                                        size: 20,
+                                                      Transform.flip(
+                                                        flipX: isRtl,
+                                                        child: const Icon(
+                                                          Icons.send_rounded,
+                                                          color: Colors.white,
+                                                          size: 20,
+                                                        ),
                                                       ),
                                                       const SizedBox(width: 8),
-                                                      const Text(
-                                                        'Envoyer',
-                                                        style: TextStyle(
+                                                      Text(
+                                                        l10n.send,
+                                                        style: const TextStyle(
                                                           fontSize: 16,
                                                           fontWeight:
                                                               FontWeight.w700,

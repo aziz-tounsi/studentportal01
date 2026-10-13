@@ -1,13 +1,16 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/absences_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../providers/auth_provider.dart';
 import '../../../data/models/absence_model.dart';
+import '../../../core/l10n/app_localizations.dart';
 
 class AbsenceDetailData {
   final String subjectName;
@@ -160,7 +163,7 @@ class AbsenceDetailScreen extends ConsumerWidget {
         ),
         child: detailAsync.when(
           data: (data) => data != null ? _DetailBody(data: data) : const _ErrorBody(),
-          loading: () => const Center(child: IosLoader()),
+          loading: () => const AbsenceDetailSkeleton(),
           error: (_, __) => const _ErrorBody(),
         ),
       ),
@@ -178,7 +181,7 @@ class _ErrorBody extends StatelessWidget {
         children: [
           Icon(Icons.error_outline, size: 56, color: Colors.red.shade300),
           const SizedBox(height: 16),
-          const Text('Impossible de charger les détails'),
+          Text(AppLocalizations.of(context).errorLoadingDetails),
         ],
       ),
     );
@@ -244,13 +247,60 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     );
   }
 
+  String _getShortcutOrName(AbsenceDetailData d) {
+    final name = d.subjectName.trim();
+    if (name.length > 15) {
+      if (d.subjectCode != null && d.subjectCode!.trim().isNotEmpty) {
+        return d.subjectCode!.trim();
+      }
+      final lower = name.toLowerCase();
+      if (lower.contains('sciences de la vie') || lower.contains('svt') || lower.contains('terre')) {
+        return 'SVT';
+      }
+      if (lower.contains('algorithmique') || lower.contains('structure')) {
+        return 'ASD';
+      }
+      if (lower.contains('architecture') || lower.contains('ordinateur')) {
+        return 'ARCHI';
+      }
+      if (lower.contains('math') || lower.contains('analyse') || lower.contains('algebre')) {
+        return 'MATH';
+      }
+      if (lower.contains('compta') || lower.contains('gestion')) {
+        return 'COMPTA';
+      }
+      if (lower.contains('anglais') || lower.contains('english') || lower.contains('francais')) {
+        return 'LANG';
+      }
+      
+      // Fallback: take first letters of each word
+      final words = name.split(' ').where((w) => w.length > 2).toList();
+      if (words.length >= 2) {
+         return words.map((w) => w[0].toUpperCase()).join('');
+      }
+      
+      return name.substring(0, 15) + '...';
+    }
+    return name;
+  }
+
   Widget _buildHeader(BuildContext context, AbsenceDetailData d, double overallPct) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 24, 0),
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => context.pop(),
+            onTap: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/absences');
+              }
+            },
             child: Container(
               width: 44,
               height: 44,
@@ -266,7 +316,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 ],
               ),
               child: Icon(
-                Icons.arrow_back_rounded,
+                isRtl
+                    ? Icons.arrow_forward_rounded
+                    : Icons.arrow_back_rounded,
                 color: Colors.grey[700],
                 size: 22,
               ),
@@ -277,9 +329,30 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(d.subjectName, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: _onSurface)),
+                Text(
+                  _getShortcutOrName(d),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    fontFamily: isRtl ? GoogleFonts.cairo().fontFamily : null,
+                    color: _onSurface,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('Matière', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 2, color: _secondaryText.withOpacity(0.7))),
+                Text(
+                  l10n.academicSubject,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 2,
+                    color: _secondaryText.withOpacity(0.7),
+                  ),
+                ),
               ],
             ),
           ),
@@ -344,11 +417,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ),
           child: Row(
             children: [
-              _statItem(icon: Icons.balance_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: d.coefficient.toStringAsFixed(1), unit: 'Coeff', isPrimary: false),
+              _statItem(icon: Icons.balance_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: d.coefficient.toStringAsFixed(1), unit: AppLocalizations.of(context).coeffLabel, isPrimary: false),
               Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withOpacity(0.5)),
-              _statItem(icon: Icons.schedule_rounded, iconBg: _primaryPink.withOpacity(0.1), iconColor: _primaryPink, value: '${d.totalHours.toStringAsFixed(0)}h', unit: 'Total', isPrimary: true, iconSize: 26),
+              _statItem(icon: Icons.schedule_rounded, iconBg: _primaryPink.withOpacity(0.1), iconColor: _primaryPink, value: '${d.totalHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}', unit: AppLocalizations.of(context).totalLabel, isPrimary: true, iconSize: 26),
               Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withOpacity(0.5)),
-              _statItem(icon: Icons.view_week_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: '${d.weeks}', unit: 'Sem.', isPrimary: false),
+              _statItem(icon: Icons.view_week_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: '${d.weeks}', unit: AppLocalizations.of(context).semLabel, isPrimary: false),
             ],
           ),
         ),
@@ -380,9 +453,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _glassChip(color: _redAbsence, label: 'Absent', value: '${totalAbsent.toStringAsFixed(0)}h'),
+          _glassChip(color: _redAbsence, label: AppLocalizations.of(context).absentLabel, value: '${totalAbsent.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}'),
           const SizedBox(width: 12),
-          _glassChip(color: _blueCI, label: 'CI', value: '${ciHours.toStringAsFixed(0)}h'),
+          _glassChip(color: _blueCI, label: AppLocalizations.of(context).ciLabel, value: '${ciHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}'),
         ],
       ),
     );
@@ -438,9 +511,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final tabWidth = constraints.maxWidth / 2;
-              return Stack(
-                children: [
-                  AnimatedPositioned(
+              return Directionality(
+                textDirection: TextDirection.ltr,
+                child: Stack(
+                  children: [
+                    AnimatedPositioned(
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOutBack,
                     left: _showWeekView ? tabWidth : 0,
@@ -481,7 +556,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                 fontWeight: FontWeight.w700,
                                 color: _showWeekView ? Colors.grey.shade600 : Colors.white,
                               ),
-                              child: const Text('Mois'),
+                              child: Text(AppLocalizations.of(context).month),
                             ),
                           ),
                         ),
@@ -499,14 +574,15 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                 fontWeight: FontWeight.w700,
                                 color: _showWeekView ? Colors.white : Colors.grey.shade600,
                               ),
-                              child: const Text('Semaine'),
+                              child: Text(AppLocalizations.of(context).week),
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -516,7 +592,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Widget _buildTimelinePanel(AbsenceDetailData d, Map<DateTime, List<AbsenceRecordModel>> absencesByDate) {
-    final monthName = DateFormat('MMMM yyyy', 'fr_FR').format(_currentMonth);
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final monthName = DateFormat('MMMM yyyy', localeCode).format(_currentMonth);
 
     if (_showWeekView) {
       final startOfWeek = _currentMonth.add(Duration(days: _currentWeekIndex * 7));
@@ -536,13 +613,18 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildMonthHeader('Semaine du ${DateFormat('dd/MM').format(weekStart)}',
+            _buildMonthHeader(
+              localeCode == 'ar'
+                  ? 'أسبوع ${DateFormat('dd/MM').format(weekStart)}'
+                  : (localeCode == 'en'
+                      ? 'Week of ${DateFormat('dd/MM').format(weekStart)}'
+                      : 'Semaine du ${DateFormat('dd/MM').format(weekStart)}'),
               onPrev: () => setState(() => _currentWeekIndex = (_currentWeekIndex - 1).clamp(0, 52)),
               onNext: () => setState(() => _currentWeekIndex = (_currentWeekIndex + 1).clamp(0, 52)),
             ),
             const SizedBox(height: 16),
             if (weekAbsences.isEmpty)
-              _buildEmptyState()
+              _buildEmptyState(isWeek: true)
             else
               ...sortedWeek.map((e) => _buildTimelineItem(e.key, e.value)),
           ],
@@ -630,7 +712,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({bool isWeek = false}) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24),
@@ -638,7 +721,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         children: [
           Icon(Icons.more_horiz, size: 32, color: _secondaryText.withOpacity(0.5)),
           const SizedBox(height: 8),
-          Text('Aucune absence ce mois-ci', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _secondaryText.withOpacity(0.7))),
+          Text(
+            isWeek ? l10n.noAbsencesWeek : l10n.noAbsencesMonth,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _secondaryText.withOpacity(0.7)),
+          ),
         ],
       ),
     );
@@ -649,14 +735,19 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final allJustified = absences.every((r) => r.justified);
     final first = absences.first;
     final dotColor = allJustified ? _blueCI : _redAbsence;
-    final dayName = DateFormat('EEE', 'fr_FR').format(date);
-    final shortDayName = dayName.substring(0, 1).toUpperCase() + dayName.substring(1, 3);
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final l10n = AppLocalizations.of(context);
+    final dayName = DateFormat('EEE', localeCode).format(date);
+    final shortDayName = dayName.length >= 3
+        ? dayName.substring(0, 1).toUpperCase() + dayName.substring(1, 3)
+        : dayName;
     final status = allJustified
-        ? 'Absence Justifiée${first.sessionType != null ? ' (${first.sessionType})' : ''}'
-        : 'Absence Non Justifiée';
+        ? '${l10n.justifiedAbsence}${first.sessionType != null ? ' (${first.sessionType})' : ''}'
+        : l10n.unjustifiedAbsence;
+    final hourUnit = l10n.translate('hour_unit');
     final hourStr = absences.length == 1
-        ? '${totalH.toStringAsFixed(0)}h'
-        : '${absences.length} séances (${totalH.toStringAsFixed(0)}h)';
+        ? '${totalH.toStringAsFixed(0)} $hourUnit'
+        : '${absences.length} ${l10n.sessionsCount} (${totalH.toStringAsFixed(0)} $hourUnit)';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

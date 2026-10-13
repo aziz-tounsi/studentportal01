@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -629,8 +630,13 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                                           width: 40,
                                           height: 40,
                                           alignment: Alignment.center,
-                                          child: const Icon(Icons.chevron_left,
-                                              color: Color(0xFF475569), size: 22),
+                                          child: Icon(
+                                            Directionality.of(context) == TextDirection.rtl
+                                                ? Icons.chevron_right
+                                                : Icons.chevron_left,
+                                            color: const Color(0xFF475569),
+                                            size: 22,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 4),
@@ -890,79 +896,84 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
             GestureDetector(
               onTap: () =>
                   setState(() => _showAttachModal = false),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.5),
-                child: GestureDetector(
-                  onTap: () {},
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.92),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    child: GestureDetector(
+                      onTap: () {},
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(32),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                  borderRadius: BorderRadius.circular(32),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Padding(
-                                      padding: EdgeInsets.only(left: 20),
-                                      child: Text(
-                                        'Joindre',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w800,
-                                          color: Color(0xFF1E293B),
-                                          letterSpacing: -0.3,
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Padding(
+                                          padding: EdgeInsets.only(left: 20),
+                                          child: Text(
+                                            'Joindre',
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF1E293B),
+                                              letterSpacing: -0.3,
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                        GestureDetector(
+                                          onTap: () => setState(() => _showAttachModal = false),
+                                          child: Container(
+                                            width: 36,
+                                            height: 36,
+                                            margin: const EdgeInsets.only(right: 12),
+                                            decoration: const BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: Color(0xFFF1F5F9),
+                                            ),
+                                            child: const Icon(Icons.close_rounded,
+                                                size: 20, color: Color(0xFF94A3B8)),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    GestureDetector(
-                                      onTap: () => setState(() => _showAttachModal = false),
-                                      child: Container(
-                                        width: 36,
-                                        height: 36,
-                                        margin: const EdgeInsets.only(right: 12),
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: const Color(0xFFF1F5F9),
-                                        ),
-                                        child: const Icon(Icons.close_rounded,
-                                            size: 20, color: Color(0xFF94A3B8)),
-                                      ),
+                                    const SizedBox(height: 8),
+                                    _AttachOption(
+                                      icon: Icons.image_outlined,
+                                      iconColor: Colors.white,
+                                      bgColor: const Color(0xFFFF2D78),
+                                      title: 'Bibliothèque photo',
+                                      subtitle: 'Partager une image ou un document',
+                                      onTap: () => _pickImage(ImageSource.gallery),
+                                    ),
+                                    _AttachOption(
+                                      icon: Icons.camera_alt_outlined,
+                                      iconColor: Colors.white,
+                                      bgColor: const Color(0xFFFF2D78),
+                                      title: 'Prendre une photo',
+                                      subtitle: 'Capturer un document ou une note',
+                                      onTap: () => _pickImage(ImageSource.camera),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                _AttachOption(
-                                  icon: Icons.image_outlined,
-                                  iconColor: _pink,
-                                  bgColor: const Color(0xFFFFF0F3),
-                                  title: 'Bibliothèque photo',
-                                  subtitle: 'Partager une image ou un document',
-                                  onTap: () => _pickImage(ImageSource.gallery),
-                                ),
-                                _AttachOption(
-                                  icon: Icons.camera_alt_outlined,
-                                  iconColor: const Color(0xFFFF5CA0),
-                                  bgColor: const Color(0xFFFFF0F3),
-                                  title: 'Prendre une photo',
-                                  subtitle: 'Capturer un document ou une note',
-                                  onTap: () => _pickImage(ImageSource.camera),
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
@@ -992,7 +1003,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
               Expanded(
                 child: TextField(
                   decoration: InputDecoration(
-                    hintText: 'Rechercher...',
+                    hintText: AppLocalizations.of(context).search,
                     hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                     prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8), size: 20),
                     filled: true,

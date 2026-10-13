@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -9,6 +10,7 @@ import '../../data/models/user_model.dart';
 import '../../data/models/enrollment_model.dart';
 import '../../data/models/school_model.dart';
 import '../../core/config/supabase_config.dart';
+import '../../core/l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import 'ios_loader.dart';
 
@@ -103,6 +105,7 @@ class _StudentCardState extends ConsumerState<StudentCard> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final user = widget.user;
     final enrollment = widget.enrollment;
 
@@ -113,7 +116,7 @@ class _StudentCardState extends ConsumerState<StudentCard> {
         : '—';
 
     final dobText = user.dateOfBirth != null
-        ? DateFormat('dd MMMM yyyy', 'fr_FR').format(user.dateOfBirth!)
+        ? DateFormat('dd/MM/yyyy').format(user.dateOfBirth!)
         : '—';
 
     return Padding(
@@ -133,6 +136,7 @@ class _StudentCardState extends ConsumerState<StudentCard> {
                 uploadingPhoto: _uploadingPhoto,
                 onPhotoTap: _pickAndUploadPhoto,
                 onMenuTap: widget.onMenuTap,
+                l10n: l10n,
               ),
             ),
           ),
@@ -150,6 +154,7 @@ class _CardContent extends StatelessWidget {
   final bool uploadingPhoto;
   final VoidCallback onPhotoTap;
   final VoidCallback onMenuTap;
+  final AppLocalizations l10n;
 
   const _CardContent({
     required this.user,
@@ -159,11 +164,15 @@ class _CardContent extends StatelessWidget {
     required this.uploadingPhoto,
     required this.onPhotoTap,
     required this.onMenuTap,
+    required this.l10n,
   });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: LayoutBuilder(
       builder: (context, constraints) {
         final scale = constraints.maxWidth / 720;
         double s(double value) => value * scale;
@@ -239,15 +248,20 @@ class _CardContent extends StatelessWidget {
                 ),
               ),
               Positioned(
-                top: s(60),
+                top: isArabic ? s(72) : s(60),
                 left: s(300),
+                right: s(20),
                 child: Text(
-                  "CARTE\nD'ÉTUDIANT",
+                  l10n.studentCardTitle,
+                  maxLines: isArabic ? 1 : 2,
+                  softWrap: !isArabic,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    fontSize: s(54),
-                    height: 0.95,
-                    letterSpacing: 1,
+                    fontSize: isArabic ? s(52) : s(46),
+                    fontFamily: isArabic ? GoogleFonts.cairo().fontFamily : null,
+                    height: isArabic ? 1.1 : 0.95,
+                    letterSpacing: isArabic ? 0 : 1,
                     color: Colors.white,
                   ),
                 ),
@@ -308,10 +322,10 @@ class _CardContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _detailRow('Nom', user.fullName, s),
-                    _detailRow('CI', classText, s),
-                    _detailRow('D.D.N', dobText, s),
-                    _detailRow('Adresse', user.address ?? '—', s),
+                    _detailRow(l10n.cardName, user.fullName, s),
+                    _detailRow(l10n.cardClass, '\u200E$classText', s),
+                    _detailRow(l10n.cardDob, '\u200E$dobText', s),
+                    _detailRow(l10n.cardAddress, user.address ?? '—', s),
                   ],
                 ),
               ),
@@ -321,7 +335,7 @@ class _CardContent extends StatelessWidget {
                 top: s(340),
                 child: Center(
                   child: Text(
-                    user.studentCode ?? '—',
+                    '\u200E${user.studentCode ?? '—'}',
                     style: TextStyle(
                       fontSize: s(22),
                       fontWeight: FontWeight.w500,
@@ -353,7 +367,8 @@ class _CardContent extends StatelessWidget {
           ),
         );
       },
-    );
+    ),
+  );
   }
 
   Widget _detailRow(String label, String value, double Function(double) s) {

@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/skeleton_loader.dart';
 
 const _brand = Color(0xFF7C3AED);
 const _brandLight = Color(0xFFF3E8FF);
@@ -48,7 +49,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                     Expanded(
                       child: semestersAsync.when(
                         loading: () =>
-                            const Center(child: IosLoader(color: _brand)),
+                            const SemestersSkeletonLoader(),
                         error: (e, _) => Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -117,7 +118,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
           SizedBox(
             height: 40,
             child: ElevatedButton.icon(
-              onPressed: () => _showCreatePeriodsDialog(context),
+              onPressed: () => _handleAjouterClicked(context),
               icon: const Icon(Icons.add, size: 18),
               label: const Text(
                 'Ajouter',
@@ -145,8 +146,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
 
   Widget _buildContent(BuildContext context, SemestersState state) {
     final semesters = state.filteredSemesters;
-    final dateFormat = DateFormat('dd MMM yyyy', 'fr');
-    final shortDateFormat = DateFormat('MMM yyyy', 'fr');
+
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -227,9 +227,10 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
   }
 
   Widget _buildPeriodCard(BuildContext context, SemestersState state, SemesterModel s) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
+
     final shortDateFormat = DateFormat('d MMM yyyy', 'fr');
-    final duration = s.endDate.difference(s.startDate).inDays;
+    final rawDuration = s.endDate.difference(s.startDate).inDays;
+    final duration = rawDuration < 0 ? 0 : rawDuration;
     final weeks = (duration / 7).ceil();
     final now = DateTime.now();
     final monthsFr = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
@@ -415,6 +416,16 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                   style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: _brand),
                                 ),
                               )
+                            else if (i == 0)
+                              Text(
+                                DateFormat('d MMM', 'fr').format(s.startDate),
+                                style: TextStyle(fontSize: 9, color: AppColors.textTertiary),
+                              )
+                            else if (isLast)
+                              Text(
+                                DateFormat('d MMM', 'fr').format(s.endDate),
+                                style: TextStyle(fontSize: 9, color: AppColors.textTertiary),
+                              )
                             else
                               Text(
                                 monthsFr[mDate.month - 1],
@@ -453,7 +464,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final isActive = !today.isBefore(ep.startDate) && !today.isAfter(ep.endDate);
     final isPast = today.isAfter(ep.endDate);
-    final isFuture = today.isBefore(ep.startDate);
+
 
     final statusColor = isActive ? const Color(0xFF059669) : isPast ? Colors.grey.shade400 : const Color(0xFFEA580C);
     final statusText = isActive ? 'En cours' : isPast ? 'Terminé' : 'À venir';
@@ -548,6 +559,110 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     );
   }
 
+  void _handleAjouterClicked(BuildContext context) {
+    final state = ref.read(semestersProvider).value;
+    if (state == null) return;
+
+    final year = state.selectedAcademicYear ?? state.currentAcademicYear;
+    if (year == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucune année scolaire active'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (state.isCurrentYearFullyCovered) {
+      _showFullyCoveredDialog(context, year);
+      return;
+    }
+
+    _showCreatePeriodsDialog(context);
+  }
+
+  void _showFullyCoveredDialog(BuildContext context, AcademicYearModel year) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (ctx) => Stack(
+        children: [
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              child: Container(color: Colors.black.withOpacity(0.28)),
+            ),
+          ),
+          Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              width: 440,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.event_busy_rounded,
+                      size: 24,
+                      color: Color(0xFFD97706),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Année scolaire complète',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Toutes les périodes pour l\'année scolaire ${year.name} sont déjà configurées jusqu\'au ${DateFormat('dd MMMM yyyy', 'fr').format(year.endDate)}.\n\nIl est impossible de créer une période supplémentaire sans libérer une plage de dates.\n\nPour réorganiser le calendrier, modifiez d\'abord les dates des périodes existantes avec l\'icône crayon.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 40,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _brand,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 1,
+                      ),
+                      child: const Text(
+                        'Compris',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSemesterDialog(BuildContext context, {SemesterModel? semester}) {
     final asyncState = ref.read(semestersProvider);
     final state = asyncState.value;
@@ -583,24 +698,41 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
       barrierColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          bool isSubmitting = false;
+
           void validateDates() {
             errorMessage = null;
-            if (startDate.isAfter(endDate)) {
-              errorMessage = 'La date de début doit être avant la date de fin';
-            } else if (minStartDate != null &&
-                isNew &&
-                startDate.isBefore(minStartDate)) {
-              errorMessage =
-                  'Le nouveau ${chosenType == 'trimestre' ? 'trimestre' : 'semestre'} doit commencer après le ${DateFormat('dd/MM/yyyy').format(minStartDate.subtract(const Duration(days: 1)))}';
+            if (!startDate.isBefore(endDate)) {
+              errorMessage = 'La date de début doit être strictement antérieure à la date de fin';
             }
-            // Check overlap with existing periods
-            final overlap = state.validateOverlap(
-              startDate,
-              endDate,
-              excludeId: semester?.id,
-            );
-            if (overlap != null) {
-              errorMessage = overlap;
+            if (errorMessage == null && nameCtrl.text.trim().isEmpty) {
+              errorMessage = 'Le nom de la période ne peut pas être vide';
+            }
+            if (errorMessage == null) {
+              final nameErr = state.validateName(nameCtrl.text.trim(), excludeId: semester?.id);
+              if (nameErr != null) errorMessage = nameErr;
+            }
+            if (errorMessage == null && selectedYearId != null) {
+              final year = state.academicYears.where((y) => y.id == selectedYearId).firstOrNull;
+              if (year != null) {
+                final sStart = SemestersState.stripTime(startDate);
+                final sEnd = SemestersState.stripTime(endDate);
+                final yStart = SemestersState.stripTime(year.startDate);
+                final yEnd = SemestersState.stripTime(year.endDate);
+                if (sStart.isBefore(yStart) || sEnd.isAfter(yEnd)) {
+                  errorMessage = 'La période doit être comprise dans l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yStart)} au ${DateFormat('dd/MM/yyyy').format(yEnd)})';
+                }
+              }
+            }
+            if (errorMessage == null) {
+              final overlap = state.validateOverlap(
+                startDate,
+                endDate,
+                excludeId: semester?.id,
+              );
+              if (overlap != null) {
+                errorMessage = overlap;
+              }
             }
             setDialogState(() {});
           }
@@ -668,7 +800,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             ),
                           ),
                           InkWell(
-                            onTap: () => Navigator.pop(ctx),
+                            onTap: () {
+                              if (!isSubmitting) Navigator.pop(ctx);
+                            },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               width: 32,
@@ -689,52 +823,6 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                       const SizedBox(height: 20),
                       Divider(height: 1, color: Colors.grey.shade200),
                       const SizedBox(height: 20),
-                      // Year selector
-                      _semLabel('Année scolaire'),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          border: Border.all(color: Colors.grey.shade200),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedYearId,
-                            isExpanded: true,
-                            borderRadius: BorderRadius.circular(12),
-                            hint: Text(
-                              'Sélectionner l\'année',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            items: state.academicYears
-                                .map(
-                                  (year) => DropdownMenuItem(
-                                    value: year.id,
-                                    child: Text(year.name),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: isNew
-                                ? (v) =>
-                                      setDialogState(() => selectedYearId = v)
-                                : null,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
                       // Period type selector (only when no periods exist yet)
                       if (isNew && lockedType == null) ...[
                         _semLabel('Type de période'),
@@ -872,56 +960,21 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      // Number + Name
-                      Row(
+                      // Number + Name (N° field removed as per user request)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(
-                            width: 80,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _semLabel('N°'),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                  controller: TextEditingController(
-                                    text: '$semesterNumber',
-                                  ),
-                                  decoration: _semInputDeco('N°'),
-                                  onChanged: (v) {
-                                    final n = int.tryParse(v);
-                                    if (n != null && n > 0) {
-                                      semesterNumber = n;
-                                      nameCtrl.text =
-                                          '${chosenType == 'trimestre' ? 'Trimestre' : 'Semestre'} $n';
-                                    }
-                                  },
-                                ),
-                              ],
+                          _semLabel('Nom'),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: nameCtrl,
+                            onChanged: (_) => validateDates(),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _semLabel('Nom'),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: nameCtrl,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  decoration: _semInputDeco(
-                                    'Ex: ${chosenType == 'trimestre' ? 'Trimestre' : 'Semestre'} 1',
-                                  ),
-                                ),
-                              ],
+                            decoration: _semInputDeco(
+                              'Ex: ${chosenType == 'trimestre' ? 'Trimestre' : 'Semestre'} 1',
                             ),
                           ),
                         ],
@@ -967,13 +1020,14 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                               setDialogState,
                               (d) {
                                 startDate = d;
-                                // Auto-calculate end date based on period type
-                                endDate = startDate.add(
-                                  Duration(days: durationDays),
-                                );
+                                if (!endDate.isAfter(startDate)) {
+                                  endDate = startDate.add(
+                                    Duration(days: durationDays),
+                                  );
+                                }
                                 validateDates();
                               },
-                              firstDate: minStartDate ?? DateTime(2020),
+                              firstDate: DateTime(2020),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -987,7 +1041,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                 endDate = d;
                                 validateDates();
                               },
-                              firstDate: startDate,
+                              firstDate: startDate.add(const Duration(days: 1)),
                             ),
                           ),
                         ],
@@ -1032,7 +1086,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                           SizedBox(
                             height: 40,
                             child: TextButton(
-                              onPressed: () => Navigator.pop(ctx),
+                              onPressed: () {
+                                if (!isSubmitting) Navigator.pop(ctx);
+                              },
                               style: TextButton.styleFrom(
                                 foregroundColor: const Color(0xFF6B7280),
                                 padding: const EdgeInsets.symmetric(
@@ -1052,33 +1108,68 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                           SizedBox(
                             height: 40,
                             child: ElevatedButton(
-                              onPressed:
-                                  errorMessage != null ||
-                                      nameCtrl.text.isEmpty ||
+                              onPressed: isSubmitting ||
+                                      errorMessage != null ||
+                                      nameCtrl.text.trim().isEmpty ||
                                       selectedYearId == null
                                   ? null
                                   : () async {
-                                      final notifier = ref.read(
-                                        semestersProvider.notifier,
-                                      );
-                                      if (isNew) {
-                                        await notifier.create(
-                                          name: nameCtrl.text,
-                                          number: semesterNumber,
-                                          startDate: startDate,
-                                          endDate: endDate,
-                                          academicYearId: selectedYearId!,
+                                      setDialogState(() => isSubmitting = true);
+                                      try {
+                                        final notifier = ref.read(
+                                          semestersProvider.notifier,
                                         );
-                                      } else {
-                                        await notifier.updateSemester(
-                                          id: semester.id,
-                                          name: nameCtrl.text,
-                                          number: semesterNumber,
-                                          startDate: startDate,
-                                          endDate: endDate,
-                                        );
+                                        if (isNew) {
+                                          await notifier.create(
+                                            name: nameCtrl.text.trim(),
+                                            number: semesterNumber,
+                                            startDate: startDate,
+                                            endDate: endDate,
+                                            academicYearId: selectedYearId,
+                                          );
+                                        } else {
+                                          await notifier.updateSemester(
+                                            id: semester.id,
+                                            name: nameCtrl.text.trim(),
+                                            number: semesterNumber,
+                                            startDate: startDate,
+                                            endDate: endDate,
+                                          );
+                                        }
+                                        if (ctx.mounted) Navigator.pop(ctx);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                                  const SizedBox(width: 8),
+                                                  Text(isNew ? 'Période créée avec succès' : 'Période mise à jour avec succès'),
+                                                ],
+                                              ),
+                                              backgroundColor: const Color(0xFF10B981),
+                                              behavior: SnackBarBehavior.floating,
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        setDialogState(() => isSubmitting = false);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(child: Text(e.toString().replaceAll('Exception: ', ''))),
+                                                ],
+                                              ),
+                                              backgroundColor: const Color(0xFFEF4444),
+                                              behavior: SnackBarBehavior.floating,
+                                            ),
+                                          );
+                                        }
                                       }
-                                      if (ctx.mounted) Navigator.pop(ctx);
                                     },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _brand,
@@ -1094,13 +1185,22 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                 ),
                                 elevation: 2,
                               ),
-                              child: Text(
-                                isNew ? 'Créer' : 'Modifier',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : Text(
+                                      isNew ? 'Créer' : 'Modifier',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
@@ -1136,6 +1236,40 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
               initialDate: date,
               firstDate: firstDate,
               lastDate: DateTime(2030),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(
+                      primary: _brand,
+                      onPrimary: Colors.white,
+                      surface: Colors.white,
+                      onSurface: Color(0xFF111827),
+                    ),
+                    textButtonTheme: TextButtonThemeData(
+                      style: TextButton.styleFrom(
+                        foregroundColor: _brand,
+                        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                    ),
+                    dialogTheme: DialogThemeData(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 12,
+                    ),
+                    datePickerTheme: DatePickerThemeData(
+                      headerBackgroundColor: _brand,
+                      headerForegroundColor: Colors.white,
+                      headerHelpStyle: const TextStyle(fontSize: 12, color: Colors.white70),
+                      dayStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      elevation: 10,
+                      shadowColor: Colors.black26,
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
             );
             if (picked != null) setDialogState(() => onPicked(picked));
           },
@@ -1212,7 +1346,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     final state = ref.read(semestersProvider).value;
     if (state == null) return;
 
-    final year = state.currentAcademicYear;
+    final year = state.selectedAcademicYear ?? state.currentAcademicYear;
     if (year == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1223,27 +1357,63 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
       return;
     }
 
-    var selectedType = 'semestre';
-    var ranges = _splitYear(year.startDate, year.endDate, 2);
+    final existingSemesters = state.semesters
+        .where((s) => s.academicYearId == year.id)
+        .toList()
+      ..sort((a, b) => a.startDate.compareTo(b.startDate));
+
+    final isFullyCovered = existingSemesters.isNotEmpty &&
+        !SemestersState.stripTime(existingSemesters.last.endDate)
+            .isBefore(SemestersState.stripTime(year.endDate));
+
+    if (isFullyCovered) {
+      _showFullyCoveredDialog(context, year);
+      return;
+    }
+
+    final DateTime initialStart;
+    if (existingSemesters.isNotEmpty) {
+      initialStart = existingSemesters.last.endDate.add(const Duration(days: 1));
+    } else {
+      final now = DateTime.now();
+      initialStart = (now.isAfter(year.startDate) && now.isBefore(year.endDate))
+          ? now
+          : year.startDate;
+    }
+
+    var selectedType = existingSemesters.isEmpty ? 'semestre' : 'single';
+
+    final defaultDurationDays = state.periodTypeDuration;
+    DateTime calculateDefaultEnd(DateTime start) {
+      final calculated = start.add(Duration(days: defaultDurationDays));
+      return calculated.isAfter(year.endDate) ? year.endDate : calculated;
+    }
+
+    var ranges = existingSemesters.isEmpty
+        ? _splitYear(initialStart, year.endDate, 2)
+        : [(start: initialStart, end: calculateDefaultEnd(initialStart))];
     var manualVacations = <({DateTime start, DateTime end})>[];
     var examPeriods = <({DateTime start, DateTime end})>[];
     String? errorMessage;
 
     List<({DateTime start, DateTime end})> computeAutoGaps() {
       if (ranges.isEmpty) return [];
-      final sorted = [...ranges]
-        ..sort((a, b) => a.start.compareTo(b.start));
+      final allRanges = [
+        ...existingSemesters.map((s) => (start: s.startDate, end: s.endDate)),
+        ...ranges,
+      ]..sort((a, b) => a.start.compareTo(b.start));
+
       final gaps = <({DateTime start, DateTime end})>[];
 
-      if (sorted.first.start.isAfter(year.startDate)) {
-        gaps.add((
-          start: year.startDate,
-          end: sorted.first.start.subtract(const Duration(days: 1)),
-        ));
+      if (allRanges.first.start.isAfter(year.startDate)) {
+        final gapEnd = allRanges.first.start.subtract(const Duration(days: 1));
+        if (!gapEnd.isBefore(year.startDate)) {
+          gaps.add((start: year.startDate, end: gapEnd));
+        }
       }
-      for (var i = 0; i < sorted.length - 1; i++) {
-        final nextStart = sorted[i + 1].start;
-        final prevEnd = sorted[i].end;
+      for (var i = 0; i < allRanges.length - 1; i++) {
+        final nextStart = allRanges[i + 1].start;
+        final prevEnd = allRanges[i].end;
         if (nextStart.isAfter(prevEnd.add(const Duration(days: 1)))) {
           gaps.add((
             start: prevEnd.add(const Duration(days: 1)),
@@ -1251,11 +1421,11 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
           ));
         }
       }
-      if (sorted.last.end.isBefore(year.endDate)) {
-        gaps.add((
-          start: sorted.last.end.add(const Duration(days: 1)),
-          end: year.endDate,
-        ));
+      if (allRanges.last.end.isBefore(year.endDate)) {
+        final gapStart = allRanges.last.end.add(const Duration(days: 1));
+        if (!gapStart.isAfter(year.endDate)) {
+          gaps.add((start: gapStart, end: year.endDate));
+        }
       }
       return gaps;
     }
@@ -1265,56 +1435,88 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
       barrierColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          bool isSubmitting = false;
           final label = selectedType == 'trimestre' ? 'Trimestre' : selectedType == 'single' ? 'Période' : 'Semestre';
           final autoGaps = computeAutoGaps();
 
           void validate() {
             errorMessage = null;
 
-            // Each range must be valid
+            // 1. Each range must have start strictly before end and stay within year bounds
             for (var i = 0; i < ranges.length; i++) {
-              if (ranges[i].start.isAfter(ranges[i].end)) {
+              final rStart = SemestersState.stripTime(ranges[i].start);
+              final rEnd = SemestersState.stripTime(ranges[i].end);
+              final numLabel = '$label ${existingSemesters.length + i + 1}';
+
+              if (!rStart.isBefore(rEnd)) {
                 errorMessage =
-                    'La date de début doit être avant la date de fin pour $label ${i + 1}';
-                break;
+                    'La date de début doit être strictement antérieure à la date de fin pour $numLabel';
+                return;
+              }
+
+              if (rStart.isBefore(SemestersState.stripTime(year.startDate))) {
+                errorMessage =
+                    '$numLabel ne peut pas commencer avant le début de l\'année scolaire (${DateFormat('dd/MM/yyyy').format(year.startDate)})';
+                return;
+              }
+
+              if (rEnd.isAfter(SemestersState.stripTime(year.endDate))) {
+                errorMessage =
+                    '$numLabel ne peut pas se terminer après la fin de l\'année scolaire (${DateFormat('dd/MM/yyyy').format(year.endDate)})';
+                return;
               }
             }
 
-            // Within academic year bounds
-            if (errorMessage == null) {
-              if (ranges.first.start.isBefore(year.startDate)) {
-                errorMessage =
-                    'La première période ne peut pas commencer avant le début de l\'année scolaire';
-              } else if (ranges.last.end.isAfter(year.endDate)) {
-                errorMessage =
-                    'La dernière période ne peut pas se terminer après la fin de l\'année scolaire';
-              }
-            }
-
-            // No overlap with existing periods
-            if (errorMessage == null) {
-              for (var i = 0; i < ranges.length; i++) {
-                final overlap = state.validateOverlap(
-                  ranges[i].start,
-                  ranges[i].end,
-                );
-                if (overlap != null) {
-                  errorMessage = '$label ${i + 1}: $overlap';
-                  break;
+            // 2. Ranges must not overlap each other
+            for (var i = 0; i < ranges.length; i++) {
+              final rStartI = SemestersState.stripTime(ranges[i].start);
+              final rEndI = SemestersState.stripTime(ranges[i].end);
+              for (var j = i + 1; j < ranges.length; j++) {
+                final rStartJ = SemestersState.stripTime(ranges[j].start);
+                final rEndJ = SemestersState.stripTime(ranges[j].end);
+                if (!rStartI.isAfter(rEndJ) && !rEndI.isBefore(rStartJ)) {
+                  errorMessage =
+                      'Les périodes créées se chevauchent entre elles ($label ${existingSemesters.length + i + 1} et $label ${existingSemesters.length + j + 1})';
+                  return;
                 }
               }
             }
 
-            setDialogState(() {});
+            // 3. Ranges must not overlap or duplicate any existing semester
+            for (var i = 0; i < ranges.length; i++) {
+              final rStart = SemestersState.stripTime(ranges[i].start);
+              final rEnd = SemestersState.stripTime(ranges[i].end);
+              final numLabel = '$label ${existingSemesters.length + i + 1}';
+
+              for (final existing in existingSemesters) {
+                final existStart = SemestersState.stripTime(existing.startDate);
+                final existEnd = SemestersState.stripTime(existing.endDate);
+
+                if (rStart == existStart && rEnd == existEnd) {
+                  errorMessage =
+                      'Une période avec exactement les mêmes dates existe déjà ("${existing.name}" du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
+                  return;
+                }
+
+                if (!rStart.isAfter(existEnd) && !rEnd.isBefore(existStart)) {
+                  errorMessage =
+                      '$numLabel chevauche avec "${existing.name}" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
+                  return;
+                }
+              }
+            }
           }
 
-           void onTypeChanged(String type) {
+          // Initial validation pass on mount
+          validate();
+
+          void onTypeChanged(String type) {
             selectedType = type;
             if (type == 'single') {
-              ranges = [(start: year.startDate, end: year.endDate)];
+              ranges = [(start: initialStart, end: calculateDefaultEnd(initialStart))];
             } else {
               ranges = _splitYear(
-                year.startDate,
+                initialStart,
                 year.endDate,
                 type == 'semestre' ? 2 : 3,
               );
@@ -1323,18 +1525,43 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
           }
 
           void onStartChanged(int index, DateTime d) {
-            ranges = [
-              for (var i = 0; i < ranges.length; i++)
-                if (i == index) (start: d, end: ranges[i].end) else ranges[i],
-            ];
+            final newRanges = List<({DateTime start, DateTime end})>.from(ranges);
+            var newEnd = newRanges[index].end;
+            if (newEnd.isBefore(d)) {
+              newEnd = d.add(const Duration(days: 90));
+              if (newEnd.isAfter(year.endDate)) newEnd = year.endDate;
+            }
+            newRanges[index] = (start: d, end: newEnd);
+
+            for (var k = index; k < newRanges.length - 1; k++) {
+              final nextStart = newRanges[k].end.add(const Duration(days: 1));
+              if (newRanges[k + 1].start.isBefore(nextStart)) {
+                var kNextEnd = newRanges[k + 1].end;
+                if (kNextEnd.isBefore(nextStart)) {
+                  kNextEnd = nextStart.add(const Duration(days: 90));
+                  if (kNextEnd.isAfter(year.endDate)) kNextEnd = year.endDate;
+                }
+                newRanges[k + 1] = (start: nextStart, end: kNextEnd);
+              }
+            }
+            ranges = newRanges;
             validate();
           }
 
           void onEndChanged(int index, DateTime d) {
-            ranges = [
-              for (var i = 0; i < ranges.length; i++)
-                if (i == index) (start: ranges[i].start, end: d) else ranges[i],
-            ];
+            final newRanges = List<({DateTime start, DateTime end})>.from(ranges);
+            newRanges[index] = (start: newRanges[index].start, end: d);
+
+            for (var k = index; k < newRanges.length - 1; k++) {
+              final nextStart = newRanges[k].end.add(const Duration(days: 1));
+              var kNextEnd = newRanges[k + 1].end;
+              if (kNextEnd.isBefore(nextStart)) {
+                kNextEnd = nextStart.add(const Duration(days: 90));
+                if (kNextEnd.isAfter(year.endDate)) kNextEnd = year.endDate;
+              }
+              newRanges[k + 1] = (start: nextStart, end: kNextEnd);
+            }
+            ranges = newRanges;
             validate();
           }
 
@@ -1401,7 +1628,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             ),
                           ),
                           InkWell(
-                            onTap: () => Navigator.pop(ctx),
+                            onTap: () {
+                              if (!isSubmitting) Navigator.pop(ctx);
+                            },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               width: 32,
@@ -1438,35 +1667,39 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             selectedType,
                             Icons.today_rounded,
                             onTypeChanged,
+                            expand: existingSemesters.isEmpty,
                           ),
-                          const SizedBox(width: 12),
-                          _typeOption(
-                            'Semestre',
-                            'semestre',
-                            selectedType,
-                            Icons.date_range_rounded,
-                            onTypeChanged,
-                          ),
-                          const SizedBox(width: 12),
-                          _typeOption(
-                            'Trimestre',
-                            'trimestre',
-                            selectedType,
-                            Icons.view_week_rounded,
-                            onTypeChanged,
-                          ),
+                          if (existingSemesters.isEmpty) ...[
+                            const SizedBox(width: 12),
+                            _typeOption(
+                              'Semestre',
+                              'semestre',
+                              selectedType,
+                              Icons.date_range_rounded,
+                              onTypeChanged,
+                            ),
+                            const SizedBox(width: 12),
+                            _typeOption(
+                              'Trimestre',
+                              'trimestre',
+                              selectedType,
+                              Icons.view_week_rounded,
+                              onTypeChanged,
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 20),
                       // Date ranges
                       ...List.generate(ranges.length, (index) {
+                        final periodIndexNumber = existingSemesters.length + index + 1;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '$label ${index + 1}',
+                                '$label $periodIndexNumber',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -1494,7 +1727,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                       ranges[index].end,
                                       setDialogState,
                                       (d) => onEndChanged(index, d),
-                                      firstDate: ranges[index].start,
+                                      firstDate: ranges[index].start.add(const Duration(days: 1)),
                                     ),
                                   ),
                                 ],
@@ -1714,7 +1947,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                           SizedBox(
                             height: 40,
                             child: TextButton(
-                              onPressed: () => Navigator.pop(ctx),
+                              onPressed: () {
+                                if (!isSubmitting) Navigator.pop(ctx);
+                              },
                               style: TextButton.styleFrom(
                                 foregroundColor: const Color(0xFF6B7280),
                                 padding: const EdgeInsets.symmetric(
@@ -1734,19 +1969,54 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                           SizedBox(
                             height: 40,
                             child: ElevatedButton(
-                              onPressed: errorMessage != null
+                              onPressed: isSubmitting || errorMessage != null
                                   ? null
                                   : () async {
-                                      final notifier = ref.read(
-                                        semestersProvider.notifier,
-                                      );
-                                      await notifier.createPeriods(
-                                        type: selectedType,
-                                        ranges: ranges,
-                                        manualVacations: manualVacations,
-                                        examPeriods: examPeriods,
-                                      );
-                                      if (ctx.mounted) Navigator.pop(ctx);
+                                      setDialogState(() => isSubmitting = true);
+                                      try {
+                                        final notifier = ref.read(
+                                          semestersProvider.notifier,
+                                        );
+                                        await notifier.createPeriods(
+                                          type: selectedType,
+                                          ranges: ranges,
+                                          manualVacations: manualVacations,
+                                          examPeriods: examPeriods,
+                                        );
+                                        if (ctx.mounted) Navigator.pop(ctx);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                                  SizedBox(width: 8),
+                                                  Text('Périodes créées avec succès'),
+                                                ],
+                                              ),
+                                              backgroundColor: Color(0xFF10B981),
+                                              behavior: SnackBarBehavior.floating,
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        setDialogState(() => isSubmitting = false);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(child: Text(e.toString().replaceAll('Exception: ', ''))),
+                                                ],
+                                              ),
+                                              backgroundColor: const Color(0xFFEF4444),
+                                              behavior: SnackBarBehavior.floating,
+                                            ),
+                                          );
+                                        }
+                                      }
                                     },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _brand,
@@ -1762,13 +2032,22 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                 ),
                                 elevation: 2,
                               ),
-                              child: const Text(
-                                'Créer',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Créer',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
@@ -1807,44 +2086,48 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     String type,
     String selectedType,
     IconData icon,
-    ValueChanged<String> onChanged,
-  ) {
+    ValueChanged<String> onChanged, {
+    bool expand = true,
+  }) {
     final isSelected = selectedType == type;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => onChanged(type),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFF3F0FF) : const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? _brand : Colors.grey.shade200,
-              width: isSelected ? 2 : 1,
+    final content = GestureDetector(
+      onTap: () => onChanged(type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF3F0FF) : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? _brand : Colors.grey.shade200,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? _brand : Colors.grey.shade500,
+              size: 20,
             ),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? _brand : Colors.grey.shade500,
-                size: 20,
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? _brand : Colors.grey.shade700,
               ),
-              const SizedBox(height: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? _brand : Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
+
+    if (expand) {
+      return Expanded(child: content);
+    }
+    return SizedBox(width: 160, child: content);
   }
 
   void _confirmDelete(BuildContext context, SemesterModel s) {
@@ -1927,9 +2210,42 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                         child: SizedBox(
                           height: 40,
                           child: ElevatedButton(
-                            onPressed: () {
-                              ref.read(semestersProvider.notifier).delete(s.id);
-                              Navigator.pop(ctx);
+                            onPressed: () async {
+                              try {
+                                await ref.read(semestersProvider.notifier).delete(s.id);
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Row(
+                                        children: [
+                                          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Période supprimée avec succès'),
+                                        ],
+                                      ),
+                                      backgroundColor: Color(0xFF10B981),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: Text('Erreur: ${e.toString()}')),
+                                        ],
+                                      ),
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFDC2626),
