@@ -99,12 +99,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _closeDrawer();
       return true;
     };
-    _drawerCtrl.forward();
+    _drawerCtrl.animateTo(
+      1.0,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   void _closeDrawer() {
     ref.read(backSwipeInterceptorProvider.notifier).state = null;
-    _drawerCtrl.reverse();
+    _drawerCtrl.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -516,7 +524,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             if (vel > 300 || _drawerCtrl.value < 0.6) {
                               _closeDrawer();
                             } else {
-                              _drawerCtrl.forward();
+                              _openDrawer();
                             }
                           },
                           child: Container(
@@ -542,7 +550,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             if (vel > 300 || _drawerCtrl.value < 0.6) {
                               _closeDrawer();
                             } else {
-                              _drawerCtrl.forward();
+                              _openDrawer();
                             }
                           },
                           child: _buildDrawer(context, l10n, ref),

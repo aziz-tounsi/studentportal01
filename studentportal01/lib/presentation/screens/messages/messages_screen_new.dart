@@ -160,7 +160,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         ),
                       ),
                       // Search button
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        overshootScale: 1.10,
+                        delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,
@@ -198,7 +201,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                   child: Row(
                     children: [
                       // Cancel button
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        overshootScale: 1.10,
+                        delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,

@@ -247,7 +247,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
         // 3. Edge Swipe Detector Strip (consumes touches on the edge to prevent vertical/child gesture conflicts)
         Positioned(
-          top: MediaQuery.of(context).padding.top + 56,
+          top: MediaQuery.of(context).padding.top + 80,
           bottom: 0,
           left: isRtl ? null : 0,
           right: isRtl ? 0 : null,

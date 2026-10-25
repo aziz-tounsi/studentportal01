@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// A reusable iOS-style bouncing wrapper that plays a noticeable multi-oscillation
-/// elastic spring bounce upon click/tap.
+/// A reusable iOS-style press-scale & bouncing wrapper that:
+/// 1. Smoothly shrinks on touch-down (scale ~0.93) and stays shrunk as long as held.
+/// 2. Springs forward and elastically bounces back to resting 1.0 on release.
+/// 3. Smoothly un-shrinks if the touch cancels or slides off.
 class BouncingWrapper extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -19,8 +21,8 @@ class BouncingWrapper extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.shrinkScale = 0.93,
-    this.overshootScale = 1.055,
-    this.duration = const Duration(milliseconds: 440),
+    this.overshootScale = 1.052,
+    this.duration = const Duration(milliseconds: 320),
     this.behavior = HitTestBehavior.opaque,
     this.hitPadding,
     this.delayNavigation = true,
@@ -31,87 +33,81 @@ class BouncingWrapper extends StatefulWidget {
 }
 
 class _BouncingWrapperState extends State<BouncingWrapper>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _scale;
+    with TickerProviderStateMixin {
+  late final AnimationController _pressCtrl;
+  late final AnimationController _bounceCtrl;
+  late final Animation<double> _bounceAnim;
   bool _isActionDispatched = false;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
+    _pressCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+    _bounceCtrl = AnimationController(
       vsync: this,
       duration: widget.duration,
     );
 
     final shrink = widget.shrinkScale;
     final overshoot = widget.overshootScale;
-    final secondaryUndershoot = 1.0 - (1.0 - shrink) * 0.28;
-    final secondaryOvershoot = 1.0 + (overshoot - 1.0) * 0.32;
+    final secondaryUndershoot = 1.0 - (1.0 - shrink) * 0.24;
+    final secondaryOvershoot = 1.0 + (overshoot - 1.0) * 0.28;
 
-    _scale = TweenSequence<double>([
-      // Phase 1 (0 -> 22%): Noticeable quick squish inward
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: shrink)
-            .chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 22,
-      ),
-      // Phase 2 (22 -> 54%): Elastic spring explosion past 1.0
+    _bounceAnim = TweenSequence<double>([
+      // 1. Elastic spring explosion from shrink scale past 1.0
       TweenSequenceItem(
         tween: Tween<double>(begin: shrink, end: overshoot)
             .chain(CurveTween(curve: Curves.easeOutBack)),
-        weight: 32,
+        weight: 38,
       ),
-      // Phase 3 (54 -> 76%): Second elastic oscillation downward
+      // 2. Soft rebound slightly below 1.0
       TweenSequenceItem(
         tween: Tween<double>(begin: overshoot, end: secondaryUndershoot)
             .chain(CurveTween(curve: Curves.easeInOutQuad)),
-        weight: 22,
+        weight: 26,
       ),
-      // Phase 4 (76 -> 90%): Third micro-rebound upward
+      // 3. Micro rebound slightly above 1.0
       TweenSequenceItem(
         tween: Tween<double>(begin: secondaryUndershoot, end: secondaryOvershoot)
             .chain(CurveTween(curve: Curves.easeInOutQuad)),
-        weight: 14,
+        weight: 18,
       ),
-      // Phase 5 (90 -> 100%): Softly settles to resting 1.0
+      // 4. Softly settles to resting 1.0
       TweenSequenceItem(
         tween: Tween<double>(begin: secondaryOvershoot, end: 1.0)
             .chain(CurveTween(curve: Curves.easeOutQuad)),
-        weight: 10,
+        weight: 18,
       ),
-    ]).animate(_ctrl);
-
-    _ctrl.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _ctrl.value = 0.0;
-      }
-    });
+    ]).animate(_bounceCtrl);
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _pressCtrl.dispose();
+    _bounceCtrl.dispose();
     super.dispose();
   }
 
   void _onTapDown(TapDownDetails _) {
     if (widget.onTap != null || widget.onLongPress != null) {
       _isActionDispatched = false;
-      // Smoothly shrink to 92-95% over ~120ms (ease-out) and stay shrunk while held
-      _ctrl.animateTo(0.22, duration: const Duration(milliseconds: 120), curve: Curves.easeOutCubic);
+      _bounceCtrl.stop();
+      _pressCtrl.animateTo(
+        1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+      );
     }
   }
 
   void _onTapUp(TapUpDetails _) {
     if (widget.onTap != null && !_isActionDispatched) {
       _isActionDispatched = true;
-      // Finger lifts: springs forward past 1.0 and elastically bounces back to resting size
-      if (_ctrl.value < 0.22) {
-        _ctrl.forward(from: 0.0);
-      } else {
-        _ctrl.forward(from: _ctrl.value);
-      }
+      _pressCtrl.value = 0.0;
+      _bounceCtrl.forward(from: 0.0);
       if (widget.delayNavigation) {
         Future.delayed(const Duration(milliseconds: 110), () {
           if (mounted) widget.onTap?.call();
@@ -123,18 +119,26 @@ class _BouncingWrapperState extends State<BouncingWrapper>
   }
 
   void _onTapCancel() {
-    if (_ctrl.value > 0) {
-      // Finger slides off or touch cancelled: smoothly return to normal resting scale
-      _ctrl.animateTo(0.0, duration: const Duration(milliseconds: 130), curve: Curves.easeOutQuad);
+    _pressCtrl.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 130),
+      curve: Curves.easeOutQuad,
+    );
+  }
+
+  double get _currentScale {
+    if (_bounceCtrl.isAnimating) {
+      return _bounceAnim.value;
     }
+    return 1.0 - (1.0 - widget.shrinkScale) * _pressCtrl.value;
   }
 
   @override
   Widget build(BuildContext context) {
     Widget content = AnimatedBuilder(
-      animation: _scale,
+      animation: Listenable.merge([_pressCtrl, _bounceCtrl]),
       builder: (context, child) => Transform.scale(
-        scale: _scale.value,
+        scale: _currentScale,
         child: child,
       ),
       child: widget.child,
@@ -154,7 +158,7 @@ class _BouncingWrapperState extends State<BouncingWrapper>
       onTapCancel: _onTapCancel,
       onLongPress: widget.onLongPress != null
           ? () {
-              _ctrl.forward(from: _ctrl.value);
+              _isActionDispatched = true;
               widget.onLongPress?.call();
             }
           : null,

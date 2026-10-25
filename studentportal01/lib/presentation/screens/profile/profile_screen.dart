@@ -22,6 +22,7 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/profile_skeleton.dart';
 import '../../widgets/bouncing_wrapper.dart';
+import '../../widgets/ios_edge_swipe_back.dart';
 import '../../providers/nav_bar_provider.dart';
 
 const Color _navPink = Color(0xFFFF2D78);
@@ -591,16 +592,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         BouncingWrapper(
           shrinkScale: 0.86,
           overshootScale: 1.10,
-          delayNavigation: true,
+          delayNavigation: false,
+          hitPadding: const EdgeInsets.all(14),
           onTap: () {
-            final fromAIChat = ref.read(navigatedFromAIChatProvider);
-            if (fromAIChat) {
-              ref.read(navigatedFromAIChatProvider.notifier).state = false;
-              context.go('/ai-chat');
+            final swipeBack = IosEdgeSwipeBack.of(context);
+            if (swipeBack != null) {
+              swipeBack.animateBack();
             } else {
-              ref.read(sideDrawerOpenProvider.notifier).state = true;
-              ref.read(navBarHiddenProvider.notifier).state = true;
-              context.go('/');
+              final fromAIChat = ref.read(navigatedFromAIChatProvider);
+              if (fromAIChat) {
+                ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                context.go('/ai-chat');
+              } else {
+                ref.read(sideDrawerOpenProvider.notifier).state = true;
+                ref.read(navBarHiddenProvider.notifier).state = true;
+                context.go('/');
+              }
             }
           },
           child: Container(

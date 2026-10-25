@@ -836,7 +836,7 @@ I have **complete** access to your academic data — grades, timetable, absences
                           16,
                           2,
                           16,
-                          MediaQuery.of(context).viewInsets.bottom > 0 ? 12 : 6,
+                          MediaQuery.of(context).viewInsets.bottom > 0 ? 22 : 8,
                         ),
                         child: Center(
                           child: Container(

@@ -165,7 +165,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       // Search button
                       BouncingWrapper(
                         shrinkScale: 0.86,
-                        hitPadding: const EdgeInsets.all(8),
+                        overshootScale: 1.10,
+                        delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,
@@ -205,7 +206,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       // Cancel button
                       BouncingWrapper(
                         shrinkScale: 0.86,
-                        hitPadding: const EdgeInsets.all(8),
+                        overshootScale: 1.10,
+                        delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,

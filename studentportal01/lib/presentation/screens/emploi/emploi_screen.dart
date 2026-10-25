@@ -268,10 +268,11 @@ class EmploiScreen extends ConsumerStatefulWidget {
 }
 
 class _EmploiScreenState extends ConsumerState<EmploiScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _isExpanded = false;
   late final TransformationController _zoomController;
   late final AnimationController _zoomAnimCtrl;
+  late final AnimationController _blurAnimCtrl;
   Animation<Matrix4>? _zoomAnimation;
   bool _isZoomed = false;
 
@@ -281,17 +282,29 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     _zoomController = TransformationController();
     _zoomAnimCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 440),
+    );
+    _blurAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
     );
     _zoomController.addListener(_onZoomChanged);
+  }
+
+  void _startZoom() {
+    if (!_isZoomed) {
+      setState(() {
+        _isZoomed = true;
+      });
+      ref.read(navBarHiddenProvider.notifier).state = true;
+      _blurAnimCtrl.forward();
+    }
   }
 
   void _onZoomChanged() {
     final scale = _zoomController.value.getMaxScaleOnAxis();
     if (scale > 1.05 && !_isZoomed) {
-      setState(() {
-        _isZoomed = true;
-      });
+      _startZoom();
     }
   }
 
@@ -303,12 +316,13 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
   }
 
   void _resetZoom() {
+    _blurAnimCtrl.reverse();
     _zoomAnimation = Matrix4Tween(
       begin: _zoomController.value,
       end: Matrix4.identity(),
     ).animate(CurvedAnimation(
       parent: _zoomAnimCtrl,
-      curve: Curves.easeOutBack,
+      curve: Curves.easeOutCubic,
     ));
 
     _zoomAnimCtrl.reset();
@@ -324,6 +338,9 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
         setState(() {
           _isZoomed = false;
         });
+        if (!_isExpanded) {
+          ref.read(navBarHiddenProvider.notifier).state = false;
+        }
       }
     });
   }
@@ -345,8 +362,9 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     _zoomController.removeListener(_onZoomChanged);
     _zoomController.dispose();
     _zoomAnimCtrl.dispose();
-    // Reset navbar visibility if disposed while expanded
-    if (_isExpanded) {
+    _blurAnimCtrl.dispose();
+    // Reset navbar visibility if disposed while expanded or zoomed
+    if (_isExpanded || _isZoomed) {
       Future.microtask(() {
         ref.read(navBarHiddenProvider.notifier).state = false;
       });
@@ -491,28 +509,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                                 BouncingWrapper(
                                   shrinkScale: 0.86,
                                   overshootScale: 1.10,
-                                  onTap: () {
-                                    setState(() {
-                                      _isZoomed = true;
-                                    });
-                                    _zoomAnimation = Matrix4Tween(
-                                      begin: Matrix4.identity(),
-                                      end: Matrix4.diagonal3Values(1.25, 1.25, 1.0),
-                                    ).animate(CurvedAnimation(
-                                      parent: _zoomAnimCtrl,
-                                      curve: Curves.easeOutBack,
-                                    ));
-                                    _zoomAnimCtrl.reset();
-                                    void listener() {
-                                      if (_zoomAnimation != null) {
-                                        _zoomController.value = _zoomAnimation!.value;
-                                      }
-                                    }
-                                    _zoomAnimation!.addListener(listener);
-                                    _zoomAnimCtrl.forward().then((_) {
-                                      _zoomAnimation?.removeListener(listener);
-                                    });
-                                  },
+                                  onTap: () => _setExpanded(true),
                                   child: Container(
                                     width: 48,
                                     height: 48,
@@ -604,20 +601,87 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                   ),
                 ),
               ),
+              if (_isExpanded && !_isZoomed)
+                timetableAsync.when(
+                  data: (slots) => Positioned.fill(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFF8F0FC),
+                            Color(0xFFF0E6F8),
+                            Color(0xFFEAF0FA),
+                            Color(0xFFF4F8FC),
+                            Color(0xFFFAFCFD),
+                          ],
+                          stops: [0.0, 0.25, 0.5, 0.75, 1.0],
+                        ),
+                      ),
+                      child: SafeArea(
+                        child: Stack(
+                          children: [
+                            Center(
+                              child: _buildScrollableTimetable(context, slots, isFullScreen: true),
+                            ),
+                            Positioned(
+                              top: 16,
+                              right: 20,
+                              child: BouncingWrapper(
+                                shrinkScale: 0.86,
+                                overshootScale: 1.10,
+                                onTap: () => _setExpanded(false),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.12),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    size: 24,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                ),
               if (_isZoomed)
                 timetableAsync.when(
                   data: (slots) => Positioned.fill(
                     child: Stack(
                       children: [
-                        Positioned.fill(
-                          child: ClipRect(
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                              child: Container(
-                                color: Colors.black.withValues(alpha: 0.35),
+                        AnimatedBuilder(
+                          animation: _blurAnimCtrl,
+                          builder: (context, _) {
+                            final blurVal = 16.0 * _blurAnimCtrl.value;
+                            return Positioned.fill(
+                              child: ClipRect(
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
+                                  child: Container(
+                                    color: Colors.white.withValues(alpha: 0.06 * _blurAnimCtrl.value),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                         SafeArea(
                           child: Center(
@@ -852,7 +916,14 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     ));
 
     if (isFullScreen) {
-      return container;
+      return GestureDetector(
+        onScaleStart: (details) {
+          if (details.pointerCount >= 2) {
+            _startZoom();
+          }
+        },
+        child: container,
+      );
     }
 
     return SizedBox(
@@ -860,21 +931,17 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
       child: GestureDetector(
         onScaleStart: (details) {
           if (details.pointerCount >= 2) {
-            setState(() {
-              _isZoomed = true;
-            });
+            _startZoom();
           }
         },
         onDoubleTap: () {
-          setState(() {
-            _isZoomed = true;
-          });
+          _startZoom();
           _zoomAnimation = Matrix4Tween(
             begin: Matrix4.identity(),
             end: Matrix4.diagonal3Values(1.35, 1.35, 1.0),
           ).animate(CurvedAnimation(
             parent: _zoomAnimCtrl,
-            curve: Curves.easeOutBack,
+            curve: Curves.easeOutCubic,
           ));
           _zoomAnimCtrl.reset();
           void listener() {

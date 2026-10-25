@@ -275,8 +275,21 @@ class AppLocalizations {
       'doc_type_reglement': 'Internal Regulations',
       'doc_type_other': 'Other document',
       'application_developer': 'Application Developer',
-      'lead_software_engineer': 'Full-Stack & Mobile Developer',
       'visit_portfolio': 'Visit Portfolio',
+      'report_a_bug': 'Report a Bug',
+      'report_bug_subtitle': 'Describe the issue or error you encountered to help us fix it.',
+      'bug_title_label': 'Bug Title',
+      'bug_title_hint': 'E.g., Button not responding on timetable',
+      'bug_desc_label': 'Description',
+      'bug_desc_hint': 'Explain what happened and steps to reproduce...',
+      'bug_type_label': 'Issue Category',
+      'bug_type_visual': 'Visual / UI glitch',
+      'bug_type_functional': 'Feature not working',
+      'bug_type_crash': 'Crash or freeze',
+      'bug_type_other': 'Other problem',
+      'add_screenshots': 'Attach Screenshots (optional)',
+      'submit_bug_report': 'Send Bug Report',
+      'bug_report_success': 'Bug report submitted successfully! The developers have received it.',
 
       // Timetable Extended
       'no_courses': 'No courses scheduled',
@@ -860,8 +873,21 @@ class AppLocalizations {
       'doc_type_reglement': 'Règlement intérieur',
       'doc_type_other': 'Autre document',
       'application_developer': 'Développeur de l\'application',
-      'lead_software_engineer': 'Développeur Full-Stack & Mobile',
       'visit_portfolio': 'Voir le portfolio',
+      'report_a_bug': 'Signaler un bug',
+      'report_bug_subtitle': 'Décrivez le problème ou l\'erreur rencontrée pour nous aider à le corriger.',
+      'bug_title_label': 'Titre du bug',
+      'bug_title_hint': 'Ex: Bouton ne répond pas sur l\'emploi du temps',
+      'bug_desc_label': 'Description détaillée',
+      'bug_desc_hint': 'Expliquez ce qui s\'est passé et les étapes pour reproduire...',
+      'bug_type_label': 'Catégorie de l\'anomalie',
+      'bug_type_visual': 'Problème visuel / Affichage',
+      'bug_type_functional': 'Fonctionnalité bloquée',
+      'bug_type_crash': 'Plantage ou blocage',
+      'bug_type_other': 'Autre problème',
+      'add_screenshots': 'Captures d\'écran (optionnel)',
+      'submit_bug_report': 'Envoyer le signalement',
+      'bug_report_success': 'Signalement envoyé avec succès ! Il a été transmis aux développeurs.',
 
       // Timetable Extended FR
       'no_courses': 'Pas de cours programmés',
@@ -1436,8 +1462,21 @@ class AppLocalizations {
       'doc_type_reglement': 'النظام الداخلي',
       'doc_type_other': 'وثيقة أخرى',
       'application_developer': 'مطور التطبيق',
-      'lead_software_engineer': 'مطور تطبيقات ونظم متكاملة',
       'visit_portfolio': 'زيارة معرض الأعمال',
+      'report_a_bug': 'الإبلاغ عن خلل أو عطل',
+      'report_bug_subtitle': 'صف المشكلة أو الخلل الذي واجهته لمساعدتنا في إصلاحه.',
+      'bug_title_label': 'عنوان المشكلة',
+      'bug_title_hint': 'مثال: الزر لا يستجيب في جدول الأوقات',
+      'bug_desc_label': 'تفاصيل المشكلة',
+      'bug_desc_hint': 'اشرح ما حدث والخطوات لتكرار هذا العطل...',
+      'bug_type_label': 'نوع المشكلة',
+      'bug_type_visual': 'مظهر أو تصميم الواجهة',
+      'bug_type_functional': 'ميزة لا تعمل بشكل صحيح',
+      'bug_type_crash': 'توقف أو تجمد التطبيق',
+      'bug_type_other': 'مشكلة أخرى',
+      'add_screenshots': 'لقطات الشاشة (اختياري)',
+      'submit_bug_report': 'إرسال تقرير الخلل',
+      'bug_report_success': 'تم إرسال التقرير بنجاح! تم تسليمه لفريق التطوير.',
 
       // Timetable Extended AR
       'no_courses': 'لا توجد حصص مجدولة',
@@ -1959,8 +1998,21 @@ class AppLocalizations {
   String get noMatchingDocuments => translate('no_matching_documents');
   String get trySelectAnotherType => translate('try_select_another_type');
   String get applicationDeveloper => translate('application_developer');
-  String get leadSoftwareEngineer => translate('lead_software_engineer');
   String get visitPortfolio => translate('visit_portfolio');
+  String get reportABug => translate('report_a_bug');
+  String get reportBugSubtitle => translate('report_bug_subtitle');
+  String get bugTitleLabel => translate('bug_title_label');
+  String get bugTitleHint => translate('bug_title_hint');
+  String get bugDescLabel => translate('bug_desc_label');
+  String get bugDescHint => translate('bug_desc_hint');
+  String get bugTypeLabel => translate('bug_type_label');
+  String get bugTypeVisual => translate('bug_type_visual');
+  String get bugTypeFunctional => translate('bug_type_functional');
+  String get bugTypeCrash => translate('bug_type_crash');
+  String get bugTypeOther => translate('bug_type_other');
+  String get addScreenshots => translate('add_screenshots');
+  String get submitBugReport => translate('submit_bug_report');
+  String get bugReportSuccess => translate('bug_report_success');
 
   // Timetable Extended
   String get noCourses => translate('no_courses');
