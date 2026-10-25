@@ -279,6 +279,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   }
 
   void _closeHistory() {
+    FocusScope.of(context).unfocus();
     ref.read(backSwipeInterceptorProvider.notifier).state = null;
     setState(() => _showHistory = false);
   }
@@ -2825,7 +2826,10 @@ class _AttachOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    return GestureDetector(
+    return BouncingWrapper(
+      shrinkScale: 0.93,
+      overshootScale: 1.055,
+      delayNavigation: false,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),

@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/announcements_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/detail_modal_sheet.dart';
+import '../../providers/nav_bar_provider.dart';
+import '../../widgets/bouncing_wrapper.dart';
 
 class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({super.key});
@@ -49,6 +51,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
 
   @override
   void dispose() {
+    ref.read(backSwipeInterceptorProvider.notifier).state = null;
     _searchController.dispose();
     _searchFocusNode.dispose();
     _animationController.dispose();
@@ -60,10 +63,15 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
       _isSearching = !_isSearching;
       if (_isSearching) {
         _animationController.forward();
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _toggleSearch();
+          return true;
+        };
         Future.delayed(const Duration(milliseconds: 150), () {
           _searchFocusNode.requestFocus();
         });
       } else {
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
         _animationController.reverse();
         _searchController.clear();
         _searchQuery = '';
@@ -520,7 +528,22 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
               ref.read(messagesRefreshingProvider.notifier).state = false;
             }
           },
-          child: CustomScrollView(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_isSearching) _toggleSearch();
+            },
+            onHorizontalDragUpdate: (details) {
+              if (_isSearching) {
+                final isRtl = Directionality.of(context) == TextDirection.rtl;
+                if (isRtl) {
+                  if ((details.primaryDelta ?? 0) > 8) _toggleSearch();
+                } else {
+                  if ((details.primaryDelta ?? 0) < -8) _toggleSearch();
+                }
+              }
+            },
+            child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
@@ -705,6 +728,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
           ],
         ),
         ),
+        ),
       ),
     );
   }
@@ -742,7 +766,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
+      child: BouncingWrapper(
+        shrinkScale: 0.93,
+        overshootScale: 1.055,
+        delayNavigation: false,
         onTap: () => _showMessageDetail(message),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),

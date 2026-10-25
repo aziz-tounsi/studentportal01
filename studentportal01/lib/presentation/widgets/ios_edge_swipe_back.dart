@@ -30,11 +30,15 @@ class IosEdgeSwipeBack extends StatefulWidget {
     this.onInterceptSwipe,
   });
 
+  static IosEdgeSwipeBackState? of(BuildContext context) {
+    return context.findAncestorStateOfType<IosEdgeSwipeBackState>();
+  }
+
   @override
-  State<IosEdgeSwipeBack> createState() => _IosEdgeSwipeBackState();
+  State<IosEdgeSwipeBack> createState() => IosEdgeSwipeBackState();
 }
 
-class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
+class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _progressAnim;
@@ -137,6 +141,16 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     }
   }
 
+  void animateBack() {
+    if (_animCtrl.isAnimating) return;
+    _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
+      CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
+    );
+    _animCtrl.forward(from: 0.0).then((_) {
+      _executeReturn();
+    });
+  }
+
   void _executeReturn() {
     if (!mounted) return;
     if (widget.onReturn != null) {
@@ -233,13 +247,13 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
         // 3. Edge Swipe Detector Strip (consumes touches on the edge to prevent vertical/child gesture conflicts)
         Positioned(
-          top: 0,
+          top: MediaQuery.of(context).padding.top + 56,
           bottom: 0,
           left: isRtl ? null : 0,
           right: isRtl ? 0 : null,
           width: _isDragging ? screenWidth : widget.edgeThreshold,
           child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+            behavior: HitTestBehavior.translucent,
             onHorizontalDragStart: (details) =>
                 _onDragStart(details, isRtl, screenWidth),
             onHorizontalDragUpdate: (details) =>

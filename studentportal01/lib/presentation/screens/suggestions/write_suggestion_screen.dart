@@ -10,6 +10,7 @@ import '../../../core/router/app_router.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/bouncing_wrapper.dart';
+import '../../widgets/ios_edge_swipe_back.dart';
 
 class WriteSuggestionScreen extends ConsumerStatefulWidget {
   const WriteSuggestionScreen({super.key});
@@ -430,10 +431,16 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                     BouncingWrapper(
                       shrinkScale: 0.86,
                       overshootScale: 1.10,
-                      delayNavigation: true,
+                      delayNavigation: false,
+                      hitPadding: const EdgeInsets.all(12),
                       onTap: () {
                         dismissAllOverlaysAndPopups();
-                        context.go('/suggestions');
+                        final swipeBack = IosEdgeSwipeBack.of(context);
+                        if (swipeBack != null) {
+                          swipeBack.animateBack();
+                        } else {
+                          context.go('/suggestions');
+                        }
                       },
                       child: Container(
                         width: 44,

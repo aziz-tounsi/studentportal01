@@ -288,11 +288,17 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
 
   void _onZoomChanged() {
     final scale = _zoomController.value.getMaxScaleOnAxis();
-    final isZoomed = scale > 1.05;
-    if (_isZoomed != isZoomed) {
+    if (scale > 1.05 && !_isZoomed) {
       setState(() {
-        _isZoomed = isZoomed;
+        _isZoomed = true;
       });
+    }
+  }
+
+  void _handleInteractionEnd(ScaleEndDetails details) {
+    final scale = _zoomController.value.getMaxScaleOnAxis();
+    if (scale < 1.15) {
+      _resetZoom();
     }
   }
 
@@ -314,6 +320,11 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     _zoomAnimation!.addListener(listener);
     _zoomAnimCtrl.forward().then((_) {
       _zoomAnimation?.removeListener(listener);
+      if (mounted) {
+        setState(() {
+          _isZoomed = false;
+        });
+      }
     });
   }
 
@@ -480,7 +491,28 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                                 BouncingWrapper(
                                   shrinkScale: 0.86,
                                   overshootScale: 1.10,
-                                  onTap: () => _setExpanded(true),
+                                  onTap: () {
+                                    setState(() {
+                                      _isZoomed = true;
+                                    });
+                                    _zoomAnimation = Matrix4Tween(
+                                      begin: Matrix4.identity(),
+                                      end: Matrix4.diagonal3Values(1.25, 1.25, 1.0),
+                                    ).animate(CurvedAnimation(
+                                      parent: _zoomAnimCtrl,
+                                      curve: Curves.easeOutBack,
+                                    ));
+                                    _zoomAnimCtrl.reset();
+                                    void listener() {
+                                      if (_zoomAnimation != null) {
+                                        _zoomController.value = _zoomAnimation!.value;
+                                      }
+                                    }
+                                    _zoomAnimation!.addListener(listener);
+                                    _zoomAnimCtrl.forward().then((_) {
+                                      _zoomAnimation?.removeListener(listener);
+                                    });
+                                  },
                                   child: Container(
                                     width: 48,
                                     height: 48,
@@ -572,63 +604,70 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                   ),
                 ),
               ),
-              if (_isExpanded)
+              if (_isZoomed)
                 timetableAsync.when(
                   data: (slots) => Positioned.fill(
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFF8F0FC),
-                            Color(0xFFF0E6F8),
-                            Color(0xFFEAF0FA),
-                            Color(0xFFF4F8FC),
-                            Color(0xFFFAFCFD),
-                          ],
-                          stops: [0.0, 0.25, 0.5, 0.75, 1.0],
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ClipRect(
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                              child: Container(
+                                color: Colors.black.withValues(alpha: 0.35),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      child: SafeArea(
-                        child: Center(
-                          child: _buildScrollableTimetable(context, slots, isFullScreen: true),
+                        SafeArea(
+                          child: Center(
+                            child: InteractiveViewer(
+                              transformationController: _zoomController,
+                              minScale: 1.0,
+                              maxScale: 3.5,
+                              boundaryMargin: const EdgeInsets.all(100),
+                              onInteractionEnd: _handleInteractionEnd,
+                              child: GestureDetector(
+                                onDoubleTap: _resetZoom,
+                                child: _buildScrollableTimetable(context, slots, isFullScreen: true),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        Positioned(
+                          top: MediaQuery.of(context).padding.top + 16,
+                          right: 20,
+                          child: BouncingWrapper(
+                            shrinkScale: 0.86,
+                            overshootScale: 1.10,
+                            onTap: _resetZoom,
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.20),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                size: 24,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   loading: () => const SizedBox.shrink(),
                   error: (_, _) => const SizedBox.shrink(),
-                ),
-              if (_isZoomed)
-                Positioned(
-                  top: MediaQuery.of(context).padding.top + 16,
-                  right: 20,
-                  child: BouncingWrapper(
-                    shrinkScale: 0.86,
-                    overshootScale: 1.10,
-                    onTap: _resetZoom,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.16),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 24,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                  ),
                 ),
             ],
           ),
@@ -812,86 +851,43 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
       ),
     ));
 
-    final interactive = InteractiveViewer(
-      transformationController: _zoomController,
-      minScale: 1.0,
-      maxScale: 3.5,
-      boundaryMargin: const EdgeInsets.all(80),
-      clipBehavior: Clip.none,
-      child: container,
-    );
-
     if (isFullScreen) {
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
-          if (_isZoomed)
-            Positioned(
-              left: -500,
-              right: -500,
-              top: -1000,
-              bottom: -1000,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.25),
-                  ),
-                ),
-              ),
-            ),
-          Positioned.fill(child: interactive),
-          Positioned(
-            top: 12,
-            right: 20,
-            child: BouncingWrapper(
-              shrinkScale: 0.86,
-              overshootScale: 1.10,
-              onTap: () => _setExpanded(false),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Icon(Icons.close_rounded, size: 22, color: Colors.grey.shade700),
-              ),
-            ),
-          ),
-        ],
-      );
+      return container;
     }
 
     return SizedBox(
       height: (MediaQuery.of(context).size.height * 0.68).clamp(580.0, 750.0),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          if (_isZoomed)
-            Positioned(
-              left: -500,
-              right: -500,
-              top: -1000,
-              bottom: -1000,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.25),
-                  ),
-                ),
-              ),
-            ),
-          interactive,
-        ],
+      child: GestureDetector(
+        onScaleStart: (details) {
+          if (details.pointerCount >= 2) {
+            setState(() {
+              _isZoomed = true;
+            });
+          }
+        },
+        onDoubleTap: () {
+          setState(() {
+            _isZoomed = true;
+          });
+          _zoomAnimation = Matrix4Tween(
+            begin: Matrix4.identity(),
+            end: Matrix4.diagonal3Values(1.35, 1.35, 1.0),
+          ).animate(CurvedAnimation(
+            parent: _zoomAnimCtrl,
+            curve: Curves.easeOutBack,
+          ));
+          _zoomAnimCtrl.reset();
+          void listener() {
+            if (_zoomAnimation != null) {
+              _zoomController.value = _zoomAnimation!.value;
+            }
+          }
+          _zoomAnimation!.addListener(listener);
+          _zoomAnimCtrl.forward().then((_) {
+            _zoomAnimation?.removeListener(listener);
+          });
+        },
+        child: container,
       ),
     );
   }

@@ -18,8 +18,8 @@ class BouncingWrapper extends StatefulWidget {
     required this.child,
     this.onTap,
     this.onLongPress,
-    this.shrinkScale = 0.90,
-    this.overshootScale = 1.05,
+    this.shrinkScale = 0.93,
+    this.overshootScale = 1.055,
     this.duration = const Duration(milliseconds: 440),
     this.behavior = HitTestBehavior.opaque,
     this.hitPadding,
@@ -98,15 +98,15 @@ class _BouncingWrapperState extends State<BouncingWrapper>
   void _onTapDown(TapDownDetails _) {
     if (widget.onTap != null || widget.onLongPress != null) {
       _isActionDispatched = false;
-      // Animate smoothly to squish point
-      _ctrl.animateTo(0.22, duration: const Duration(milliseconds: 70), curve: Curves.easeOutCubic);
+      // Smoothly shrink to 92-95% over ~120ms (ease-out) and stay shrunk while held
+      _ctrl.animateTo(0.22, duration: const Duration(milliseconds: 120), curve: Curves.easeOutCubic);
     }
   }
 
   void _onTapUp(TapUpDetails _) {
     if (widget.onTap != null && !_isActionDispatched) {
       _isActionDispatched = true;
-      // Spring forward through the full multi-phase bounce
+      // Finger lifts: springs forward past 1.0 and elastically bounces back to resting size
       if (_ctrl.value < 0.22) {
         _ctrl.forward(from: 0.0);
       } else {
@@ -124,7 +124,8 @@ class _BouncingWrapperState extends State<BouncingWrapper>
 
   void _onTapCancel() {
     if (_ctrl.value > 0) {
-      _ctrl.animateTo(0.0, duration: const Duration(milliseconds: 120), curve: Curves.easeOutQuad);
+      // Finger slides off or touch cancelled: smoothly return to normal resting scale
+      _ctrl.animateTo(0.0, duration: const Duration(milliseconds: 130), curve: Curves.easeOutQuad);
     }
   }
 

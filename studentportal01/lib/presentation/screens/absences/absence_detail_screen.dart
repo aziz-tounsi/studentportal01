@@ -13,6 +13,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
+import '../../widgets/ios_edge_swipe_back.dart';
 
 class AbsenceDetailData {
   final String subjectName;
@@ -297,14 +298,20 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           BouncingWrapper(
             shrinkScale: 0.86,
             overshootScale: 1.10,
-            delayNavigation: true,
+            delayNavigation: false,
+            hitPadding: const EdgeInsets.all(12),
             onTap: () {
-              final fromAIChat = ref.read(navigatedFromAIChatProvider);
-              if (fromAIChat) {
-                ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                context.go('/ai-chat');
+              final swipeBack = IosEdgeSwipeBack.of(context);
+              if (swipeBack != null) {
+                swipeBack.animateBack();
               } else {
-                context.go('/absences');
+                final fromAIChat = ref.read(navigatedFromAIChatProvider);
+                if (fromAIChat) {
+                  ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                  context.go('/ai-chat');
+                } else {
+                  context.go('/absences');
+                }
               }
             },
             child: Container(

@@ -88,12 +88,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) {
           return Consumer(
             builder: (context, ref, _) {
-              final hideNavBar = ref.watch(navBarHiddenProvider);
               final fromAIChat = ref.watch(navigatedFromAIChatProvider);
               final isHome = state.matchedLocation == '/';
               final isAIChat = state.matchedLocation == '/ai-chat';
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
+              final isAbsenceDetail =
+                  state.matchedLocation.startsWith('/absences/');
+              final hideNavBar = ref.watch(navBarHiddenProvider) ||
+                  isWriteSuggestion ||
+                  isAbsenceDetail ||
+                  isAIChat;
 
               const homeGradient = LinearGradient(
                 begin: Alignment.topLeft,
@@ -132,16 +137,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
               final backgroundWidget = isWriteSuggestion
                   ? const SuggestionsScreen()
-                  : fromAIChat
-                      ? const AIChatScreen()
-                      : isSideNavPage
-                          ? const HomeScreen(forceDrawerOpen: true)
-                          : const HomeScreen();
+                  : isAbsenceDetail
+                      ? (fromAIChat ? const AIChatScreen() : const AbsencesScreen())
+                      : fromAIChat
+                          ? const AIChatScreen()
+                          : isSideNavPage
+                              ? const HomeScreen(forceDrawerOpen: true)
+                              : const HomeScreen();
 
               final backgroundGradient = fromAIChat ? aiChatGradient : homeGradient;
 
               final onReturnCallback = isWriteSuggestion
                   ? () => context.go('/suggestions')
+                  : isAbsenceDetail
+                      ? () {
+                          if (fromAIChat) {
+                            ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                            context.go('/ai-chat');
+                          } else {
+                            context.go('/absences');
+                          }
+                        }
                   : isAIChat
                       ? () {
                           ref.read(navBarHiddenProvider.notifier).state = false;
@@ -271,6 +287,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 NoTransitionPage(child: const AbsencesScreen()),
           ),
           GoRoute(
+            path: '/absences/:offeringId',
+            name: 'absence-detail',
+            pageBuilder: (context, state) {
+              final offeringId = state.pathParameters['offeringId']!;
+              return NoTransitionPage(
+                child: AbsenceDetailScreen(subjectOfferingId: offeringId),
+              );
+            },
+          ),
+          GoRoute(
             path: '/resultats',
             name: 'resultats',
             pageBuilder: (context, state) =>
@@ -332,47 +358,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final courseId = state.pathParameters['courseId']!;
           return CourseDetailScreen(courseId: courseId);
-        },
-      ),
-      GoRoute(
-        path: '/absences/:offeringId',
-        name: 'absence-detail',
-        pageBuilder: (context, state) {
-          final offeringId = state.pathParameters['offeringId']!;
-          return NoTransitionPage(
-            child: Consumer(
-              builder: (context, ref, _) {
-                final fromAIChat = ref.watch(navigatedFromAIChatProvider);
-                return IosEdgeSwipeBack(
-                  backgroundPage:
-                      fromAIChat ? const AIChatScreen() : const AbsencesScreen(),
-                  backgroundGradient: fromAIChat
-                      ? const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFF8F0FC),
-                            Color(0xFFF0E6F8),
-                            Color(0xFFEAF0FA),
-                            Color(0xFFF4F8FC),
-                            Color(0xFFFAFCFD),
-                          ],
-                          stops: [0.0, 0.25, 0.5, 0.75, 1.0],
-                        )
-                      : null,
-                  onReturn: () {
-                    if (fromAIChat) {
-                      ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                      context.go('/ai-chat');
-                    } else {
-                      context.go('/absences');
-                    }
-                  },
-                  child: AbsenceDetailScreen(subjectOfferingId: offeringId),
-                );
-              },
-            ),
-          );
         },
       ),
     ],

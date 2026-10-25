@@ -29,7 +29,7 @@ class GlassCard extends StatelessWidget {
     final isIconLeft = iconAlignment == Alignment.topLeft;
 
     return BouncingWrapper(
-      shrinkScale: 0.90,
+      shrinkScale: 0.93,
       overshootScale: 1.055,
       delayNavigation: true,
       onTap: onTap,
