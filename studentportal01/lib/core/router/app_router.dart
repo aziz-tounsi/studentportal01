@@ -121,11 +121,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 stops: [0.0, 0.25, 0.5, 0.75, 1.0],
               );
 
+              final isSideNavPage = const [
+                '/settings',
+                '/contact',
+                '/about',
+                '/profile',
+                '/mon-solde',
+              ].contains(state.matchedLocation);
+
+              final isSideDrawerOpen = ref.watch(sideDrawerOpenProvider);
+              final backSwipeInterceptor = ref.watch(backSwipeInterceptorProvider);
+
               final backgroundWidget = isWriteSuggestion
                   ? const SuggestionsScreen()
                   : fromAIChat
                       ? const AIChatScreen()
-                      : const HomeScreen();
+                      : (isSideNavPage && isSideDrawerOpen)
+                          ? const HomeScreen(forceDrawerOpen: true)
+                          : const HomeScreen();
 
               final backgroundGradient = fromAIChat ? aiChatGradient : homeGradient;
 
@@ -163,6 +176,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   backgroundPage: const HomeScreen(),
                   backgroundGradient: homeGradient,
                   onReturn: onReturnCallback,
+                  onInterceptSwipe: backSwipeInterceptor,
                   child: child,
                 );
               }
@@ -176,6 +190,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         backgroundPage: backgroundWidget,
                         backgroundGradient: backgroundGradient,
                         onReturn: onReturnCallback,
+                        onInterceptSwipe: backSwipeInterceptor,
                         child: child,
                       ),
                 bottomNavigationBar: hideNavBar

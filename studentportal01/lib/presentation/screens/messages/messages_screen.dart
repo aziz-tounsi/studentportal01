@@ -2,13 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/ios_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/announcement_model.dart';
+import '../../widgets/bouncing_wrapper.dart';
+import '../../providers/nav_bar_provider.dart';
 
 // =====================================================
 // REAL-TIME CLASS MESSAGES STATE NOTIFIER
@@ -197,6 +199,9 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
 
   @override
   void dispose() {
+    if (_searchQuery.isNotEmpty) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     _searchController.dispose();
     _debounce?.cancel();
     super.dispose();
@@ -205,7 +210,18 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   void _onSearchChanged(String value) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() => _searchQuery = value.trim());
+      final q = value.trim();
+      if (q.isNotEmpty) {
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _searchController.clear();
+          ref.read(backSwipeInterceptorProvider.notifier).state = null;
+          setState(() => _searchQuery = '');
+          return true;
+        };
+      } else {
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
+      }
+      setState(() => _searchQuery = q);
     });
   }
 
@@ -221,6 +237,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(messagesNotifierProvider(widget.classId));
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -259,12 +276,15 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                 hintText: AppLocalizations.of(context).search,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
+                    ? BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
+                        onTap: () {
                           _searchController.clear();
+                          ref.read(backSwipeInterceptorProvider.notifier).state = null;
                           setState(() => _searchQuery = '');
                         },
+                        child: const Icon(Icons.clear),
                       )
                     : null,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusM)),
@@ -274,7 +294,35 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
             ),
           ),
           Expanded(
-            child: _buildContent(context, state),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                FocusScope.of(context).unfocus();
+                if (_searchQuery.isNotEmpty) {
+                  _searchController.clear();
+                  ref.read(backSwipeInterceptorProvider.notifier).state = null;
+                  setState(() => _searchQuery = '');
+                }
+              },
+              onHorizontalDragUpdate: (details) {
+                if (_searchQuery.isNotEmpty) {
+                  if (isRtl) {
+                    if ((details.primaryDelta ?? 0) > 8) {
+                      _searchController.clear();
+                      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+                      setState(() => _searchQuery = '');
+                    }
+                  } else {
+                    if ((details.primaryDelta ?? 0) < -8) {
+                      _searchController.clear();
+                      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+                      setState(() => _searchQuery = '');
+                    }
+                  }
+                }
+              },
+              child: _buildContent(context, state),
+            ),
           ),
         ],
       ),
@@ -349,17 +397,19 @@ class _MessageCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSizes.paddingM),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSizes.cardBorderRadius),
-      ),
-      child: InkWell(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSizes.paddingM),
+      child: BouncingWrapper(
+        shrinkScale: 0.96,
         onTap: () => _showDetail(context),
-        borderRadius: BorderRadius.circular(AppSizes.cardBorderRadius),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.paddingM),
-          child: Column(
+        child: Card(
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSizes.cardBorderRadius),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSizes.paddingM),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -549,8 +599,9 @@ class _MessageCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showFullImage(BuildContext context, String url) {
     Navigator.of(context).push(

@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/bouncing_wrapper.dart';
+import '../../providers/nav_bar_provider.dart';
 import '../../widgets/absences_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -238,6 +240,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
 
   @override
   void dispose() {
+    if (_isSearching) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     _searchController.dispose();
     _searchFocusNode.dispose();
     _searchAnimationController.dispose();
@@ -249,10 +254,15 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
       _isSearching = !_isSearching;
       if (_isSearching) {
         _searchAnimationController.forward();
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _toggleSearch();
+          return true;
+        };
         Future.delayed(const Duration(milliseconds: 150), () {
           _searchFocusNode.requestFocus();
         });
       } else {
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
         _searchAnimationController.reverse();
         _searchController.clear();
         _searchFocusNode.unfocus();
@@ -298,7 +308,22 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
             },
             color: _accentColor,
             backgroundColor: Colors.white,
-            child: CustomScrollView(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                if (_isSearching) _toggleSearch();
+              },
+              onHorizontalDragUpdate: (details) {
+                if (_isSearching) {
+                  final isRtl = Directionality.of(context) == TextDirection.rtl;
+                  if (isRtl) {
+                    if ((details.primaryDelta ?? 0) > 8) _toggleSearch();
+                  } else {
+                    if ((details.primaryDelta ?? 0) < -8) _toggleSearch();
+                  }
+                }
+              },
+              child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               slivers: [
                 SliverToBoxAdapter(
@@ -343,6 +368,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),
@@ -425,7 +451,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           ],
                         ),
                       ),
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,
@@ -462,7 +490,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                   opacity: fadeIn.clamp(0.0, 1.0),
                   child: Row(
                     children: [
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,

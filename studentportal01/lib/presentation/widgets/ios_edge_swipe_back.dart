@@ -18,6 +18,7 @@ class IosEdgeSwipeBack extends StatefulWidget {
   final VoidCallback? onReturn;
   final double edgeThreshold;
   final Gradient? backgroundGradient;
+  final bool Function()? onInterceptSwipe;
 
   const IosEdgeSwipeBack({
     super.key,
@@ -26,6 +27,7 @@ class IosEdgeSwipeBack extends StatefulWidget {
     this.onReturn,
     this.edgeThreshold = 44.0,
     this.backgroundGradient,
+    this.onInterceptSwipe,
   });
 
   @override
@@ -67,6 +69,9 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
   void _onDragStart(DragStartDetails details, bool isRtl, double screenWidth) {
     if (_animCtrl.isAnimating) return;
+    if (widget.onInterceptSwipe != null && widget.onInterceptSwipe!()) {
+      return;
+    }
     _startX = details.globalPosition.dx;
     _lastX = _startX;
     _lastTime = DateTime.now().millisecondsSinceEpoch;

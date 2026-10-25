@@ -11,6 +11,7 @@ import '../../../data/models/timetable_model.dart';
 import '../../providers/student_context_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/semester_navigator.dart';
+import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/emploi_skeleton.dart';
 
 final emploiSemesterProvider = StateProvider<int>((ref) => 1);
@@ -818,10 +819,11 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
 
     return Directionality(
       textDirection: TextDirection.ltr,
-      child: GestureDetector(
-      onTap: () {
-        _showSlotDetails(context, slot, color, timeRange);
-      },
+      child: BouncingWrapper(
+        shrinkScale: 0.92,
+        onTap: () {
+          _showSlotDetails(context, slot, color, timeRange);
+        },
       child: Container(
         margin: const EdgeInsets.all(2.5),
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),

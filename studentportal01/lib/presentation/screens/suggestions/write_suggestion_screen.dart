@@ -113,6 +113,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
   final List<PlatformFile> _attachedFiles = [];
   bool _isSubmitting = false;
   String _selectedType = 'autre';
+  bool _isTypeDropdownOpen = false;
 
   @override
   void deactivate() {
@@ -283,7 +284,12 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
-          onSelected: (value) => setState(() => _selectedType = value),
+          onOpened: () => setState(() => _isTypeDropdownOpen = true),
+          onCanceled: () => setState(() => _isTypeDropdownOpen = false),
+          onSelected: (value) => setState(() {
+            _selectedType = value;
+            _isTypeDropdownOpen = false;
+          }),
           offset: const Offset(0, 56),
           itemBuilder: (context) => typesMap.entries.map((entry) {
             final typeColor = getTypeColor(entry.key);
@@ -367,10 +373,15 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: Colors.grey[600],
-                    size: 20,
+                  child: AnimatedRotation(
+                    turns: _isTypeDropdownOpen ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.grey[600],
+                      size: 20,
+                    ),
                   ),
                 ),
               ],

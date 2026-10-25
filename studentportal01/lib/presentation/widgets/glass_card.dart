@@ -37,12 +37,17 @@ class _GlassCardState extends State<GlassCard>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 150),
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 320),
     );
     _scaleAnimation = Tween<double>(
       begin: 1.0,
-      end: 0.95,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+      end: 0.93,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.elasticOut,
+    ));
   }
 
   @override

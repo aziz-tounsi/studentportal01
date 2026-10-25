@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/l10n/app_localizations.dart';
+import 'bouncing_wrapper.dart';
 
 /// Reusable animated search header component
 /// Used across Notifications, Messages, and Suggestions screens
@@ -124,7 +125,9 @@ class AnimatedSearchHeader extends StatelessWidget {
                         ),
                       ),
                       // Search button
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: onToggleSearch,
                         child: Container(
                           width: 44,
@@ -162,7 +165,9 @@ class AnimatedSearchHeader extends StatelessWidget {
                   child: Row(
                     children: [
                       // Cancel button
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: onToggleSearch,
                         child: Container(
                           width: 44,

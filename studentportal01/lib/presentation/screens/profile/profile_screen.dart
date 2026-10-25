@@ -21,6 +21,7 @@ import '../../providers/student_context_provider.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/profile_skeleton.dart';
+import '../../widgets/bouncing_wrapper.dart';
 import '../../providers/nav_bar_provider.dart';
 
 const Color _navPink = Color(0xFFFF2D78);
@@ -376,7 +377,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SizedBox(height: 28),
 
               // Déconnexion Button at Bottom of Profile Page
-              GestureDetector(
+              BouncingWrapper(
+                shrinkScale: 0.92,
                 onTap: _handleLogout,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),

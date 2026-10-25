@@ -7,9 +7,11 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../../core/router/app_router.dart';
 import '../../../data/models/document_model.dart';
 import '../../widgets/animated_search_header.dart';
+import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/detail_modal_sheet.dart';
 import '../../widgets/documents_skeleton.dart';
 import '../../widgets/semester_navigator.dart';
+import '../../providers/nav_bar_provider.dart';
 
 // Semester state provider for this screen
 final docsSemesterProvider = StateProvider<int>((ref) => 1);
@@ -238,6 +240,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     with TickerProviderStateMixin {
   late AnimationController _searchAnimController;
   String? _selectedCategory;
+  bool _isFilterDropdownOpen = false;
   
   // Search state
   bool _isSearching = false;
@@ -279,6 +282,9 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
 
   @override
   void dispose() {
+    if (_isSearching) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     _searchAnimController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -290,10 +296,15 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
       _isSearching = !_isSearching;
       if (_isSearching) {
         _searchAnimController.forward();
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _toggleSearch();
+          return true;
+        };
         Future.delayed(const Duration(milliseconds: 150), () {
           _searchFocusNode.requestFocus();
         });
       } else {
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
         _searchAnimController.reverse();
         _searchController.clear();
         _searchQuery = '';
@@ -404,39 +415,56 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
       return _buildEmptySemesterState(selectedSemester, l10n);
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // "Trier par" label and dropdown button aligned to max right - fixed at top
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: _buildSortAndFilterBar(availableCategories, l10n),
-        ),
-        const SizedBox(height: 10),
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
 
-        // Scrollable document cards that pass cleanly under the "Trier par" row
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(documentsProvider(selectedSemester));
-              await ref.read(documentsProvider(selectedSemester).future);
-            },
-            color: const Color(0xFF6B5CE7),
-            backgroundColor: Colors.white,
-            child: filteredDocs.isEmpty
-                ? SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    child: _buildEmptyFilterState(l10n),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    itemCount: filteredDocs.length,
-                    itemBuilder: (context, index) => _DocumentCard(document: filteredDocs[index]),
-                  ),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        if (_isSearching) _toggleSearch();
+      },
+      onHorizontalDragUpdate: (details) {
+        if (_isSearching) {
+          if (isRtl) {
+            if ((details.primaryDelta ?? 0) > 8) _toggleSearch();
+          } else {
+            if ((details.primaryDelta ?? 0) < -8) _toggleSearch();
+          }
+        }
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // "Trier par" label and dropdown button aligned to max right - fixed at top
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _buildSortAndFilterBar(availableCategories, l10n),
           ),
-        ),
-      ],
+          const SizedBox(height: 10),
+
+          // Scrollable document cards that pass cleanly under the "Trier par" row
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(documentsProvider(selectedSemester));
+                await ref.read(documentsProvider(selectedSemester).future);
+              },
+              color: const Color(0xFF6B5CE7),
+              backgroundColor: Colors.white,
+              child: filteredDocs.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                      child: _buildEmptyFilterState(l10n),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
+                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                      itemCount: filteredDocs.length,
+                      itemBuilder: (context, index) => _DocumentCard(document: filteredDocs[index]),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -485,9 +513,12 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                 borderRadius: BorderRadius.circular(24),
               ),
               offset: const Offset(0, 48),
+              onOpened: () => setState(() => _isFilterDropdownOpen = true),
+              onCanceled: () => setState(() => _isFilterDropdownOpen = false),
               onSelected: (String categoryKey) {
                 setState(() {
                   _selectedCategory = (categoryKey == allCategoriesKey) ? null : categoryKey;
+                  _isFilterDropdownOpen = false;
                 });
               },
               itemBuilder: (BuildContext context) => sortOptions.map((entry) {
@@ -564,12 +595,17 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 18,
-                      color: _selectedCategory != null
-                          ? const Color(0xFF6B5CE7)
-                          : Colors.grey[500],
+                    AnimatedRotation(
+                      turns: _isFilterDropdownOpen ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: _selectedCategory != null
+                            ? const Color(0xFF6B5CE7)
+                            : Colors.grey[500],
+                      ),
                     ),
                   ],
                 ),
@@ -794,27 +830,29 @@ class _DocumentCard extends StatelessWidget {
     final categoryColor = _DocumentsScreenState.getCategoryColor(document.category);
     final categoryIcon = _DocumentsScreenState.getCategoryIcon(document.category);
 
-    return GestureDetector(
-          onTap: () => _showDocumentDetails(context, document),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.6),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: BouncingWrapper(
+        shrinkScale: 0.96,
+        onTap: () => _showDocumentDetails(context, document),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.6),
+              width: 1.5,
             ),
-            child: Row(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
               children: [
                 // Category icon with soft gradient matching document type
                 Container(
@@ -935,7 +973,8 @@ class _DocumentCard extends StatelessWidget {
               ],
             ),
           ),
-        );
+        ),
+      );
   }
 
   void _showDocumentDetails(BuildContext context, DocumentModel document) {

@@ -14,6 +14,7 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../../data/services/ai_data_provider.dart';
 import '../../../data/services/ai_service.dart';
 import '../../providers/nav_bar_provider.dart';
+import '../../widgets/bouncing_wrapper.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const Color _pink = Color(0xFFFF2D78);
@@ -268,6 +269,20 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
     });
   }
 
+  void _openHistory() {
+    setState(() => _showHistory = true);
+    _loadConversations();
+    ref.read(backSwipeInterceptorProvider.notifier).state = () {
+      _closeHistory();
+      return true;
+    };
+  }
+
+  void _closeHistory() {
+    ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    setState(() => _showHistory = false);
+  }
+
   Future<void> _initAI() async {
     if (!mounted) return;
     try {
@@ -369,6 +384,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
       }
       _currentConversationId = conv.id;
       _showHistory = false;
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
     });
     _scrollToBottom();
   }
@@ -682,6 +698,9 @@ I have **complete** access to your academic data — grades, timetable, absences
 
   @override
   void dispose() {
+    if (_showHistory) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     ref.read(navBarHiddenProvider.notifier).state = false;
     _inputController.dispose();
     _searchController.dispose();
@@ -720,7 +739,7 @@ I have **complete** access to your academic data — grades, timetable, absences
       canPop: !_showHistory,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _showHistory) {
-          setState(() => _showHistory = false);
+          _closeHistory();
           return;
         }
         if (didPop) {
@@ -841,7 +860,7 @@ I have **complete** access to your academic data — grades, timetable, absences
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutCubic,
               child: GestureDetector(
-                onTap: () => setState(() => _showHistory = false),
+                onTap: _closeHistory,
                 child: Container(color: Colors.black.withValues(alpha: 0.25)),
               ),
             ),
@@ -857,9 +876,9 @@ I have **complete** access to your academic data — grades, timetable, absences
             child: GestureDetector(
               onHorizontalDragUpdate: (details) {
                 if (isRtl) {
-                  if ((details.primaryDelta ?? 0) < -8) setState(() => _showHistory = false);
+                  if ((details.primaryDelta ?? 0) < -8) _closeHistory();
                 } else {
-                  if ((details.primaryDelta ?? 0) > 8) setState(() => _showHistory = false);
+                  if ((details.primaryDelta ?? 0) > 8) _closeHistory();
                 }
               },
               child: ClipRRect(
@@ -1005,11 +1024,9 @@ I have **complete** access to your academic data — grades, timetable, absences
                   ),
                 ),
                 // History
-                GestureDetector(
-                  onTap: () {
-                    setState(() => _showHistory = true);
-                    _loadConversations();
-                  },
+                BouncingWrapper(
+                  shrinkScale: 0.88,
+                  onTap: _openHistory,
                   child: Container(
                     width: 36,
                     height: 36,
@@ -1419,8 +1436,10 @@ I have **complete** access to your academic data — grades, timetable, absences
                 ),
               ),
               const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => setState(() => _showHistory = false),
+              BouncingWrapper(
+                shrinkScale: 0.86,
+                hitPadding: const EdgeInsets.all(8),
+                onTap: _closeHistory,
                 child: Container(
                   width: 44,
                   height: 44,
@@ -1506,7 +1525,7 @@ I have **complete** access to your academic data — grades, timetable, absences
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: GestureDetector(
             onTap: () {
-              setState(() => _showHistory = false);
+              _closeHistory();
               _startNewChat();
             },
             child: Container(

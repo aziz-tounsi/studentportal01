@@ -4,13 +4,15 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../providers/suggestions_provider.dart';
+import '../../widgets/bouncing_wrapper.dart';
+import '../../providers/nav_bar_provider.dart';
 import '../../widgets/detail_modal_sheet.dart';
 import 'write_suggestion_screen.dart';
 import '../../widgets/ios_loader.dart';
@@ -55,6 +57,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
 
   @override
   void dispose() {
+    if (_isSearching) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     _titleController.dispose();
     _contentController.dispose();
     _searchController.dispose();
@@ -68,8 +73,13 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
       _isSearching = !_isSearching;
       if (_isSearching) {
         _searchAnimationController.forward();
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _toggleSearch();
+          return true;
+        };
         _searchFocusNode.requestFocus();
       } else {
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
         _searchAnimationController.reverse();
         _searchController.clear();
         _searchQuery = '';
@@ -115,10 +125,25 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                   ref.read(suggestionsRefreshingProvider.notifier).state = false;
                 }
               },
-              child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  if (_isSearching) _toggleSearch();
+                },
+                onHorizontalDragUpdate: (details) {
+                  if (_isSearching) {
+                    final isRtl = Directionality.of(context) == TextDirection.rtl;
+                    if (isRtl) {
+                      if ((details.primaryDelta ?? 0) > 8) _toggleSearch();
+                    } else {
+                      if ((details.primaryDelta ?? 0) < -8) _toggleSearch();
+                    }
+                  }
+                },
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
               slivers: [
                 // Header with animated search
                 SliverToBoxAdapter(
@@ -222,7 +247,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                             ),
                                           ),
                                           const SizedBox(height: 20),
-                                          GestureDetector(
+                                          BouncingWrapper(
+                                            shrinkScale: 0.92,
                                             onTap: () => context.go('/write-suggestion'),
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -295,18 +321,17 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
             ),
           ),
         ),
-        ),
-        // FloatingActionButton positioned manually - only show when there are suggestions
+      ),
+    ),
+    // FloatingActionButton positioned manually - only show when there are suggestions
         if (suggestionsAsync.hasValue && suggestionsAsync.value!.isNotEmpty)
           Positioned(
             right: 24,
             bottom: 160,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => context.go('/write-suggestion'),
-                borderRadius: BorderRadius.circular(32),
-                child: Container(
+            child: BouncingWrapper(
+              shrinkScale: 0.88,
+              onTap: () => context.go('/write-suggestion'),
+              child: Container(
                   width: 64,
                   height: 64,
                   decoration: BoxDecoration(
@@ -326,7 +351,6 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                 ),
               ),
             ),
-          ),
       ],
     );
   }
@@ -559,7 +583,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
+      child: BouncingWrapper(
+        shrinkScale: 0.96,
         onTap: () => _showSuggestionDetail(suggestion),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
@@ -1667,7 +1692,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                           ],
                         ),
                       ),
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,
@@ -1704,7 +1731,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                   opacity: fadeIn.clamp(0.0, 1.0),
                   child: Row(
                     children: [
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,

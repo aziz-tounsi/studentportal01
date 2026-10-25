@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui';
+import '../../widgets/bouncing_wrapper.dart';
+import '../../providers/nav_bar_provider.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
@@ -45,6 +47,9 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
 
   @override
   void dispose() {
+    if (_isSearching) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     _searchController.dispose();
     _searchFocusNode.dispose();
     _searchAnimationController.dispose();
@@ -56,10 +61,15 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
       _isSearching = !_isSearching;
       if (_isSearching) {
         _searchAnimationController.forward();
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _toggleSearch();
+          return true;
+        };
         Future.delayed(const Duration(milliseconds: 150), () {
           _searchFocusNode.requestFocus();
         });
       } else {
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
         _searchAnimationController.reverse();
         _searchController.clear();
         _searchQuery = '';
@@ -106,7 +116,22 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                 ref.read(resultatsRefreshingProvider.notifier).state = false;
               }
             },
-            child: CustomScrollView(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                if (_isSearching) _toggleSearch();
+              },
+              onHorizontalDragUpdate: (details) {
+                if (_isSearching) {
+                  final isRtl = Directionality.of(context) == TextDirection.rtl;
+                  if (isRtl) {
+                    if ((details.primaryDelta ?? 0) > 8) _toggleSearch();
+                  } else {
+                    if ((details.primaryDelta ?? 0) < -8) _toggleSearch();
+                  }
+                }
+              },
+              child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
@@ -159,6 +184,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                 ),
               ),
             ],
+          ),
           ),
           ),
         ),
@@ -242,7 +268,9 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           ],
                         ),
                       ),
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,
@@ -279,7 +307,9 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                   opacity: fadeIn.clamp(0.0, 1.0),
                   child: Row(
                     children: [
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,

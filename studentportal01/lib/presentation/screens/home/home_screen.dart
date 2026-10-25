@@ -13,12 +13,15 @@ import '../../providers/auth_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../providers/school_provider.dart';
+import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/student_card.dart';
 import '../../widgets/student_card_skeleton.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  final bool forceDrawerOpen;
+
+  const HomeScreen({super.key, this.forceDrawerOpen = false});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -38,6 +41,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
+    final shouldOpen = widget.forceDrawerOpen || ref.read(sideDrawerOpenProvider);
+    _isDrawerOpen = shouldOpen;
+    if (shouldOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(navBarHiddenProvider.notifier).state = true;
+          ref.read(backSwipeInterceptorProvider.notifier).state = () {
+            _closeDrawer();
+            return true;
+          };
+        }
+      });
+    }
     _scrollController = ScrollController();
     _expandCtrl = AnimationController(
       vsync: this,
@@ -50,8 +66,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  void _openDrawer() {
+    setState(() => _isDrawerOpen = true);
+    ref.read(navBarHiddenProvider.notifier).state = true;
+    ref.read(sideDrawerOpenProvider.notifier).state = true;
+    ref.read(backSwipeInterceptorProvider.notifier).state = () {
+      _closeDrawer();
+      return true;
+    };
+  }
+
+  void _closeDrawer() {
+    setState(() => _isDrawerOpen = false);
+    ref.read(navBarHiddenProvider.notifier).state = false;
+    ref.read(sideDrawerOpenProvider.notifier).state = false;
+    ref.read(backSwipeInterceptorProvider.notifier).state = null;
+  }
+
   @override
   void dispose() {
+    if (_isDrawerOpen) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     ref.read(navBarHiddenProvider.notifier).state = false;
     _scrollController.dispose();
     _expandCtrl.dispose();
@@ -96,16 +132,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       extendBody: true,
-      drawerScrimColor: Colors.black.withValues(alpha: 0.25),
-      drawer: _buildDrawer(context, l10n, ref),
-      onDrawerChanged: (isOpen) {
-        if (_isDrawerOpen != isOpen) {
-          setState(() {
-            _isDrawerOpen = isOpen;
-          });
-        }
-        ref.read(navBarHiddenProvider.notifier).state = isOpen;
-      },
       body: LayoutBuilder(
         builder: (context, constraints) {
           final screenHeight = constraints.maxHeight;
@@ -341,7 +367,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         GestureDetector(
-                          onTap: () => Scaffold.of(context).openDrawer(),
+                          onTap: _openDrawer,
                           child: Container(
                             width: 48,
                             height: 48,
@@ -397,33 +423,89 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           );
 
-          return AnimatedScale(
-            scale: _isDrawerOpen ? 0.93 : 1.0,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(_isDrawerOpen ? 24 : 0),
-                boxShadow: _isDrawerOpen
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ]
-                    : null,
+          final isRtl = Directionality.of(context) == TextDirection.rtl;
+
+          return Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFE8D5F2),
+                  Color(0xFFD4C4E8),
+                  Color(0xFFC9D6F0),
+                  Color(0xFFE0EAF5),
+                  Color(0xFFF0F5FA),
+                ],
+                stops: [0.0, 0.25, 0.5, 0.75, 1.0],
               ),
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(
-                  sigmaX: _isDrawerOpen ? 10.0 : 0.0,
-                  sigmaY: _isDrawerOpen ? 10.0 : 0.0,
+            ),
+            child: Stack(
+              children: [
+                AnimatedScale(
+                  scale: _isDrawerOpen ? 0.93 : 1.0,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(_isDrawerOpen ? 24 : 0),
+                      boxShadow: _isDrawerOpen
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: ImageFiltered(
+                      imageFilter: ImageFilter.blur(
+                        sigmaX: _isDrawerOpen ? 10.0 : 0.0,
+                        sigmaY: _isDrawerOpen ? 10.0 : 0.0,
+                      ),
+                      child: bodyStack,
+                    ),
+                  ),
                 ),
-                child: bodyStack,
-              ),
+                if (_isDrawerOpen)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _closeDrawer,
+                      onHorizontalDragUpdate: (details) {
+                        if (isRtl) {
+                          if ((details.primaryDelta ?? 0) > 8) _closeDrawer();
+                        } else {
+                          if ((details.primaryDelta ?? 0) < -8) _closeDrawer();
+                        }
+                      },
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.25),
+                      ),
+                    ),
+                  ),
+                if (_isDrawerOpen)
+                  PositionedDirectional(
+                    start: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: math.min(320.0, constraints.maxWidth * 0.78),
+                    child: GestureDetector(
+                      onHorizontalDragUpdate: (details) {
+                        if (isRtl) {
+                          if ((details.primaryDelta ?? 0) > 8) _closeDrawer();
+                        } else {
+                          if ((details.primaryDelta ?? 0) < -8) _closeDrawer();
+                        }
+                      },
+                      child: _buildDrawer(context, l10n, ref),
+                    ),
+                  ),
+              ],
             ),
           );
         },
@@ -452,7 +534,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         user: userModel,
         enrollment: enrollmentModel,
         school: school,
-        onMenuTap: () => Scaffold.of(context).openDrawer(),
+        onMenuTap: _openDrawer,
         onTap: _expandCard,
       ),
       loading: () => StudentCard(
@@ -460,7 +542,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         user: userModel,
         enrollment: enrollmentModel,
         school: null,
-        onMenuTap: () => Scaffold.of(context).openDrawer(),
+        onMenuTap: _openDrawer,
         onTap: _expandCard,
       ),
       error: (_, _) => StudentCard(
@@ -468,7 +550,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         user: userModel,
         enrollment: enrollmentModel,
         school: null,
-        onMenuTap: () => Scaffold.of(context).openDrawer(),
+        onMenuTap: _openDrawer,
         onTap: _expandCard,
       ),
     );
@@ -556,71 +638,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     AppLocalizations l10n,
     WidgetRef ref,
   ) {
-    return Drawer(
-      backgroundColor: Colors.transparent,
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.65),
-              border: Border(
-                right: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1,
-                ),
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.65),
+            border: Border(
+              right: BorderSide(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1,
               ),
             ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  const SizedBox(height: 24),
-                  _DrawerItem(
-                    icon: Icons.person_rounded,
-                    label: l10n.monProfil,
-                    onTap: () {
-                      setState(() => _isDrawerOpen = false);
-                      context.go('/profile');
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 24),
+                _DrawerItem(
+                  icon: Icons.person_rounded,
+                  label: l10n.monProfil,
+                  onTap: () {
+                    ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    context.go('/profile');
+                  },
+                ),
+                const SizedBox(height: 4),
+                _DrawerItem(
+                  icon: Icons.settings_rounded,
+                  label: l10n.settings,
+                  onTap: () {
+                    ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    context.go('/settings');
+                  },
+                ),
+                _DrawerItem(
+                  icon: Icons.contact_support_rounded,
+                  label: l10n.contactUs,
+                  onTap: () {
+                    ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    context.go('/contact');
+                  },
+                ),
+                _DrawerItem(
+                  icon: Icons.info_rounded,
+                  label: l10n.about,
+                  onTap: () {
+                    ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    context.go('/about');
+                  },
+                ),
+                const Spacer(),
+                // White Logout Button with Bounce
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: BouncingWrapper(
+                    shrinkScale: 0.94,
+                    onTap: () async {
+                      _closeDrawer();
+                      await ref.read(authProvider.notifier).signOut();
+                      if (context.mounted) {
+                        context.go('/login');
+                      }
                     },
-                  ),
-                  const SizedBox(height: 4),
-                  _DrawerItem(
-                    icon: Icons.settings_rounded,
-                    label: l10n.settings,
-                    onTap: () {
-                      setState(() => _isDrawerOpen = false);
-                      context.go('/settings');
-                    },
-                  ),
-                  _DrawerItem(
-                    icon: Icons.contact_support_rounded,
-                    label: l10n.contactUs,
-                    onTap: () {
-                      setState(() => _isDrawerOpen = false);
-                      context.go('/contact');
-                    },
-                  ),
-                  _DrawerItem(
-                    icon: Icons.info_rounded,
-                    label: l10n.about,
-                    onTap: () {
-                      setState(() => _isDrawerOpen = false);
-                      context.go('/about');
-                    },
-                  ),
-                  const Spacer(),
-                  // White Logout Button
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: GestureDetector(
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await ref.read(authProvider.notifier).signOut();
-                        if (context.mounted) {
-                          context.go('/login');
-                        }
-                      },
-                      child: Container(
+                    child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -663,8 +744,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

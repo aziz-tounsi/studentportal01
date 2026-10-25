@@ -10,6 +10,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/announcements_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/detail_modal_sheet.dart';
+import '../../widgets/bouncing_wrapper.dart';
+import '../../providers/nav_bar_provider.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/notifications_screen_skeleton.dart';
 
@@ -50,6 +52,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
   @override
   void dispose() {
+    if (_isSearching) {
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
     _searchController.dispose();
     _searchFocusNode.dispose();
     _animationController.dispose();
@@ -61,10 +66,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       _isSearching = !_isSearching;
       if (_isSearching) {
         _animationController.forward();
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _toggleSearch();
+          return true;
+        };
         Future.delayed(const Duration(milliseconds: 150), () {
           _searchFocusNode.requestFocus();
         });
       } else {
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
         _animationController.reverse();
         _searchController.clear();
         _searchQuery = '';
@@ -153,7 +163,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                         ),
                       ),
                       // Search button
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,
@@ -191,7 +203,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   child: Row(
                     children: [
                       // Cancel button
-                      GestureDetector(
+                      BouncingWrapper(
+                        shrinkScale: 0.86,
+                        hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
                           width: 44,
@@ -525,7 +539,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           },
           color: const Color(0xFFFF2D78),
           backgroundColor: Colors.white,
-          child: CustomScrollView(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_isSearching) _toggleSearch();
+            },
+            onHorizontalDragUpdate: (details) {
+              if (_isSearching) {
+                final isRtl = Directionality.of(context) == TextDirection.rtl;
+                if (isRtl) {
+                  if ((details.primaryDelta ?? 0) > 8) _toggleSearch();
+                } else {
+                  if ((details.primaryDelta ?? 0) < -8) _toggleSearch();
+                }
+              }
+            },
+            child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             slivers: [
               // Header
@@ -709,6 +738,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           ],
         ),
         ),
+        ),
       ),
     );
   }
@@ -749,7 +779,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
+      child: BouncingWrapper(
+        shrinkScale: 0.96,
         onTap: () => _showAnnouncementDetail(announcement),
         child: ClipRRect(
       borderRadius: BorderRadius.circular(28),
