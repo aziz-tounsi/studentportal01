@@ -429,10 +429,13 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                             ),
                           ],
                         ),
-                        child: Icon(
-                          isRtl ? Icons.arrow_forward_rounded : Icons.arrow_back_rounded,
-                          color: Colors.grey[700],
-                          size: 22,
+                        child: Transform.scale(
+                          scaleX: isRtl ? -1 : 1,
+                          child: Icon(
+                            Icons.arrow_back_rounded,
+                            color: Colors.grey[700],
+                            size: 22,
+                          ),
                         ),
                       ),
                     ),
@@ -519,9 +522,10 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                             ),
                             const SizedBox(height: 12),
                             Container(
+                              clipBehavior: Clip.antiAlias,
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(22),
                                 border: Border.all(
                                   color: const Color(0xFFE2E8F0),
                                   width: 1.2,
@@ -545,7 +549,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                 ),
                                 decoration: InputDecoration(
                                   filled: true,
-                                  fillColor: Colors.white,
+                                  fillColor: Colors.transparent,
                                   hintText: l10n.describeSuggestionHint,
                                   hintStyle: const TextStyle(
                                     color: Color(0xFF9CA3AF),

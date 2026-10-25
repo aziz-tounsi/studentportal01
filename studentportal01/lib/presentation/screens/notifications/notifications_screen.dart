@@ -1768,7 +1768,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       } else if (difference.inDays < 7) {
         return 'منذ ${difference.inDays} يوم';
       } else {
-        return DateFormat('d MMM', 'ar').format(time);
+        return ArabicTypography.toLatinDigits(DateFormat('d MMM', 'ar').format(time));
       }
     } else if (lang == 'en') {
       if (difference.inMinutes < 60) {

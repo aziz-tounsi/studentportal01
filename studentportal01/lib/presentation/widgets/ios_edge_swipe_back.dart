@@ -10,7 +10,8 @@ import '../screens/home/home_screen.dart';
 ///
 /// The gesture is strictly locked to the horizontal axis so that vertical scrolling
 /// cannot occur simultaneously. While dragging, the destination bottom page is
-/// displayed underneath with an iOS frosted glass blur.
+/// displayed underneath with an iOS frosted glass blur, starts slightly zoomed out,
+/// zooms in smoothly as you slide, and does a subtle micro-bounce as it surfaces to the top.
 class IosEdgeSwipeBack extends StatefulWidget {
   final Widget child;
   final Widget? backgroundPage;
@@ -30,9 +31,13 @@ class IosEdgeSwipeBack extends StatefulWidget {
 }
 
 class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _progressAnim;
+
+  // Subtle spring bounce controller for when the under-page becomes the main page
+  late AnimationController _bounceCtrl;
+  late Animation<double> _bounceAnim;
 
   double _progress = 0.0;
   bool _isDragging = false;
@@ -47,23 +52,44 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 220),
     );
     _animCtrl.addListener(() {
       setState(() {
         _progress = _progressAnim.value;
       });
     });
+
+    _bounceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+    _bounceAnim = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.025)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.025, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
+        weight: 55,
+      ),
+    ]).animate(_bounceCtrl);
+    _bounceCtrl.addListener(() {
+      setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _animCtrl.dispose();
+    _bounceCtrl.dispose();
     super.dispose();
   }
 
   void _onDragStart(DragStartDetails details, bool isRtl, double screenWidth) {
-    if (_animCtrl.isAnimating) return;
+    if (_animCtrl.isAnimating || _bounceCtrl.isAnimating) return;
     _startX = details.globalPosition.dx;
     _lastX = _startX;
     _lastTime = DateTime.now().millisecondsSinceEpoch;
@@ -103,12 +129,14 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     final passedDist = _progress >= 0.22;
 
     if (passedDist || flicked) {
-      // Animate completion and return
+      // Animate slide completion, trigger under-page micro bounce, and execute return
       _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
         CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
       _animCtrl.forward(from: 0.0).then((_) {
-        _executeReturn();
+        _bounceCtrl.forward(from: 0.0).then((_) {
+          _executeReturn();
+        });
       });
     } else {
       // Snap back to closed state
@@ -149,26 +177,35 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final screenWidth = MediaQuery.of(context).size.width;
 
+    // Zoomed out slightly at start (0.92), zooms smoothly to 1.0 as progress reaches 1.0,
+    // and micro-bounces (up to 1.025) as it surfaces to the top
+    final double underPageScale = (0.92 + (0.08 * _progress)) *
+        (_bounceCtrl.isAnimating ? _bounceAnim.value : 1.0);
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. Blurred bottom destination page underneath (visible only during swipe/animation)
-        if (_progress > 0.0) ...[
+        // 1. Blurred bottom destination page underneath (visible during swipe and bounce animation)
+        if (_progress > 0.0 || _bounceCtrl.isAnimating) ...[
           Positioned.fill(
             child: IgnorePointer(
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(
-                  sigmaX: 16.0 * (1.0 - (_progress * 0.3)),
-                  sigmaY: 16.0 * (1.0 - (_progress * 0.3)),
+              child: Transform.scale(
+                scale: underPageScale,
+                alignment: Alignment.center,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: (16.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 16.0),
+                    sigmaY: (16.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 16.0),
+                  ),
+                  child: widget.backgroundPage ?? const HomeScreen(),
                 ),
-                child: widget.backgroundPage ?? const HomeScreen(),
               ),
             ),
           ),
           Positioned.fill(
             child: Container(
               color: Colors.black.withValues(
-                alpha: 0.12 * (1.0 - _progress),
+                alpha: (0.12 * (1.0 - _progress)).clamp(0.0, 1.0),
               ),
             ),
           ),
@@ -196,7 +233,7 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                   )
                 : null,
             child: IgnorePointer(
-              ignoring: _isDragging || _animCtrl.isAnimating,
+              ignoring: _isDragging || _animCtrl.isAnimating || _bounceCtrl.isAnimating,
               child: widget.child,
             ),
           ),

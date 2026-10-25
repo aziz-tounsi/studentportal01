@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
+import '../theme/arabic_typography.dart';
 
 class AppLocalizations {
   final Locale locale;
@@ -2407,7 +2408,7 @@ class AppLocalizations {
     final lang = locale.languageCode;
     final timePart = DateFormat('HH:mm').format(dt);
     if (lang == 'ar') {
-      final datePart = DateFormat('d MMMM yyyy', 'ar').format(dt);
+      final datePart = ArabicTypography.toLatinDigits(DateFormat('d MMMM yyyy', 'ar').format(dt));
       return '$datePart على الساعة $timePart';
     } else if (lang == 'en') {
       final datePart = DateFormat('d MMMM yyyy', 'en').format(dt);

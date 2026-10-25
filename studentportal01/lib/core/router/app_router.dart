@@ -105,7 +105,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           ref.read(navBarHiddenProvider.notifier).state = false;
                           context.go('/');
                         }
-                      : null;
+                      : () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          } else if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/');
+                          }
+                        };
 
               if (isAIChat) {
                 return IosEdgeSwipeBack(

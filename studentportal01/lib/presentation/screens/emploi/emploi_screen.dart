@@ -1115,7 +1115,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
     if (isFuture) {
       final lang = Localizations.localeOf(context).languageCode;
       final formattedDate = startDate != null
-          ? DateFormat('d MMMM yyyy', lang).format(startDate)
+          ? ArabicTypography.toLatinDigits(DateFormat('d MMMM yyyy', lang).format(startDate))
           : null;
       title = l10n.upcomingSemester;
       subtitle = formattedDate != null

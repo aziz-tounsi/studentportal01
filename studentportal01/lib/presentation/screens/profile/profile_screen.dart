@@ -602,12 +602,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ],
             ),
             child: Center(
-              child: Icon(
-                isRtl
-                    ? Icons.arrow_forward_ios_rounded
-                    : Icons.arrow_back_ios_new_rounded,
-                size: 18,
-                color: const Color(0xFF1F2937),
+              child: Transform.scale(
+                scaleX: isRtl ? -1 : 1,
+                child: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 18,
+                  color: Color(0xFF1F2937),
+                ),
               ),
             ),
           ),

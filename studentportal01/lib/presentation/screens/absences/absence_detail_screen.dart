@@ -10,6 +10,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import '../../providers/auth_provider.dart';
 import '../../../data/models/absence_model.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 
 class AbsenceDetailData {
   final String subjectName;
@@ -284,7 +285,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Widget _buildHeader(BuildContext context, AbsenceDetailData d, double overallPct) {
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final isAr = Localizations.localeOf(context).languageCode == 'ar' ||
+        Directionality.of(context) == TextDirection.rtl;
     final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 24, 0),
@@ -314,12 +316,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ),
                 ],
               ),
-              child: Icon(
-                isRtl
-                    ? Icons.arrow_forward_rounded
-                    : Icons.arrow_back_rounded,
-                color: Colors.grey[700],
-                size: 22,
+              child: Transform.scale(
+                scaleX: isAr ? -1 : 1,
+                child: Icon(
+                  Icons.arrow_back_rounded,
+                  color: Colors.grey[700],
+                  size: 22,
+                ),
               ),
             ),
           ),
@@ -338,7 +341,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.5,
-                    fontFamily: isRtl ? GoogleFonts.cairo().fontFamily : null,
+                    fontFamily: isAr ? GoogleFonts.cairo().fontFamily : null,
                     color: _onSurface,
                   ),
                 ),
@@ -551,7 +554,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeOutCubic,
                               style: TextStyle(
-                                fontSize: 14,
+                                fontFamily: Localizations.localeOf(context).languageCode == 'ar'
+                                    ? GoogleFonts.cairo().fontFamily
+                                    : null,
+                                fontSize: Localizations.localeOf(context).languageCode == 'ar' ? 15 : 14,
                                 fontWeight: FontWeight.w700,
                                 color: _showWeekView ? Colors.grey.shade600 : Colors.white,
                               ),
@@ -569,7 +575,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeOutCubic,
                               style: TextStyle(
-                                fontSize: 14,
+                                fontFamily: Localizations.localeOf(context).languageCode == 'ar'
+                                    ? GoogleFonts.cairo().fontFamily
+                                    : null,
+                                fontSize: Localizations.localeOf(context).languageCode == 'ar' ? 15 : 14,
                                 fontWeight: FontWeight.w700,
                                 color: _showWeekView ? Colors.white : Colors.grey.shade600,
                               ),
@@ -592,7 +601,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   Widget _buildTimelinePanel(AbsenceDetailData d, Map<DateTime, List<AbsenceRecordModel>> absencesByDate) {
     final localeCode = Localizations.localeOf(context).languageCode;
-    final monthName = DateFormat('MMMM yyyy', localeCode).format(_currentMonth);
+    final rawMonth = DateFormat('MMMM yyyy', localeCode).format(_currentMonth);
+    final monthName = ArabicTypography.toLatinDigits(rawMonth);
 
     if (_showWeekView) {
       final startOfWeek = _currentMonth.add(Duration(days: _currentWeekIndex * 7));
@@ -613,11 +623,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildMonthHeader(
-              localeCode == 'ar'
-                  ? 'أسبوع ${DateFormat('dd/MM').format(weekStart)}'
-                  : (localeCode == 'en'
-                      ? 'Week of ${DateFormat('dd/MM').format(weekStart)}'
-                      : 'Semaine du ${DateFormat('dd/MM').format(weekStart)}'),
+              ArabicTypography.toLatinDigits(
+                localeCode == 'ar'
+                    ? 'أسبوع ${DateFormat('dd/MM').format(weekStart)}'
+                    : (localeCode == 'en'
+                        ? 'Week of ${DateFormat('dd/MM').format(weekStart)}'
+                        : 'Semaine du ${DateFormat('dd/MM').format(weekStart)}'),
+              ),
               onPrev: () => setState(() => _currentWeekIndex = (_currentWeekIndex - 1).clamp(0, 52)),
               onNext: () => setState(() => _currentWeekIndex = (_currentWeekIndex + 1).clamp(0, 52)),
             ),

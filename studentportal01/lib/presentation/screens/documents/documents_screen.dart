@@ -882,7 +882,7 @@ class _DocumentCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            dateFormat.format(document.createdAt),
+                            ArabicTypography.toLatinDigits(dateFormat.format(document.createdAt)),
                             style: ArabicTypography.bodyStyle(
                               context,
                               fontSize: 11,
@@ -918,12 +918,12 @@ class _DocumentCard extends StatelessWidget {
                 ),
                 
                 const SizedBox(width: 8),
-                // Normal grey arrow without square background
+                // Normal grey arrow pointing left in Arabic, right in Latin
                 Icon(
                   ArabicTypography.isArabic(context)
-                      ? Icons.arrow_back_ios_new_rounded
-                      : Icons.arrow_forward_ios_rounded,
-                  size: 14,
+                      ? Icons.chevron_left_rounded
+                      : Icons.chevron_right_rounded,
+                  size: 18,
                   color: Colors.grey[400],
                 ),
               ],
@@ -1075,7 +1075,7 @@ class _DocumentCard extends StatelessWidget {
           _DetailRow(
             icon: Icons.calendar_today_outlined,
             label: l10n.dateLabel,
-            value: dateFormat.format(document.createdAt),
+            value: ArabicTypography.toLatinDigits(dateFormat.format(document.createdAt)),
           ),
           if (document.fileSize != null)
             _DetailRow(

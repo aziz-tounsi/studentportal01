@@ -1487,7 +1487,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
       return '${diff.inDays}j';
     } else {
       if (lang == 'ar') {
-        return DateFormat('d MMMM yyyy', 'ar').format(date);
+        return ArabicTypography.toLatinDigits(DateFormat('d MMMM yyyy', 'ar').format(date));
       } else if (lang == 'en') {
         return '\u200E${DateFormat('d MMMM yyyy', 'en').format(date)}\u200E';
       } else {
