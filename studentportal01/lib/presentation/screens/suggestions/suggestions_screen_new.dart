@@ -678,12 +678,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                color: const Color(0xFF10B981).withValues(alpha: 0.14),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
-                                  width: 1,
-                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,

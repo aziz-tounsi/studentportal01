@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../widgets/contact_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../providers/nav_bar_provider.dart';
+import '../../widgets/contact_skeleton.dart';
 
 // Provider to fetch contact info from Supabase
 final contactInfoProvider = FutureProvider<Map<String, dynamic>>((ref) async {
@@ -125,7 +127,19 @@ class ContactScreen extends ConsumerWidget {
                         return Row(
                           children: [
                             GestureDetector(
-                              onTap: () => Navigator.pop(context),
+                              onTap: () {
+                                final fromAIChat = ref.read(navigatedFromAIChatProvider);
+                                if (fromAIChat) {
+                                  ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                                  context.go('/ai-chat');
+                                } else if (Navigator.of(context).canPop()) {
+                                  Navigator.of(context).pop();
+                                } else if (context.canPop()) {
+                                  context.pop();
+                                } else {
+                                  context.go('/');
+                                }
+                              },
                               child: Container(
                                 width: 44,
                                 height: 44,

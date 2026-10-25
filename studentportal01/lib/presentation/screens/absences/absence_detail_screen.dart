@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../../data/models/absence_model.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../providers/nav_bar_provider.dart';
 
 class AbsenceDetailData {
   final String subjectName;
@@ -294,7 +295,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         children: [
           GestureDetector(
             onTap: () {
-              if (Navigator.of(context).canPop()) {
+              final fromAIChat = ref.read(navigatedFromAIChatProvider);
+              if (fromAIChat) {
+                ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                context.go('/ai-chat');
+              } else if (Navigator.of(context).canPop()) {
                 Navigator.of(context).pop();
               } else if (context.canPop()) {
                 context.pop();

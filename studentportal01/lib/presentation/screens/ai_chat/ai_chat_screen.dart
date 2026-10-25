@@ -1217,38 +1217,12 @@ I have **complete** access to your academic data — grades, timetable, absences
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
-                  // Send button (on the right)
-                  GestureDetector(
-                    onTap: (_inputController.text.trim().isNotEmpty ||
+                  // Bouncing Send button (on the right)
+                  _BouncingSendButton(
+                    enabled: (_inputController.text.trim().isNotEmpty ||
                                 _pendingFileText != null) &&
-                            !_isTyping
-                        ? () => _sendMessage(_inputController.text)
-                        : null,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: (_inputController.text.trim().isNotEmpty ||
-                                    _pendingFileText != null) &&
-                                !_isTyping
-                            ? _pink
-                            : const Color(0xFFCBD5E1),
-                        boxShadow: (_inputController.text.trim().isNotEmpty ||
-                                    _pendingFileText != null) &&
-                                !_isTyping
-                            ? [
-                                BoxShadow(
-                                  color: _pink.withValues(alpha: 0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: const Icon(Icons.send, size: 18, color: Colors.white),
-                    ),
+                            !_isTyping,
+                    onTap: () => _sendMessage(_inputController.text),
                   ),
                 ],
               ),
@@ -1941,7 +1915,7 @@ class _MessageBubble extends StatelessWidget {
                   ProviderScope.containerOf(context)
                       .read(navigatedFromAIChatProvider.notifier)
                       .state = true;
-                  context.push(act.route);
+                  context.go(act.route);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2643,7 +2617,7 @@ class _MarkdownText extends StatelessWidget {
                 ProviderScope.containerOf(context)
                     .read(navigatedFromAIChatProvider.notifier)
                     .state = true;
-                context.push(linkTarget);
+                context.go(linkTarget);
               }
             },
         ));
@@ -2940,6 +2914,104 @@ class _AnimatedSuggestionChipState extends State<_AnimatedSuggestionChip> {
               fontWeight: FontWeight.w600,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Bouncing Send Button ───────────────────────────────────────────────────
+class _BouncingSendButton extends StatefulWidget {
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  const _BouncingSendButton({
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  State<_BouncingSendButton> createState() => _BouncingSendButtonState();
+}
+
+class _BouncingSendButtonState extends State<_BouncingSendButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 360),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.82).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+        reverseCurve: Curves.elasticOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails _) {
+    if (widget.enabled) {
+      _controller.forward();
+    }
+  }
+
+  void _handleTapUp(TapUpDetails _) {
+    if (widget.enabled) {
+      _controller.reverse();
+      widget.onTap?.call();
+    }
+  }
+
+  void _handleTapCancel() {
+    if (widget.enabled) {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) => Transform.scale(
+          scale: _scaleAnimation.value,
+          child: child,
+        ),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.enabled ? _pink : const Color(0xFFCBD5E1),
+            boxShadow: widget.enabled
+                ? [
+                    BoxShadow(
+                      color: _pink.withValues(alpha: 0.32),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: const Icon(Icons.send, size: 18, color: Colors.white),
         ),
       ),
     );

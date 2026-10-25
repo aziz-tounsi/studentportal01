@@ -17,13 +17,15 @@ class IosEdgeSwipeBack extends StatefulWidget {
   final Widget? backgroundPage;
   final VoidCallback? onReturn;
   final double edgeThreshold;
+  final Gradient? backgroundGradient;
 
   const IosEdgeSwipeBack({
     super.key,
     required this.child,
     this.backgroundPage,
     this.onReturn,
-    this.edgeThreshold = 36.0,
+    this.edgeThreshold = 44.0,
+    this.backgroundGradient,
   });
 
   @override
@@ -153,11 +155,32 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     // Zoomed out slightly at start (0.92), zooms smoothly to 1.0 as progress reaches 1.0
     final double underPageScale = 0.92 + (0.08 * _progress);
 
+    const defaultHomeGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color(0xFFE8D5F2),
+        Color(0xFFD4C4E8),
+        Color(0xFFC9D6F0),
+        Color(0xFFE0EAF5),
+        Color(0xFFF0F5FA),
+      ],
+      stops: [0.0, 0.25, 0.5, 0.75, 1.0],
+    );
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. Blurred bottom destination page underneath (visible during swipe animation)
+        // 1. App background gradient layer: fills the outer margin around the zoomed-out underpage
+        // completely eliminating any black/grey edge areas during swipe gesture
         if (_progress > 0.0) ...[
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: widget.backgroundGradient ?? defaultHomeGradient,
+              ),
+            ),
+          ),
           Positioned.fill(
             child: IgnorePointer(
               child: Transform.scale(
@@ -165,18 +188,11 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                 alignment: Alignment.center,
                 child: ImageFiltered(
                   imageFilter: ImageFilter.blur(
-                    sigmaX: (16.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 16.0),
-                    sigmaY: (16.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 16.0),
+                    sigmaX: (14.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 14.0),
+                    sigmaY: (14.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 14.0),
                   ),
                   child: widget.backgroundPage ?? const HomeScreen(),
                 ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(
-                alpha: (0.12 * (1.0 - _progress)).clamp(0.0, 1.0),
               ),
             ),
           ),
@@ -194,7 +210,7 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(
-                          alpha: 0.22 * (1.0 - _progress),
+                          alpha: 0.18 * (1.0 - _progress),
                         ),
                         blurRadius: 28,
                         spreadRadius: 2,
@@ -210,7 +226,7 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
           ),
         ),
 
-        // 3. Edge Swipe Detector Strip (consumes touches on the edge to prevent vertical scroll)
+        // 3. Edge Swipe Detector Strip (consumes touches on the edge to prevent vertical/child gesture conflicts)
         Positioned(
           top: 0,
           bottom: 0,
@@ -218,7 +234,7 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
           right: isRtl ? 0 : null,
           width: _isDragging ? screenWidth : widget.edgeThreshold,
           child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
+            behavior: HitTestBehavior.opaque,
             onHorizontalDragStart: (details) =>
                 _onDragStart(details, isRtl, screenWidth),
             onHorizontalDragUpdate: (details) =>

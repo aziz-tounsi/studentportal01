@@ -8,6 +8,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../providers/nav_bar_provider.dart';
 
 const Color _navPink = Color(0xFFFF2D78);
 
@@ -344,7 +345,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       return Row(
                         children: [
                           GestureDetector(
-                            onTap: () => Navigator.pop(context),
+                            onTap: () {
+                              final fromAIChat = ref.read(navigatedFromAIChatProvider);
+                              if (fromAIChat) {
+                                ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                                context.go('/ai-chat');
+                              } else if (Navigator.of(context).canPop()) {
+                                Navigator.of(context).pop();
+                              } else if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go('/');
+                              }
+                            },
                             child: Container(
                               width: 44,
                               height: 44,

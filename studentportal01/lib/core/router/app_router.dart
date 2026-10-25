@@ -95,11 +95,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
 
+              const homeGradient = LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFE8D5F2),
+                  Color(0xFFD4C4E8),
+                  Color(0xFFC9D6F0),
+                  Color(0xFFE0EAF5),
+                  Color(0xFFF0F5FA),
+                ],
+                stops: [0.0, 0.25, 0.5, 0.75, 1.0],
+              );
+
+              const aiChatGradient = LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFF8F0FC),
+                  Color(0xFFF0E6F8),
+                  Color(0xFFEAF0FA),
+                  Color(0xFFF4F8FC),
+                  Color(0xFFFAFCFD),
+                ],
+                stops: [0.0, 0.25, 0.5, 0.75, 1.0],
+              );
+
               final backgroundWidget = isWriteSuggestion
                   ? const SuggestionsScreen()
                   : fromAIChat
                       ? const AIChatScreen()
                       : const HomeScreen();
+
+              final backgroundGradient = fromAIChat ? aiChatGradient : homeGradient;
 
               final onReturnCallback = isWriteSuggestion
                   ? () => context.go('/suggestions')
@@ -133,6 +161,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 return IosEdgeSwipeBack(
                   key: const ValueKey('/ai-chat'),
                   backgroundPage: const HomeScreen(),
+                  backgroundGradient: homeGradient,
                   onReturn: onReturnCallback,
                   child: child,
                 );
@@ -145,6 +174,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     : IosEdgeSwipeBack(
                         key: ValueKey(state.matchedLocation),
                         backgroundPage: backgroundWidget,
+                        backgroundGradient: backgroundGradient,
                         onReturn: onReturnCallback,
                         child: child,
                       ),
@@ -290,10 +320,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final offeringId = state.pathParameters['offeringId']!;
           return NoTransitionPage(
-            child: IosEdgeSwipeBack(
-              backgroundPage: const AbsencesScreen(),
-              onReturn: () => context.go('/absences'),
-              child: AbsenceDetailScreen(subjectOfferingId: offeringId),
+            child: Consumer(
+              builder: (context, ref, _) {
+                final fromAIChat = ref.watch(navigatedFromAIChatProvider);
+                return IosEdgeSwipeBack(
+                  backgroundPage:
+                      fromAIChat ? const AIChatScreen() : const AbsencesScreen(),
+                  backgroundGradient: fromAIChat
+                      ? const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFF8F0FC),
+                            Color(0xFFF0E6F8),
+                            Color(0xFFEAF0FA),
+                            Color(0xFFF4F8FC),
+                            Color(0xFFFAFCFD),
+                          ],
+                          stops: [0.0, 0.25, 0.5, 0.75, 1.0],
+                        )
+                      : null,
+                  onReturn: () {
+                    if (fromAIChat) {
+                      ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                      context.go('/ai-chat');
+                    } else {
+                      context.go('/absences');
+                    }
+                  },
+                  child: AbsenceDetailScreen(subjectOfferingId: offeringId),
+                );
+              },
             ),
           );
         },

@@ -579,7 +579,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     icon: Icons.person_rounded,
                     label: l10n.monProfil,
                     onTap: () {
-                      context.push('/profile');
+                      setState(() => _isDrawerOpen = false);
+                      context.go('/profile');
                     },
                   ),
                   const SizedBox(height: 4),
@@ -587,21 +588,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     icon: Icons.settings_rounded,
                     label: l10n.settings,
                     onTap: () {
-                      context.push('/settings');
+                      setState(() => _isDrawerOpen = false);
+                      context.go('/settings');
                     },
                   ),
                   _DrawerItem(
                     icon: Icons.contact_support_rounded,
                     label: l10n.contactUs,
                     onTap: () {
-                      context.push('/contact');
+                      setState(() => _isDrawerOpen = false);
+                      context.go('/contact');
                     },
                   ),
                   _DrawerItem(
                     icon: Icons.info_rounded,
                     label: l10n.about,
                     onTap: () {
-                      context.push('/about');
+                      setState(() => _isDrawerOpen = false);
+                      context.go('/about');
                     },
                   ),
                   const Spacer(),
