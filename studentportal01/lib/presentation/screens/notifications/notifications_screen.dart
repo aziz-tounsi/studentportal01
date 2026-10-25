@@ -1420,7 +1420,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                               runSpacing: 8,
                               children: [
                                 if (announcement.isPinned)
-                                  _buildBadge(l10n.pinnedLabel, Colors.orange, Icons.push_pin),
+                                  _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
                                 if (announcement.isImportant)
                                   _buildBadge(
                                     l10n.importantLabel,

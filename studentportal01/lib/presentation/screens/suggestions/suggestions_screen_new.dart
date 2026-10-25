@@ -671,12 +671,52 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (hasDocumentAttachment) ...[
-                        _buildBadge(
-                          l10n.attachment,
-                          Colors.purple,
-                        ),
-                      ],
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (suggestion.replies.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.mark_email_read_rounded,
+                                    size: 13,
+                                    color: Color(0xFF10B981),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    l10n.locale.languageCode == 'ar'
+                                        ? 'تم الرد'
+                                        : (l10n.locale.languageCode == 'en' ? 'Replied' : 'Répondu'),
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF10B981),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          if (hasDocumentAttachment) ...[
+                            _buildBadge(
+                              l10n.attachment,
+                              Colors.purple,
+                            ),
+                          ],
+                        ],
+                      ),
                       Text(
                         _getRelativeTime(suggestion.createdAt, l10n.locale.languageCode),
                         style: TextStyle(

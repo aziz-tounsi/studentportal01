@@ -307,38 +307,26 @@ class AboutScreen extends ConsumerWidget {
                       ),
                       child: Column(
                         children: [
-                          // Developer Badge Pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  const Color(0xFFFF2D78).withValues(alpha: 0.1),
-                                  const Color(0xFFFF5CA0).withValues(alpha: 0.1),
-                                ],
+                          // Developer Text
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.code_rounded,
+                                size: 15,
+                                color: Color(0xFFFF2D78),
                               ),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.code_rounded,
-                                  size: 15,
+                              const SizedBox(width: 6),
+                              Text(
+                                l10n.applicationDeveloper.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
                                   color: Color(0xFFFF2D78),
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  l10n.applicationDeveloper.toUpperCase(),
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.6,
-                                    color: Color(0xFFFF2D78),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 18),
 

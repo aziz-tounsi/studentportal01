@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../providers/announcements_provider.dart';
+import '../providers/nav_bar_provider.dart';
 
 const Color _pink = Color(0xFFFF2D78);
 
@@ -128,6 +129,7 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     }
 
     // Navigating to a different route
+    ref.read(navigatedFromAIChatProvider.notifier).state = false;
     setState(() {
       _fromIndex = _selectedIndex;
       _selectedIndex = index;

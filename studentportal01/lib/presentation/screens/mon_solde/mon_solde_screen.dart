@@ -1501,13 +1501,6 @@ class _GlassyCategoryCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: cat.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cat.color.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Icon(cat.icon, color: cat.color, size: 24),
               ),

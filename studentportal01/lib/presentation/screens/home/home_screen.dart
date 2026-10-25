@@ -397,13 +397,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           );
 
-          if (_isDrawerOpen) {
-            return ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: bodyStack,
-            );
-          }
-          return bodyStack;
+          return AnimatedScale(
+            scale: _isDrawerOpen ? 0.93 : 1.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(_isDrawerOpen ? 24 : 0),
+                boxShadow: _isDrawerOpen
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: _isDrawerOpen ? 10.0 : 0.0,
+                  sigmaY: _isDrawerOpen ? 10.0 : 0.0,
+                ),
+                child: bodyStack,
+              ),
+            ),
+          );
         },
       ),
     );

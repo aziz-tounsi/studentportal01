@@ -89,6 +89,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return Consumer(
             builder: (context, ref, _) {
               final hideNavBar = ref.watch(navBarHiddenProvider);
+              final fromAIChat = ref.watch(navigatedFromAIChatProvider);
               final isHome = state.matchedLocation == '/';
               final isAIChat = state.matchedLocation == '/ai-chat';
               final isWriteSuggestion =
@@ -96,7 +97,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
               final backgroundWidget = isWriteSuggestion
                   ? const SuggestionsScreen()
-                  : const HomeScreen();
+                  : fromAIChat
+                      ? const AIChatScreen()
+                      : const HomeScreen();
 
               final onReturnCallback = isWriteSuggestion
                   ? () => context.go('/suggestions')
@@ -105,15 +108,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           ref.read(navBarHiddenProvider.notifier).state = false;
                           context.go('/');
                         }
-                      : () {
-                          if (Navigator.of(context).canPop()) {
-                            Navigator.of(context).pop();
-                          } else if (context.canPop()) {
-                            context.pop();
-                          } else {
-                            context.go('/');
-                          }
-                        };
+                      : fromAIChat
+                          ? () {
+                              ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                              if (Navigator.of(context).canPop()) {
+                                Navigator.of(context).pop();
+                              } else if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go('/ai-chat');
+                              }
+                            }
+                          : () {
+                              if (Navigator.of(context).canPop()) {
+                                Navigator.of(context).pop();
+                              } else if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go('/');
+                              }
+                            };
 
               if (isAIChat) {
                 return IosEdgeSwipeBack(

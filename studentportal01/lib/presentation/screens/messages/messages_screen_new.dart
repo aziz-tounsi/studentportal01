@@ -1407,7 +1407,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                             runSpacing: 8,
                             children: [
                               if (message.isPinned)
-                                _buildBadge(l10n.pinnedLabel, Colors.orange, Icons.push_pin),
+                                _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
                               if (message.isImportant)
                                 _buildBadge(
                                   l10n.importantLabel,

@@ -308,42 +308,45 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     final selectedSemester = ref.watch(docsSemesterProvider);
     final documentsAsync = ref.watch(documentsProvider(selectedSemester));
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _gradientColors,
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: _gradientColors,
+          ),
         ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _buildHeader(l10n),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: DynamicSemesterNav(
-                selectedSemesterNumber: selectedSemester,
-                accentColor: const Color(0xFF6B5CE7),
-                secondaryColor: const Color(0xFF8B5CF6),
-                onChanged: (v) {
-                  ref.read(docsSemesterProvider.notifier).state = v;
-                  setState(() {
-                    _selectedCategory = null;
-                  });
-                },
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _buildHeader(l10n),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: DynamicSemesterNav(
+                  selectedSemesterNumber: selectedSemester,
+                  accentColor: const Color(0xFF6B5CE7),
+                  secondaryColor: const Color(0xFF8B5CF6),
+                  onChanged: (v) {
+                    ref.read(docsSemesterProvider.notifier).state = v;
+                    setState(() {
+                      _selectedCategory = null;
+                    });
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: documentsAsync.when(
-                data: (documents) => _buildContent(documents, l10n, selectedSemester),
-                loading: () => _buildLoadingState(l10n),
-                error: (error, stack) => _buildErrorState(l10n),
+              const SizedBox(height: 12),
+              Expanded(
+                child: documentsAsync.when(
+                  data: (documents) => _buildContent(documents, l10n, selectedSemester),
+                  loading: () => _buildLoadingState(l10n),
+                  error: (error, stack) => _buildErrorState(l10n),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

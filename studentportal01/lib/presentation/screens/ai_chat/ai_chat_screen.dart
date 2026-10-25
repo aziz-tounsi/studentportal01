@@ -14,7 +14,6 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../../data/services/ai_data_provider.dart';
 import '../../../data/services/ai_service.dart';
 import '../../providers/nav_bar_provider.dart';
-import '../../widgets/ios_loader.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const Color _pink = Color(0xFFFF2D78);
@@ -215,7 +214,6 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   final FocusNode _inputFocus = FocusNode();
 
   bool _isTyping = false;
-  bool _isLoadingData = false;
 
   // Attach modal
   bool _showAttachModal = false;
@@ -272,16 +270,12 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
   Future<void> _initAI() async {
     if (!mounted) return;
-    setState(() => _isLoadingData = true);
     try {
       // Pre-fetch snapshot in background (will be ready when first message sent)
       final snapshot = await ref.read(studentAISnapshotProvider.future);
       _cachedSnapshot = snapshot;
     } catch (_) {}
     if (!mounted) return;
-    setState(() {
-      _isLoadingData = false;
-    });
     _addWelcome();
   }
 
@@ -772,32 +766,36 @@ I have **complete** access to your academic data — grades, timetable, absences
                       ),
 
                       // Messages List - reverse: true anchors newest messages right above input bar
+                      // Wrapped in LTR Directionality so Arabic chat is never mirrored (keeps same layout as Latin)
                       Expanded(
                         child: ClipRect(
-                          child: ScrollConfiguration(
-                            behavior: const ScrollBehavior().copyWith(
-                              overscroll: false,
-                              physics: const BouncingScrollPhysics(
-                                parent: AlwaysScrollableScrollPhysics(),
-                              ),
-                            ),
-                            child: GestureDetector(
-                              onTap: () => FocusScope.of(context).unfocus(),
-                              behavior: HitTestBehavior.translucent,
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                reverse: true,
+                          child: Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: ScrollConfiguration(
+                              behavior: const ScrollBehavior().copyWith(
+                                overscroll: false,
                                 physics: const BouncingScrollPhysics(
                                   parent: AlwaysScrollableScrollPhysics(),
                                 ),
-                                keyboardDismissBehavior:
-                                    ScrollViewKeyboardDismissBehavior.onDrag,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
+                              ),
+                              child: GestureDetector(
+                                onTap: () => FocusScope.of(context).unfocus(),
+                                behavior: HitTestBehavior.translucent,
+                                child: ListView.builder(
+                                  controller: _scrollController,
+                                  reverse: true,
+                                  physics: const BouncingScrollPhysics(
+                                    parent: AlwaysScrollableScrollPhysics(),
+                                  ),
+                                  keyboardDismissBehavior:
+                                      ScrollViewKeyboardDismissBehavior.onDrag,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  itemCount: listItems.length,
+                                  itemBuilder: (context, index) => listItems[index],
                                 ),
-                                itemCount: listItems.length,
-                                itemBuilder: (context, index) => listItems[index],
                               ),
                             ),
                           ),
@@ -812,9 +810,14 @@ I have **complete** access to your academic data — grades, timetable, absences
                           child: _buildAttachmentPreview(),
                         ),
 
-                      // Bottom Input Bar - direct child of Column
+                      // Bottom Input Bar - direct child of Column with iOS keyboard clearance
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          2,
+                          16,
+                          MediaQuery.of(context).viewInsets.bottom > 0 ? 12 : 6,
+                        ),
                         child: Center(
                           child: Container(
                             constraints:
@@ -990,9 +993,7 @@ I have **complete** access to your academic data — grades, timetable, absences
                       Text(
                         _isTyping
                             ? l10n.translate('ai_thinking')
-                            : _isLoadingData
-                                ? l10n.loading
-                                : l10n.translate('ai_assistant_role'),
+                            : l10n.translate('ai_assistant_role'),
                         style: ArabicTypography.bodyStyle(
                           context,
                           fontSize: 11.5,
@@ -1003,35 +1004,6 @@ I have **complete** access to your academic data — grades, timetable, absences
                     ],
                   ),
                 ),
-                // Refresh data button
-                GestureDetector(
-                  onTap: _isLoadingData
-                      ? null
-                      : () async {
-                          setState(() => _isLoadingData = true);
-                          try {
-                            _cachedSnapshot =
-                                await ref.refresh(studentAISnapshotProvider.future);
-                          } catch (_) {}
-                          if (mounted) setState(() => _isLoadingData = false);
-                        },
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFF1F5F9).withValues(alpha: 0.5),
-                    ),
-                    child: _isLoadingData
-                        ? const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: IosLoader.small(size: 16, color: _pink),
-                          )
-                        : const Icon(Icons.refresh_rounded,
-                            color: Color(0xFF64748B), size: 18),
-                  ),
-                ),
-                const SizedBox(width: 6),
                 // History
                 GestureDetector(
                   onTap: () {
@@ -1275,12 +1247,7 @@ I have **complete** access to your academic data — grades, timetable, absences
                               ]
                             : null,
                       ),
-                      child: _isTyping
-                          ? const IosLoader.small(size: 18, color: Colors.white)
-                          : Transform.scale(
-                              scaleX: isRtl ? -1 : 1,
-                              child: const Icon(Icons.send, size: 18, color: Colors.white),
-                            ),
+                      child: const Icon(Icons.send, size: 18, color: Colors.white),
                     ),
                   ),
                 ],
@@ -1867,8 +1834,8 @@ class _MessageBubble extends StatelessWidget {
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? (isRtl ? 4 : 20) : (isRtl ? 20 : 5)),
-                  bottomRight: Radius.circular(isUser ? (isRtl ? 20 : 4) : (isRtl ? 5 : 20)),
+                  bottomLeft: Radius.circular(isUser ? 20 : 5),
+                  bottomRight: Radius.circular(isUser ? 4 : 20),
                 ),
                 border: isUser ? null : Border.all(color: const Color(0xFFE8ECF1)),
                 boxShadow: isUser
@@ -1970,7 +1937,12 @@ class _MessageBubble extends StatelessWidget {
             runSpacing: 8,
             children: actions.take(3).map((act) {
               return GestureDetector(
-                onTap: () => context.push(act.route),
+                onTap: () {
+                  ProviderScope.containerOf(context)
+                      .read(navigatedFromAIChatProvider.notifier)
+                      .state = true;
+                  context.push(act.route);
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
@@ -2668,6 +2640,9 @@ class _MarkdownText extends StatelessWidget {
           recognizer: TapGestureRecognizer()
             ..onTap = () {
               if (linkTarget.startsWith('/')) {
+                ProviderScope.containerOf(context)
+                    .read(navigatedFromAIChatProvider.notifier)
+                    .state = true;
                 context.push(linkTarget);
               }
             },
