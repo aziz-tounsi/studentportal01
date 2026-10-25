@@ -520,8 +520,19 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                             const SizedBox(height: 12),
                             Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF9FAFB),
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF64748B).withValues(alpha: 0.06),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
                               child: TextField(
                                 controller: _contentController,
@@ -534,7 +545,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                 ),
                                 decoration: InputDecoration(
                                   filled: true,
-                                  fillColor: Colors.transparent,
+                                  fillColor: Colors.white,
                                   hintText: l10n.describeSuggestionHint,
                                   hintStyle: const TextStyle(
                                     color: Color(0xFF9CA3AF),

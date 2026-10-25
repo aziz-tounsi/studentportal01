@@ -1,20 +1,28 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../screens/home/home_screen.dart';
 
 /// Wraps a page with native iOS-style interactive edge-swipe-to-return gesture.
 ///
 /// In LTR (Latin: English, French): sliding from the left edge towards right pops the page.
 /// In RTL (Arabic): sliding from the right edge towards left pops the page.
+///
+/// The gesture is strictly locked to the horizontal axis so that vertical scrolling
+/// cannot occur simultaneously. While dragging, the destination bottom page is
+/// displayed underneath with an iOS frosted glass blur.
 class IosEdgeSwipeBack extends StatefulWidget {
   final Widget child;
+  final Widget? backgroundPage;
   final VoidCallback? onReturn;
   final double edgeThreshold;
 
   const IosEdgeSwipeBack({
     super.key,
     required this.child,
+    this.backgroundPage,
     this.onReturn,
-    this.edgeThreshold = 38.0,
+    this.edgeThreshold = 36.0,
   });
 
   @override
@@ -27,11 +35,9 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
   late Animation<double> _progressAnim;
 
   double _progress = 0.0;
-  bool _isEdgeTouch = false;
   bool _isDragging = false;
 
   double _startX = 0.0;
-  double _startY = 0.0;
   double _lastX = 0.0;
   int _lastTime = 0;
   double _velocity = 0.0; // px / ms
@@ -41,7 +47,7 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 240),
     );
     _animCtrl.addListener(() {
       setState(() {
@@ -56,34 +62,20 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     super.dispose();
   }
 
-  void _onPointerDown(PointerDownEvent ev, bool isRtl, double screenWidth) {
+  void _onDragStart(DragStartDetails details, bool isRtl, double screenWidth) {
     if (_animCtrl.isAnimating) return;
-
-    final x = ev.position.dx;
-    final isEdge = isRtl
-        ? (x >= screenWidth - widget.edgeThreshold)
-        : (x <= widget.edgeThreshold);
-
-    if (isEdge) {
-      _isEdgeTouch = true;
-      _isDragging = false;
-      _startX = x;
-      _startY = ev.position.dy;
-      _lastX = x;
-      _lastTime = DateTime.now().millisecondsSinceEpoch;
-      _velocity = 0.0;
-      _progress = 0.0;
-    } else {
-      _isEdgeTouch = false;
-    }
+    _startX = details.globalPosition.dx;
+    _lastX = _startX;
+    _lastTime = DateTime.now().millisecondsSinceEpoch;
+    _velocity = 0.0;
+    _isDragging = true;
+    _progress = 0.0;
+    setState(() {});
   }
 
-  void _onPointerMove(PointerMoveEvent ev, bool isRtl, double screenWidth) {
-    if (!_isEdgeTouch) return;
-
-    final currentX = ev.position.dx;
-    final currentY = ev.position.dy;
-
+  void _onDragUpdate(DragUpdateDetails details, bool isRtl, double screenWidth) {
+    if (!_isDragging) return;
+    final currentX = details.globalPosition.dx;
     final now = DateTime.now().millisecondsSinceEpoch;
     final dt = now - _lastTime;
     if (dt > 0) {
@@ -92,65 +84,46 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     _lastX = currentX;
     _lastTime = now;
 
-    final dx = currentX - _startX;
-    final dy = (currentY - _startY).abs();
-
-    if (!_isDragging) {
-      // If predominantly vertical movement, ignore as normal page scrolling
-      if (dy > dx.abs() && dy > 8) {
-        _isEdgeTouch = false;
-        return;
-      }
-
-      // Check if moving in valid return direction
-      final isValidDirection = isRtl ? (dx < -6) : (dx > 6);
-      if (isValidDirection) {
-        _isDragging = true;
-      }
-    }
-
-    if (_isDragging) {
-      final dragDist = isRtl ? (_startX - currentX) : (currentX - _startX);
-      setState(() {
-        _progress = (dragDist / screenWidth).clamp(0.0, 1.0);
-      });
-    }
+    // In LTR: drag from left towards right (currentX - _startX)
+    // In RTL: drag from right towards left (_startX - currentX)
+    final dragDist = isRtl ? (_startX - currentX) : (currentX - _startX);
+    setState(() {
+      _progress = (dragDist / screenWidth).clamp(0.0, 1.0);
+    });
   }
 
-  void _onPointerUp(PointerUpEvent ev, bool isRtl) {
-    if (!_isEdgeTouch) return;
-    _isEdgeTouch = false;
-
+  void _onDragEnd(DragEndDetails details, bool isRtl) {
     if (!_isDragging) return;
     _isDragging = false;
 
-    // Check if threshold or velocity passed
-    final passedDist = _progress >= 0.25;
-    final flicked = isRtl ? (_velocity < -0.28) : (_velocity > 0.28);
+    final primaryVel = details.primaryVelocity ?? 0.0;
+    final flicked = isRtl
+        ? (primaryVel < -280 || _velocity < -0.28)
+        : (primaryVel > 280 || _velocity > 0.28);
+    final passedDist = _progress >= 0.22;
 
     if (passedDist || flicked) {
-      // Animate remaining distance to complete return
+      // Animate completion and return
       _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
-        CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutQuad),
+        CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
       _animCtrl.forward(from: 0.0).then((_) {
         _executeReturn();
       });
     } else {
-      // Snap back to 0 (cancel return)
+      // Snap back to closed state
       _progressAnim = Tween<double>(begin: _progress, end: 0.0).animate(
-        CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutQuad),
+        CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
       _animCtrl.forward(from: 0.0);
     }
   }
 
-  void _onPointerCancel(PointerCancelEvent ev) {
+  void _onDragCancel() {
     if (_isDragging) {
       _isDragging = false;
-      _isEdgeTouch = false;
       _progressAnim = Tween<double>(begin: _progress, end: 0.0).animate(
-        CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutQuad),
+        CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
       _animCtrl.forward(from: 0.0);
     }
@@ -176,49 +149,77 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final screenWidth = MediaQuery.of(context).size.width;
 
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (ev) => _onPointerDown(ev, isRtl, screenWidth),
-      onPointerMove: (ev) => _onPointerMove(ev, isRtl, screenWidth),
-      onPointerUp: (ev) => _onPointerUp(ev, isRtl),
-      onPointerCancel: _onPointerCancel,
-      child: Stack(
-        children: [
-          // Background dimming scrim that fades out as the page slides away
-          if (_progress > 0.0)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(
-                  alpha: 0.16 * (1.0 - _progress),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Blurred bottom destination page underneath (visible only during swipe/animation)
+        if (_progress > 0.0) ...[
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: 16.0 * (1.0 - (_progress * 0.3)),
+                  sigmaY: 16.0 * (1.0 - (_progress * 0.3)),
                 ),
+                child: widget.backgroundPage ?? const HomeScreen(),
               ),
             ),
-          // Interactive sliding page with iOS-style edge drop shadow
-          Transform.translate(
-            offset: Offset(
-              isRtl ? -(_progress * screenWidth) : (_progress * screenWidth),
-              0,
-            ),
+          ),
+          Positioned.fill(
             child: Container(
-              decoration: _progress > 0.0
-                  ? BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: 0.18 * (1.0 - _progress),
-                          ),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                          offset: Offset(isRtl ? 8 : -8, 0),
-                        ),
-                      ],
-                    )
-                  : null,
-              child: widget.child,
+              color: Colors.black.withValues(
+                alpha: 0.12 * (1.0 - _progress),
+              ),
             ),
           ),
         ],
-      ),
+
+        // 2. Sliding top page strictly translated on X axis
+        Transform.translate(
+          offset: Offset(
+            isRtl ? -(_progress * screenWidth) : (_progress * screenWidth),
+            0.0,
+          ),
+          child: Container(
+            decoration: _progress > 0.0
+                ? BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: 0.22 * (1.0 - _progress),
+                        ),
+                        blurRadius: 28,
+                        spreadRadius: 2,
+                        offset: Offset(isRtl ? 10 : -10, 0),
+                      ),
+                    ],
+                  )
+                : null,
+            child: IgnorePointer(
+              ignoring: _isDragging || _animCtrl.isAnimating,
+              child: widget.child,
+            ),
+          ),
+        ),
+
+        // 3. Edge Swipe Detector Strip (consumes touches on the edge to prevent vertical scroll)
+        Positioned(
+          top: 0,
+          bottom: 0,
+          left: isRtl ? null : 0,
+          right: isRtl ? 0 : null,
+          width: _isDragging ? screenWidth : widget.edgeThreshold,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragStart: (details) =>
+                _onDragStart(details, isRtl, screenWidth),
+            onHorizontalDragUpdate: (details) =>
+                _onDragUpdate(details, isRtl, screenWidth),
+            onHorizontalDragEnd: (details) => _onDragEnd(details, isRtl),
+            onHorizontalDragCancel: _onDragCancel,
+          ),
+        ),
+      ],
     );
   }
 }

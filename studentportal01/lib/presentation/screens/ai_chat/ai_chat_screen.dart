@@ -208,7 +208,7 @@ class AIChatScreen extends ConsumerStatefulWidget {
 }
 
 class _AIChatScreenState extends ConsumerState<AIChatScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final List<_ChatMessage> _messages = [];
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -1295,42 +1295,44 @@ I have **complete** access to your academic data — grades, timetable, absences
             color: Colors.black.withValues(alpha: 0.3),
             child: GestureDetector(
               onTap: () {},
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(32),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(32),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            width: 1.5,
+              child: Material(
+                type: MaterialType.transparency,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(32),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(32),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              width: 1.5,
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsetsDirectional.only(start: 20),
-                                  child: Text(
-                                    l10n.translate('attach_title'),
-                                    style: ArabicTypography.headerStyle(
-                                      ctx,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: const Color(0xFF1E293B),
-                                      letterSpacing: -0.3,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsetsDirectional.only(start: 20),
+                                    child: Text(
+                                      l10n.translate('attach_title'),
+                                      style: ArabicTypography.headerStyle(
+                                        ctx,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF1E293B),
+                                        letterSpacing: -0.3,
+                                      ).copyWith(decoration: TextDecoration.none),
                                     ),
                                   ),
-                                ),
                                 GestureDetector(
                                   onTap: () =>
                                       setState(() => _showAttachModal = false),
@@ -1384,7 +1386,8 @@ I have **complete** access to your academic data — grades, timetable, absences
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   // ─── History Panel ────────────────────────────────────────────────────────────
@@ -2835,7 +2838,7 @@ class _AttachOption extends StatelessWidget {
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF1E293B),
-                      ),
+                      ).copyWith(decoration: TextDecoration.none),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -2844,7 +2847,7 @@ class _AttachOption extends StatelessWidget {
                         context,
                         fontSize: 12,
                         color: const Color(0xFF94A3B8),
-                      ),
+                      ).copyWith(decoration: TextDecoration.none),
                     ),
                   ],
                 ),

@@ -86,19 +86,44 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         navigatorKey: shellNavigatorKey,
         builder: (context, state, child) {
-          if (state.matchedLocation == '/ai-chat') {
-            return child;
-          }
           return Consumer(
             builder: (context, ref, _) {
               final hideNavBar = ref.watch(navBarHiddenProvider);
               final isHome = state.matchedLocation == '/';
+              final isAIChat = state.matchedLocation == '/ai-chat';
+              final isWriteSuggestion =
+                  state.matchedLocation == '/write-suggestion';
+
+              final backgroundWidget = isWriteSuggestion
+                  ? const SuggestionsScreen()
+                  : const HomeScreen();
+
+              final onReturnCallback = isWriteSuggestion
+                  ? () => context.go('/suggestions')
+                  : isAIChat
+                      ? () {
+                          ref.read(navBarHiddenProvider.notifier).state = false;
+                          context.go('/');
+                        }
+                      : null;
+
+              if (isAIChat) {
+                return IosEdgeSwipeBack(
+                  key: const ValueKey('/ai-chat'),
+                  backgroundPage: const HomeScreen(),
+                  onReturn: onReturnCallback,
+                  child: child,
+                );
+              }
+
               return Scaffold(
                 extendBody: true,
                 body: isHome
                     ? child
                     : IosEdgeSwipeBack(
                         key: ValueKey(state.matchedLocation),
+                        backgroundPage: backgroundWidget,
+                        onReturn: onReturnCallback,
                         child: child,
                       ),
                 bottomNavigationBar: hideNavBar
@@ -244,6 +269,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final offeringId = state.pathParameters['offeringId']!;
           return NoTransitionPage(
             child: IosEdgeSwipeBack(
+              backgroundPage: const AbsencesScreen(),
+              onReturn: () => context.go('/absences'),
               child: AbsenceDetailScreen(subjectOfferingId: offeringId),
             ),
           );
