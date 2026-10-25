@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
@@ -1188,6 +1188,28 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                         final vOffset = _verticalOffset(distance);
                         final isCenter = absDistance < 0.5;
 
+                        // Depth-of-field blur for circles receding into the background
+                        double blurSigma = 0.0;
+                        if (absDistance > 0.6) {
+                          blurSigma = ((absDistance - 0.6) * 3.5).clamp(0.0, 5.0);
+                        }
+
+                        Widget circleCard = _PaymentCircleCard(
+                          key: ValueKey('payment_card_$index'),
+                          payment: widget.payments[index],
+                          currency: widget.currency,
+                          isCenter: isCenter,
+                          absDistance: absDistance,
+                          isCurrentMonth: index == widget.currentMonthIndex,
+                        );
+
+                        if (blurSigma > 0.1) {
+                          circleCard = ImageFiltered(
+                            imageFilter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                            child: circleCard,
+                          );
+                        }
+
                         return Positioned(
                           key: ValueKey('circle_item_$index'),
                           left: centerX + xOffset - _centerSize / 2,
@@ -1199,14 +1221,7 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                               scale: scale,
                               child: Opacity(
                                 opacity: opacity,
-                                child: _PaymentCircleCard(
-                                  key: ValueKey('payment_card_$index'),
-                                  payment: widget.payments[index],
-                                  currency: widget.currency,
-                                  isCenter: isCenter,
-                                  absDistance: absDistance,
-                                  isCurrentMonth: index == widget.currentMonthIndex,
-                                ),
+                                child: circleCard,
                               ),
                             ),
                           ),
@@ -1218,34 +1233,39 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
               ),
 
               // Invisible PageView to enable smooth swipe gestures and taps
+              // Directionality is locked to LTR so sliding left moves circles left
+              // and sliding right moves circles right across both Arabic and Latin
               Positioned.fill(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: widget.payments.length,
-                  physics: const BouncingScrollPhysics(),
-                  itemBuilder: (context, index) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: () {
-                        final isCenter = (_currentPage - index).abs() < 0.5;
-                        if (isCenter) {
-                          _showPaymentDetailsDialog(
-                            context,
-                            widget.payments[index],
-                            widget.currency,
-                            DateFormat('dd/MM/yyyy'),
-                          );
-                        } else {
-                          _pageController.animateToPage(
-                            index,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutCubic,
-                          );
-                        }
-                      },
-                      child: const SizedBox.expand(),
-                    );
-                  },
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: PageView.builder(
+                    controller: _pageController,
+                    itemCount: widget.payments.length,
+                    physics: const BouncingScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      return GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: () {
+                          final isCenter = (_currentPage - index).abs() < 0.5;
+                          if (isCenter) {
+                            _showPaymentDetailsDialog(
+                              context,
+                              widget.payments[index],
+                              widget.currency,
+                              DateFormat('dd/MM/yyyy'),
+                            );
+                          } else {
+                            _pageController.animateToPage(
+                              index,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                            );
+                          }
+                        },
+                        child: const SizedBox.expand(),
+                      );
+                    },
+                  ),
                 ),
               ),
             ],

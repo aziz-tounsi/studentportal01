@@ -2319,28 +2319,41 @@ class _MarkdownText extends StatelessWidget {
         widgets.add(Container(
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsetsDirectional.fromSTEB(14, 10, 12, 10),
           decoration: BoxDecoration(
             color: const Color(0xFFFFF0F5),
             borderRadius: BorderRadius.circular(14),
-            border: Border(
-              left: const BorderSide(color: _pink, width: 3.5),
-              top: BorderSide(color: _pink.withValues(alpha: 0.15), width: 1),
-              right: BorderSide(color: _pink.withValues(alpha: 0.15), width: 1),
-              bottom: BorderSide(color: _pink.withValues(alpha: 0.15), width: 1),
-            ),
           ),
-          child: RichText(
-            text: _parseInline(
-              content,
-              context,
-              _aiTextStyle(
-                context,
-                text: content,
-                fontSize: 13.5,
-                color: const Color(0xFF475569),
-                fontStyle: FontStyle.italic,
-                height: 1.45,
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicHeight(
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 3.5,
+                    color: _pink,
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                      child: RichText(
+                        text: _parseInline(
+                          content,
+                          context,
+                          _aiTextStyle(
+                            context,
+                            text: content,
+                            fontSize: 13.5,
+                            color: const Color(0xFF475569),
+                            fontStyle: FontStyle.italic,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
