@@ -101,13 +101,54 @@ class StudentResultsRepository {
     final gradeLevelId = classData?['niveau_id'] ?? classData?['grade_level_id'];
     final sectionId = classData?['section_id'];
 
-    // Get subject offerings for this semester
-    final offerings = await _client
+    // 1. Resolve all semester IDs matching this semester number to support multi-year / migrated schemas
+    final Set<String> targetSemesterIds = {semesterId};
+    try {
+      final semRow = await _client
+          .from('semesters')
+          .select('number, school_id')
+          .eq('id', semesterId)
+          .maybeSingle();
+      final semNumber = semRow?['number'] as int?;
+      if (semNumber != null) {
+        final matchingRows = await _client
+            .from('semesters')
+            .select('id')
+            .eq('number', semNumber);
+        for (final r in (matchingRows as List)) {
+          final id = r['id']?.toString();
+          if (id != null && id.isNotEmpty) {
+            targetSemesterIds.add(id);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Get all grades for this enrollment first so we know which offerings have grades
+    final grades = await _client
+        .from('grades')
+        .select('''
+          id,
+          subject_offering_id,
+          component_id,
+          grade_value,
+          status
+        ''')
+        .eq('enrollment_id', enrollmentId);
+
+    final Set<String> gradedOfferingIds = (grades as List)
+        .map((g) => g['subject_offering_id']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    // 3. Get subject offerings for matching semester(s)
+    var offeringsQuery = _client
         .from('subject_offerings')
         .select('''
           id,
           coefficient,
           subject_id,
+          semester_id,
           subjects!inner (
             id,
             name,
@@ -119,8 +160,48 @@ class StudentResultsRepository {
             weight_percent
           )
         ''')
-        .eq('semester_id', semesterId)
         .eq('class_id', enrollment['class_id']);
+
+    final dynamic rawOfferingsResponse;
+    if (targetSemesterIds.length == 1) {
+      rawOfferingsResponse = await offeringsQuery.eq('semester_id', targetSemesterIds.first);
+    } else {
+      rawOfferingsResponse = await offeringsQuery.filter('semester_id', 'in', targetSemesterIds.toList());
+    }
+
+    final List<dynamic> rawOfferings = (rawOfferingsResponse as List?) ?? [];
+
+    // Group offerings by normalized subject name / ID, and pick the best offering (preferring ones with grades)
+    final Map<String, dynamic> chosenOfferingsMap = {};
+    for (final offering in rawOfferings) {
+      final subject = offering['subjects'] as Map<String, dynamic>?;
+      final subName = (subject?['name']?.toString() ?? offering['subject_id']?.toString() ?? '').trim().toLowerCase();
+      if (subName.isEmpty) continue;
+
+      final existing = chosenOfferingsMap[subName];
+      if (existing == null) {
+        chosenOfferingsMap[subName] = offering;
+      } else {
+        // Compare how many grades each offering has
+        final existingId = existing['id']?.toString();
+        final currentId = offering['id']?.toString();
+        final existingHasGrade = existingId != null && gradedOfferingIds.contains(existingId);
+        final currentHasGrade = currentId != null && gradedOfferingIds.contains(currentId);
+
+        if (!existingHasGrade && currentHasGrade) {
+          chosenOfferingsMap[subName] = offering;
+        } else if (existingHasGrade && currentHasGrade) {
+          // Both have grades, pick the one with higher coefficient or more components
+          final existingCoeff = (existing['coefficient'] as num?)?.toDouble() ?? 1.0;
+          final currentCoeff = (offering['coefficient'] as num?)?.toDouble() ?? 1.0;
+          if (currentCoeff > existingCoeff) {
+            chosenOfferingsMap[subName] = offering;
+          }
+        }
+      }
+    }
+
+    final List<dynamic> offerings = chosenOfferingsMap.values.toList();
 
     // Fetch teacher assignments for this class
     final Map<String, Map<String, String>> teacherMap = {};
@@ -142,18 +223,6 @@ class StudentResultsRepository {
         }
       }
     } catch (_) {}
-
-    // Get all grades for this enrollment and semester
-    final grades = await _client
-        .from('grades')
-        .select('''
-          id,
-          subject_offering_id,
-          component_id,
-          grade_value,
-          status
-        ''')
-        .eq('enrollment_id', enrollmentId);
 
     // Build grade summaries
     final List<SubjectGradesSummary> summaries = [];

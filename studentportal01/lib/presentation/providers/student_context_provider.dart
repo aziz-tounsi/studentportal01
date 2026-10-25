@@ -60,33 +60,68 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
   }
 
   // 2. Fetch semesters for the target academic year
+  List<SemesterInfo> semesters = [];
   if (targetYearId != null && targetYearId.isNotEmpty) {
-    final semesters =
-        await service.getSemestersForAcademicYear(targetYearId);
-    if (semesters.isNotEmpty) {
-      return semesters;
+    semesters = await service.getSemestersForAcademicYear(targetYearId);
+  }
+
+  // 3. Ensure all standard semesters (1, 2, 3) are present.
+  // If any semester numbers (like 1) are missing from the enrolled year, augment from active academic year or school semesters.
+  final existingNumbers = semesters.map((s) => s.number).toSet();
+  if (semesters.isEmpty || !existingNumbers.contains(1) || existingNumbers.length < 3) {
+    try {
+      var activeYearQuery = supabase
+          .from('academic_years')
+          .select('id')
+          .eq('is_current', true);
+      if (schoolId != null && schoolId.isNotEmpty) {
+        activeYearQuery = activeYearQuery.eq('school_id', schoolId);
+      }
+      final activeYear = await activeYearQuery.order('start_date', ascending: false).limit(1).maybeSingle();
+      if (activeYear != null) {
+        final activeSemesters = await service.getSemestersForAcademicYear(activeYear['id'] as String);
+        for (final s in activeSemesters) {
+          if (!existingNumbers.contains(s.number)) {
+            semesters.add(s);
+            existingNumbers.add(s.number);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Fallback: Query all semesters for schoolId
+    if (!existingNumbers.contains(1) || semesters.isEmpty) {
+      try {
+        var semQuery = supabase
+            .from('semesters')
+            .select('id, name, number, is_current, start_date, end_date');
+        if (schoolId != null && schoolId.isNotEmpty) {
+          semQuery = semQuery.eq('school_id', schoolId);
+        }
+        final semestersResp = await semQuery.order('number');
+        if ((semestersResp as List).isNotEmpty) {
+          for (final row in semestersResp) {
+            final s = SemesterInfo.fromJson(row);
+            if (!existingNumbers.contains(s.number)) {
+              semesters.add(s);
+              existingNumbers.add(s.number);
+            }
+          }
+        }
+      } catch (_) {}
     }
   }
 
-  // 3. Fallback: Query all semesters for schoolId or generally
-  try {
-    var semQuery = supabase
-        .from('semesters')
-        .select('id, name, number, is_current, start_date, end_date');
-    if (schoolId != null && schoolId.isNotEmpty) {
-      semQuery = semQuery.eq('school_id', schoolId);
-    }
-    final semestersResp = await semQuery.order('number');
-    if ((semestersResp as List).isNotEmpty) {
-      return semestersResp
-          .map((e) => SemesterInfo.fromJson(e))
-          .toList();
-    }
-  } catch (_) {}
+  if (semesters.isNotEmpty) {
+    semesters.sort((a, b) => a.number.compareTo(b.number));
+    return semesters;
+  }
 
   // 4. Default fallback
   return [
     SemesterInfo(id: '1', name: 'Semestre 1', number: 1, isCurrent: true),
+    SemesterInfo(id: '2', name: 'Semestre 2', number: 2, isCurrent: false),
+    SemesterInfo(id: '3', name: 'Semestre 3', number: 3, isCurrent: false),
   ];
 });
 
@@ -103,7 +138,9 @@ final selectedSemesterProvider = Provider<SemesterInfo?>((ref) {
   final matched = semesters.where((s) => s.number == selectedNumber).firstOrNull;
   if (matched != null) return matched;
 
-  return semesters.where((s) => s.isCurrent).firstOrNull ?? semesters.first;
+  return semesters.where((s) => s.isCurrent).firstOrNull ??
+         semesters.where((s) => s.number == 1).firstOrNull ??
+         semesters.first;
 });
 
 // ============================================================
@@ -206,7 +243,7 @@ extension StudentContextX on StudentContext {
 }
 
 extension SemesterInfoX on SemesterInfo {
-  bool get isCurrent {
+  bool get isCurrentByDate {
     final now = DateTime.now();
     if (startDate != null && endDate != null) {
       return now.isAfter(startDate!) && now.isBefore(endDate!);

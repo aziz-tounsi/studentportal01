@@ -736,10 +736,33 @@ class CoreDataService {
         'p_user_id': userId,
         'p_semester_id': semesterId,
       });
-      if (result == null) return [];
-      return (result as List)
-          .map((e) => TimetableSlotInfo.fromJson(e as Map<String, dynamic>))
-          .toList();
+      if (result is List && result.isNotEmpty) {
+        return result
+            .map((e) => TimetableSlotInfo.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+
+      // Fallback: check other semester IDs with the same semester number
+      final semRow = await _client.from('semesters').select('number').eq('id', semesterId).maybeSingle();
+      final semNum = semRow?['number'] as int?;
+      if (semNum != null) {
+        final otherSems = await _client.from('semesters').select('id').eq('number', semNum);
+        for (final r in (otherSems as List)) {
+          final otherId = r['id']?.toString();
+          if (otherId != null && otherId != semesterId) {
+            final otherRes = await _client.rpc('get_timetable_for_student_semester', params: {
+              'p_user_id': userId,
+              'p_semester_id': otherId,
+            });
+            if (otherRes is List && otherRes.isNotEmpty) {
+              return otherRes
+                  .map((e) => TimetableSlotInfo.fromJson(e as Map<String, dynamic>))
+                  .toList();
+            }
+          }
+        }
+      }
+      return [];
     } catch (e) {
       return [];
     }
@@ -755,10 +778,33 @@ class CoreDataService {
         'p_user_id': userId,
         'p_semester_id': semesterId,
       });
-      if (result == null) return [];
-      return (result as List)
-          .map((e) => AbsenceSummary.fromJson(e as Map<String, dynamic>))
-          .toList();
+      if (result is List && result.isNotEmpty) {
+        return result
+            .map((e) => AbsenceSummary.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+
+      // Fallback: check other semester IDs with the same semester number
+      final semRow = await _client.from('semesters').select('number').eq('id', semesterId).maybeSingle();
+      final semNum = semRow?['number'] as int?;
+      if (semNum != null) {
+        final otherSems = await _client.from('semesters').select('id').eq('number', semNum);
+        for (final r in (otherSems as List)) {
+          final otherId = r['id']?.toString();
+          if (otherId != null && otherId != semesterId) {
+            final otherRes = await _client.rpc('get_absences_for_student_semester', params: {
+              'p_user_id': userId,
+              'p_semester_id': otherId,
+            });
+            if (otherRes is List && otherRes.isNotEmpty) {
+              return otherRes
+                  .map((e) => AbsenceSummary.fromJson(e as Map<String, dynamic>))
+                  .toList();
+            }
+          }
+        }
+      }
+      return [];
     } catch (e) {
       return [];
     }
@@ -774,10 +820,35 @@ class CoreDataService {
         'p_user_id': userId,
         'p_semester_id': semesterId,
       });
-      if (result == null) {
-        return SemesterResults(subjects: [], totalCoefficient: 0);
+      if (result != null) {
+        final parsed = SemesterResults.fromJson(result as Map<String, dynamic>);
+        if (parsed.subjects.isNotEmpty) {
+          return parsed;
+        }
       }
-      return SemesterResults.fromJson(result as Map<String, dynamic>);
+
+      // Fallback: check other semester IDs with the same semester number
+      final semRow = await _client.from('semesters').select('number').eq('id', semesterId).maybeSingle();
+      final semNum = semRow?['number'] as int?;
+      if (semNum != null) {
+        final otherSems = await _client.from('semesters').select('id').eq('number', semNum);
+        for (final r in (otherSems as List)) {
+          final otherId = r['id']?.toString();
+          if (otherId != null && otherId != semesterId) {
+            final otherRes = await _client.rpc('get_results_for_student_semester', params: {
+              'p_user_id': userId,
+              'p_semester_id': otherId,
+            });
+            if (otherRes != null) {
+              final otherParsed = SemesterResults.fromJson(otherRes as Map<String, dynamic>);
+              if (otherParsed.subjects.isNotEmpty) {
+                return otherParsed;
+              }
+            }
+          }
+        }
+      }
+      return SemesterResults(subjects: [], totalCoefficient: 0);
     } catch (e) {
       return SemesterResults(subjects: [], totalCoefficient: 0);
     }

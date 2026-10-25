@@ -204,10 +204,14 @@ final studentAISnapshotProvider = FutureProvider<StudentAISnapshot>((ref) async 
     } catch (_) {}
   }
 
-  // 4. Semesters
+  // 4. Semesters (Source of truth from semestersProvider)
   List<SemesterInfo> semesters = [];
   SemesterInfo? currentSemester;
-  if (academicYearId != null) {
+  try {
+    semesters = await ref.watch(semestersProvider.future);
+  } catch (_) {}
+
+  if (semesters.isEmpty && academicYearId != null) {
     try {
       semesters = await service.getSemestersForAcademicYear(academicYearId);
     } catch (_) {}
@@ -228,16 +232,16 @@ final studentAISnapshotProvider = FutureProvider<StudentAISnapshot>((ref) async 
         )).toList();
       } catch (_) {}
     }
-
-    final appSelectedSem = ref.watch(selectedSemesterProvider);
-    final appSemNum = ref.watch(selectedSemesterNumberProvider);
-
-    currentSemester = (appSelectedSem != null ? semesters.firstWhereOrNull((s) => s.id == appSelectedSem.id) : null) ??
-        semesters.firstWhereOrNull((s) => s.number == appSemNum) ??
-        semesters.firstWhereOrNull((s) => s.isCurrent) ??
-        semesters.firstWhereOrNull((s) => s.number == 1) ??
-        semesters.firstOrNull;
   }
+
+  final appSelectedSem = ref.watch(selectedSemesterProvider);
+  final appSemNum = ref.watch(selectedSemesterNumberProvider);
+
+  currentSemester = (appSelectedSem != null ? semesters.firstWhereOrNull((s) => s.id == appSelectedSem.id) : null) ??
+      semesters.firstWhereOrNull((s) => s.number == appSemNum) ??
+      semesters.firstWhereOrNull((s) => s.isCurrent) ??
+      semesters.firstWhereOrNull((s) => s.number == 1) ??
+      semesters.firstOrNull;
 
   final semId = currentSemester?.id ?? '';
 
@@ -359,8 +363,53 @@ final studentAISnapshotProvider = FutureProvider<StudentAISnapshot>((ref) async 
 
   final allSemesterResults = <String, SemesterResults>{};
 
-  // Fallback for Grades if RPC was empty
-  if (ctx?.enrollmentId != null) {
+  // 5a. Primary: Load complete screen-aligned grades for ALL semesters directly from gradesProvider
+  for (final sem in semesters) {
+    try {
+      final screenGrades = await ref.read(gradesProvider(sem.number).future);
+      if (screenGrades.isNotEmpty) {
+        double totalWeightedSum = 0;
+        double totalCoeffSum = 0;
+        final list = <SubjectResult>[];
+        for (final sg in screenGrades) {
+          final comps = sg.components.map((c) => GradeComponent(
+            componentId: c.componentId,
+            componentName: c.componentName,
+            weightPercent: c.weightPercent,
+            gradeValue: c.grade,
+            status: c.status,
+          )).toList();
+          if (sg.average != null) {
+            totalWeightedSum += sg.average! * sg.coefficient;
+            totalCoeffSum += sg.coefficient;
+          }
+          list.add(SubjectResult(
+            subjectOfferingId: sg.subjectOfferingId,
+            subjectCode: sg.subjectCode ?? '',
+            subjectName: sg.subjectName,
+            coefficient: sg.coefficient,
+            components: comps,
+            average: sg.average,
+          ));
+        }
+        final genAvg = totalCoeffSum > 0 ? (totalWeightedSum / totalCoeffSum) : null;
+        final semResult = SemesterResults(
+          subjects: list,
+          totalCoefficient: totalCoeffSum,
+          generalAverage: genAvg,
+        );
+        allSemesterResults[sem.id] = semResult;
+        allSemesterResults[sem.number.toString()] = semResult;
+        allSemesterResults['Semestre ${sem.number}'] = semResult;
+        if (sem.number == (currentSemester?.number ?? 1) || sem.id == currentSemester?.id) {
+          grades = semResult;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 5b. Fallback: Direct DB query if allSemesterResults is still empty
+  if (allSemesterResults.isEmpty && ctx?.enrollmentId != null) {
     try {
       final gradesResp = await supabase
           .from('grades')
@@ -452,57 +501,15 @@ final studentAISnapshotProvider = FutureProvider<StudentAISnapshot>((ref) async 
         }
 
         final genAvg = totalCoeffSum > 0 ? (totalWeightedSum / totalCoeffSum) : null;
-        allSemesterResults[currentSemId] = SemesterResults(
+        final semResult = SemesterResults(
           subjects: subjectResultsList,
           totalCoefficient: totalCoeffSum,
           generalAverage: genAvg,
         );
-      }
-
-      if (allSemesterResults.containsKey(semId)) {
-        grades = allSemesterResults[semId]!;
-      } else if (allSemesterResults.isNotEmpty) {
-        grades = allSemesterResults.values.first;
-      }
-    } catch (_) {}
-  }
-
-  // 5b. Screen-aligned fallback: ensure AI grades are 100% identical to ResultatsScreenV2
-  if (grades.subjects.isEmpty) {
-    try {
-      final semNum = currentSemester?.number ?? 1;
-      final screenGrades = await ref.read(gradesProvider(semNum).future);
-      if (screenGrades.isNotEmpty) {
-        double totalWeightedSum = 0;
-        double totalCoeffSum = 0;
-        final list = <SubjectResult>[];
-        for (final sg in screenGrades) {
-          final comps = sg.components.map((c) => GradeComponent(
-            componentId: c.componentId,
-            componentName: c.componentName,
-            weightPercent: c.weightPercent,
-            gradeValue: c.grade,
-            status: c.status,
-          )).toList();
-          if (sg.average != null) {
-            totalWeightedSum += sg.average! * sg.coefficient;
-            totalCoeffSum += sg.coefficient;
-          }
-          list.add(SubjectResult(
-            subjectOfferingId: sg.subjectOfferingId,
-            subjectCode: sg.subjectCode ?? '',
-            subjectName: sg.subjectName,
-            coefficient: sg.coefficient,
-            components: comps,
-            average: sg.average,
-          ));
+        allSemesterResults[currentSemId] = semResult;
+        if (grades.subjects.isEmpty) {
+          grades = semResult;
         }
-        final genAvg = totalCoeffSum > 0 ? (totalWeightedSum / totalCoeffSum) : null;
-        grades = SemesterResults(
-          subjects: list,
-          totalCoefficient: totalCoeffSum,
-          generalAverage: genAvg,
-        );
       }
     } catch (_) {}
   }
@@ -837,11 +844,19 @@ String buildAISystemContext(StudentAISnapshot snap) {
 
   // 4. Results & Grades
   sb.writeln('\n=== 4. ACADEMIC RESULTS & GRADES (DEFAULT TO CURRENT SEMESTER: ${snap.currentSemester?.name ?? 'Semestre 1'}) ===');
-  if (snap.allSemesterResults.isNotEmpty) {
+  final activeSem = snap.currentSemester ?? (snap.semesters.isNotEmpty ? snap.semesters.first : null);
+  final activeSemNum = activeSem?.number ?? 1;
+  bool wroteAnyResults = false;
+
+  if (snap.semesters.isNotEmpty) {
     for (final sem in snap.semesters) {
-      final res = snap.allSemesterResults[sem.id];
+      final res = snap.allSemesterResults[sem.id] ??
+                  snap.allSemesterResults[sem.number.toString()] ??
+                  snap.allSemesterResults['Semestre ${sem.number}'] ??
+                  (sem.number == activeSemNum && snap.results.subjects.isNotEmpty ? snap.results : null);
       if (res != null && res.subjects.isNotEmpty) {
-        final isCurrent = sem.id == snap.currentSemester?.id;
+        wroteAnyResults = true;
+        final isCurrent = sem.number == activeSemNum || sem.id == activeSem?.id;
         sb.writeln('\n--- ${sem.name.toUpperCase()}${isCurrent ? ' [CURRENT ACTIVE SEMESTER - USE THIS BY DEFAULT]' : ' [OTHER SEMESTER - ONLY IF EXPLICITLY ASKED]'} (Moyenne Générale: ${res.averageDisplay}/20, Coeff: ${res.totalCoefficient}) ---');
         final validSubjects = res.subjects.where((s) => s.average != null).toList()
           ..sort((a, b) => b.average!.compareTo(a.average!));
@@ -858,7 +873,10 @@ String buildAISystemContext(StudentAISnapshot snap) {
         }
       }
     }
-  } else if (snap.results.subjects.isNotEmpty) {
+  }
+
+  if (!wroteAnyResults && snap.results.subjects.isNotEmpty) {
+    wroteAnyResults = true;
     sb.writeln('General Average (Moyenne Générale): ${snap.results.averageDisplay}/20');
     sb.writeln('Total Coefficients Sum: ${snap.results.totalCoefficient}');
     for (final sub in snap.results.subjects) {
@@ -867,7 +885,7 @@ String buildAISystemContext(StudentAISnapshot snap) {
         sb.writeln('    - ${comp.componentName} (${comp.weightPercent}%): ${comp.gradeDisplay}/20 [${comp.status}]');
       }
     }
-  } else {
+  } else if (!wroteAnyResults) {
     sb.writeln('No academic grades published yet.');
   }
 

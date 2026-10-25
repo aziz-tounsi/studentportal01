@@ -381,7 +381,10 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     AppLocalizations l10n,
   ) {
     if (grades.isEmpty) {
-      return SliverFillRemaining(child: _buildEmptyState(context));
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: _buildEmptyState(context, semester: semester),
+      );
     }
 
     // Filter grades based on search
@@ -470,34 +473,85 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.bar_chart_rounded,
-            size: 64,
-            color: Colors.black.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Aucune matière assignée',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.black.withValues(alpha: 0.6),
-              fontWeight: FontWeight.w600,
+  Widget _buildEmptyState(BuildContext context, {int? semester}) {
+    final semTitle = semester != null ? 'le Trimestre $semester' : 'ce trimestre';
+
+    return Align(
+      alignment: const Alignment(0, -0.45),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Les notes seront affichées ici',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.black.withValues(alpha: 0.4),
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF06B6D4), Color(0xFF2563EB)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.bar_chart_rounded,
+                  size: 36,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Aucun résultat disponible',
+                textAlign: TextAlign.center,
+                style: ArabicTypography.headerStyle(
+                  context,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF1F2937),
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Les notes pour $semTitle n\'ont pas encore été publiées par l\'établissement.',
+                textAlign: TextAlign.center,
+                style: ArabicTypography.bodyStyle(
+                  context,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF6B7280),
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -667,7 +721,7 @@ class _GlassySemesterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gradientColors = isValidated
-        ? [const Color(0xFF10B981), const Color(0xFF059669)]
+        ? [const Color(0xFF06B6D4), const Color(0xFF2563EB)]
         : [const Color(0xFFEF4444), const Color(0xFFDC2626)];
 
     return ClipRRect(
@@ -686,13 +740,14 @@ class _GlassySemesterCard extends StatelessWidget {
             // NO BORDER
             boxShadow: [
               BoxShadow(
-                color: gradientColors[0].withValues(alpha: 0.5),
+                color: gradientColors[1].withValues(alpha: 0.45),
                 blurRadius: 30,
                 offset: const Offset(0, 14),
               ),
             ],
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -753,35 +808,38 @@ class _GlassySemesterCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isValidated
-                          ? Icons.verified_rounded
-                          : Icons.cancel_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isValidated ? 'Trimestre validé' : 'Trimestre non validé',
-                      style: const TextStyle(
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isValidated
+                            ? Icons.verified_rounded
+                            : Icons.cancel_rounded,
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        size: 18,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Text(
+                        isValidated ? 'Trimestre validé' : 'Trimestre non validé',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

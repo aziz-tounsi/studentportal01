@@ -445,23 +445,80 @@ class ResultatsScreen extends ConsumerWidget {
             child: gradesAsync.when(
               data: (grades) {
                 if (grades.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.assessment_outlined,
-                          size: 64,
-                          color: AppColors.textLight,
+                  return Align(
+                    alignment: const Alignment(0, -0.45),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 20,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: AppSizes.paddingM),
-                        Text(
-                          l10n.noData,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: AppColors.textSecondary,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF06B6D4), Color(0xFF2563EB)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
                               ),
+                              child: const Icon(
+                                Icons.bar_chart_rounded,
+                                size: 36,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Aucun résultat disponible',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1F2937),
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Les notes pour le Trimestre $selectedSemester n\'ont pas encore été publiées par l\'établissement.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF6B7280),
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   );
                 }
@@ -581,8 +638,8 @@ class _SemesterAverageCard extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              isPassing ? AppColors.success : AppColors.error,
-              isPassing ? AppColors.success.withValues(alpha: 0.8) : AppColors.error.withValues(alpha: 0.8),
+              isPassing ? const Color(0xFF06B6D4) : AppColors.error,
+              isPassing ? const Color(0xFF2563EB) : AppColors.error.withValues(alpha: 0.8),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -590,6 +647,7 @@ class _SemesterAverageCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSizes.cardBorderRadius),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               '${l10n.semesterAverage} $semester',
@@ -608,20 +666,23 @@ class _SemesterAverageCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSizes.paddingS),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSizes.paddingM,
-                vertical: AppSizes.paddingS,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(AppSizes.radiusL),
-              ),
-              child: Text(
-                isPassing ? l10n.passed : l10n.failed,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSizes.paddingM,
+                  vertical: AppSizes.paddingS,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(AppSizes.radiusL),
+                ),
+                child: Text(
+                  isPassing ? l10n.passed : l10n.failed,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),

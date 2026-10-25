@@ -27,9 +27,62 @@ const String _openRouterApiKey = String.fromEnvironment(
 // Free OpenRouter model (poolside laguna 2.1 fast responder, tested and verified)
 const String _freeModel = 'poolside/laguna-s-2.1:free';
 
-// ─── Arabic Typography Helper (Uses Tajawal for Arabic) ───────────────────────
+// ─── Arabic Typography & Gender Helpers ────────────────────────────────────────
 bool _isArabicText(String text) {
   return RegExp(r'[\u0600-\u06FF]').hasMatch(text);
+}
+
+/// Detects if a student's first name is feminine (Tunisian / Arab / French names)
+bool _isFemaleName(String name) {
+  if (name.isEmpty) return false;
+  final clean = name.trim().toLowerCase()
+      .replaceAll('é', 'e')
+      .replaceAll('è', 'e')
+      .replaceAll('ê', 'e')
+      .replaceAll('ë', 'e')
+      .replaceAll('ï', 'i')
+      .replaceAll('î', 'i')
+      .replaceAll('à', 'a')
+      .replaceAll('â', 'a');
+
+  const femaleNames = <String>{
+    'nour', 'noor', 'ines', 'inès', 'mariem', 'maryem', 'maryam', 'meriem', 'myriam',
+    'sarra', 'sara', 'sarah', 'yasmine', 'yasmina', 'yasmin', 'aya', 'eya',
+    'salma', 'selma', 'fatma', 'fatima', 'fatma zahra', 'khadija', 'rym', 'rim',
+    'sirine', 'cyrine', 'chaima', 'chayma', 'shayma', 'hela', 'amira', 'manel',
+    'rania', 'ons', 'wiem', 'lina', 'maya', 'ghofrane', 'emna', 'dorra', 'farah',
+    'asma', 'souhir', 'sonia', 'leila', 'layla', 'hiba', 'nesrine', 'nisrine',
+    'nourhene', 'nourhen', 'hadil', 'islem', 'rawen', 'tasnim', 'tasneem',
+    'chafia', 'habiba', 'samia', 'nadia', 'hanen', 'sihem', 'sana', 'olfa',
+    'mayssa', 'marwa', 'safa', 'soumaya', 'chahd', 'shahd', 'molka', 'roua',
+    'lobna', 'ikram', 'afef', 'rahma', 'ghada', 'bochra', 'bouchra', 'emma',
+    'lea', 'chloe', 'julie', 'marie', 'sophie', 'camille', 'alice', 'clara',
+    'louise', 'manon', 'jade', 'eva', 'zoe', 'lola', 'lena', 'kenza', 'amina',
+    'amal', 'amel', 'hanan', 'maha', 'dina', 'rawan', 'reem',
+  };
+
+  if (femaleNames.contains(clean)) return true;
+
+  // Arabic characters check (names ending in ة, ى, اء, or common Arabic feminine roots)
+  if (name.endsWith('ة') || name.endsWith('ى') || name.endsWith('اء') ||
+      name.contains('نور') || name.contains('مريم') || name.contains('إيناس') ||
+      name.contains('سارة') || name.contains('فاطمة') || name.contains('خديجة') ||
+      name.contains('آية') || name.contains('ياسمين') || name.contains('سلمى') ||
+      name.contains('شيماء') || name.contains('ريم') || name.contains('أميرة')) {
+    return true;
+  }
+
+  if (clean.endsWith('ine') || clean.endsWith('ette') || clean.endsWith('ia') || clean.endsWith('ina')) {
+    return true;
+  }
+
+  return false;
+}
+
+/// Pink flower 🌸 for girls, energetic ⚡ for boys, ✨ fallback
+String _getGreetingEmoji(String firstName) {
+  if (firstName.isEmpty) return '✨';
+  return _isFemaleName(firstName) ? '🌸' : '⚡';
 }
 
 TextStyle _aiTextStyle(
@@ -181,9 +234,12 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   late AnimationController _typingAnimCtrl;
   late Animation<double> _typingAnim;
 
+  // Suggestions state & iOS animation
+  late AnimationController _suggestionsAnimCtrl;
+  int _suggestionBatchIndex = 0;
+
   // Cached snapshot
   StudentAISnapshot? _cachedSnapshot;
-  double _lastBottomInset = 0;
 
   @override
   void initState() {
@@ -194,6 +250,12 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
     );
     _typingAnim = CurvedAnimation(parent: _typingAnimCtrl, curve: Curves.easeInOut);
     _typingAnimCtrl.repeat(reverse: true);
+
+    _suggestionsAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _suggestionsAnimCtrl.forward();
 
     _inputFocus.addListener(() {
       if (_inputFocus.hasFocus) {
@@ -333,13 +395,39 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
   String _buildWelcomeMessage(String firstName) {
     final lang = Localizations.localeOf(context).languageCode;
-    final name = firstName.isNotEmpty ? ' $firstName' : '';
+    final name = firstName.isNotEmpty ? ', $firstName' : '';
+    final emoji = _getGreetingEmoji(firstName);
+
     if (lang == 'ar') {
-      return 'مرحباً$name ! 👋\nكيف يمكنني مساعدتك اليوم؟';
+      return '''## مرحباً$name ! $emoji
+
+أنا **NOVA**، مساعدك الأكاديمي الذكي.
+
+لدي وصول **كامل** إلى بياناتك المدرسية — الأعداد والنتائج، جدول الأوقات، الغيابات، والإشعارات.
+
+> 💡 اسألني أي سؤال أو أرسل ملفاً لتحليله.
+
+### كيف يمكنني مساعدتك اليوم؟''';
     } else if (lang == 'fr') {
-      return 'Bonjour$name ! 👋\nComment puis-je t\'aider aujourd\'hui ?';
+      return '''## Bonjour$name ! $emoji
+
+Je suis **NOVA**, ton assistant académique intelligent.
+
+J'ai accès **complet** à tes données scolaires — notes, emploi du temps, absences, notifications, et documents.
+
+> 💡 Pose-moi n'importe quelle question ou envoie un fichier à analyser.
+
+### Comment puis-je t'aider aujourd'hui ?''';
     } else {
-      return 'Hello$name! 👋\nHow can I help you today?';
+      return '''## Hello$name! $emoji
+
+I'm **NOVA**, your smart academic assistant.
+
+I have **complete** access to your academic data — grades, timetable, absences, notifications, and documents.
+
+> 💡 Ask me any question or upload a file to analyze.
+
+### How can I help you today?''';
     }
   }
 
@@ -467,12 +555,12 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
 
 
-  void _scrollToBottom({int delayMs = 100}) {
+  void _scrollToBottom({int delayMs = 60}) {
     Future.delayed(Duration(milliseconds: delayMs), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 280),
+          0.0,
+          duration: const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
         );
       }
@@ -527,43 +615,71 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
     });
   }
 
-  // ─── Quick Prompts ───────────────────────────────────────────────────────────
-  List<String> _getQuickPrompts() {
-    final lang = Localizations.localeOf(context).languageCode;
+  // ─── Quick Prompts Pool & Selection (3 distinct items each time) ────────────
+  List<String> _getPromptsPool(String lang) {
     if (lang == 'ar') {
       return [
+        // Batch 1
         '📊 ما هو معدلي العام؟',
         '📅 ما هو جدولي غداً؟',
         '⚠️ كم غياباً لديّ؟',
-        '💰 ما وضعي المالي؟',
-        '📢 ما آخر الإشعارات؟',
-        '📚 أفضل مادة عندي؟',
+        // Batch 2
+        '💰 ما وضعي المالي ورصيدي؟',
+        '📢 ما هي آخر الإعلانات؟',
+        '📚 ما هي أفضل مادة عندي؟',
+        // Batch 3
+        '🕒 متى تبدأ حصتي القادمة؟',
+        '📄 ما هي الوثائق التي يمكنني طلبها؟',
+        '📉 ما هي المواد التي تحتاج مراجعة؟',
       ];
     } else if (lang == 'fr') {
       return [
-        '📊 Quelle est ma moyenne générale?',
-        '📅 Quel est mon emploi du temps demain?',
-        '⚠️ Combien d\'absences ai-je?',
-        '💰 Quel est mon solde?',
-        '📢 Quelles sont les dernières notifs?',
-        '📚 Quelle est ma meilleure matière?',
+        // Batch 1
+        '📊 Quelle est ma moyenne générale ?',
+        '📅 Quel est mon emploi du temps demain ?',
+        '⚠️ Combien d\'absences ai-je ?',
+        // Batch 2
+        '💰 Quel est mon solde actuel ?',
+        '📢 Quelles sont les dernières annonces ?',
+        '📚 Quelle est ma meilleure matière ?',
+        // Batch 3
+        '🕒 À quelle heure commence mon prochain cours ?',
+        '📄 Quels documents puis-je demander ?',
+        '📉 Quelles matières dois-je réviser ?',
       ];
     } else {
       return [
+        // Batch 1
         '📊 What\'s my overall average?',
         '📅 What\'s my schedule tomorrow?',
         '⚠️ How many absences do I have?',
-        '💰 What\'s my payment status?',
-        '📢 What are the latest notifications?',
+        // Batch 2
+        '💰 What is my payment balance?',
+        '📢 What are the latest announcements?',
         '📚 Which subject am I best at?',
+        // Batch 3
+        '🕒 When is my next class?',
+        '📄 What documents can I request?',
+        '📉 Which subjects should I review?',
       ];
     }
+  }
+
+  List<String> _getThreeSuggestions() {
+    final lang = Localizations.localeOf(context).languageCode;
+    final pool = _getPromptsPool(lang);
+    final totalBatches = pool.length ~/ 3;
+    final batch = _suggestionBatchIndex % totalBatches;
+    final startIndex = batch * 3;
+    return pool.sublist(startIndex, startIndex + 3);
   }
 
   void _startNewChat() {
     _currentConversationId = null;
     _searchQuery = '';
     _searchController.clear();
+    _suggestionBatchIndex++;
+    _suggestionsAnimCtrl.forward(from: 0.0);
     setState(() {
       _messages.clear();
       _addWelcome();
@@ -578,30 +694,33 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
     _scrollController.dispose();
     _inputFocus.dispose();
     _typingAnimCtrl.dispose();
+    _suggestionsAnimCtrl.dispose();
     super.dispose();
   }
 
   // ─── Build ───────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final topPadding = MediaQuery.of(context).padding.top;
     final screenWidth = MediaQuery.of(context).size.width;
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-
-    if (bottomInset > _lastBottomInset) {
-      // Keyboard opened: automatically elevate content and scroll up like Messenger/DMs
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom(delayMs: 80);
-        _scrollToBottom(delayMs: 260);
-      });
-    }
-    _lastBottomInset = bottomInset;
 
     // Show quick prompts only when there's only the welcome message
     final showQuickPrompts = _messages.length == 1 &&
         _messages.first.role == 'assistant' &&
         !_isTyping;
+
+    // Build items in reverse order so index 0 is newest and anchored at bottom
+    final List<Widget> listItems = [];
+    if (_isTyping) {
+      listItems.add(_TypingIndicator(listenable: _typingAnim));
+    }
+    for (int i = _messages.length - 1; i >= 0; i--) {
+      if (showQuickPrompts && i == 0) {
+        listItems.add(_buildQuickPrompts());
+      }
+      listItems.add(_MessageBubble(message: _messages[i]));
+    }
 
     return PopScope(
       canPop: !_showHistory,
@@ -639,7 +758,6 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                 ),
                 child: SafeArea(
                   top: false,
-                  bottom: bottomInset == 0,
                   child: Column(
                     children: [
                       // Top Bar with safe spacing
@@ -653,7 +771,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                         child: _buildTopBar(),
                       ),
 
-                      // Messages List - Takes all available space above input bar
+                      // Messages List - reverse: true anchors newest messages right above input bar
                       Expanded(
                         child: ClipRect(
                           child: ScrollConfiguration(
@@ -668,6 +786,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                               behavior: HitTestBehavior.translucent,
                               child: ListView.builder(
                                 controller: _scrollController,
+                                reverse: true,
                                 physics: const BouncingScrollPhysics(
                                   parent: AlwaysScrollableScrollPhysics(),
                                 ),
@@ -677,24 +796,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                                   horizontal: 16,
                                   vertical: 8,
                                 ),
-                                itemCount: _messages.length +
-                                    (_isTyping ? 1 : 0) +
-                                    (showQuickPrompts ? 1 : 0),
-                                itemBuilder: (context, index) {
-                                  if (showQuickPrompts && index == 1) {
-                                    return _buildQuickPrompts();
-                                  }
-                                  final msgIdx = showQuickPrompts && index > 1
-                                      ? index - 1
-                                      : index;
-                                  if (msgIdx == _messages.length && _isTyping) {
-                                    return _TypingIndicator(listenable: _typingAnim);
-                                  }
-                                  if (msgIdx < _messages.length) {
-                                    return _MessageBubble(message: _messages[msgIdx]);
-                                  }
-                                  return const SizedBox.shrink();
-                                },
+                                itemCount: listItems.length,
+                                itemBuilder: (context, index) => listItems[index],
                               ),
                             ),
                           ),
@@ -709,7 +812,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                           child: _buildAttachmentPreview(),
                         ),
 
-                      // Bottom Input Bar
+                      // Bottom Input Bar - direct child of Column
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
                         child: Center(
@@ -881,35 +984,18 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                           color: const Color(0xFF1E293B),
                         ),
                       ),
-                      Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _isLoadingData
-                                  ? Colors.orange
-                                  : _isTyping
-                                      ? Colors.blue
-                                      : Colors.green,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isTyping
-                                ? l10n.translate('ai_thinking')
-                                : _isLoadingData
-                                    ? l10n.loading
-                                    : l10n.translate('ai_assistant_role'),
-                            style: ArabicTypography.bodyStyle(
-                              context,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: _pink,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        _isTyping
+                            ? l10n.translate('ai_thinking')
+                            : _isLoadingData
+                                ? l10n.loading
+                                : l10n.translate('ai_assistant_role'),
+                        style: ArabicTypography.bodyStyle(
+                          context,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: _pink,
+                        ),
                       ),
                     ],
                   ),
@@ -969,47 +1055,27 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   }
 
   Widget _buildQuickPrompts() {
-    final prompts = _getQuickPrompts();
+    final suggestions = _getThreeSuggestions();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20, top: 4),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: prompts
-            .map(
-              (p) => GestureDetector(
-                onTap: () {
-                  _inputController.text = p;
-                  _sendMessage(p);
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF64748B).withValues(alpha: 0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    p,
-                    style: _aiTextStyle(
-                      context,
-                      text: p,
-                      fontSize: 13,
-                      color: const Color(0xFF334155),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            )
-            .toList(),
+      padding: const EdgeInsets.only(bottom: 16, top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: List.generate(suggestions.length, (index) {
+          final p = suggestions[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _AnimatedSuggestionChip(
+              key: ValueKey('${_suggestionBatchIndex}_$index'),
+              text: p,
+              index: index,
+              controller: _suggestionsAnimCtrl,
+              onTap: () {
+                _inputController.text = p;
+                _sendMessage(p);
+              },
+            ),
+          );
+        }),
       ),
     );
   }
@@ -1139,7 +1205,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                     controller: _inputController,
                     focusNode: _inputFocus,
                     textInputAction: TextInputAction.send,
-                    maxLines: 4,
+                    maxLines: 5,
                     minLines: 1,
                     style: _aiTextStyle(
                       context,
@@ -1345,13 +1411,18 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
               Expanded(
                 child: Container(
                   height: 44,
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(28),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: const Color(0xFFE2E8F0),
+                      width: 1.2,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 8,
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
                     ],
@@ -1870,7 +1941,10 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _buildAssistantContent(BuildContext context) {
     final isWelcome = message.id == 'welcome';
-    final actions = isWelcome ? <_RouteAction>[] : _detectRouteActions(message.content, context);
+    final actions = isWelcome
+        ? _getWelcomeActions(context)
+        : _detectRouteActions(message.content, context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1879,7 +1953,7 @@ class _MessageBubble extends StatelessWidget {
           textColor: const Color(0xFF334155),
         ),
         if (actions.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1887,9 +1961,9 @@ class _MessageBubble extends StatelessWidget {
               return GestureDetector(
                 onTap: () => context.push(act.route),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _pink.withValues(alpha: 0.10),
+                    color: const Color(0xFFFFF0F5),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -1901,13 +1975,19 @@ class _MessageBubble extends StatelessWidget {
                         act.label,
                         style: ArabicTypography.bodyStyle(
                           context,
-                          fontSize: 12,
+                          fontSize: 12.5,
                           color: _pink,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: _pink),
+                      Icon(
+                        Directionality.of(context) == TextDirection.rtl
+                            ? Icons.chevron_left_rounded
+                            : Icons.chevron_right_rounded,
+                        size: 13,
+                        color: _pink,
+                      ),
                     ],
                   ),
                 ),
@@ -1930,6 +2010,33 @@ class _RouteAction {
     required this.label,
     required this.icon,
   });
+}
+
+List<_RouteAction> _getWelcomeActions(BuildContext context) {
+  final lang = Localizations.localeOf(context).languageCode;
+  return [
+    _RouteAction(
+      route: '/emploi',
+      label: lang == 'ar'
+          ? 'جدول الأوقات'
+          : (lang == 'fr' ? 'Emploi du temps' : 'Timetable'),
+      icon: Icons.calendar_today_rounded,
+    ),
+    _RouteAction(
+      route: '/absences',
+      label: lang == 'ar'
+          ? 'سجل الغيابات'
+          : (lang == 'fr' ? 'Consulter Absences' : 'Check Absences'),
+      icon: Icons.event_busy_rounded,
+    ),
+    _RouteAction(
+      route: '/documents',
+      label: lang == 'ar'
+          ? 'المستندات والشهادات'
+          : (lang == 'fr' ? 'Mes Documents' : 'My Documents'),
+      icon: Icons.folder_open_rounded,
+    ),
+  ];
 }
 
 List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
@@ -1966,7 +2073,7 @@ List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
     icon: Icons.calendar_today_rounded,
   );
   check(
-    keywords: ['/resultats', 'résultat', 'résultats', 'النتائج', 'معدل', 'درجات', 'grades', 'bulletin'],
+    keywords: ['/resultats', 'résultat', 'résultats', 'النتائج', 'معدل', 'درجات', 'grades', 'bulletin', 'note', 'notes'],
     route: '/resultats',
     labelAr: 'عرض النتائج والمعدلات',
     labelFr: 'Voir les Résultats',
@@ -2108,27 +2215,32 @@ class _MarkdownText extends StatelessWidget {
 
         switch (level) {
           case 1:
-            fontSize = 19;
+            fontSize = 20.5;
             topPadding = i == 0 ? 0 : 14;
+            bottomPadding = 6;
             break;
           case 2:
-            fontSize = 17;
+            fontSize = 18.0;
             topPadding = i == 0 ? 0 : 12;
+            bottomPadding = 6;
             break;
           case 3:
             fontSize = 15.5;
             topPadding = i == 0 ? 0 : 10;
+            bottomPadding = 4;
             break;
           case 4:
             fontSize = 14.5;
             weight = FontWeight.w700;
             topPadding = i == 0 ? 0 : 8;
+            bottomPadding = 4;
             headerColor = const Color(0xFF1E293B);
             break;
           default:
             fontSize = 13.5;
             weight = FontWeight.w700;
             topPadding = i == 0 ? 0 : 6;
+            bottomPadding = 3;
             headerColor = const Color(0xFF334155);
         }
 
@@ -2144,7 +2256,7 @@ class _MarkdownText extends StatelessWidget {
                 fontSize: fontSize,
                 fontWeight: weight,
                 color: headerColor,
-                letterSpacing: -0.2,
+                letterSpacing: -0.3,
               ),
             ),
           ),
@@ -2179,18 +2291,32 @@ class _MarkdownText extends StatelessWidget {
         continue;
       }
 
-      // Blockquote (>)
+      // Blockquote (>) - styled callout container with soft pink tint and left accent bar
       if (trimmed.startsWith('> ') || (trimmed.startsWith('>') && trimmed.length > 1)) {
-        final content = trimmed.replaceFirst(RegExp(r'^>\s*'), '');
+        final bqLines = <String>[trimmed.replaceFirst(RegExp(r'^>\s*'), '')];
+        while (i + 1 < lines.length) {
+          final nextTrimmed = lines[i + 1].trim();
+          if (nextTrimmed.startsWith('> ') || (nextTrimmed.startsWith('>') && nextTrimmed.length > 1)) {
+            bqLines.add(nextTrimmed.replaceFirst(RegExp(r'^>\s*'), ''));
+            i++;
+          } else {
+            break;
+          }
+        }
+        final content = bqLines.join('\n').trim();
         if (content.isEmpty) continue;
         widgets.add(Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 10, 8),
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsetsDirectional.fromSTEB(14, 10, 12, 10),
           decoration: BoxDecoration(
-            color: _pink.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(8),
-            border: const BorderDirectional(
-              start: BorderSide(color: _pink, width: 3),
+            color: const Color(0xFFFFF0F5),
+            borderRadius: BorderRadius.circular(14),
+            border: Border(
+              left: const BorderSide(color: _pink, width: 3.5),
+              top: BorderSide(color: _pink.withValues(alpha: 0.15), width: 1),
+              right: BorderSide(color: _pink.withValues(alpha: 0.15), width: 1),
+              bottom: BorderSide(color: _pink.withValues(alpha: 0.15), width: 1),
             ),
           ),
           child: RichText(
@@ -2201,7 +2327,7 @@ class _MarkdownText extends StatelessWidget {
                 context,
                 text: content,
                 fontSize: 13.5,
-                color: textColor,
+                color: const Color(0xFF475569),
                 fontStyle: FontStyle.italic,
                 height: 1.45,
               ),
@@ -2211,8 +2337,96 @@ class _MarkdownText extends StatelessWidget {
         continue;
       }
 
+      // Standalone italic subtitle (e.g. "*Semestre 1 · par matière*")
+      if ((trimmed.startsWith('*') && trimmed.endsWith('*') && !trimmed.startsWith('**') && trimmed.length > 2) ||
+          (trimmed.startsWith('_') && trimmed.endsWith('_') && !trimmed.startsWith('__') && trimmed.length > 2)) {
+        final content = trimmed.substring(1, trimmed.length - 1).trim();
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 0, bottom: 8),
+          child: RichText(
+            text: _parseInline(
+              content,
+              context,
+              _aiTextStyle(
+                context,
+                text: content,
+                fontSize: 12.5,
+                color: const Color(0xFF64748B),
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ));
+        continue;
+      }
+
+      // Insight / Lecture line (e.g. "**Lecture :** ton CC en Informatique...")
+      if (trimmed.startsWith('**Lecture :**') || trimmed.startsWith('**Lecture:**') || trimmed.startsWith('**Conseil :**')) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 3),
+          child: RichText(
+            text: _parseInline(
+              trimmed,
+              context,
+              _aiTextStyle(
+                context,
+                text: trimmed,
+                fontSize: 13.5,
+                color: const Color(0xFF1E293B),
+                height: 1.45,
+              ),
+            ),
+          ),
+        ));
+        continue;
+      }
+
+      // Standalone medal rank row (e.g. "🥇 **Informatique** : **16.75**/20 · Coeff 1.0")
+      if (trimmed.startsWith('🥇') || trimmed.startsWith('🥈') || trimmed.startsWith('🥉')) {
+        widgets.add(Padding(
+          padding: const EdgeInsetsDirectional.only(start: 2, top: 3, bottom: 2),
+          child: RichText(
+            text: _parseInline(
+              trimmed,
+              context,
+              _aiTextStyle(
+                context,
+                text: trimmed,
+                fontSize: 14.5,
+                color: textColor,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ));
+        continue;
+      }
+
       // Bullet list (- , * , • , •) with indentation support for sub-items
       final isIndented = line.startsWith('  ') || line.startsWith('\t');
+
+      // Indented detail sub-line under a row (e.g. "   Orale 19.00 · CC 10.00 · Synthèse 19.00")
+      if (isIndented && !trimmed.startsWith('-') && !trimmed.startsWith('*') && !trimmed.startsWith('•')) {
+        widgets.add(Padding(
+          padding: const EdgeInsetsDirectional.only(start: 22, bottom: 4),
+          child: RichText(
+            text: _parseInline(
+              trimmed,
+              context,
+              _aiTextStyle(
+                context,
+                text: trimmed,
+                fontSize: 13,
+                color: const Color(0xFF64748B),
+                height: 1.45,
+              ),
+            ),
+          ),
+        ));
+        continue;
+      }
+
       if (trimmed.startsWith('- ') ||
           trimmed.startsWith('* ') ||
           trimmed.startsWith('• ') ||
@@ -2293,6 +2507,28 @@ class _MarkdownText extends StatelessWidget {
       if (numberedMatch != null) {
         final num = numberedMatch.group(1)!;
         final content = numberedMatch.group(2)!;
+        final startsWithMedal = content.startsWith('🥇') || content.startsWith('🥈') || content.startsWith('🥉');
+
+        if (startsWithMedal) {
+          widgets.add(Padding(
+            padding: const EdgeInsetsDirectional.only(start: 2, top: 3, bottom: 2),
+            child: RichText(
+              text: _parseInline(
+                content,
+                context,
+                _aiTextStyle(
+                  context,
+                  text: content,
+                  fontSize: 14.5,
+                  color: textColor,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ));
+          continue;
+        }
+
         widgets.add(Padding(
           padding: const EdgeInsetsDirectional.only(start: 2, bottom: 4),
           child: Row(
@@ -2625,3 +2861,89 @@ class _AttachOption extends StatelessWidget {
     );
   }
 }
+
+// ─── Animated iOS-Style Suggestion Chip ────────────────────────────────────────
+class _AnimatedSuggestionChip extends StatefulWidget {
+  final String text;
+  final int index;
+  final AnimationController controller;
+  final VoidCallback onTap;
+
+  const _AnimatedSuggestionChip({
+    super.key,
+    required this.text,
+    required this.index,
+    required this.controller,
+    required this.onTap,
+  });
+
+  @override
+  State<_AnimatedSuggestionChip> createState() => _AnimatedSuggestionChipState();
+}
+
+class _AnimatedSuggestionChipState extends State<_AnimatedSuggestionChip> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = (widget.index * 0.16).clamp(0.0, 0.6);
+    final end = (start + 0.44).clamp(0.0, 1.0);
+    final anim = CurvedAnimation(
+      parent: widget.controller,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, child) {
+        final opacity = anim.value.clamp(0.0, 1.0);
+        final translateY = (1.0 - anim.value) * 18.0;
+        final scale = 0.94 + (0.06 * anim.value);
+
+        return Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(0, translateY),
+            child: Transform.scale(
+              scale: _isPressed ? 0.96 : scale,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10.5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF64748B).withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Text(
+            widget.text,
+            style: _aiTextStyle(
+              context,
+              text: widget.text,
+              fontSize: 13.5,
+              color: const Color(0xFF334155),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
