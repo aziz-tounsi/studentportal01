@@ -865,6 +865,26 @@ I have **complete** access to your academic data — grades, timetable, absences
               ),
             ),
           ),
+          // Edge drag gesture to open history drawer from the opposite edge of the screen exit gesture
+          if (!_showHistory)
+            Positioned(
+              left: isRtl ? 0 : null,
+              right: isRtl ? null : 0,
+              top: 0,
+              bottom: 0,
+              width: 35,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragUpdate: (details) {
+                  if (isRtl) {
+                    if ((details.primaryDelta ?? 0) > 8) _openHistory();
+                  } else {
+                    if ((details.primaryDelta ?? 0) < -8) _openHistory();
+                  }
+                },
+              ),
+            ),
+
           AnimatedPositioned(
             left: isRtl ? (_showHistory ? 0 : -screenWidth * 0.82) : null,
             right: isRtl ? null : (_showHistory ? 0 : -screenWidth * 0.82),
@@ -882,12 +902,7 @@ I have **complete** access to your academic data — grades, timetable, absences
                 }
               },
               child: ClipRRect(
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(isRtl ? 0 : 28),
-                  bottomLeft: Radius.circular(isRtl ? 0 : 28),
-                  topRight: Radius.circular(isRtl ? 28 : 0),
-                  bottomRight: Radius.circular(isRtl ? 28 : 0),
-                ),
+                borderRadius: BorderRadius.zero,
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                   child: Container(
@@ -1183,7 +1198,11 @@ I have **complete** access to your academic data — grades, timetable, absences
                     shrinkScale: 0.86,
                     overshootScale: 1.10,
                     delayNavigation: false,
-                    onTap: () => setState(() => _showAttachModal = true),
+                    hitPadding: const EdgeInsets.all(8),
+                    onTap: () {
+                      FocusScope.of(context).unfocus();
+                      setState(() => _showAttachModal = true);
+                    },
                     child: Container(
                       width: 40,
                       height: 40,
@@ -1305,16 +1324,24 @@ I have **complete** access to your academic data — grades, timetable, absences
                                 GestureDetector(
                                   onTap: () =>
                                       setState(() => _showAttachModal = false),
-                                  child: Container(
-                                    width: 36,
-                                    height: 36,
-                                    margin: const EdgeInsetsDirectional.only(end: 12),
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Color(0xFFF1F5F9),
+                                  child: BouncingWrapper(
+                                    shrinkScale: 0.86,
+                                    overshootScale: 1.10,
+                                    delayNavigation: false,
+                                    hitPadding: const EdgeInsets.all(12),
+                                    onTap: () =>
+                                        setState(() => _showAttachModal = false),
+                                    child: Container(
+                                      width: 36,
+                                      height: 36,
+                                      margin: const EdgeInsetsDirectional.only(end: 12),
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Color(0xFFF1F5F9),
+                                      ),
+                                      child: const Icon(Icons.close_rounded,
+                                          size: 20, color: Color(0xFF94A3B8)),
                                     ),
-                                    child: const Icon(Icons.close_rounded,
-                                        size: 20, color: Color(0xFF94A3B8)),
                                   ),
                                 ),
                               ],
@@ -3010,30 +3037,33 @@ class _BouncingSendButtonState extends State<_BouncingSendButton>
       onTapUp: _handleTapUp,
       onTapCancel: _handleTapCancel,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: _scaleAnimation,
-        builder: (context, child) => Transform.scale(
-          scale: _scaleAnimation.value,
-          child: child,
-        ),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.enabled ? _pink : const Color(0xFFCBD5E1),
-            boxShadow: widget.enabled
-                ? [
-                    BoxShadow(
-                      color: _pink.withValues(alpha: 0.32),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: AnimatedBuilder(
+          animation: _scaleAnimation,
+          builder: (context, child) => Transform.scale(
+            scale: _scaleAnimation.value,
+            child: child,
           ),
-          child: const Icon(Icons.send, size: 18, color: Colors.white),
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.enabled ? _pink : const Color(0xFFCBD5E1),
+              boxShadow: widget.enabled
+                  ? [
+                      BoxShadow(
+                        color: _pink.withValues(alpha: 0.32),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: const Icon(Icons.send, size: 18, color: Colors.white),
+          ),
         ),
       ),
     );

@@ -9,6 +9,7 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../../core/router/app_router.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/bouncing_wrapper.dart';
 
 class WriteSuggestionScreen extends ConsumerStatefulWidget {
   const WriteSuggestionScreen({super.key});
@@ -330,7 +331,11 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
               ),
             );
           }).toList(),
-          child: Container(
+          child: AnimatedScale(
+            scale: _isTypeDropdownOpen ? 0.98 : 1.0,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutBack,
+            child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             child: Row(
               children: [
@@ -389,6 +394,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -421,7 +427,10 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 child: Row(
                   children: [
-                    GestureDetector(
+                    BouncingWrapper(
+                      shrinkScale: 0.86,
+                      overshootScale: 1.10,
+                      delayNavigation: true,
                       onTap: () {
                         dismissAllOverlaysAndPopups();
                         context.go('/suggestions');

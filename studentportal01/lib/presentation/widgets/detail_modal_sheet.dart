@@ -74,10 +74,15 @@ class _DetailModalSheetState extends State<DetailModalSheet>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      value: widget.initialChildSize,
-      upperBound: 1.0,
+      value: 0.0,
+      upperBound: 1.05,
       lowerBound: 0.0,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _animateTo(widget.initialChildSize);
+      }
+    });
   }
 
   @override
@@ -91,8 +96,8 @@ class _DetailModalSheetState extends State<DetailModalSheet>
     _ctrl
         .animateTo(
           target.clamp(0.0, 1.0),
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.elasticOut,
+          duration: const Duration(milliseconds: 460),
+          curve: Curves.easeOutBack,
         )
         .then((_) => onComplete?.call());
   }

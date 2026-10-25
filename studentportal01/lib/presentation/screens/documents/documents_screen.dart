@@ -564,7 +564,11 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                   ),
                 );
               }).toList(),
-              child: Container(
+              child: AnimatedScale(
+                scale: _isFilterDropdownOpen ? 0.95 : 1.0,
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutBack,
+                child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.9),
@@ -612,6 +616,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               ),
             ),
           ),
+        ),
         ],
       ),
     );

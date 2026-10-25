@@ -126,7 +126,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 '/contact',
                 '/about',
                 '/profile',
-                '/mon-solde',
               ].contains(state.matchedLocation);
 
               final backSwipeInterceptor = ref.watch(backSwipeInterceptorProvider);
@@ -175,7 +174,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   backgroundPage: const HomeScreen(),
                   backgroundGradient: homeGradient,
                   onReturn: onReturnCallback,
-                  onInterceptSwipe: backSwipeInterceptor,
+                  onInterceptSwipe: () {
+                    final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 50;
+                    if (isKeyboardOpen) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      return true;
+                    }
+                    return backSwipeInterceptor != null ? backSwipeInterceptor() : false;
+                  },
                   child: child,
                 );
               }

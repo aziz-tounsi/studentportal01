@@ -12,6 +12,7 @@ import '../../../data/models/absence_model.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../providers/nav_bar_provider.dart';
+import '../../widgets/bouncing_wrapper.dart';
 
 class AbsenceDetailData {
   final String subjectName;
@@ -293,16 +294,15 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       padding: const EdgeInsets.fromLTRB(20, 8, 24, 0),
       child: Row(
         children: [
-          GestureDetector(
+          BouncingWrapper(
+            shrinkScale: 0.86,
+            overshootScale: 1.10,
+            delayNavigation: true,
             onTap: () {
               final fromAIChat = ref.read(navigatedFromAIChatProvider);
               if (fromAIChat) {
                 ref.read(navigatedFromAIChatProvider.notifier).state = false;
                 context.go('/ai-chat');
-              } else if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              } else if (context.canPop()) {
-                context.pop();
               } else {
                 context.go('/absences');
               }

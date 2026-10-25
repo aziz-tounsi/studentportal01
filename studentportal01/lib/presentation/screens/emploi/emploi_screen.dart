@@ -267,11 +267,61 @@ class EmploiScreen extends ConsumerStatefulWidget {
   ConsumerState<EmploiScreen> createState() => _EmploiScreenState();
 }
 
-class _EmploiScreenState extends ConsumerState<EmploiScreen> {
+class _EmploiScreenState extends ConsumerState<EmploiScreen>
+    with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
+  late final TransformationController _zoomController;
+  late final AnimationController _zoomAnimCtrl;
+  Animation<Matrix4>? _zoomAnimation;
+  bool _isZoomed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _zoomController = TransformationController();
+    _zoomAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _zoomController.addListener(_onZoomChanged);
+  }
+
+  void _onZoomChanged() {
+    final scale = _zoomController.value.getMaxScaleOnAxis();
+    final isZoomed = scale > 1.05;
+    if (_isZoomed != isZoomed) {
+      setState(() {
+        _isZoomed = isZoomed;
+      });
+    }
+  }
+
+  void _resetZoom() {
+    _zoomAnimation = Matrix4Tween(
+      begin: _zoomController.value,
+      end: Matrix4.identity(),
+    ).animate(CurvedAnimation(
+      parent: _zoomAnimCtrl,
+      curve: Curves.easeOutBack,
+    ));
+
+    _zoomAnimCtrl.reset();
+    void listener() {
+      if (_zoomAnimation != null) {
+        _zoomController.value = _zoomAnimation!.value;
+      }
+    }
+    _zoomAnimation!.addListener(listener);
+    _zoomAnimCtrl.forward().then((_) {
+      _zoomAnimation?.removeListener(listener);
+    });
+  }
 
   void _setExpanded(bool expanded) {
     if (_isExpanded != expanded) {
+      if (_isZoomed) {
+        _resetZoom();
+      }
       setState(() {
         _isExpanded = expanded;
       });
@@ -281,6 +331,9 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
 
   @override
   void dispose() {
+    _zoomController.removeListener(_onZoomChanged);
+    _zoomController.dispose();
+    _zoomAnimCtrl.dispose();
     // Reset navbar visibility if disposed while expanded
     if (_isExpanded) {
       Future.microtask(() {
@@ -317,10 +370,17 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
           ),
         ),
         child: PopScope(
-          canPop: !_isExpanded,
+          canPop: !_isExpanded && !_isZoomed,
           onPopInvokedWithResult: (didPop, _) {
             if (didPop) return;
-            _setExpanded(false);
+            if (_isZoomed) {
+              _resetZoom();
+              return;
+            }
+            if (_isExpanded) {
+              _setExpanded(false);
+              return;
+            }
           },
           child: Stack(
             children: [
@@ -417,7 +477,9 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                GestureDetector(
+                                BouncingWrapper(
+                                  shrinkScale: 0.86,
+                                  overshootScale: 1.10,
                                   onTap: () => _setExpanded(true),
                                   child: Container(
                                     width: 48,
@@ -537,6 +599,36 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                   ),
                   loading: () => const SizedBox.shrink(),
                   error: (_, _) => const SizedBox.shrink(),
+                ),
+              if (_isZoomed)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  right: 20,
+                  child: BouncingWrapper(
+                    shrinkScale: 0.86,
+                    overshootScale: 1.10,
+                    onTap: _resetZoom,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.16),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 24,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -720,14 +812,41 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
       ),
     ));
 
+    final interactive = InteractiveViewer(
+      transformationController: _zoomController,
+      minScale: 1.0,
+      maxScale: 3.5,
+      boundaryMargin: const EdgeInsets.all(80),
+      clipBehavior: Clip.none,
+      child: container,
+    );
+
     if (isFullScreen) {
       return Stack(
+        clipBehavior: Clip.none,
         children: [
-          Positioned.fill(child: container),
+          if (_isZoomed)
+            Positioned(
+              left: -500,
+              right: -500,
+              top: -1000,
+              bottom: -1000,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.25),
+                  ),
+                ),
+              ),
+            ),
+          Positioned.fill(child: interactive),
           Positioned(
             top: 12,
             right: 20,
-            child: GestureDetector(
+            child: BouncingWrapper(
+              shrinkScale: 0.86,
+              overshootScale: 1.10,
               onTap: () => _setExpanded(false),
               child: Container(
                 width: 40,
@@ -753,7 +872,27 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
 
     return SizedBox(
       height: (MediaQuery.of(context).size.height * 0.68).clamp(580.0, 750.0),
-      child: container,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          if (_isZoomed)
+            Positioned(
+              left: -500,
+              right: -500,
+              top: -1000,
+              bottom: -1000,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.25),
+                  ),
+                ),
+              ),
+            ),
+          interactive,
+        ],
+      ),
     );
   }
 
@@ -820,7 +959,8 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
     return Directionality(
       textDirection: TextDirection.ltr,
       child: BouncingWrapper(
-        shrinkScale: 0.92,
+        shrinkScale: 0.90,
+        overshootScale: 1.055,
         onTap: () {
           _showSlotDetails(context, slot, color, timeRange);
         },

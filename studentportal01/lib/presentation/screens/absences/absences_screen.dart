@@ -712,7 +712,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _GlassyAbsenceCard(
                   absence: a,
-                  onTap: () => context.push('/absences/${a.subjectOfferingId}'),
+                  onTap: () => context.go('/absences/${a.subjectOfferingId}'),
                 ),
               )),
           ],
