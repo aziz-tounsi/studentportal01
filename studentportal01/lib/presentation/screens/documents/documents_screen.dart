@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
@@ -919,12 +919,15 @@ class _DocumentCard extends StatelessWidget {
                 
                 const SizedBox(width: 8),
                 // Normal grey arrow pointing left in Arabic, right in Latin
-                Icon(
-                  ArabicTypography.isArabic(context)
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
-                  size: 18,
-                  color: Colors.grey[400],
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Icon(
+                    ArabicTypography.isArabic(context)
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded,
+                    size: 18,
+                    color: Colors.grey[400],
+                  ),
                 ),
               ],
             ),

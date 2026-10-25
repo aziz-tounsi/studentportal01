@@ -316,10 +316,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ),
                 ],
               ),
-              child: Transform.scale(
-                scaleX: isAr ? -1 : 1,
+              child: Directionality(
+                textDirection: TextDirection.ltr,
                 child: Icon(
-                  Icons.arrow_back_rounded,
+                  isAr ? Icons.arrow_forward_rounded : Icons.arrow_back_rounded,
                   color: Colors.grey[700],
                   size: 22,
                 ),

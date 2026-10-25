@@ -360,12 +360,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ],
                               ),
                               child: Center(
-                                child: Transform.scale(
-                                  scaleX: isRtl ? -1 : 1,
-                                  child: const Icon(
-                                    Icons.arrow_back_ios_new_rounded,
+                                child: Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: Icon(
+                                    isRtl ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_new_rounded,
                                     size: 18,
-                                    color: Color(0xFF1F2937),
+                                    color: const Color(0xFF1F2937),
                                   ),
                                 ),
                               ),
@@ -856,10 +856,13 @@ class _SettingsActionRow extends StatelessWidget {
                   color: Color(0xFFF8FAFC),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  isAr ? Icons.arrow_back_ios_new_rounded : Icons.arrow_forward_ios_rounded,
-                  size: 13,
-                  color: const Color(0xFF94A3B8),
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Icon(
+                    isAr ? Icons.arrow_back_ios_new_rounded : Icons.arrow_forward_ios_rounded,
+                    size: 13,
+                    color: const Color(0xFF94A3B8),
+                  ),
                 ),
               ),
           ],

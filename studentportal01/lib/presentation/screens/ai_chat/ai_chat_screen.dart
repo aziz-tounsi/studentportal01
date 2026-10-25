@@ -945,12 +945,15 @@ I have **complete** access to your academic data — grades, timetable, absences
                     width: 40,
                     height: 40,
                     alignment: Alignment.center,
-                    child: Icon(
-                      Directionality.of(context) == TextDirection.rtl
-                          ? Icons.chevron_right
-                          : Icons.chevron_left,
-                      color: const Color(0xFF475569),
-                      size: 22,
+                    child: Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Icon(
+                        Directionality.of(context) == TextDirection.rtl
+                            ? Icons.arrow_forward_ios_rounded
+                            : Icons.arrow_back_ios_new_rounded,
+                        color: const Color(0xFF475569),
+                        size: 20,
+                      ),
                     ),
                   ),
                 ),
@@ -1182,101 +1185,106 @@ I have **complete** access to your academic data — grades, timetable, absences
               color: Colors.white.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(28),
             ),
-            child: Row(
-              children: [
-                // Attach button
-                GestureDetector(
-                  onTap: () => setState(() => _showAttachModal = true),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFFF1F5F9),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.add, size: 22, color: Color(0xFF64748B)),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                // Text input
-                Expanded(
-                  child: TextField(
-                    controller: _inputController,
-                    focusNode: _inputFocus,
-                    textInputAction: TextInputAction.send,
-                    maxLines: 5,
-                    minLines: 1,
-                    style: _aiTextStyle(
-                      context,
-                      text: _inputController.text.isNotEmpty
-                          ? _inputController.text
-                          : (isRtl ? 'ع' : ''),
-                      fontSize: 15,
-                      color: const Color(0xFF475569),
-                    ),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.transparent,
-                      border: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      hintText: AppLocalizations.of(context)
-                          .translate('ask_ai_question_hint'),
-                      hintStyle: _aiTextStyle(
-                        context,
-                        text: AppLocalizations.of(context)
-                            .translate('ask_ai_question_hint'),
-                        fontSize: 14,
-                        color: const Color(0xFF94A3B8),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                children: [
+                  // Attach button (on the left)
+                  GestureDetector(
+                    onTap: () => setState(() => _showAttachModal = true),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFFF1F5F9),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 10),
-                      isDense: true,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.add, size: 22, color: Color(0xFF64748B)),
                     ),
-                    onSubmitted: (val) => _sendMessage(val),
-                    onChanged: (_) => setState(() {}),
                   ),
-                ),
-                // Send button
-                GestureDetector(
-                  onTap: (_inputController.text.trim().isNotEmpty ||
-                              _pendingFileText != null) &&
-                          !_isTyping
-                      ? () => _sendMessage(_inputController.text)
-                      : null,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: (_inputController.text.trim().isNotEmpty ||
-                                  _pendingFileText != null) &&
-                              !_isTyping
-                          ? _pink
-                          : const Color(0xFFCBD5E1),
-                      boxShadow: (_inputController.text.trim().isNotEmpty ||
-                                  _pendingFileText != null) &&
-                              !_isTyping
-                          ? [
-                              BoxShadow(
-                                color: _pink.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : null,
+                  const SizedBox(width: 4),
+                  // Text input (middle)
+                  Expanded(
+                    child: TextField(
+                      controller: _inputController,
+                      focusNode: _inputFocus,
+                      textInputAction: TextInputAction.send,
+                      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                      textAlign: isRtl ? TextAlign.right : TextAlign.left,
+                      maxLines: 5,
+                      minLines: 1,
+                      style: _aiTextStyle(
+                        context,
+                        text: _inputController.text.isNotEmpty
+                            ? _inputController.text
+                            : (isRtl ? 'ع' : ''),
+                        fontSize: 15,
+                        color: const Color(0xFF475569),
+                      ),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.transparent,
+                        border: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        hintText: AppLocalizations.of(context)
+                            .translate('ask_ai_question_hint'),
+                        hintStyle: _aiTextStyle(
+                          context,
+                          text: AppLocalizations.of(context)
+                              .translate('ask_ai_question_hint'),
+                          fontSize: 14,
+                          color: const Color(0xFF94A3B8),
+                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 10),
+                        isDense: true,
+                      ),
+                      onSubmitted: (val) => _sendMessage(val),
+                      onChanged: (_) => setState(() {}),
                     ),
-                    child: _isTyping
-                        ? const IosLoader.small(size: 18, color: Colors.white)
-                        : Transform.scale(
-                            scaleX: isRtl ? -1 : 1,
-                            child: const Icon(Icons.send, size: 18, color: Colors.white),
-                          ),
                   ),
-                ),
-              ],
+                  // Send button (on the right)
+                  GestureDetector(
+                    onTap: (_inputController.text.trim().isNotEmpty ||
+                                _pendingFileText != null) &&
+                            !_isTyping
+                        ? () => _sendMessage(_inputController.text)
+                        : null,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: (_inputController.text.trim().isNotEmpty ||
+                                    _pendingFileText != null) &&
+                                !_isTyping
+                            ? _pink
+                            : const Color(0xFFCBD5E1),
+                        boxShadow: (_inputController.text.trim().isNotEmpty ||
+                                    _pendingFileText != null) &&
+                                !_isTyping
+                            ? [
+                                BoxShadow(
+                                  color: _pink.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: _isTyping
+                          ? const IosLoader.small(size: 18, color: Colors.white)
+                          : Transform.scale(
+                              scaleX: isRtl ? -1 : 1,
+                              child: const Icon(Icons.send, size: 18, color: Colors.white),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

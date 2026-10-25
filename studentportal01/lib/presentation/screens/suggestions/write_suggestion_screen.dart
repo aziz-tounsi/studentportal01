@@ -429,10 +429,10 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                             ),
                           ],
                         ),
-                        child: Transform.scale(
-                          scaleX: isRtl ? -1 : 1,
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
                           child: Icon(
-                            Icons.arrow_back_rounded,
+                            isRtl ? Icons.arrow_forward_rounded : Icons.arrow_back_rounded,
                             color: Colors.grey[700],
                             size: 22,
                           ),

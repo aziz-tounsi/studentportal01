@@ -31,13 +31,9 @@ class IosEdgeSwipeBack extends StatefulWidget {
 }
 
 class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _progressAnim;
-
-  // Subtle spring bounce controller for when the under-page becomes the main page
-  late AnimationController _bounceCtrl;
-  late Animation<double> _bounceAnim;
 
   double _progress = 0.0;
   bool _isDragging = false;
@@ -59,37 +55,16 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
         _progress = _progressAnim.value;
       });
     });
-
-    _bounceCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 180),
-    );
-    _bounceAnim = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.025)
-            .chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 45,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.025, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeInCubic)),
-        weight: 55,
-      ),
-    ]).animate(_bounceCtrl);
-    _bounceCtrl.addListener(() {
-      setState(() {});
-    });
   }
 
   @override
   void dispose() {
     _animCtrl.dispose();
-    _bounceCtrl.dispose();
     super.dispose();
   }
 
   void _onDragStart(DragStartDetails details, bool isRtl, double screenWidth) {
-    if (_animCtrl.isAnimating || _bounceCtrl.isAnimating) return;
+    if (_animCtrl.isAnimating) return;
     _startX = details.globalPosition.dx;
     _lastX = _startX;
     _lastTime = DateTime.now().millisecondsSinceEpoch;
@@ -129,14 +104,12 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     final passedDist = _progress >= 0.22;
 
     if (passedDist || flicked) {
-      // Animate slide completion, trigger under-page micro bounce, and execute return
+      // Animate slide completion and execute return
       _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
         CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
       _animCtrl.forward(from: 0.0).then((_) {
-        _bounceCtrl.forward(from: 0.0).then((_) {
-          _executeReturn();
-        });
+        _executeReturn();
       });
     } else {
       // Snap back to closed state
@@ -177,16 +150,14 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // Zoomed out slightly at start (0.92), zooms smoothly to 1.0 as progress reaches 1.0,
-    // and micro-bounces (up to 1.025) as it surfaces to the top
-    final double underPageScale = (0.92 + (0.08 * _progress)) *
-        (_bounceCtrl.isAnimating ? _bounceAnim.value : 1.0);
+    // Zoomed out slightly at start (0.92), zooms smoothly to 1.0 as progress reaches 1.0
+    final double underPageScale = 0.92 + (0.08 * _progress);
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. Blurred bottom destination page underneath (visible during swipe and bounce animation)
-        if (_progress > 0.0 || _bounceCtrl.isAnimating) ...[
+        // 1. Blurred bottom destination page underneath (visible during swipe animation)
+        if (_progress > 0.0) ...[
           Positioned.fill(
             child: IgnorePointer(
               child: Transform.scale(
@@ -233,7 +204,7 @@ class _IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                   )
                 : null,
             child: IgnorePointer(
-              ignoring: _isDragging || _animCtrl.isAnimating || _bounceCtrl.isAnimating,
+              ignoring: _isDragging || _animCtrl.isAnimating,
               child: widget.child,
             ),
           ),
