@@ -236,7 +236,7 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
           subjectsAsync.when(
             data: (subjects) {
               return DropdownButtonFormField<String>(
-                value: currentFilter.subject,
+                initialValue: currentFilter.subject,
                 decoration: const InputDecoration(
                   labelText: 'Matière',
                   prefixIcon: Icon(Icons.subject_rounded),
@@ -255,14 +255,14 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
               );
             },
             loading: () => const LinearProgressIndicator(),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
           ),
           const SizedBox(height: AppSizes.paddingM),
           // Teacher filter
           teachersAsync.when(
             data: (teachers) {
               return DropdownButtonFormField<String>(
-                value: currentFilter.teacherName,
+                initialValue: currentFilter.teacherName,
                 decoration: const InputDecoration(
                   labelText: 'Enseignant',
                   prefixIcon: Icon(Icons.person_rounded),
@@ -281,7 +281,7 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
               );
             },
             loading: () => const LinearProgressIndicator(),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
           ),
           const SizedBox(height: AppSizes.paddingM),
           // Attachments filter

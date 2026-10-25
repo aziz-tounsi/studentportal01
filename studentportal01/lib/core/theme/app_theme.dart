@@ -350,6 +350,99 @@ class AppTheme {
     );
   }
 
+  static TextTheme arabicTextTheme(TextTheme base, {Color? primaryColor, Color? secondaryColor}) {
+    final pColor = primaryColor ?? AppColors.textPrimary;
+    final sColor = secondaryColor ?? AppColors.textSecondary;
+
+    return base.copyWith(
+      // Headers & Titles: Cairo
+      displayLarge: GoogleFonts.cairo(
+        fontSize: AppSizes.fontDisplay,
+        fontWeight: FontWeight.w900,
+        color: pColor,
+        letterSpacing: -0.5,
+      ),
+      displayMedium: GoogleFonts.cairo(
+        fontSize: AppSizes.fontHeading,
+        fontWeight: FontWeight.w700,
+        color: pColor,
+        letterSpacing: -0.3,
+      ),
+      displaySmall: GoogleFonts.cairo(
+        fontSize: AppSizes.fontTitle,
+        fontWeight: FontWeight.w700,
+        color: pColor,
+      ),
+      headlineLarge: GoogleFonts.cairo(
+        fontSize: AppSizes.fontXXL,
+        fontWeight: FontWeight.w700,
+        color: pColor,
+      ),
+      headlineMedium: GoogleFonts.cairo(
+        fontSize: AppSizes.fontXL,
+        fontWeight: FontWeight.w600,
+        color: pColor,
+      ),
+      headlineSmall: GoogleFonts.cairo(
+        fontSize: AppSizes.fontL,
+        fontWeight: FontWeight.w600,
+        color: pColor,
+      ),
+      titleLarge: GoogleFonts.cairo(
+        fontSize: AppSizes.fontXL,
+        fontWeight: FontWeight.w700,
+        color: pColor,
+      ),
+      titleMedium: GoogleFonts.cairo(
+        fontSize: AppSizes.fontL,
+        fontWeight: FontWeight.w600,
+        color: pColor,
+      ),
+      titleSmall: GoogleFonts.cairo(
+        fontSize: AppSizes.fontM,
+        fontWeight: FontWeight.w600,
+        color: pColor,
+      ),
+
+      // Body & Interface: Tajawal
+      bodyLarge: GoogleFonts.tajawal(
+        fontSize: AppSizes.fontL,
+        fontWeight: FontWeight.w400,
+        color: pColor,
+        height: 1.5,
+      ),
+      bodyMedium: GoogleFonts.tajawal(
+        fontSize: AppSizes.fontM,
+        fontWeight: FontWeight.w400,
+        color: sColor,
+        height: 1.5,
+      ),
+      bodySmall: GoogleFonts.tajawal(
+        fontSize: AppSizes.fontS,
+        fontWeight: FontWeight.w300,
+        color: sColor,
+        height: 1.45,
+      ),
+
+      // Buttons & Labels: Tajawal
+      labelLarge: GoogleFonts.tajawal(
+        fontSize: AppSizes.fontM,
+        fontWeight: FontWeight.w700,
+        color: pColor,
+      ),
+      labelMedium: GoogleFonts.tajawal(
+        fontSize: AppSizes.fontS,
+        fontWeight: FontWeight.w500,
+        color: sColor,
+      ),
+      labelSmall: GoogleFonts.tajawal(
+        fontSize: AppSizes.fontXS,
+        fontWeight: FontWeight.w400,
+        color: AppColors.textLight,
+      ),
+    );
+  }
+
   static AppBarTheme get _appBarTheme {
     return AppBarTheme(
       elevation: 0,

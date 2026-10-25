@@ -8,11 +8,13 @@ class ResultsRepository {
 
   ResultsRepository(this._client);
 
-  /// Get all academic years
-  Future<List<Map<String, dynamic>>> getAcademicYears() async {
-    final response = await _client
-        .from('academic_years')
-        .select()
+  /// Get all academic years (optionally filtered by schoolId)
+  Future<List<Map<String, dynamic>>> getAcademicYears({String? schoolId}) async {
+    var query = _client.from('academic_years').select();
+    if (schoolId != null && schoolId.isNotEmpty) {
+      query = query.eq('school_id', schoolId);
+    }
+    final response = await query
         .order('is_current', ascending: false)
         .order('start_date', ascending: false);
     return List<Map<String, dynamic>>.from(response);
@@ -20,14 +22,18 @@ class ResultsRepository {
 
   /// Get semesters for an academic year (or all semesters if no year specified)
   Future<List<Map<String, dynamic>>> getSemesters(
-    String? academicYearId,
-  ) async {
+    String? academicYearId, {
+    String? schoolId,
+  }) async {
     var query = _client
         .from('semesters')
         .select('id, name, number, start_date, end_date, academic_year_id, is_current');
 
     if (academicYearId != null && academicYearId.isNotEmpty) {
       query = query.eq('academic_year_id', academicYearId);
+    }
+    if (schoolId != null && schoolId.isNotEmpty) {
+      query = query.eq('school_id', schoolId);
     }
 
     final response = await query.order('number', ascending: true);

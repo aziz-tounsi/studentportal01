@@ -62,6 +62,12 @@ class ClassModel {
   final String? level;
   final int? year;
   final String? section;
+  final String? niveauId;
+  final String? sectionId;
+  final String? niveauName;
+  final String? niveauCode;
+  final String? sectionName;
+  final String? sectionCode;
   final DateTime createdAt;
 
   ClassModel({
@@ -71,18 +77,43 @@ class ClassModel {
     this.level,
     this.year,
     this.section,
+    this.niveauId,
+    this.sectionId,
+    this.niveauName,
+    this.niveauCode,
+    this.sectionName,
+    this.sectionCode,
     required this.createdAt,
   });
 
   factory ClassModel.fromJson(Map<String, dynamic> json) {
+    final niveauMap = json['niveaux'] as Map<String, dynamic>?;
+    final sectionMap = json['sections'] as Map<String, dynamic>?;
+
+    final resolvedNiveauName = niveauMap?['name'] as String? ?? json['niveau_name'] as String?;
+    final resolvedNiveauCode = niveauMap?['code'] as String? ?? json['niveau_code'] as String?;
+    final resolvedSectionName = sectionMap?['name'] as String? ?? json['section_name'] as String?;
+    final resolvedSectionCode = sectionMap?['code'] as String? ?? json['section_code'] as String?;
+
+    final resolvedLevel = json['level'] as String? ?? resolvedNiveauName ?? resolvedNiveauCode;
+    final resolvedSection = json['section'] as String? ?? resolvedSectionName ?? resolvedSectionCode;
+
     return ClassModel(
       id: json['id'] as String,
-      schoolId: json['school_id'] as String,
-      name: json['name'] as String,
-      level: json['level'] as String?,
+      schoolId: (json['school_id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      level: resolvedLevel,
       year: json['year'] as int?,
-      section: json['section'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      section: resolvedSection,
+      niveauId: (json['niveau_id'] as String?) ?? niveauMap?['id'] as String?,
+      sectionId: (json['section_id'] as String?) ?? sectionMap?['id'] as String?,
+      niveauName: resolvedNiveauName,
+      niveauCode: resolvedNiveauCode,
+      sectionName: resolvedSectionName,
+      sectionCode: resolvedSectionCode,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
+          : DateTime.now(),
     );
   }
 
@@ -94,6 +125,8 @@ class ClassModel {
       'level': level,
       'year': year,
       'section': section,
+      'niveau_id': niveauId,
+      'section_id': sectionId,
       'created_at': createdAt.toIso8601String(),
     };
   }

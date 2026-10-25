@@ -1082,3 +1082,25 @@ final semestersProvider =
     AsyncNotifierProvider<SemestersNotifier, SemestersState>(
       SemestersNotifier.new,
     );
+
+/// Current active semester ID (from semesters where is_current == true or date range fallback)
+final currentActiveSemesterIdProvider = Provider<String?>((ref) {
+  final semestersAsync = ref.watch(semestersProvider);
+  return semestersAsync.whenOrNull(
+    data: (state) {
+      if (state.current != null) return state.current!.id;
+      final list = state.filteredSemesters.isNotEmpty
+          ? state.filteredSemesters
+          : state.semesters;
+      final now = DateTime.now();
+      final byDate = list.where(
+        (s) => !now.isBefore(s.startDate) && !now.isAfter(s.endDate),
+      ).firstOrNull;
+      if (byDate != null) return byDate.id;
+      final currentFlag = list.where((s) => s.isCurrent).firstOrNull;
+      if (currentFlag != null) return currentFlag.id;
+      return list.isNotEmpty ? list.first.id : null;
+    },
+  );
+});
+

@@ -4,8 +4,6 @@
 /// and semesters. All portal screens should use this as the source of truth.
 library;
 
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,10 +33,6 @@ final studentContextProvider = FutureProvider<StudentContext?>((ref) async {
 // SEMESTERS PROVIDER (Dynamic from DB with auto-refresh)
 // ============================================================
 
-/// Polling interval for semesters refresh (5 seconds for responsive updates)
-final _semestersRefreshProvider = StreamProvider<int>((ref) {
-  return Stream.periodic(const Duration(seconds: 5), (i) => i);
-});
 
 final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
   final context = await ref.watch(studentContextProvider.future);
@@ -46,24 +40,24 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
   final supabase = Supabase.instance.client;
 
   final schoolId = context?.schoolId;
-  String? activeYearId;
+  String? targetYearId = context?.academicYearId;
 
-  // 1. Always check for active academic_year (is_current = true)
-  try {
-    var query = supabase
-        .from('academic_years')
-        .select('id')
-        .eq('is_current', true);
-    if (schoolId != null && schoolId.isNotEmpty) {
-      query = query.eq('school_id', schoolId);
-    }
-    final activeYearResp = await query.maybeSingle();
-    if (activeYearResp != null) {
-      activeYearId = activeYearResp['id'] as String?;
-    }
-  } catch (_) {}
-
-  final targetYearId = activeYearId ?? context?.academicYearId;
+  // 1. Fallback to active academic_year only if student has no enrolled academicYearId
+  if (targetYearId == null || targetYearId.isEmpty) {
+    try {
+      var query = supabase
+          .from('academic_years')
+          .select('id')
+          .eq('is_current', true);
+      if (schoolId != null && schoolId.isNotEmpty) {
+        query = query.eq('school_id', schoolId);
+      }
+      final activeYearResp = await query.order('start_date', ascending: false).limit(1).maybeSingle();
+      if (activeYearResp != null) {
+        targetYearId = activeYearResp['id'] as String?;
+      }
+    } catch (_) {}
+  }
 
   // 2. Fetch semesters for the target academic year
   if (targetYearId != null && targetYearId.isNotEmpty) {
@@ -83,9 +77,9 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
       semQuery = semQuery.eq('school_id', schoolId);
     }
     final semestersResp = await semQuery.order('number');
-    if (semestersResp != null && (semestersResp as List).isNotEmpty) {
-      return (semestersResp as List)
-          .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
+    if ((semestersResp as List).isNotEmpty) {
+      return semestersResp
+          .map((e) => SemesterInfo.fromJson(e))
           .toList();
     }
   } catch (_) {}

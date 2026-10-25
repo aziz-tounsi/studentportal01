@@ -430,6 +430,8 @@ class _NoteInfoScreenState extends ConsumerState<NoteInfoScreen> {
     }
 
     return RefreshIndicator(
+      color: const Color(0xFFFF2D78),
+      backgroundColor: Colors.white,
       onRefresh: () => ref.read(noteInfoNotifierProvider.notifier).refresh(),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -536,7 +538,7 @@ class _AnnouncementCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
@@ -577,7 +579,7 @@ class _AnnouncementCard extends StatelessWidget {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.6),
+                                      color: Colors.black.withValues(alpha: 0.6),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
@@ -641,200 +643,14 @@ class _AnnouncementCard extends StatelessWidget {
     );
   }
 
-  /// Build Facebook-style image gallery for attachments
-  Widget _buildImageGallery(BuildContext context, List<AnnouncementAttachment> images) {
-    if (images.isEmpty) return const SizedBox.shrink();
-    
-    if (images.length == 1) {
-      return GestureDetector(
-        onTap: () => _showFullImage(context, images[0].fileUrl),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppSizes.radiusM),
-          child: Image.network(
-            images[0].fileUrl,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: 200,
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Container(
-                height: 200,
-                color: Colors.grey[200],
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) => Container(
-              height: 200,
-              color: Colors.grey[200],
-              child: const Center(child: Icon(Icons.broken_image, size: 48, color: Colors.grey)),
-            ),
-          ),
-        ),
-      );
-    }
-    
-    // Multiple images: grid layout
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSizes.radiusM),
-      child: SizedBox(
-        height: 200,
-        child: Row(
-          children: [
-            // First image takes half width
-            Expanded(
-              child: GestureDetector(
-                onTap: () => _showImageGalleryViewer(context, images, 0),
-                child: Image.network(
-                  images[0].fileUrl,
-                  fit: BoxFit.cover,
-                  height: 200,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[200],
-                    child: const Center(child: Icon(Icons.broken_image)),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 2),
-            // Second column with remaining images
-            Expanded(
-              child: Column(
-                children: [
-                  if (images.length > 1)
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _showImageGalleryViewer(context, images, 1),
-                        child: Image.network(
-                          images[1].fileUrl,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.grey[200],
-                            child: const Center(child: Icon(Icons.broken_image)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (images.length > 2) ...[
-                    const SizedBox(height: 2),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _showImageGalleryViewer(context, images, 2),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(
-                              images[2].fileUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                color: Colors.grey[200],
-                                child: const Center(child: Icon(Icons.broken_image)),
-                              ),
-                            ),
-                            if (images.length > 3)
-                              Container(
-                                color: Colors.black45,
-                                child: Center(
-                                  child: Text(
-                                    '+${images.length - 3}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  /// Show full-screen image gallery viewer with page navigation
-  void _showImageGalleryViewer(BuildContext context, List<AnnouncementAttachment> images, int initialIndex) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(color: Colors.black87),
-            ),
-            PageView.builder(
-              controller: PageController(initialPage: initialIndex),
-              itemCount: images.length,
-              itemBuilder: (context, index) => InteractiveViewer(
-                child: Center(
-                  child: Image.network(
-                    images[index].fileUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.broken_image,
-                      size: 64,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 40,
-              right: 16,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-            // Page indicator
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    '${initialIndex + 1} / ${images.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildTypeBadge(String type) {
     final info = _getTypeInfo(type);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: info.color.withOpacity(0.1),
+        color: info.color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppSizes.radiusXS),
       ),
       child: Row(
@@ -859,9 +675,9 @@ class _AnnouncementCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSizes.paddingS),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(AppSizes.radiusS),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

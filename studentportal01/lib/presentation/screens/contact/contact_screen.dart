@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../widgets/ios_loader.dart';
+import '../../widgets/contact_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 
 // Provider to fetch contact info from Supabase
 final contactInfoProvider = FutureProvider<Map<String, dynamic>>((ref) async {
@@ -68,9 +69,20 @@ class ContactScreen extends ConsumerWidget {
   }
 
   Future<void> _launchEmail(String email) async {
-    final uri = Uri(scheme: 'mailto', path: email);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+    final cleanEmail = email.trim();
+    final uri = Uri(scheme: 'mailto', path: cleanEmail);
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        await launchUrl(uri);
+      }
+    } catch (e) {
+      debugPrint('Error launching email: $e');
+      try {
+        await launchUrl(uri);
+      } catch (err) {
+        debugPrint('Fallback error launching email: $err');
+      }
     }
   }
 
@@ -142,11 +154,12 @@ class ContactScreen extends ConsumerWidget {
                               child: Text(
                                 l10n.contact,
                                 textAlign: isRtl ? TextAlign.right : TextAlign.left,
-                                style: const TextStyle(
+                                style: ArabicTypography.headerStyle(
+                                  ctx,
                                   fontSize: 26,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -0.6,
-                                  color: Color(0xFF1F2937),
+                                  color: const Color(0xFF1F2937),
                                 ),
                               ),
                             ),
@@ -193,8 +206,9 @@ class ContactScreen extends ConsumerWidget {
                             const SizedBox(height: 18),
                             Text(
                               l10n.needHelp,
-                              style: const TextStyle(
-                                color: Color(0xFF1F2937),
+                              style: ArabicTypography.headerStyle(
+                                context,
+                                color: const Color(0xFF1F2937),
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.5,
@@ -204,7 +218,8 @@ class ContactScreen extends ConsumerWidget {
                             Text(
                               l10n.contactDesc,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: ArabicTypography.bodyStyle(
+                                context,
                                 color: Colors.grey[600],
                                 fontSize: 14.5,
                                 height: 1.45,
@@ -244,11 +259,12 @@ class ContactScreen extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Text(
                           l10n.joinUsSocial,
-                          style: const TextStyle(
+                          style: ArabicTypography.subtitleStyle(
+                            context,
                             fontSize: 17,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: -0.3,
-                            color: Color(0xFF1F2937),
+                            color: const Color(0xFF1F2937),
                           ),
                         ),
                       ),
@@ -294,7 +310,7 @@ class ContactScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            loading: () => const Center(child: IosLoader()),
+            loading: () => const ContactSkeleton(),
             error: (context, error) => const Center(child: Text('Erreur de chargement')),
           ),
         ),
@@ -356,10 +372,11 @@ class _UnifiedContactCard extends StatelessWidget {
           // Header left: Section Title WITHOUT icon
           Text(
             l10n.nosCoordonnees,
-            style: const TextStyle(
+            style: ArabicTypography.subtitleStyle(
+              context,
               fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF0F172A),
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF0F172A),
               letterSpacing: -0.3,
             ),
           ),
@@ -422,6 +439,7 @@ class _ContactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAr = ArabicTypography.isArabic(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -444,19 +462,21 @@ class _ContactRow extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(
+                    style: ArabicTypography.bodyStyle(
+                      context,
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF64748B),
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     value,
-                    style: const TextStyle(
+                    style: ArabicTypography.bodyStyle(
+                      context,
                       fontSize: 14.5,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B),
+                      color: const Color(0xFF1E293B),
                     ),
                   ),
                 ],
@@ -468,10 +488,10 @@ class _ContactRow extends StatelessWidget {
                 color: Color(0xFFF8FAFC),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.arrow_forward_ios_rounded,
+              child: Icon(
+                isAr ? Icons.arrow_back_ios_new_rounded : Icons.arrow_forward_ios_rounded,
                 size: 13,
-                color: Color(0xFF94A3B8),
+                color: const Color(0xFF94A3B8),
               ),
             ),
           ],
@@ -533,10 +553,11 @@ class _OpeningHoursCard extends StatelessWidget {
             children: [
               Text(
                 l10n.scheduleTitle,
-                style: const TextStyle(
+                style: ArabicTypography.subtitleStyle(
+                  context,
                   fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF0F172A),
                   letterSpacing: -0.3,
                 ),
               ),
@@ -560,10 +581,11 @@ class _OpeningHoursCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       badge,
-                      style: const TextStyle(
+                      style: ArabicTypography.bodyStyle(
+                        context,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
+                        color: const Color(0xFF0F172A),
                       ),
                     ),
                   ],
@@ -598,9 +620,10 @@ class _OpeningHoursCard extends StatelessWidget {
                     width: 50,
                     child: Text(
                       _getDayLabel(item.key, l10n),
-                      style: TextStyle(
+                      style: ArabicTypography.bodyStyle(
+                        context,
                         fontSize: 15,
-                        fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
                         color: isToday ? const Color(0xFF0F172A) : const Color(0xFF475569),
                       ),
                     ),
@@ -617,7 +640,8 @@ class _OpeningHoursCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       item.isClosed ? l10n.closed : '\u200E${item.open} — ${item.close}',
-                      style: TextStyle(
+                      style: ArabicTypography.bodyStyle(
+                        context,
                         fontSize: 14.5,
                         fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
                         color: item.isClosed

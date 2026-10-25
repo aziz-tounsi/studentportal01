@@ -7,9 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../../data/services/core_data_service.dart';
 import '../../providers/student_context_provider.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/mon_solde_skeleton.dart';
 
 // Semester state provider for this screen
@@ -80,7 +80,10 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
   final Map<PaymentCategory, double> paid = {};
 
   for (final plan in plans) {
-    final category = _mapCategory(plan.category);
+    final category = _mapCategory(
+      plan.category,
+      '${plan.planType} ${plan.description ?? ''}',
+    );
     amounts[category] = (amounts[category] ?? 0) + plan.amountTotal;
     paid[category] = (paid[category] ?? 0) + plan.totalPaid;
   }
@@ -196,7 +199,7 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
 ) async {
   try {
     final context = await ref.watch(studentContextProvider.future);
-    if (context == null || context.niveauId == null) return {};
+    if (context == null) return {};
     final supabase = Supabase.instance.client;
 
     final categories = [
@@ -210,46 +213,84 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
     ];
     final Map<String, double> pricing = {};
 
-    for (final cat in categories) {
-      try {
-        final result = await supabase.rpc(
-          'get_payment_pricing_for_enrollment',
-          params: {
-            'p_enrollment_id': context.enrollmentId ?? '',
-            'p_category': cat,
-          },
-        );
-        if (result != null && (result as List).isNotEmpty) {
-          final amount = (result.first['amount'] as num?)?.toDouble();
-          if (amount != null && amount > 0) {
-            pricing[cat] = amount;
+    if (context.enrollmentId != null && context.enrollmentId!.isNotEmpty) {
+      for (final cat in categories) {
+        try {
+          final result = await supabase.rpc(
+            'get_payment_pricing_for_enrollment',
+            params: {
+              'p_enrollment_id': context.enrollmentId!,
+              'p_category': cat,
+            },
+          );
+          if (result != null && (result as List).isNotEmpty) {
+            final amount = (result.first['amount'] as num?)?.toDouble();
+            if (amount != null && amount > 0) {
+              pricing[cat] = amount;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Direct fallback from payment_pricing table if available
+    try {
+      var query = supabase.from('payment_pricing').select('category, amount');
+      if (context.schoolId.isNotEmpty) {
+        query = query.eq('school_id', context.schoolId);
+      }
+      if (context.niveauId != null && context.niveauId!.isNotEmpty) {
+        query = query.eq('niveau_id', context.niveauId!);
+      }
+        final pricingResp = await query;
+        for (final row in pricingResp as List) {
+          final cat = row['category']?.toString();
+          final amount = (row['amount'] as num?)?.toDouble();
+          if (cat != null && amount != null && amount > 0) {
+            pricing.putIfAbsent(cat, () => amount);
           }
         }
       } catch (_) {}
-    }
+
     return pricing;
   } catch (e) {
     return {};
   }
 });
 
-PaymentCategory _mapCategory(String? category) {
-  switch (category) {
-    case 'scolarite':
-      return PaymentCategory.scolarite;
-    case 'transport':
-      return PaymentCategory.transport;
-    case 'inscription':
-      return PaymentCategory.inscription;
-    case 'uniforme':
-      return PaymentCategory.uniforme;
-    case 'cantine':
-      return PaymentCategory.cantine;
-    case 'activites':
-      return PaymentCategory.activites;
-    default:
-      return PaymentCategory.autres;
+PaymentCategory _mapCategory(String? category, [String? description]) {
+  final combined = '${category ?? ''} ${description ?? ''}'.toLowerCase();
+  if (combined.contains('scolar') ||
+      combined.contains('tuition') ||
+      combined.contains('annual') ||
+      combined.contains('mensuel') ||
+      combined.contains('semestr') ||
+      combined.contains('trimestr')) {
+    return PaymentCategory.scolarite;
   }
+  if (combined.contains('transp') || combined.contains('bus')) {
+    return PaymentCategory.transport;
+  }
+  if (combined.contains('inscript') || combined.contains('regist')) {
+    return PaymentCategory.inscription;
+  }
+  if (combined.contains('unif') ||
+      combined.contains('tenue') ||
+      combined.contains('cloth')) {
+    return PaymentCategory.uniforme;
+  }
+  if (combined.contains('cantin') ||
+      combined.contains('repas') ||
+      combined.contains('food') ||
+      combined.contains('restau')) {
+    return PaymentCategory.cantine;
+  }
+  if (combined.contains('activ') ||
+      combined.contains('sport') ||
+      combined.contains('club')) {
+    return PaymentCategory.activites;
+  }
+  return PaymentCategory.autres;
 }
 
 class MonSoldeScreen extends ConsumerStatefulWidget {
@@ -291,9 +332,11 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           bottom: false,
           child: RefreshIndicator(
             color: const Color(0xFFFF2D78),
+            backgroundColor: Colors.white,
             onRefresh: () async {
               ref.read(soldeRefreshingProvider.notifier).state = true;
               try {
+                // ignore: unused_result
                 await ref.refresh(paymentsDataProvider.future);
               } finally {
                 ref.read(soldeRefreshingProvider.notifier).state = false;
@@ -411,20 +454,22 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             children: [
               Text(
                 l10n.monSolde,
-                style: const TextStyle(
+                style: ArabicTypography.headerStyle(
+                  context,
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
-                  color: Color(0xFF1F2937),
+                  color: const Color(0xFF1F2937),
                   letterSpacing: -0.8,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 l10n.soldeSubtitle,
-                style: const TextStyle(
+                style: ArabicTypography.subtitleStyle(
+                  context,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF1F2937),
+                  color: const Color(0xFF1F2937),
                 ),
               ),
             ],
@@ -459,7 +504,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
 
     final latestPlansByCategory = <String, PaymentPlanInfo>{};
     for (final p in sortedPlans) {
-      final cat = p.category ?? 'scolarite';
+      final cat = _mapCategory(p.category, '${p.planType} ${p.description ?? ''}').name;
       latestPlansByCategory.putIfAbsent(cat, () => p);
     }
     final dedupedPlans = latestPlansByCategory.values.toList();
@@ -479,7 +524,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
 
     // Schedule uses scolarite only
     final scolaritePlans = dedupedPlans
-        .where((p) => p.category == null || p.category == 'scolarite')
+        .where((p) => _mapCategory(p.category, '${p.planType} ${p.description ?? ''}') == PaymentCategory.scolarite)
         .toList();
     final scolaritePricing = pricing['scolarite'] ?? 0.0;
     final scheduleTotal = scolaritePlans.fold<double>(
@@ -521,8 +566,10 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
         .where((c) => c.category != PaymentCategory.scolarite)
         .toList();
 
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 110),
+      padding: EdgeInsets.fromLTRB(24, 0, 24, 136 + bottomInset),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
           // Main Balance Card
@@ -1170,13 +1217,35 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                 ),
               ),
 
-              // Invisible PageView to enable smooth swipe gestures
+              // Invisible PageView to enable smooth swipe gestures and taps
               Positioned.fill(
                 child: PageView.builder(
                   controller: _pageController,
                   itemCount: widget.payments.length,
                   physics: const BouncingScrollPhysics(),
-                  itemBuilder: (context, index) => const SizedBox.shrink(),
+                  itemBuilder: (context, index) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () {
+                        final isCenter = (_currentPage - index).abs() < 0.5;
+                        if (isCenter) {
+                          _showPaymentDetailsDialog(
+                            context,
+                            widget.payments[index],
+                            widget.currency,
+                            DateFormat('dd/MM/yyyy'),
+                          );
+                        } else {
+                          _pageController.animateToPage(
+                            index,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                          );
+                        }
+                      },
+                      child: const SizedBox.expand(),
+                    );
+                  },
                 ),
               ),
             ],
@@ -1354,6 +1423,19 @@ class _PaymentCircleCard extends StatelessWidget {
       );
     }
 
+    if (isCenter) {
+      card = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _showPaymentDetailsDialog(
+          context,
+          payment,
+          currency,
+          DateFormat('dd/MM/yyyy'),
+        ),
+        child: card,
+      );
+    }
+
     return card;
   }
 
@@ -1374,7 +1456,7 @@ class _GlassyCategoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cat = category.category;
-    final isPaid = category.remaining <= 0;
+    final isPaid = category.amount > 0 && category.remaining <= 0;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1477,16 +1559,17 @@ class _GlassyCategoryCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          ' /  ',
+                          '${_formatCurrency(category.paid)} $currency / ${_formatCurrency(category.amount)} $currency',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade500,
                           ),
                         ),
-                        if (!isPaid)
+                        if (!isPaid && category.amount > 0)
                           Text(
-                            ':  ',
-                            style: TextStyle(
+                            '${l10n.translate('remaining_short')}: ${_formatCurrency(category.remaining)} $currency',
+                            style: ArabicTypography.bodyStyle(
+                              context,
                               fontSize: 11,
                               color: cat.color,
                               fontWeight: FontWeight.w600,
@@ -1508,9 +1591,13 @@ class _GlassyCategoryCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     final cat = catData.category;
-    final isPaid = catData.remaining <= 0;
+    final isPaid = catData.amount > 0 && catData.remaining <= 0;
     final statusColor = isPaid ? const Color(0xFF10B981) : cat.color;
-    final statusText = isPaid ? l10n.statusPaid : l10n.translate('incomplete');
+    final statusText = isPaid
+        ? l10n.statusPaid
+        : (catData.paid > 0
+            ? l10n.translate('incomplete')
+            : l10n.statusPending);
 
     showGeneralDialog(
       context: context,
@@ -1573,25 +1660,25 @@ class _GlassyCategoryCard extends StatelessWidget {
                   const SizedBox(height: 24),
                   _buildDetailRow(
                     l10n.translate('total_amount'),
-                    ' ',
+                    '${_formatCurrency(catData.amount)} $currency',
                     Icons.account_balance_wallet_rounded,
                     cat.color,
                   ),
                   _buildDetailRow(
                     l10n.translate('paid_amount'),
-                    ' ',
+                    '${_formatCurrency(catData.paid)} $currency',
                     Icons.check_circle_rounded,
-                    const Color(0xFF10B981),
+                    cat.color,
                   ),
                   _buildDetailRow(
                     l10n.translate('remaining_amount'),
-                    ' ',
+                    '${_formatCurrency(catData.remaining)} $currency',
                     Icons.pending_actions_rounded,
                     cat.color,
                   ),
                   _buildDetailRow(
                     l10n.translate('progress'),
-                    '%',
+                    '${catData.progressPercent.toStringAsFixed(0)}%',
                     Icons.pie_chart_rounded,
                     cat.color,
                   ),
@@ -1718,7 +1805,7 @@ class _GlassyPaymentCard extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _showPaymentDetails(context, payment, currency, dateFormat),
+      onTap: () => _showPaymentDetailsDialog(context, payment, currency, dateFormat),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -1805,267 +1892,267 @@ class _GlassyPaymentCard extends StatelessWidget {
     );
   }
 
-  void _showPaymentDetails(
-    BuildContext context,
-    PaymentInfo payment,
-    String currency,
-    DateFormat dateFormat,
-  ) {
-    final l10n = AppLocalizations.of(context);
-    final isPaid = payment.status == 'paid';
-    final isOverdue =
-        !isPaid &&
-        payment.dueDate != null &&
-        payment.dueDate!.isBefore(DateTime.now());
+  String _formatCurrency(double amount) {
+    final formatter = NumberFormat('#,###', 'fr_FR');
+    return formatter.format(amount);
+  }
+}
 
-    Color statusColor;
-    IconData statusIcon;
-    String statusText;
+void _showPaymentDetailsDialog(
+  BuildContext context,
+  PaymentInfo payment,
+  String currency,
+  DateFormat dateFormat,
+) {
+  final l10n = AppLocalizations.of(context);
+  final isPaid = payment.status == 'paid';
+  final isOverdue =
+      !isPaid &&
+      payment.dueDate != null &&
+      payment.dueDate!.isBefore(DateTime.now());
 
-    if (isPaid) {
-      statusColor = const Color(0xFF10B981);
-      statusIcon = Icons.check_circle_rounded;
-      statusText = l10n.statusPaid;
-    } else if (isOverdue) {
-      statusColor = const Color(0xFFEF4444);
-      statusIcon = Icons.warning_rounded;
-      statusText = l10n.statusOverdue;
-    } else {
-      statusColor = const Color(0xFFF59E0B);
-      statusIcon = Icons.schedule_rounded;
-      statusText = l10n.statusPending;
-    }
+  Color statusColor;
+  IconData statusIcon;
+  String statusText;
 
-    // Calculate delay duration for overdue payments
-    String? delayText;
-    if (isOverdue && payment.dueDate != null) {
-      final delay = DateTime.now().difference(payment.dueDate!);
-      final days = delay.inDays;
-      if (days > 0) {
-        if (l10n.locale.languageCode == 'ar') {
-          delayText = '$days يوم تأخير';
-        } else if (l10n.locale.languageCode == 'en') {
-          delayText = '$days day${days > 1 ? 's' : ''} overdue';
-        } else {
-          delayText = '$days jour${days > 1 ? 's' : ''} de retard';
-        }
-      }
-    }
-
-    // Generate reference if not exists
-    final reference =
-        payment.reference ??
-        'PAY-${payment.id.length >= 8 ? payment.id.substring(0, 8).toUpperCase() : payment.id.toUpperCase()}';
-
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '',
-      barrierColor: Colors.black.withValues(alpha: 0.35),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return Center(
-          child: Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(32),
-            ),
-            backgroundColor: Colors.white,
-            child: Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(32),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header with status icon
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(statusIcon, color: statusColor, size: 36),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.locale.languageCode == 'ar'
-                        ? 'تفاصيل الدفع'
-                        : (l10n.locale.languageCode == 'en' ? 'Payment Details' : 'Détails du paiement'),
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Text(
-                      statusText,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: statusColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  // Show delay duration for overdue as info row
-                  if (delayText != null) ...[
-                    const SizedBox(height: 24),
-                    _buildDetailRow(
-                      l10n.delayLabel,
-                      delayText,
-                      Icons.timer_off_rounded,
-                      statusColor,
-                    ),
-                  ],
-                  if (delayText == null) const SizedBox(height: 24),
-                  // Amount
-                  _buildDetailRow(
-                    l10n.amountLabel,
-                    '${_formatCurrency(payment.amount)} $currency',
-                    Icons.attach_money_rounded,
-                    statusColor,
-                  ),
-                  // Due date
-                  if (payment.dueDate != null)
-                    _buildDetailRow(
-                      l10n.dueDateLabel,
-                      dateFormat.format(payment.dueDate!),
-                      Icons.calendar_today_rounded,
-                      statusColor,
-                    ),
-                  // Paid date
-                  if (payment.paidAt != null)
-                    _buildDetailRow(
-                      l10n.paymentDateLabel,
-                      dateFormat.format(payment.paidAt!),
-                      Icons.event_available_rounded,
-                      statusColor,
-                    ),
-                  // Payment method
-                  if (payment.method != null)
-                    _buildDetailRow(
-                      l10n.methodLabel,
-                      payment.displayMethod,
-                      Icons.payment_rounded,
-                      statusColor,
-                    ),
-                  // Reference
-                  _buildDetailRow(
-                    l10n.locale.languageCode == 'ar'
-                        ? 'المرجع'
-                        : (l10n.locale.languageCode == 'en' ? 'Reference' : 'Référence'),
-                    reference,
-                    Icons.receipt_rounded,
-                    statusColor,
-                  ),
-                  // Notes
-                  if (payment.notes != null && payment.notes!.isNotEmpty)
-                    _buildDetailRow(
-                      l10n.locale.languageCode == 'ar'
-                          ? 'ملاحظات'
-                          : (l10n.locale.languageCode == 'en' ? 'Notes' : 'Notes'),
-                      payment.notes!,
-                      Icons.note_rounded,
-                      statusColor,
-                    ),
-                  const SizedBox(height: 28),
-                  // Close button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: statusColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        l10n.closeLabel,
-                        style: (l10n.locale.languageCode == 'ar'
-                            ? GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)
-                            : const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: 8 * animation.value,
-            sigmaY: 8 * animation.value,
-          ),
-          child: FadeTransition(opacity: animation, child: child),
-        );
-      },
-    );
+  if (isPaid) {
+    statusColor = const Color(0xFF10B981);
+    statusIcon = Icons.check_circle_rounded;
+    statusText = l10n.statusPaid;
+  } else if (isOverdue) {
+    statusColor = const Color(0xFFEF4444);
+    statusIcon = Icons.warning_rounded;
+    statusText = l10n.statusOverdue;
+  } else {
+    statusColor = const Color(0xFFF59E0B);
+    statusIcon = Icons.schedule_rounded;
+    statusText = l10n.statusPending;
   }
 
-  Widget _buildDetailRow(
-    String label,
-    String value,
-    IconData icon,
-    Color statusColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: statusColor, size: 22),
+  // Calculate delay duration for overdue payments
+  String? delayText;
+  if (isOverdue && payment.dueDate != null) {
+    final delay = DateTime.now().difference(payment.dueDate!);
+    final days = delay.inDays;
+    if (days > 0) {
+      if (l10n.locale.languageCode == 'ar') {
+        delayText = '$days يوم تأخير';
+      } else if (l10n.locale.languageCode == 'en') {
+        delayText = '$days day${days > 1 ? 's' : ''} overdue';
+      } else {
+        delayText = '$days jour${days > 1 ? 's' : ''} de retard';
+      }
+    }
+  }
+
+  // Generate reference if not exists
+  final reference =
+      payment.reference ??
+      'PAY-${payment.id.length >= 8 ? payment.id.substring(0, 8).toUpperCase() : payment.id.toUpperCase()}';
+
+  showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: '',
+    barrierColor: Colors.black.withValues(alpha: 0.35),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return Center(
+        child: Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(32),
           ),
-          const SizedBox(width: 14),
-          Expanded(
+          backgroundColor: Colors.white,
+          child: Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(32),
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                // Header with status icon
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 36),
                 ),
+                const SizedBox(height: 16),
                 Text(
-                  value,
+                  l10n.locale.languageCode == 'ar'
+                      ? 'تفاصيل الدفع'
+                      : (l10n.locale.languageCode == 'en' ? 'Payment Details' : 'Détails du paiement'),
                   style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                     color: Colors.grey.shade800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                // Show delay duration for overdue as info row
+                if (delayText != null) ...[
+                  const SizedBox(height: 24),
+                  _buildPaymentDetailRow(
+                    l10n.delayLabel,
+                    delayText,
+                    Icons.timer_off_rounded,
+                    statusColor,
+                  ),
+                ],
+                if (delayText == null) const SizedBox(height: 24),
+                // Amount
+                _buildPaymentDetailRow(
+                  l10n.amountLabel,
+                  '${NumberFormat('#,###', 'fr_FR').format(payment.amount)} $currency',
+                  Icons.attach_money_rounded,
+                  statusColor,
+                ),
+                // Due date
+                if (payment.dueDate != null)
+                  _buildPaymentDetailRow(
+                    l10n.dueDateLabel,
+                    dateFormat.format(payment.dueDate!),
+                    Icons.calendar_today_rounded,
+                    statusColor,
+                  ),
+                // Paid date
+                if (payment.paidAt != null)
+                  _buildPaymentDetailRow(
+                    l10n.paymentDateLabel,
+                    dateFormat.format(payment.paidAt!),
+                    Icons.event_available_rounded,
+                    statusColor,
+                  ),
+                // Payment method
+                if (payment.method != null)
+                  _buildPaymentDetailRow(
+                    l10n.methodLabel,
+                    payment.displayMethod,
+                    Icons.payment_rounded,
+                    statusColor,
+                  ),
+                // Reference
+                _buildPaymentDetailRow(
+                  l10n.locale.languageCode == 'ar'
+                      ? 'المرجع'
+                      : (l10n.locale.languageCode == 'en' ? 'Reference' : 'Référence'),
+                  reference,
+                  Icons.receipt_rounded,
+                  statusColor,
+                ),
+                // Notes
+                if (payment.notes != null && payment.notes!.isNotEmpty)
+                  _buildPaymentDetailRow(
+                    l10n.locale.languageCode == 'ar'
+                        ? 'ملاحظات'
+                        : (l10n.locale.languageCode == 'en' ? 'Notes' : 'Notes'),
+                    payment.notes!,
+                    Icons.note_rounded,
+                    statusColor,
+                  ),
+                const SizedBox(height: 28),
+                // Close button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: statusColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      l10n.closeLabel,
+                      style: (l10n.locale.languageCode == 'ar'
+                          ? GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)
+                          : const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      );
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      return BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: 8 * animation.value,
+          sigmaY: 8 * animation.value,
+        ),
+        child: FadeTransition(opacity: animation, child: child),
+      );
+    },
+  );
+}
 
-  String _formatCurrency(double amount) {
-    final formatter = NumberFormat('#,###', 'fr_FR');
-    return formatter.format(amount);
-  }
+Widget _buildPaymentDetailRow(
+  String label,
+  String value,
+  IconData icon,
+  Color statusColor,
+) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: statusColor, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }

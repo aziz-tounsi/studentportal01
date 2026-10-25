@@ -193,7 +193,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       try {
         userResponse = await _supabase
             .from('users')
-            .select('id, school_id, role, full_name, email, phone, photo_url, student_code, date_of_birth, address, created_at, updated_at')
+            .select('id, school_id, role, full_name, email, phone, photo_url, student_code, date_of_birth, address, created_at, updated_at, niveau, niveau_code, section_code, niveau_id, section_id, initial_password')
             .eq('id', userId)
             .maybeSingle();
       } catch (e) {
@@ -274,9 +274,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
               try {
                 classData = await _supabase
                     .from('classes')
-                    .select('id, school_id, name, room, capacity, is_active, created_at')
+                    .select('id, school_id, name, room, capacity, is_active, created_at, niveau_id, section_id')
                     .eq('id', classId)
                     .maybeSingle();
+
+                if (classData != null) {
+                  // Resolve niveau if present
+                  final classNiveauId = classData['niveau_id'] as String? ?? userResponse['niveau_id'] as String?;
+                  if (classNiveauId != null) {
+                    try {
+                      final niveauResp = await _supabase
+                          .from('niveaux')
+                          .select('id, code, name, name_ar, cycle, has_sections')
+                          .eq('id', classNiveauId)
+                          .maybeSingle();
+                      if (niveauResp != null) {
+                        classData['niveaux'] = niveauResp;
+                      }
+                    } catch (_) {}
+                  }
+
+                  // Resolve section if present
+                  final classSectionId = classData['section_id'] as String? ?? userResponse['section_id'] as String?;
+                  if (classSectionId != null) {
+                    try {
+                      final sectionResp = await _supabase
+                          .from('sections')
+                          .select('id, code, name, name_ar')
+                          .eq('id', classSectionId)
+                          .maybeSingle();
+                      if (sectionResp != null) {
+                        classData['sections'] = sectionResp;
+                      }
+                    } catch (_) {}
+                  }
+                }
               } catch (e) {
                 debugPrint('AuthProvider: Error fetching class: $e');
               }
@@ -442,6 +474,81 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } else {
         rethrow;
       }
+    }
+  }
+
+  /// Change user password, update users.initial_password for admin dashboard, and alert admin
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = state.user;
+    final email = user?.email ?? _supabase.auth.currentUser?.email;
+    final userId = user?.id ?? _supabase.auth.currentUser?.id;
+
+    if (email == null || userId == null) {
+      throw 'user_not_connected';
+    }
+
+    // 1. Verify current password
+    try {
+      await _supabase.auth.signInWithPassword(
+        email: email,
+        password: currentPassword,
+      );
+    } on AuthException {
+      throw 'current_password_incorrect';
+    } catch (_) {
+      throw 'current_password_incorrect';
+    }
+
+    // 2. Update Supabase Auth user password
+    try {
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } on AuthException catch (e) {
+      if (e.message.toLowerCase().contains('weak') ||
+          e.message.toLowerCase().contains('character') ||
+          e.message.toLowerCase().contains('least') ||
+          e.message.toLowerCase().contains('length')) {
+        throw 'password_too_short';
+      }
+      throw 'password_update_failed';
+    } catch (_) {
+      throw 'password_update_failed';
+    }
+
+    // 3. Update public.users initial_password so the admin on the student profile gets the new password
+    try {
+      await _supabase.from('users').update({
+        'initial_password': newPassword,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+
+      // Update in-memory user state
+      if (state.user != null) {
+        state = state.copyWith(
+          user: state.user!.copyWith(initialPassword: newPassword),
+        );
+      }
+    } catch (e) {
+      debugPrint('AuthProvider: Failed to update initial_password in users table: $e');
+    }
+
+    // 4. Alert the admin dashboard by logging into password_reset_requests
+    try {
+      await _supabase.from('password_reset_requests').insert({
+        'user_id': userId,
+        'email': email,
+        'full_name': user?.fullName ?? 'Étudiant',
+        'status': 'approved',
+        'admin_notes': 'Mot de passe modifié par l\'étudiant depuis l\'application (mis à jour dans la fiche étudiant)',
+        'new_password_sent': true,
+        'processed_at': DateTime.now().toIso8601String(),
+      });
+    } catch (alertError) {
+      debugPrint('AuthProvider: Failed to notify password_reset_requests: $alertError');
     }
   }
 }

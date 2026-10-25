@@ -1,7 +1,6 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/absences_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -164,7 +163,7 @@ class AbsenceDetailScreen extends ConsumerWidget {
         child: detailAsync.when(
           data: (data) => data != null ? _DetailBody(data: data) : const _ErrorBody(),
           loading: () => const AbsenceDetailSkeleton(),
-          error: (_, __) => const _ErrorBody(),
+          error: (_, _) => const _ErrorBody(),
         ),
       ),
     );
@@ -279,7 +278,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
          return words.map((w) => w[0].toUpperCase()).join('');
       }
       
-      return name.substring(0, 15) + '...';
+      return '${name.substring(0, 15)}...';
     }
     return name;
   }
@@ -305,11 +304,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 15,
                     offset: const Offset(0, 5),
                   ),
@@ -350,7 +349,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 2,
-                    color: _secondaryText.withOpacity(0.7),
+                    color: _secondaryText.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -374,9 +373,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             width: 48, height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.4),
+              color: Colors.white.withValues(alpha: 0.4),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8),
               ],
             ),
           ),
@@ -385,7 +384,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             child: CircularProgressIndicator(
               value: clamped,
               strokeWidth: 4,
-              backgroundColor: _primaryPink.withOpacity(0.2),
+              backgroundColor: _primaryPink.withValues(alpha: 0.2),
               valueColor: const AlwaysStoppedAnimation<Color>(_primaryPink),
             ),
           ),
@@ -404,12 +403,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 30,
                 offset: const Offset(0, 12),
               ),
@@ -418,9 +417,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           child: Row(
             children: [
               _statItem(icon: Icons.balance_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: d.coefficient.toStringAsFixed(1), unit: AppLocalizations.of(context).coeffLabel, isPrimary: false),
-              Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withOpacity(0.5)),
-              _statItem(icon: Icons.schedule_rounded, iconBg: _primaryPink.withOpacity(0.1), iconColor: _primaryPink, value: '${d.totalHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}', unit: AppLocalizations.of(context).totalLabel, isPrimary: true, iconSize: 26),
-              Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withOpacity(0.5)),
+              Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withValues(alpha: 0.5)),
+              _statItem(icon: Icons.schedule_rounded, iconBg: _primaryPink.withValues(alpha: 0.1), iconColor: _primaryPink, value: '${d.totalHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}', unit: AppLocalizations.of(context).totalLabel, isPrimary: true, iconSize: 26),
+              Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withValues(alpha: 0.5)),
               _statItem(icon: Icons.view_week_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: '${d.weeks}', unit: AppLocalizations.of(context).semLabel, isPrimary: false),
             ],
           ),
@@ -435,7 +434,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         children: [
           Container(
             width: 44, height: 44,
-            decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4)]),
+            decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4)]),
             child: Icon(icon, size: iconSize, color: iconColor),
           ),
           const SizedBox(height: 8),
@@ -469,7 +468,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         borderRadius: BorderRadius.circular(9999),
         border: Border.all(color: Colors.white, width: 1),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 30, offset: const Offset(0, 8)),
         ],
       ),
       child: Row(
@@ -477,7 +476,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         children: [
           Container(
             width: 8, height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)]),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]),
           ),
           const SizedBox(width: 8),
           Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color)),
@@ -497,12 +496,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           height: 56,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 30,
                 offset: const Offset(0, 12),
               ),
@@ -533,7 +532,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         borderRadius: BorderRadius.circular(26),
                         boxShadow: [
                           BoxShadow(
-                            color: _primaryPink.withOpacity(0.5),
+                            color: _primaryPink.withValues(alpha: 0.5),
                             blurRadius: 20,
                             offset: const Offset(0, 8),
                           ),
@@ -668,12 +667,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           width: double.infinity,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 30,
                 offset: const Offset(0, 12),
               ),
@@ -719,11 +718,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         children: [
-          Icon(Icons.more_horiz, size: 32, color: _secondaryText.withOpacity(0.5)),
+          Icon(Icons.more_horiz, size: 32, color: _secondaryText.withValues(alpha: 0.5)),
           const SizedBox(height: 8),
           Text(
             isWeek ? l10n.noAbsencesWeek : l10n.noAbsencesMonth,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _secondaryText.withOpacity(0.7)),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _secondaryText.withValues(alpha: 0.7)),
           ),
         ],
       ),
@@ -753,16 +752,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.4),
+        color: Colors.white.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.5)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
           Container(
             width: 48, height: 48,
             decoration: BoxDecoration(
-              color: (allJustified ? _blueCI : _redAbsence).withOpacity(0.1),
+              color: (allJustified ? _blueCI : _redAbsence).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -789,7 +788,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             decoration: BoxDecoration(
               color: dotColor,
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: dotColor.withOpacity(0.6), blurRadius: 8)],
+              boxShadow: [BoxShadow(color: dotColor.withValues(alpha: 0.6), blurRadius: 8)],
             ),
           ),
         ],

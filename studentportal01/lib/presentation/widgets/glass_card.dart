@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/arabic_typography.dart';
+
 class GlassCard extends StatefulWidget {
   final IconData icon;
   final String label;
@@ -67,7 +69,7 @@ class _GlassCardState extends State<GlassCard>
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
+                color: Colors.black.withValues(alpha: 0.06),
                 blurRadius: 20,
                 offset: const Offset(0, 6),
               ),
@@ -79,10 +81,10 @@ class _GlassCardState extends State<GlassCard>
               filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     width: 1.5,
                   ),
                 ),
@@ -112,7 +114,7 @@ class _GlassCardState extends State<GlassCard>
                                   boxShadow: [
                                     BoxShadow(
                                       color: widget.gradientColors.first
-                                          .withOpacity(0.35),
+                                          .withValues(alpha: 0.35),
                                       blurRadius: 16,
                                       offset: const Offset(0, 6),
                                     ),
@@ -130,7 +132,8 @@ class _GlassCardState extends State<GlassCard>
                           // Title
                           Text(
                             widget.label,
-                            style: TextStyle(
+                            style: ArabicTypography.headerStyle(
+                              context,
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
                               color: Colors.grey[900],
@@ -144,7 +147,8 @@ class _GlassCardState extends State<GlassCard>
                           // Subtitle
                           Text(
                             widget.subtitle,
-                            style: TextStyle(
+                            style: ArabicTypography.bodyStyle(
+                              context,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: Colors.grey[500],
@@ -176,7 +180,7 @@ class _GlassCardState extends State<GlassCard>
                             borderRadius: BorderRadius.circular(14),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFF43F5E).withOpacity(0.5),
+                                color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),

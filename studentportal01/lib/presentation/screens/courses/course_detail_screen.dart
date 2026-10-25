@@ -400,7 +400,7 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                 if (course.documentAttachments.isNotEmpty)
                   ...course.documentAttachments.map((attachment) {
                     return _buildDocumentTile(attachment);
-                  }).toList(),
+                  }),
 
                 const SizedBox(height: AppSizes.paddingXL),
               ],
@@ -430,7 +430,7 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
           child: Image.network(
             attachment.fileUrl,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const Center(
+            errorBuilder: (_, _, _) => const Center(
               child: Icon(Icons.image_outlined, color: AppColors.textLight),
             ),
             loadingBuilder: (_, child, loadingProgress) {

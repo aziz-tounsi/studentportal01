@@ -22,7 +22,7 @@ class GradientBlob extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: colors.map((c) => c.withOpacity(0.15)).toList(),
+            colors: colors.map((c) => c.withValues(alpha: 0.15)).toList(),
           ),
         ),
       ),

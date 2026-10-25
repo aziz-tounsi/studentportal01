@@ -533,7 +533,7 @@ class CoreDataService {
     try {
       final userResponse = await _client
           .from('users')
-          .select('id, school_id, role, full_name, email, student_code')
+          .select('id, school_id, role, full_name, email, student_code, niveau, niveau_code, section_code, niveau_id, section_id')
           .eq('id', userId)
           .maybeSingle();
       
@@ -552,6 +552,8 @@ class CoreDataService {
           ''')
           .eq('user_id', userId)
           .eq('is_active', true)
+          .order('created_at', ascending: false)
+          .limit(1)
           .maybeSingle();
 
       final classInfo = enrollmentResponse?['classes'] as Map<String, dynamic>?;
@@ -570,14 +572,14 @@ class CoreDataService {
         groupId: enrollmentResponse?['group_id'],
         academicYearId: enrollmentResponse?['academic_year_id'],
         className: classInfo?['name'],
-        niveauId: classInfo?['niveau_id'],
-        niveauCode: niveau?['code'],
-        niveauName: niveau?['name'],
+        niveauId: classInfo?['niveau_id'] ?? userResponse['niveau_id'],
+        niveauCode: niveau?['code'] ?? userResponse['niveau_code'],
+        niveauName: niveau?['name'] ?? userResponse['niveau'],
         cycle: niveau?['cycle'],
         hasSections: niveau?['has_sections'] ?? false,
-        sectionId: classInfo?['section_id'],
-        sectionCode: section?['code'],
-        sectionName: section?['name'],
+        sectionId: classInfo?['section_id'] ?? userResponse['section_id'],
+        sectionCode: section?['code'] ?? userResponse['section_code'],
+        sectionName: section?['name'] ?? userResponse['section_code'],
         academicYearName: academicYear?['name'],
         isCurrentYear: academicYear?['is_current'] ?? false,
       );
@@ -702,7 +704,7 @@ class CoreDataService {
         .eq('academic_year_id', academicYearId)
         .order('number')
         .map((rows) => rows
-            .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
+            .map((e) => SemesterInfo.fromJson(e))
             .toList());
 
     final poll = Stream.periodic(const Duration(seconds: 30))
@@ -787,13 +789,61 @@ class CoreDataService {
       final result = await _client.rpc('get_payments_for_student', params: {
         'p_user_id': userId,
       });
-      if (result == null) return [];
-      return (result as List)
-          .map((e) => PaymentPlanInfo.fromJson(e as Map<String, dynamic>))
+      if (result is List && result.isNotEmpty) {
+        return result
+            .map((e) => PaymentPlanInfo.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+
+    // Fallback: direct table queries on payment_plans & payments via enrollments
+    try {
+      final enrollmentsResp = await _client
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', userId);
+      final enrollmentIds = (enrollmentsResp as List)
+          .map((e) => e['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
           .toList();
-    } catch (e) {
-      return [];
-    }
+
+      if (enrollmentIds.isNotEmpty) {
+        final plansResp = await _client
+            .from('payment_plans')
+            .select('*, payments(*)')
+            .filter('enrollment_id', 'in', enrollmentIds);
+
+        return (plansResp as List).map((p) {
+          final paymentsRaw = (p['payments'] as List?) ?? [];
+          final paymentsList = paymentsRaw
+              .map((e) => PaymentInfo.fromJson(e as Map<String, dynamic>))
+              .toList();
+
+          final totalPaid = paymentsList
+              .where((item) =>
+                  item.status.toLowerCase() == 'paid' || item.paidAt != null)
+              .fold<double>(0.0, (sum, item) => sum + item.amount);
+          final amountTotal = (p['amount_total'] as num?)?.toDouble() ?? 0.0;
+          final planType = p['plan_type']?.toString() ?? '';
+          final description = p['description']?.toString();
+
+          return PaymentPlanInfo(
+            planId: p['id']?.toString() ?? '',
+            planType: planType,
+            amountTotal: amountTotal,
+            currency: p['currency']?.toString() ?? 'TND',
+            description: description,
+            category: p['category']?.toString(),
+            academicYear: p['academic_year']?.toString(),
+            payments: paymentsList,
+            totalPaid: totalPaid,
+            remaining: (amountTotal - totalPaid).clamp(0.0, double.infinity),
+          );
+        }).toList();
+      }
+    } catch (_) {}
+
+    return [];
   }
 
   // ============================================================

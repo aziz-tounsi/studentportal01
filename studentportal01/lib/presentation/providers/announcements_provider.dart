@@ -372,7 +372,7 @@ final globalAnnouncementsCountProvider = Provider<int>((ref) {
   return announcements.when(
     data: (list) => list.length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });
 
@@ -382,6 +382,6 @@ final classMessagesCountProvider = Provider<int>((ref) {
   return messages.when(
     data: (list) => list.length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });

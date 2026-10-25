@@ -79,7 +79,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
     return semestersAsync.when(
       data: (semesters) => _buildNav(context, semesters),
       loading: () => _buildLoadingNav(),
-      error: (_, __) => _buildNav(context, _getDefaultSemesters()),
+      error: (_, _) => _buildNav(context, _getDefaultSemesters()),
     );
   }
 
@@ -99,7 +99,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
           height: 56,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.8),
+            color: Colors.white.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(28),
           ),
           child: const Center(child: IosLoader()),
@@ -129,11 +129,11 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
           height: 56,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.8),
+            color: Colors.white.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.12),
+                color: Colors.black.withValues(alpha: 0.12),
                 blurRadius: 32,
                 offset: const Offset(0, 12),
               ),
@@ -177,7 +177,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                             borderRadius: BorderRadius.circular(18),
                             boxShadow: [
                               BoxShadow(
-                                color: widget.accentColor.withOpacity(0.5),
+                                color: widget.accentColor.withValues(alpha: 0.5),
                                 blurRadius: 24,
                                 offset: const Offset(0, 8),
                               ),
@@ -313,7 +313,7 @@ class SemesterTabBar extends ConsumerWidget {
       },
       loading: () =>
           const SizedBox(height: 40, child: Center(child: IosLoader())),
-      error: (_, __) => _buildTabs(context, [
+      error: (_, _) => _buildTabs(context, [
         SemesterInfo(id: '1', name: 'Sem. 1', number: 1, isCurrent: false),
         SemesterInfo(id: '2', name: 'Sem. 2', number: 2, isCurrent: false),
       ], color),

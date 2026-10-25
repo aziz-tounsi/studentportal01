@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../../data/models/grade_model.dart';
-import '../../providers/student_context_provider.dart';
 import '../../widgets/semester_navigator.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/resultats_skeleton.dart';
 
 // Import providers from the original file
@@ -98,9 +96,11 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
           bottom: false,
           child: RefreshIndicator(
             color: const Color(0xFFFF2D78),
+            backgroundColor: Colors.white,
             onRefresh: () async {
               ref.read(resultatsRefreshingProvider.notifier).state = true;
               try {
+                // ignore: unused_result
                 await ref.refresh(gradesProvider(selectedSemester).future);
               } finally {
                 ref.read(resultatsRefreshingProvider.notifier).state = false;
@@ -175,7 +175,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
         final fadeIn = slideValue;
 
         return SizedBox(
-          height: 64,
+          height: 72,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -200,7 +200,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF06B6D4).withOpacity(0.4),
+                                color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -221,20 +221,22 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           children: [
                             Text(
                               l10n.resultats,
-                              style: const TextStyle(
+                              style: ArabicTypography.headerStyle(
+                                context,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF1F2937),
+                                color: const Color(0xFF1F2937),
                                 letterSpacing: -0.8,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               l10n.resultsSubtitle,
-                              style: const TextStyle(
+                              style: ArabicTypography.subtitleStyle(
+                                context,
                                 fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF1F2937),
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF1F2937),
                               ),
                             ),
                           ],
@@ -246,11 +248,11 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -283,11 +285,11 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -305,11 +307,11 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                         child: Container(
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
+                            color: Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -331,14 +333,16 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                                   cursorColor: Colors.grey[600],
                                   onChanged: (value) =>
                                       setState(() => _searchQuery = value),
-                                  style: TextStyle(
+                                  style: ArabicTypography.bodyStyle(
+                                    context,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
                                     hintText: AppLocalizations.of(context).search,
-                                    hintStyle: TextStyle(
+                                    hintStyle: ArabicTypography.bodyStyle(
+                                      context,
                                       color: Colors.grey[400],
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,
@@ -429,9 +433,10 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
           // Section title
           Text(
             l10n.translate('details_par_matiere'),
-            style: TextStyle(
+            style: ArabicTypography.subtitleStyle(
+              context,
               fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               color: Colors.grey.shade800,
             ),
           ),
@@ -454,7 +459,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                   'Aucun résultat',
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -473,14 +478,14 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
           Icon(
             Icons.bar_chart_rounded,
             size: 64,
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             'Aucune matière assignée',
             style: TextStyle(
               fontSize: 16,
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -489,7 +494,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
             'Les notes seront affichées ici',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withValues(alpha: 0.4),
             ),
           ),
         ],
@@ -520,7 +525,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF06B6D4).withOpacity(0.5),
+              color: const Color(0xFF06B6D4).withValues(alpha: 0.5),
               blurRadius: 50,
               offset: const Offset(0, 20),
             ),
@@ -542,7 +547,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                               letterSpacing: 1.5,
                             ),
                           ),
@@ -566,7 +571,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                                 style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w500,
-                                  color: Colors.white.withOpacity(0.6),
+                                  color: Colors.white.withValues(alpha: 0.6),
                                 ),
                               ),
                             ],
@@ -577,7 +582,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                               Icon(
                                 Icons.check_circle_rounded,
                                 size: 14,
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha: 0.8),
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -585,7 +590,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontStyle: FontStyle.italic,
-                                  color: Colors.white.withOpacity(0.9),
+                                  color: Colors.white.withValues(alpha: 0.9),
                                 ),
                               ),
                             ],
@@ -598,10 +603,10 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                       width: 96,
                       height: 96,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Center(
@@ -628,9 +633,9 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: progress,
-                    backgroundColor: Colors.white.withOpacity(0.2),
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      Colors.white.withOpacity(0.6),
+                      Colors.white.withValues(alpha: 0.6),
                     ),
                     minHeight: 6,
                   ),
@@ -644,192 +649,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
   }
 }
 
-/// iOS 26 Style Trimester Navigator with smooth glass pill animation
-class _iOS26TrimesterNav extends StatefulWidget {
-  final int selectedTrimester;
-  final ValueChanged<int> onChanged;
 
-  const _iOS26TrimesterNav({
-    required this.selectedTrimester,
-    required this.onChanged,
-  });
 
-  @override
-  State<_iOS26TrimesterNav> createState() => _iOS26TrimesterNavState();
-}
-
-class _iOS26TrimesterNavState extends State<_iOS26TrimesterNav>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-  int _previousIndex = 0;
-
-  static const _gradientColors = [Color(0xFF06B6D4), Color(0xFF3B82F6)];
-
-  Color get _selectedTextColor => Colors.white;
-
-  @override
-  void initState() {
-    super.initState();
-    _previousIndex = widget.selectedTrimester - 1;
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    );
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutBack,
-    );
-    _controller.value = 1.0;
-  }
-
-  @override
-  void didUpdateWidget(_iOS26TrimesterNav oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedTrimester != widget.selectedTrimester) {
-      _previousIndex = oldWidget.selectedTrimester - 1;
-      _controller.forward(from: 0.0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          height: 56,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.6),
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 30,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final tabWidth = constraints.maxWidth / 2; // 2 semesters
-              final currentIndex = widget.selectedTrimester - 1;
-
-              return Stack(
-                children: [
-                  // Animated glass pill indicator
-                  AnimatedBuilder(
-                    animation: _animation,
-                    builder: (context, child) {
-                      final startPos = _previousIndex * tabWidth;
-                      final endPos = currentIndex * tabWidth;
-                      final currentPos =
-                          startPos + (endPos - startPos) * _animation.value;
-
-                      return Positioned(
-                        left: currentPos,
-                        top: 0,
-                        bottom: 0,
-                        width: tabWidth,
-                        child: Container(
-                          margin: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
-                            ),
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF06B6D4).withOpacity(0.5),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  // Tab labels - 2 semesters only (Tunisian system)
-                  Row(
-                    children: [
-                      _TrimesterTab(
-                        label: 'Semestre 1',
-                        isSelected: widget.selectedTrimester == 1,
-                        selectedTextColor: _selectedTextColor,
-                        onTap: () => widget.onChanged(1),
-                      ),
-                      _TrimesterTab(
-                        label: 'Semestre 2',
-                        isSelected: widget.selectedTrimester == 2,
-                        selectedTextColor: _selectedTextColor,
-                        onTap: () => widget.onChanged(2),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TrimesterTab extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final Color selectedTextColor;
-  final VoidCallback onTap;
-
-  const _TrimesterTab({
-    required this.label,
-    required this.isSelected,
-    required this.selectedTextColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          alignment: Alignment.center,
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            style: Localizations.localeOf(context).languageCode == 'ar'
-                ? GoogleFonts.cairo(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: isSelected ? selectedTextColor : Colors.grey.shade600,
-                  )
-                : TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: isSelected ? selectedTextColor : Colors.grey.shade600,
-                    letterSpacing: -0.2,
-                  ),
-            child: Text(label),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // Glassy Semester Average Card - NO BORDER
 class _GlassySemesterCard extends StatelessWidget {
@@ -865,7 +686,7 @@ class _GlassySemesterCard extends StatelessWidget {
             // NO BORDER
             boxShadow: [
               BoxShadow(
-                color: gradientColors[0].withOpacity(0.5),
+                color: gradientColors[0].withValues(alpha: 0.5),
                 blurRadius: 30,
                 offset: const Offset(0, 14),
               ),
@@ -882,7 +703,7 @@ class _GlassySemesterCard extends StatelessWidget {
                       Text(
                         'Moyenne Trimestre $semester',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -905,7 +726,7 @@ class _GlassySemesterCard extends StatelessWidget {
                             child: Text(
                               '/20',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 fontSize: 18,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -918,7 +739,7 @@ class _GlassySemesterCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -938,7 +759,7 @@ class _GlassySemesterCard extends StatelessWidget {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -1021,7 +842,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
         : grade >= 10
         ? const Color(0xFF00B087)
         : const Color(0xFFEF4444);
-    final gradeBgColor = gradeColor.withOpacity(0.1);
+    final gradeBgColor = gradeColor.withValues(alpha: 0.1);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(32),
@@ -1029,12 +850,12 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.7),
+            color: Colors.white.withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withOpacity(0.5)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 30,
                 offset: const Offset(0, 8),
               ),
@@ -1090,8 +911,9 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                           children: [
                             Text(
                               widget.subject.subjectName,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
+                              style: ArabicTypography.subtitleStyle(
+                                context,
+                                fontWeight: FontWeight.w700,
                                 fontSize: 18,
                                 color: Colors.grey.shade800,
                               ),
@@ -1177,7 +999,8 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                                   const SizedBox(width: 6),
                                   Text(
                                     widget.subject.teacherName!,
-                                    style: TextStyle(
+                                    style: ArabicTypography.bodyStyle(
+                                      context,
                                       fontSize: 12,
                                       color: Colors.grey.shade600,
                                       fontWeight: FontWeight.w500,
@@ -1249,7 +1072,8 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                 Expanded(
                   child: Text(
                     widget.subject.weightsDisplay,
-                    style: TextStyle(
+                    style: ArabicTypography.bodyStyle(
+                      context,
                       fontSize: 13,
                       color: Colors.grey.shade700,
                       fontWeight: FontWeight.w500,
@@ -1280,7 +1104,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                     width: 60,
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
-                      color: compColor.withOpacity(0.1),
+                      color: compColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(
@@ -1302,7 +1126,8 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                       children: [
                         Text(
                           l10n.formatGradeComponentName(component.componentName),
-                          style: TextStyle(
+                          style: ArabicTypography.bodyStyle(
+                            context,
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                             color: Colors.grey.shade800,
@@ -1310,7 +1135,8 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                         ),
                         Text(
                           '${l10n.translate('weight_label')}: ${component.weightPercent.toStringAsFixed(0)}%',
-                          style: TextStyle(
+                          style: ArabicTypography.bodyStyle(
+                            context,
                             fontSize: 12,
                             color: Colors.grey.shade500,
                           ),
@@ -1326,7 +1152,7 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: compGrade / 20,
-                          backgroundColor: compColor.withOpacity(0.1),
+                          backgroundColor: compColor.withValues(alpha: 0.1),
                           valueColor: AlwaysStoppedAnimation(compColor),
                           minHeight: 6,
                         ),
@@ -1344,7 +1170,8 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                       ),
                       child: Text(
                         l10n.translate('badge_upcoming'),
-                        style: TextStyle(
+                        style: ArabicTypography.bodyStyle(
+                          context,
                           fontSize: 10,
                           color: Colors.grey.shade500,
                         ),

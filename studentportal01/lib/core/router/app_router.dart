@@ -24,7 +24,28 @@ import '../../presentation/screens/about/about_screen.dart';
 import '../../presentation/screens/stats/stats_screen.dart';
 import '../../presentation/screens/ai_chat/ai_chat_screen.dart';
 import '../../presentation/widgets/bubble_nav_bar.dart';
+import '../../presentation/widgets/ios_edge_swipe_back.dart';
 import '../../presentation/providers/nav_bar_provider.dart';
+
+// Navigator keys for clean overlay/popup dismissal across tabs
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'rootNav');
+final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellNav');
+
+/// Dismisses any open menus, dialogs, bottom sheets or popup overlays
+void dismissAllOverlaysAndPopups() {
+  try {
+    final rootNav = rootNavigatorKey.currentState;
+    while (rootNav != null && rootNav.canPop()) {
+      rootNav.pop();
+    }
+  } catch (_) {}
+  try {
+    final shellNav = shellNavigatorKey.currentState;
+    while (shellNav != null && shellNav.canPop()) {
+      shellNav.pop();
+    }
+  } catch (_) {}
+}
 
 // Helper to determine the nav bar index based on current location
 int _getNavBarIndex(String location) {
@@ -37,6 +58,7 @@ int _getNavBarIndex(String location) {
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;
@@ -61,30 +83,41 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
 
-      // Shell Route with persistent bottom nav
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) {
+          if (state.matchedLocation == '/ai-chat') {
+            return child;
+          }
           return Consumer(
             builder: (context, ref, _) {
               final hideNavBar = ref.watch(navBarHiddenProvider);
+              final isHome = state.matchedLocation == '/';
               return Scaffold(
                 extendBody: true,
-                body: child,
-                bottomNavigationBar: AnimatedSlide(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeInOut,
-                  offset: hideNavBar ? const Offset(0, 1) : Offset.zero,
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 180),
-                    opacity: hideNavBar ? 0.0 : 1.0,
-                    child: IgnorePointer(
-                      ignoring: hideNavBar,
-                      child: BubbleNavBar(
-                        currentIndex: _getNavBarIndex(state.matchedLocation),
+                body: isHome
+                    ? child
+                    : IosEdgeSwipeBack(
+                        key: ValueKey(state.matchedLocation),
+                        child: child,
                       ),
-                    ),
-                  ),
-                ),
+                bottomNavigationBar: hideNavBar
+                    ? null
+                    : AnimatedSlide(
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeInOut,
+                        offset: Offset.zero,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: 1.0,
+                          child: IgnorePointer(
+                            ignoring: false,
+                            child: BubbleNavBar(
+                              currentIndex: _getNavBarIndex(state.matchedLocation),
+                            ),
+                          ),
+                        ),
+                      ),
               );
             },
           );
@@ -204,13 +237,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CourseDetailScreen(courseId: courseId);
         },
       ),
-            GoRoute(
+      GoRoute(
         path: '/absences/:offeringId',
         name: 'absence-detail',
         pageBuilder: (context, state) {
           final offeringId = state.pathParameters['offeringId']!;
           return NoTransitionPage(
-            child: AbsenceDetailScreen(subjectOfferingId: offeringId),
+            child: IosEdgeSwipeBack(
+              child: AbsenceDetailScreen(subjectOfferingId: offeringId),
+            ),
           );
         },
       ),

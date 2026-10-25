@@ -9,7 +9,7 @@ final themeProvider = StateNotifierProvider<ThemeNotifier, AppThemeMode>((ref) {
 });
 
 class ThemeNotifier extends StateNotifier<AppThemeMode> {
-  ThemeNotifier() : super(AppThemeMode.system) {
+  ThemeNotifier() : super(AppThemeMode.light) {
     _loadSavedTheme();
   }
 
@@ -21,7 +21,7 @@ class ThemeNotifier extends StateNotifier<AppThemeMode> {
     if (savedTheme != null) {
       state = AppThemeMode.values.firstWhere(
         (e) => e.name == savedTheme,
-        orElse: () => AppThemeMode.system,
+        orElse: () => AppThemeMode.light,
       );
     }
   }

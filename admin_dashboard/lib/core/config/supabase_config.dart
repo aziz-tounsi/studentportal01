@@ -1,4 +1,4 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Supabase configuration for Admin Dashboard
 /// Uses the same Supabase project as the student app
@@ -10,6 +10,8 @@ class SupabaseConfig {
   /// behind a trusted backend or edge function.
   static const String serviceRoleKey = String.fromEnvironment(
     'SUPABASE_SERVICE_ROLE_KEY',
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhenVhdXhpdnJib3lnZWhya2lqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Nzg4NDMxNiwiZXhwIjoyMDgzNDYwMzE2fQ.Lc4xJVNGspo7sCHLg7nq_K_UAbgvpyIravgNtbVpmLE',
   );
   
   static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhenVhdXhpdnJib3lnZWhya2lqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4ODQzMTYsImV4cCI6MjA4MzQ2MDMxNn0._rYkNtubGQo745cX-YApjWQyYC4s8r37SEa6AoiVppo';

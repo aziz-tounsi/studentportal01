@@ -1,18 +1,24 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
 
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
+  Future<void> _launchPortfolio() async {
+    const portfolioUrl = 'https://aziz-tounsi.github.io/';
+    final uri = Uri.parse(portfolioUrl);
     try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        await launchUrl(uri);
+      }
+    } catch (e) {
+      debugPrint('Error launching portfolio url: $e');
+    }
   }
 
   @override
@@ -80,29 +86,31 @@ class AboutScreen extends ConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                  Text(
-                                    l10n.about,
-                                    style: const TextStyle(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -0.6,
-                                      color: Color(0xFF1F2937),
-                                    ),
+                                Text(
+                                  l10n.about,
+                                  style: ArabicTypography.headerStyle(
+                                    context,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.6,
+                                    color: const Color(0xFF1F2937),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    l10n.aboutSubtitle,
-                                    style: TextStyle(
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey.shade600,
-                                    ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  l10n.aboutSubtitle,
+                                  style: ArabicTypography.subtitleStyle(
+                                    context,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade600,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        );
+                          ),
+                        ],
+                      );
                     },
                   ),
                 ),
@@ -110,10 +118,10 @@ class AboutScreen extends ConsumerWidget {
 
               // Content
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 150),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    // 1. Logo and Intro Card
+                    // 1. Logo & School Hero Card
                     Container(
                       padding: const EdgeInsets.all(28),
                       decoration: BoxDecoration(
@@ -130,35 +138,50 @@ class AboutScreen extends ConsumerWidget {
                       child: Column(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(20),
+                            width: 80,
+                            height: 80,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                              ),
                               shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                             ),
                             child: const Icon(
                               Icons.school_rounded,
-                              size: 64,
-                              color: Color(0xFF3B82F6),
+                              size: 42,
+                              color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          const Text(
+                          const SizedBox(height: 18),
+                          Text(
                             'Lycée Pythagore',
-                            style: TextStyle(
+                            style: ArabicTypography.headerStyle(
+                              context,
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF1E293B),
+                              color: const Color(0xFF1E293B),
+                              letterSpacing: -0.3,
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           Text(
                             l10n.aboutDesc,
-                            style: const TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF64748B),
-                              height: 1.5,
+                            style: ArabicTypography.bodyStyle(
+                              context,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                              color: const Color(0xFF64748B),
+                              height: 1.55,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -167,18 +190,9 @@ class AboutScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 20),
 
-                    // 2. Features
-                    _UnifiedInfoCard(
-                      title: l10n.features,
-                      icon: Icons.star_rounded,
-                      iconColor: const Color(0xFF8B5CF6),
-                      description: '- ${l10n.featureAnnouncements}\n- ${l10n.featureGrades}\n- ${l10n.featureAbsences}\n- ${l10n.featureTimetable}',
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 3. App Info
+                    // 2. Features Section (Redesigned: Clean, Minimal, Modern with Icons)
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(22),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(26),
@@ -191,27 +205,203 @@ class AboutScreen extends ConsumerWidget {
                         ],
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.code_rounded, color: Color(0xFF10B981), size: 32),
-                          const SizedBox(height: 12),
-                          Text(
-                            '${l10n.developedWithLove} par Aziz Tounsi',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E293B),
-                            ),
-                            textAlign: TextAlign.center,
+                          // Header
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.auto_awesome_rounded,
+                                  color: Color(0xFF6366F1),
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                l10n.features,
+                                style: ArabicTypography.subtitleStyle(
+                                  context,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1E293B),
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${l10n.appVersion} \u200E1.2.0',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF94A3B8),
+                          const SizedBox(height: 20),
+
+                          // Feature Rows
+                          _FeatureRow(
+                            icon: Icons.auto_graph_rounded,
+                            iconColor: const Color(0xFF3B82F6),
+                            title: l10n.featureAcademicTrackingTitle,
+                            subtitle: l10n.featureAcademicTrackingDesc,
+                          ),
+                          const Divider(color: Color(0xFFF1F5F9), height: 20),
+                          _FeatureRow(
+                            icon: Icons.calendar_month_rounded,
+                            iconColor: const Color(0xFF10B981),
+                            title: l10n.featureDynamicScheduleTitle,
+                            subtitle: l10n.featureDynamicScheduleDesc,
+                          ),
+                          const Divider(color: Color(0xFFF1F5F9), height: 20),
+                          _FeatureRow(
+                            icon: Icons.verified_user_rounded,
+                            iconColor: const Color(0xFFF43F5E),
+                            title: l10n.featureAttendanceTitle,
+                            subtitle: l10n.featureAttendanceDesc,
+                          ),
+                          const Divider(color: Color(0xFFF1F5F9), height: 20),
+                          _FeatureRow(
+                            icon: Icons.folder_shared_rounded,
+                            iconColor: const Color(0xFF8B5CF6),
+                            title: l10n.featureDocumentsTitle,
+                            subtitle: l10n.featureDocumentsDesc,
+                          ),
+                          const Divider(color: Color(0xFFF1F5F9), height: 20),
+                          _FeatureRow(
+                            icon: Icons.account_balance_wallet_rounded,
+                            iconColor: const Color(0xFFF59E0B),
+                            title: l10n.featureFinancialTitle,
+                            subtitle: l10n.featureFinancialDesc,
+                          ),
+                          const Divider(color: Color(0xFFF1F5F9), height: 20),
+                          _FeatureRow(
+                            icon: Icons.smart_toy_rounded,
+                            iconColor: const Color(0xFFFF2D78),
+                            title: l10n.featureAiTitle,
+                            subtitle: l10n.featureAiDesc,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 3. Application Developer Section (Minimal, Clean & Pro)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(
+                          color: const Color(0xFFE2E8F0),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          // Developer Badge Pill
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  const Color(0xFFFF2D78).withValues(alpha: 0.1),
+                                  const Color(0xFFFF5CA0).withValues(alpha: 0.1),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
                             ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.code_rounded,
+                                  size: 15,
+                                  color: Color(0xFFFF2D78),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  l10n.applicationDeveloper.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.6,
+                                    color: Color(0xFFFF2D78),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Navbar Pink Portfolio CTA Button
+                          GestureDetector(
+                            onTap: _launchPortfolio,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF2D78).withValues(alpha: 0.35),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.arrow_outward_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    l10n.visitPortfolio,
+                                    style: ArabicTypography.buttonStyle(
+                                      context,
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Version Footer: 2026
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 14,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${l10n.appVersion} 1.2.0 • 2026',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -227,70 +417,63 @@ class AboutScreen extends ConsumerWidget {
   }
 }
 
-class _UnifiedInfoCard extends StatelessWidget {
-  final String title;
-  final String description;
+class _FeatureRow extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
+  final String title;
+  final String subtitle;
 
-  const _UnifiedInfoCard({
-    required this.title,
-    required this.description,
+  const _FeatureRow({
     required this.icon,
     required this.iconColor,
+    required this.title,
+    required this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Icon(icon, color: iconColor, size: 17),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(width: 12),
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 17,
+                style: ArabicTypography.subtitleStyle(
+                  context,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: const Color(0xFF1E293B),
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: ArabicTypography.bodyStyle(
+                  context,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: const Color(0xFF64748B),
+                  height: 1.35,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Text(
-            description,
-            style: const TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

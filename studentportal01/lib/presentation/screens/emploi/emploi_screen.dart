@@ -6,6 +6,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../../data/models/timetable_model.dart';
 import '../../providers/student_context_provider.dart';
 import '../../providers/nav_bar_provider.dart';
@@ -316,7 +317,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
         ),
         child: PopScope(
           canPop: !_isExpanded,
-          onPopInvoked: (didPop) {
+          onPopInvokedWithResult: (didPop, _) {
             if (didPop) return;
             _setExpanded(false);
           },
@@ -326,9 +327,11 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                 bottom: false,
                 child: RefreshIndicator(
                   color: const Color(0xFFFF2D78),
+                  backgroundColor: Colors.white,
                   onRefresh: () async {
                     ref.read(emploiRefreshingProvider.notifier).state = true;
                     try {
+                      // ignore: unused_result
                       await ref.refresh(timetableProvider.future);
                     } finally {
                       ref.read(emploiRefreshingProvider.notifier).state = false;
@@ -341,7 +344,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
                           child: SizedBox(
-                            height: 64,
+                            height: 72,
                             child: Row(
                               children: [
                                 Container(
@@ -389,21 +392,25 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                                                     ? 'Exam Timetable'
                                                     : 'Emploi d\'examen'))
                                             : l10n.emploi,
-                                        style: const TextStyle(
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.w900,
-                                            color: Color(0xFF1F2937),
-                                            letterSpacing: -0.8),
+                                        style: ArabicTypography.headerStyle(
+                                          context,
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w900,
+                                          color: const Color(0xFF1F2937),
+                                          letterSpacing: -0.8,
+                                        ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         selectedType == 'exam'
                                             ? l10n.examTimetableSubtitle
                                             : l10n.emploiSubtitle,
-                                        style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: Color(0xFF1F2937)),
+                                        style: ArabicTypography.subtitleStyle(
+                                          context,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF1F2937),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -528,7 +535,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                     ),
                   ),
                   loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
                 ),
             ],
           ),
@@ -908,10 +915,12 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black.withOpacity(0.35),
+      barrierColor: Colors.black.withValues(alpha: 0.35),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return Center(
           child: Dialog(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -926,9 +935,10 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                     ),
                     child: Text(
                       fullName,
-                      style: TextStyle(
+                      style: ArabicTypography.headerStyle(
+                        dialogContext,
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w700,
                         color: color,
                       ),
                       textAlign: TextAlign.center,
@@ -940,11 +950,16 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.access_time_filled, size: 20, color: Colors.grey),
+                      const Icon(Icons.access_time_filled, size: 20, color: Color(0xFF6B7280)),
                       const SizedBox(width: 8),
                       Text(
                         timeRange,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                        style: ArabicTypography.bodyStyle(
+                          dialogContext,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1F2937),
+                        ),
                       ),
                     ],
                   ),
@@ -957,13 +972,18 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                       children: [
                         const Padding(
                           padding: EdgeInsets.only(top: 2),
-                          child: Icon(Icons.location_on_rounded, size: 18, color: Colors.grey),
+                          child: Icon(Icons.location_on_rounded, size: 18, color: Color(0xFF6B7280)),
                         ),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             detailLocation,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                            style: ArabicTypography.bodyStyle(
+                              dialogContext,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF1F2937),
+                            ),
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -973,11 +993,16 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  const Divider(),
+                  Divider(color: Colors.grey.shade200),
                   const SizedBox(height: 16),
                   Text(
                     l10n.translate('teacher'),
-                    style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
+                    style: ArabicTypography.subtitleStyle(
+                      dialogContext,
+                      fontSize: 14,
+                      color: const Color(0xFF6B7280),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -985,18 +1010,23 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                     children: [
                       CircleAvatar(
                         radius: 24,
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor: Colors.grey.shade100,
                         backgroundImage: slot.teacherPhotoUrl != null
                             ? NetworkImage(slot.teacherPhotoUrl!)
                             : null,
                         child: slot.teacherPhotoUrl == null
-                            ? const Icon(Icons.person, color: Colors.grey)
+                            ? const Icon(Icons.person, color: Color(0xFF9CA3AF))
                             : null,
                       ),
                       const SizedBox(width: 16),
                       Text(
                         slot.teacherName ?? l10n.translate('not_assigned'),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        style: ArabicTypography.bodyStyle(
+                          dialogContext,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1F2937),
+                        ),
                       ),
                     ],
                   ),
@@ -1079,6 +1109,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
     bool isFuture = false,
     DateTime? startDate,
   }) {
+    final l10n = AppLocalizations.of(context);
     final String title;
     final String subtitle;
     if (isFuture) {
@@ -1086,18 +1117,16 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
       final formattedDate = startDate != null
           ? DateFormat('d MMMM yyyy', lang).format(startDate)
           : null;
-      title = 'Semestre à venir';
+      title = l10n.upcomingSemester;
       subtitle = formattedDate != null
-          ? 'L\'emploi du temps sera disponible à partir du $formattedDate.'
-          : 'L\'emploi du temps sera disponible dès le début du semestre.';
+          ? l10n.translate('timetable_available_from', {'date': formattedDate})
+          : l10n.translate('timetable_available_start');
     } else if (isExam) {
-      title = 'Aucun examen planifié';
-      subtitle =
-          'Les horaires des examens pour ce semestre n\'ont pas encore été publiés par l\'administration.';
+      title = l10n.noExamsScheduled;
+      subtitle = l10n.noExamsDesc;
     } else {
-      title = 'Emploi du temps non disponible';
-      subtitle =
-          'L\'emploi du temps de la classe pour ce semestre n\'a pas encore été créé par l\'administration.';
+      title = l10n.timetableNotAvailable;
+      subtitle = l10n.timetableNotAvailableDesc;
     }
 
     return Align(
@@ -1165,10 +1194,12 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
               const SizedBox(height: 20),
               Text(
                 title,
-                style: const TextStyle(
+                textAlign: TextAlign.center,
+                style: ArabicTypography.headerStyle(
+                  context,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1F2937),
+                  color: const Color(0xFF1F2937),
                   letterSpacing: -0.4,
                 ),
               ),
@@ -1176,10 +1207,11 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: ArabicTypography.bodyStyle(
+                  context,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF6B7280),
+                  color: const Color(0xFF6B7280),
                   height: 1.4,
                 ),
               ),

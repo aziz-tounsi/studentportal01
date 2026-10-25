@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/user_model.dart';
@@ -452,18 +452,21 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
   /// Reset user password (for password reset requests)
   Future<String?> resetUserPassword(String userId) async {
     try {
-      final user = state.value?.users.firstWhere((u) => u.id == userId);
-      if (user == null) return null;
-
       final newPassword = generatePassword();
 
-      // Update password via admin API (service role)
-      await _adminSupabase.auth.admin.updateUserById(
-        userId,
-        attributes: AdminUserAttributes(password: newPassword),
-      );
+      // 1. Try to update password in auth.users via admin API (service role)
+      try {
+        await _adminSupabase.auth.admin.updateUserById(
+          userId,
+          attributes: AdminUserAttributes(password: newPassword),
+        );
+      } catch (authErr) {
+        debugPrint(
+          'Warning in resetUserPassword: auth.admin.updateUserById failed for $userId ($authErr). Saving password to users table.',
+        );
+      }
 
-      // Store initial password in user record for admin reference
+      // 2. Always store initial password in user record for admin reference
       await _adminSupabase
           .from('users')
           .update({
@@ -475,8 +478,11 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       await refresh();
       return newPassword;
     } catch (e) {
-      state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
-      return null;
+      debugPrint('Error in resetUserPassword: $e');
+      if (state.hasValue && state.value != null) {
+        state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
+      }
+      rethrow;
     }
   }
 

@@ -3,6 +3,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/messages_screen_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,7 +82,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
         final fadeIn = slideValue;
 
         return SizedBox(
-          height: 64,
+          height: 72,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -107,7 +108,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF06B6D4).withOpacity(0.4),
+                                color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -129,7 +130,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           children: [
                             Text(
                               AppLocalizations.of(context).messages,
-                              style: TextStyle(
+                              style: ArabicTypography.headerStyle(
+                                context,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w900,
                                 color: Colors.grey[900],
@@ -139,7 +141,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                             const SizedBox(height: 2),
                             Text(
                               AppLocalizations.of(context).messagesSubtitle,
-                              style: TextStyle(
+                              style: ArabicTypography.subtitleStyle(
+                                context,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: Colors.grey[600],
@@ -155,11 +158,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -193,11 +196,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -216,11 +219,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         child: Container(
                           height: 48,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
+                            color: Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 20,
                                 offset: const Offset(0, 6),
                               ),
@@ -242,14 +245,16 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                   cursorColor: Colors.grey[600],
                                   onChanged: (value) =>
                                       setState(() => _searchQuery = value),
-                                  style: TextStyle(
+                                  style: ArabicTypography.bodyStyle(
+                                    context,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
                                     hintText: AppLocalizations.of(context).search,
-                                    hintStyle: TextStyle(
+                                    hintStyle: ArabicTypography.bodyStyle(
+                                      context,
                                       color: Colors.grey[400],
                                       fontSize: 16,
                                       fontWeight: FontWeight.w400,
@@ -319,7 +324,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF06B6D4).withOpacity(0.4),
+                color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -335,7 +340,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             children: [
               Text(
                 AppLocalizations.of(context).messages,
-                style: TextStyle(
+                style: ArabicTypography.headerStyle(
+                  context,
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                   color: Colors.grey[900],
@@ -345,7 +351,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
               const SizedBox(height: 4),
               Text(
                 AppLocalizations.of(context).messagesSubtitle,
-                style: TextStyle(
+                style: ArabicTypography.subtitleStyle(
+                  context,
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: Colors.grey[600],
@@ -361,11 +368,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.8),
+              color: Colors.white.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -393,7 +400,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: _accentColor.withOpacity(0.1),
+              color: _accentColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
@@ -416,7 +423,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
               border: Border.all(color: _accentColor, width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: _accentColor.withOpacity(0.15),
+                  color: _accentColor.withValues(alpha: 0.15),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -503,9 +510,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
         bottom: false,
         child: RefreshIndicator(
           color: const Color(0xFFFF2D78),
+          backgroundColor: Colors.white,
           onRefresh: () async {
             ref.read(messagesRefreshingProvider.notifier).state = true;
             try {
+              // ignore: unused_result
               await ref.refresh(classMessagesProvider.future);
             } finally {
               ref.read(messagesRefreshingProvider.notifier).state = false;
@@ -604,51 +613,78 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
 
                 if (filtered.isEmpty) {
                   return SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(28),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 20,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 72,
+                              height: 72,
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(28),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.mail_outline_rounded,
-                                    size: 40,
-                                    color: const Color(0xFF94A3B8),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    l10n.noMessages,
-                                    style: TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF94A3B8),
-                                      letterSpacing: -0.3,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    l10n.messagesAppearHere,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: const Color(0xFF94A3B8).withValues(alpha: 0.7),
-                                    ),
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
                                   ),
                                 ],
                               ),
+                              child: const Icon(
+                                Icons.mark_email_read_rounded,
+                                size: 34,
+                                color: Colors.white,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 20),
+                            Text(
+                              l10n.noMessages,
+                              textAlign: TextAlign.center,
+                              style: ArabicTypography.headerStyle(
+                                context,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1F2937),
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              l10n.messagesAppearHere,
+                              textAlign: TextAlign.center,
+                              style: ArabicTypography.bodyStyle(
+                                context,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF6B7280),
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -656,7 +692,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                 }
 
                 return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 110),
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 124 + MediaQuery.of(context).padding.bottom),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => _buildMessageCard(filtered[index]),
@@ -715,15 +751,15 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.85),
+                color: Colors.white.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -744,12 +780,12 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [typeColor, typeColor.withOpacity(0.7)],
+                            colors: [typeColor, typeColor.withValues(alpha: 0.7)],
                           ),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: typeColor.withOpacity(0.3),
+                              color: typeColor.withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -869,7 +905,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                               borderRadius: BorderRadius.circular(10),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
+                                  color: Colors.black.withValues(alpha: 0.1),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
@@ -912,7 +948,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                         decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.6),
+                                          color: Colors.black.withValues(alpha: 0.6),
                                           borderRadius: BorderRadius.circular(4),
                                         ),
                                         child: Text(
@@ -990,7 +1026,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -1025,7 +1061,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
                 ),
                 child: Stack(
                   children: [
@@ -1080,7 +1116,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withOpacity(0.6),
+                              Colors.black.withValues(alpha: 0.6),
                             ],
                           ),
                         ),
@@ -1120,9 +1156,9 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
           : Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.purple.withOpacity(0.08),
+                color: Colors.purple.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.purple.withOpacity(0.2)),
+                border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1222,7 +1258,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.purple.withOpacity(0.08),
+                color: Colors.purple.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -1231,7 +1267,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.purple.withOpacity(0.2),
+                      color: Colors.purple.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -1313,12 +1349,12 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                   gradient: LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: [typeColor, typeColor.withOpacity(0.7)],
+                                    colors: [typeColor, typeColor.withValues(alpha: 0.7)],
                                   ),
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: typeColor.withOpacity(0.3),
+                                      color: typeColor.withValues(alpha: 0.3),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -1337,7 +1373,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: typeColor.withOpacity(0.1),
+                                        color: typeColor.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(

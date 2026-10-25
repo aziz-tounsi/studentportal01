@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../core/l10n/app_localizations.dart';
 
 class AbsencesCardsSkeleton extends StatelessWidget {
   const AbsencesCardsSkeleton({super.key});
@@ -11,8 +12,8 @@ class AbsencesCardsSkeleton extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 110),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
-          _buildSummaryCardSkeleton(),
-          const SizedBox(height: 20),
+          _buildSummaryCardSkeleton(context),
+          const SizedBox(height: 36),
           _buildAbsenceCardSkeleton(),
           _buildAbsenceCardSkeleton(),
           _buildAbsenceCardSkeleton(),
@@ -22,66 +23,110 @@ class AbsencesCardsSkeleton extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCardSkeleton() {
+  Widget _buildSummaryCardSkeleton(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final gradientColors = const [Color(0xFFEC4899), Color(0xFFF43F5E)];
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFFEC4899).withValues(alpha: 0.3),
-              const Color(0xFFF43F5E).withValues(alpha: 0.2),
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradientColors,
+            ),
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: gradientColors[0].withValues(alpha: 0.6),
+                blurRadius: 60,
+                offset: const Offset(0, 24),
+              ),
             ],
           ),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Shimmer.fromColors(
-          baseColor: Colors.white.withValues(alpha: 0.3),
-          highlightColor: Colors.white.withValues(alpha: 0.6),
           child: Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 120,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      width: 80,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                    Text(
+                      l10n.overallAbsenceRate,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Container(
-                      width: 140,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Shimmer.fromColors(
+                          baseColor: Colors.white.withValues(alpha: 0.35),
+                          highlightColor: Colors.white.withValues(alpha: 0.75),
+                          child: Container(
+                            width: 80,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 6, left: 4),
+                          child: Text(
+                            '%',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Shimmer.fromColors(
+                      baseColor: Colors.white.withValues(alpha: 0.35),
+                      highlightColor: Colors.white.withValues(alpha: 0.75),
+                      child: Container(
+                        width: 110,
+                        height: 13,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               Container(
-                width: 64,
-                height: 64,
+                width: 68,
+                height: 68,
                 decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.4),
+                ),
+                child: Center(
+                  child: Shimmer.fromColors(
+                    baseColor: Colors.white.withValues(alpha: 0.35),
+                    highlightColor: Colors.white.withValues(alpha: 0.75),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

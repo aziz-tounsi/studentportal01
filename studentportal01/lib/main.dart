@@ -12,7 +12,6 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/l10n/app_localizations.dart';
 import 'presentation/providers/locale_provider.dart';
-import 'presentation/providers/theme_provider.dart';
 
 void main() {
   // runZonedGuarded must wrap EVERYTHING including ensureInitialized so that
@@ -70,11 +69,71 @@ class StudentPortalApp extends ConsumerWidget {
 
   ThemeData _applyLocaleFont(ThemeData theme, Locale? locale) {
     if (locale?.languageCode == 'ar') {
+      final isDark = theme.brightness == Brightness.dark;
+      final pColor = isDark ? Colors.white : AppColors.textPrimary;
+      final sColor = isDark ? Colors.grey[400]! : AppColors.textSecondary;
+
+      final arabicText = AppTheme.arabicTextTheme(
+        theme.textTheme,
+        primaryColor: pColor,
+        secondaryColor: sColor,
+      );
+
       return theme.copyWith(
-        textTheme: GoogleFonts.cairoTextTheme(theme.textTheme),
+        textTheme: arabicText,
         appBarTheme: theme.appBarTheme.copyWith(
           titleTextStyle: GoogleFonts.cairo(
-            textStyle: theme.appBarTheme.titleTextStyle,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: pColor,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            textStyle: GoogleFonts.tajawal(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            textStyle: GoogleFonts.tajawal(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            textStyle: GoogleFonts.tajawal(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+          labelStyle: GoogleFonts.tajawal(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: sColor,
+          ),
+          hintStyle: GoogleFonts.tajawal(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: isDark ? Colors.grey[600] : Colors.grey[400],
+          ),
+        ),
+        dialogTheme: theme.dialogTheme.copyWith(
+          titleTextStyle: GoogleFonts.cairo(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: pColor,
+          ),
+          contentTextStyle: GoogleFonts.tajawal(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: sColor,
           ),
         ),
       );
@@ -86,7 +145,6 @@ class StudentPortalApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);
-    final themeNotifier = ref.watch(themeProvider.notifier);
 
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
@@ -94,8 +152,8 @@ class StudentPortalApp extends ConsumerWidget {
         title: 'PythaOne',
         debugShowCheckedModeBanner: false,
         theme: _applyLocaleFont(AppTheme.lightTheme, locale),
-        darkTheme: _applyLocaleFont(AppTheme.darkTheme, locale),
-        themeMode: themeNotifier.themeMode,
+        darkTheme: _applyLocaleFont(AppTheme.lightTheme, locale),
+        themeMode: ThemeMode.light,
         locale: locale,
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: AppLocalizations.localizationsDelegates,

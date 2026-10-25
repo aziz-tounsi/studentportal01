@@ -262,7 +262,7 @@ class SuggestionRepository {
     final userId = supabase.auth.currentUser!.id;
     
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final storePath = '$userId/$timestamp\_$fileName';
+    final storePath = '$userId/${timestamp}_$fileName';
     
     await supabase.storage
         .from('suggestions')
@@ -284,7 +284,7 @@ final pendingSuggestionsCountProvider = Provider<int>((ref) {
   return suggestions.when(
     data: (list) => list.where((s) => s.status == 'pending' && !s.isRead).length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });
 
@@ -293,7 +293,7 @@ final readSuggestionsCountProvider = Provider<int>((ref) {
   return suggestions.when(
     data: (list) => list.where((s) => s.isRead).length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });
 
@@ -302,7 +302,7 @@ final repliedSuggestionsCountProvider = Provider<int>((ref) {
   return suggestions.when(
     data: (list) => list.where((s) => s.replies.isNotEmpty).length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });
 
@@ -312,7 +312,7 @@ final repliedOrSeenSuggestionsCountProvider = Provider<int>((ref) {
   return suggestions.when(
     data: (list) => list.where((s) => s.replies.isNotEmpty || s.isRead).length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });
 
@@ -321,7 +321,7 @@ final allSuggestionsCountProvider = Provider<int>((ref) {
   return suggestions.when(
     data: (list) => list.length,
     loading: () => 0,
-    error: (_, __) => 0,
+    error: (_, _) => 0,
   );
 });
 

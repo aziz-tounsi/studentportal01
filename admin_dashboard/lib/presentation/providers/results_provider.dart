@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/config/supabase_config.dart';
 import '../../data/models/grading_config_model.dart';
 import '../../data/models/student_result_model.dart';
 import '../../data/models/tunisian_coefficients.dart';
@@ -169,11 +170,20 @@ class ResultsProvider extends ChangeNotifier {
   /// Load ALL enrolled students regardless of class (for global search)
   Future<void> loadAllEnrolledStudents() async {
     try {
-      _allEnrolledStudents = await _repository.getEnrolledStudents(
+      var students = await _repository.getEnrolledStudents(
         academicYearId: _selectedAcademicYearId,
         classId: null, // no class filter
         searchQuery: null,
       );
+      // Fallback: If selected year has 0 enrolled students, load across all years so search never fails
+      if (students.isEmpty) {
+        students = await _repository.getEnrolledStudents(
+          academicYearId: null,
+          classId: null,
+          searchQuery: null,
+        );
+      }
+      _allEnrolledStudents = students;
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading all enrolled students: $e');
@@ -218,17 +228,30 @@ class ResultsProvider extends ChangeNotifier {
   /// Load academic years
   Future<void> loadAcademicYears() async {
     try {
-      // Load all academic years (same as Semestres page)
-      _academicYears = await _repository.getAcademicYears();
+      final user = SupabaseConfig.client.auth.currentUser;
+      String? schoolId;
+      if (user != null) {
+        try {
+          final profile = await SupabaseConfig.adminClient
+              .from('users')
+              .select('school_id')
+              .eq('id', user.id)
+              .maybeSingle();
+          schoolId = profile?['school_id']?.toString();
+        } catch (_) {}
+      }
+      schoolId ??= '11111111-1111-1111-1111-111111111111';
 
-      // Select current year by default
-      final current = _academicYears.firstWhere(
-        (y) => y['is_current'] == true,
-        orElse: () => _academicYears.isNotEmpty ? _academicYears.first : {},
-      );
+      // Load academic years for this school
+      _academicYears = await _repository.getAcademicYears(schoolId: schoolId);
 
-      if (current.isNotEmpty) {
-        _selectedAcademicYearId = current['id'];
+      // Prioritize the academic year with is_current == true for this school
+      Map<String, dynamic>? selectedYear =
+          _academicYears.where((y) => y['is_current'] == true).firstOrNull;
+      selectedYear ??= _academicYears.isNotEmpty ? _academicYears.first : null;
+
+      if (selectedYear != null && selectedYear.isNotEmpty) {
+        _selectedAcademicYearId = selectedYear['id'];
         await loadSemesters();
       }
 
@@ -239,13 +262,28 @@ class ResultsProvider extends ChangeNotifier {
     }
   }
 
-  /// Load semesters — loads semesters for the selected academic year only,
+  /// Load semesters — loads semesters for the selected academic year,
   /// then auto-selects is_current = true
   Future<void> loadSemesters() async {
     try {
-      // Filter by the currently selected academic year so we don't get
-      // Semestre 1 from 2024-2025 AND Semestre 1 from 2025-2026 simultaneously.
-      _semesters = await _repository.getSemesters(_selectedAcademicYearId);
+      final user = SupabaseConfig.client.auth.currentUser;
+      String? schoolId;
+      if (user != null) {
+        try {
+          final profile = await SupabaseConfig.adminClient
+              .from('users')
+              .select('school_id')
+              .eq('id', user.id)
+              .maybeSingle();
+          schoolId = profile?['school_id']?.toString();
+        } catch (_) {}
+      }
+      schoolId ??= '11111111-1111-1111-1111-111111111111';
+
+      _semesters = await _repository.getSemesters(
+        _selectedAcademicYearId,
+        schoolId: schoolId,
+      );
 
       // Sort by number
       _semesters.sort((a, b) {
@@ -258,13 +296,26 @@ class ResultsProvider extends ChangeNotifier {
         '📅 Loaded ${_semesters.length} semesters: ${_semesters.map((s) => s['name']).toList()}',
       );
 
-      // Always auto-select the semester flagged is_current = true in the DB
-      // (this is exactly what the Semestres page controls)
+      // Always auto-select current active semester
+      final now = DateTime.now();
       final current = _semesters.where((s) => s['is_current'] == true).firstOrNull;
+      final byDate = _semesters.where((s) {
+        try {
+          if (s['start_date'] != null && s['end_date'] != null) {
+            final start = DateTime.parse(s['start_date'].toString());
+            final end = DateTime.parse(s['end_date'].toString());
+            return !now.isBefore(start) && !now.isAfter(end);
+          }
+        } catch (_) {}
+        return false;
+      }).firstOrNull;
+
       if (current != null) {
         _selectedSemesterId = current['id'];
+      } else if (byDate != null) {
+        _selectedSemesterId = byDate['id'];
       } else if (_semesters.isNotEmpty) {
-        _selectedSemesterId = _semesters.last['id'];
+        _selectedSemesterId = _semesters.first['id'];
       }
 
       notifyListeners();
@@ -324,6 +375,8 @@ class ResultsProvider extends ChangeNotifier {
           classId: _selectedClassId,
           searchQuery: _searchQuery.isNotEmpty ? _searchQuery : null,
         );
+      } else if (_enrolledStudents.isEmpty && _selectedClassId == null) {
+        _enrolledStudents = _allEnrolledStudents;
       }
 
       debugPrint(
@@ -477,6 +530,10 @@ class ResultsProvider extends ChangeNotifier {
   void setSemester(String? semesterId) {
     _selectedSemesterId = semesterId;
     loadSubjectOfferings();
+    if (_selectedClassId != null && _selectedAcademicYearId != null) {
+      calculateResults();
+    }
+    notifyListeners();
   }
 
   void setNiveau(String? niveauId) {

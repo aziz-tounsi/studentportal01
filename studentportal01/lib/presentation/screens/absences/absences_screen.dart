@@ -1,12 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/absences_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/semester_navigator.dart';
@@ -290,6 +290,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
             onRefresh: () async {
               ref.read(absencesRefreshingProvider.notifier).state = true;
               try {
+                // ignore: unused_result
                 await ref.refresh(absencesProvider(selectedTrimester).future);
               } finally {
                 ref.read(absencesRefreshingProvider.notifier).state = false;
@@ -357,7 +358,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
         final fadeIn = slideValue;
 
         return SizedBox(
-          height: 64,
+          height: 72,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -382,7 +383,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFEC4899).withOpacity(0.4),
+                                color: const Color(0xFFEC4899).withValues(alpha: 0.4),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -403,20 +404,22 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           children: [
                             Text(
                               l10n.absences,
-                              style: const TextStyle(
+                              style: ArabicTypography.headerStyle(
+                                context,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF1F2937),
+                                color: const Color(0xFF1F2937),
                                 letterSpacing: -0.8,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               l10n.absencesSubtitle,
-                              style: const TextStyle(
+                              style: ArabicTypography.subtitleStyle(
+                                context,
                                 fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF1F2937),
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF1F2937),
                               ),
                             ),
                           ],
@@ -428,11 +431,11 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -465,11 +468,11 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -488,11 +491,11 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                         child: Container(
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
+                            color: Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -512,14 +515,16 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                                   controller: _searchController,
                                   focusNode: _searchFocusNode,
                                   cursorColor: const Color(0xFFEC4899),
-                                  style: TextStyle(
+                                  style: ArabicTypography.bodyStyle(
+                                    context,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
                                     hintText: l10n.search,
-                                    hintStyle: TextStyle(
+                                    hintStyle: ArabicTypography.bodyStyle(
+                                      context,
                                       color: Colors.grey[400],
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,
@@ -588,17 +593,88 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
             _buildSummaryCard(totalAbsent, totalHours, overallPercent, criticalCount),
             const SizedBox(height: 36),
             if (filtered.isEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 60),
-                child: Column(
-                  children: [
-                    Icon(Icons.check_circle_outline, size: 64, color: Colors.grey.shade300),
-                    const SizedBox(height: 16),
-                    Text(
-                      _searchQuery.isNotEmpty ? l10n.noResults : l10n.noAbsences,
-                      style: TextStyle(fontSize: 16, color: Colors.grey.shade500),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 1.5,
                     ),
-                  ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: _searchQuery.isNotEmpty
+                                ? const [Color(0xFF64748B), Color(0xFF475569)]
+                                : const [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (_searchQuery.isNotEmpty
+                                      ? const Color(0xFF64748B)
+                                      : const Color(0xFFFF2D78))
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          _searchQuery.isNotEmpty
+                              ? Icons.search_off_rounded
+                              : Icons.event_available_rounded,
+                          size: 34,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        _searchQuery.isNotEmpty ? l10n.noResults : l10n.noAbsences,
+                        textAlign: TextAlign.center,
+                        style: ArabicTypography.headerStyle(
+                          context,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF1F2937),
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? l10n.noSearchResultsDesc
+                            : l10n.noAbsencesDesc,
+                        textAlign: TextAlign.center,
+                        style: ArabicTypography.bodyStyle(
+                          context,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
@@ -635,7 +711,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: gradientColors[0].withOpacity(0.6),
+                color: gradientColors[0].withValues(alpha: 0.6),
                 blurRadius: 60,
                 offset: const Offset(0, 24),
               ),
@@ -649,7 +725,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                   children: [
                     Text(
                       l10n.overallAbsenceRate,
-                      style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w500),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14, fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -668,7 +744,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                     const SizedBox(height: 8),
                     Text(
                       '${totalAbsent.toStringAsFixed(0)} ${l10n.translate('hour_unit')} / ${totalHours.toStringAsFixed(0)} ${l10n.translate('hour_unit')}',
-                      style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
                     ),
                   ],
                 ),
@@ -678,7 +754,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -692,7 +768,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -751,12 +827,12 @@ class _GlassyAbsenceCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: Colors.black.withValues(alpha: 0.15),
                   blurRadius: 50,
                   offset: const Offset(0, 20),
                 ),
@@ -772,7 +848,7 @@ class _GlassyAbsenceCard extends StatelessWidget {
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.5),
+                        color: Colors.white.withValues(alpha: 0.5),
                         shape: BoxShape.circle,
                       ),
                       child: Stack(
@@ -805,9 +881,12 @@ class _GlassyAbsenceCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            absence.subjectName == 'MatiÃƒÂ¨re inconnue' ? AppLocalizations.of(context).unknownSubject : absence.subjectName,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                            absence.subjectName == 'Matière inconnue' || absence.subjectName.contains('inconnue')
+                                ? AppLocalizations.of(context).unknownSubject
+                                : absence.subjectName,
+                            style: ArabicTypography.subtitleStyle(
+                              context,
+                              fontWeight: FontWeight.w700,
                               fontSize: 15,
                               color: Colors.grey.shade800,
                             ),
@@ -824,13 +903,23 @@ class _GlassyAbsenceCard extends StatelessWidget {
                                   ),
                                   child: Text(
                                     absence.subjectCode!,
-                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                    style: ArabicTypography.bodyStyle(
+                                      context,
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                               const SizedBox(width: 8),
                               Text(
                                 '${absence.totalAbsentHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')} / ${absence.totalHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                style: ArabicTypography.bodyStyle(
+                                  context,
+                                  fontSize: 12,
+                                  color: Colors.grey.shade500,
+                                  fontWeight: FontWeight.w400,
+                                ),
                               ),
                             ],
                           ),
@@ -851,7 +940,12 @@ class _GlassyAbsenceCard extends StatelessWidget {
                                 const SizedBox(width: 6),
                                 Text(
                                   absence.teacherName!,
-                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                  style: ArabicTypography.bodyStyle(
+                                    context,
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ],
                             ),
@@ -863,7 +957,12 @@ class _GlassyAbsenceCard extends StatelessWidget {
                               const SizedBox(width: 4),
                               Text(
                                 '${absence.weeks} ${AppLocalizations.of(context).weeks}',
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                style: ArabicTypography.bodyStyle(
+                                  context,
+                                  fontSize: 11,
+                                  color: Colors.grey.shade500,
+                                  fontWeight: FontWeight.w400,
+                                ),
                               ),
                             ],
                           ),
@@ -881,7 +980,7 @@ class _GlassyAbsenceCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: levelColor.withOpacity(0.1),
+                      color: levelColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(

@@ -22,7 +22,7 @@ class StudentResultsRepository {
             academic_year_id,
             class_id,
             group_id,
-            academic_years!inner (
+            academic_years (
               id,
               name,
               is_current
@@ -46,7 +46,8 @@ class StudentResultsRepository {
           ''')
           .eq('user_id', userId)
           .eq('is_active', true)
-          .eq('academic_years.is_current', true)
+          .order('created_at', ascending: false)
+          .limit(1)
           .maybeSingle();
 
       return response;
@@ -58,6 +59,8 @@ class StudentResultsRepository {
             .select('*, academic_years(*), classes(*)')
             .eq('user_id', userId)
             .eq('is_active', true)
+            .order('created_at', ascending: false)
+            .limit(1)
             .maybeSingle();
         return response;
       } catch (_) {

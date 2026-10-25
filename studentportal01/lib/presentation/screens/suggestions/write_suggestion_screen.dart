@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
+import '../../../core/router/app_router.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/ios_loader.dart';
 
@@ -108,9 +110,15 @@ Color getTypeColor(String type) {
 
 class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
   final TextEditingController _contentController = TextEditingController();
-  List<PlatformFile> _attachedFiles = [];
+  final List<PlatformFile> _attachedFiles = [];
   bool _isSubmitting = false;
   String _selectedType = 'autre';
+
+  @override
+  void deactivate() {
+    dismissAllOverlaysAndPopups();
+    super.deactivate();
+  }
 
   @override
   void dispose() {
@@ -178,7 +186,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
             final bytes = file.bytes;
             if (bytes != null) {
               final timestamp = DateTime.now().millisecondsSinceEpoch;
-              final storePath = '$userId/$timestamp\_${file.name}';
+              final storePath = '$userId/${timestamp}_${file.name}';
 
               await supabase.storage
                   .from('suggestions')
@@ -193,7 +201,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
               attachmentTypes.add(file.extension ?? '');
             }
           } catch (e) {
-            print('Error uploading file: $e');
+            debugPrint('Error uploading file: $e');
           }
         }
       }
@@ -251,7 +259,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -260,6 +268,8 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
       child: Theme(
         data: Theme.of(context).copyWith(
           popupMenuTheme: PopupMenuThemeData(
+            color: Colors.white,
+            surfaceTintColor: Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
             ),
@@ -267,6 +277,12 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
           ),
         ),
         child: PopupMenuButton<String>(
+          color: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 8,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           onSelected: (value) => setState(() => _selectedType = value),
           offset: const Offset(0, 56),
           itemBuilder: (context) => typesMap.entries.map((entry) {
@@ -283,7 +299,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: typeColor.withOpacity(0.1),
+                        color: typeColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(typeIcon, color: typeColor, size: 18),
@@ -315,7 +331,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: selectedColor.withOpacity(0.1),
+                    color: selectedColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(selectedIcon, color: selectedColor, size: 22),
@@ -395,16 +411,19 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () => context.go('/suggestions'),
+                      onTap: () {
+                        dismissAllOverlaysAndPopups();
+                        context.go('/suggestions');
+                      },
                       child: Container(
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
@@ -424,7 +443,8 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                         children: [
                           Text(
                             l10n.newSuggestion,
-                            style: TextStyle(
+                            style: ArabicTypography.headerStyle(
+                              context,
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
                               color: Colors.grey[900],
@@ -433,7 +453,8 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                           ),
                           Text(
                             l10n.shareIdeas,
-                            style: TextStyle(
+                            style: ArabicTypography.subtitleStyle(
+                              context,
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                               color: Colors.grey[600],
@@ -456,15 +477,15 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.5),
+                            color: Colors.white.withValues(alpha: 0.5),
                             width: 1.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 30,
                               offset: const Offset(0, 10),
                             ),
@@ -497,26 +518,36 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            TextField(
-                              controller: _contentController,
-                              maxLines: 6,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[900],
-                                height: 1.5,
+                            Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                              decoration: InputDecoration(
-                                hintText: l10n.describeSuggestionHint,
-                                hintStyle: TextStyle(
-                                  color: Colors.grey[400],
+                              child: TextField(
+                                controller: _contentController,
+                                maxLines: 6,
+                                style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w500,
+                                  color: Color(0xFF1F2937),
+                                  height: 1.5,
                                 ),
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                contentPadding: const EdgeInsets.all(20),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: Colors.transparent,
+                                  hintText: l10n.describeSuggestionHint,
+                                  hintStyle: const TextStyle(
+                                    color: Color(0xFF9CA3AF),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  errorBorder: InputBorder.none,
+                                  focusedErrorBorder: InputBorder.none,
+                                  contentPadding: const EdgeInsets.all(20),
+                                ),
                               ),
                             ),
                              const SizedBox(height: 24),
@@ -592,7 +623,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                                  width: 22,
                                                  height: 22,
                                                  decoration: BoxDecoration(
-                                                   color: Colors.black.withOpacity(0.6),
+                                                   color: Colors.black.withValues(alpha: 0.6),
                                                    shape: BoxShape.circle,
                                                  ),
                                                  child: const Icon(
@@ -630,7 +661,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                              // Action buttons
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha: 0.8),
                                 borderRadius: BorderRadius.circular(20)
                               ),
                               padding: const EdgeInsets.all(12),
@@ -652,7 +683,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                           BoxShadow(
                                             color: const Color(
                                               0xFFFF2D78,
-                                            ).withOpacity(0.3),
+                                            ).withValues(alpha: 0.3),
                                             blurRadius: 15,
                                             offset: const Offset(0, 8),
                                           ),
@@ -683,7 +714,8 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                                       const SizedBox(width: 8),
                                                       Text(
                                                         l10n.send,
-                                                        style: const TextStyle(
+                                                        style: ArabicTypography.buttonStyle(
+                                                          context,
                                                           fontSize: 16,
                                                           fontWeight:
                                                               FontWeight.w700,

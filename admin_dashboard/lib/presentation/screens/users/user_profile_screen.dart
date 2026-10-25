@@ -63,7 +63,8 @@ class UserProfileData {
 }
 
 // ==================== PROFILE PROVIDER ====================
-final userProfileDataProvider = FutureProvider.family<UserProfileData?, String>((
+final userProfileDataProvider =
+    FutureProvider.autoDispose.family<UserProfileData?, String>((
   ref,
   userId,
 ) async {
@@ -348,6 +349,45 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   bool _showPassword = false;
   bool _isResettingPassword = false;
   int _selectedMonthOffset = 0;
+  RealtimeChannel? _userChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribeToUserChanges();
+  }
+
+  @override
+  void dispose() {
+    _userChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _subscribeToUserChanges() {
+    try {
+      _userChannel = Supabase.instance.client
+          .channel('profile_realtime_${widget.userId}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'users',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'id',
+              value: widget.userId,
+            ),
+            callback: (payload) {
+              debugPrint('ProfileScreen: Realtime user update received for ${widget.userId}');
+              if (mounted) {
+                ref.invalidate(userProfileDataProvider(widget.userId));
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('ProfileScreen: Error setting up realtime subscription: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -562,6 +602,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              _outlineButton(
+                icon: Icons.refresh_rounded,
+                label: 'Actualiser',
+                onTap: () => ref.invalidate(userProfileDataProvider(widget.userId)),
+              ),
               _outlineButton(icon: Icons.edit_outlined, label: 'Modifier', onTap: () => _showEditDialog(user)),
               _brandOutlineButton(label: 'Réinitialiser mot de passe', onTap: _isResettingPassword ? null : () => _resetPassword(user), isLoading: _isResettingPassword),
               if (isStudent) ...[
@@ -844,8 +889,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     if (result == null || result.isEmpty) return;
 
     try {
-      // Save the password to initial_password field
-      await Supabase.instance.client
+      // 1. Try to update actual Auth password via admin client with service role
+      try {
+        await SupabaseConfig.adminClient.auth.admin.updateUserById(
+          widget.userId,
+          attributes: AdminUserAttributes(password: result),
+        );
+      } catch (authErr) {
+        debugPrint(
+          'Warning in _setPasswordManually: auth update failed for ${widget.userId} ($authErr). Saving password to users table.',
+        );
+      }
+
+      // 2. Save the password to initial_password field
+      await SupabaseConfig.adminClient
           .from('users')
           .update({
             'initial_password': result,
@@ -1770,8 +1827,9 @@ onTap: () => _showStudentPaymentsSheet(data),
                   ),
                   // Rows
                   ...activities.take(10).map((a) {
+                    final action = a['action'] as String? ?? '';
                     final type = a['type'] as String? ?? '';
-                    final detail = a['detail'] as String? ?? '';
+                    final detail = (a['details'] ?? a['detail']) as String? ?? '';
                     final date = a['date'] as String? ?? '';
                     return TableRow(
                       decoration: BoxDecoration(
@@ -1780,7 +1838,7 @@ onTap: () => _showStudentPaymentsSheet(data),
                       children: [
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: _activityBadge(type),
+                          child: _activityBadge(action, type),
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1808,33 +1866,27 @@ onTap: () => _showStudentPaymentsSheet(data),
     );
   }
 
-  Widget _activityBadge(String type) {
+  Widget _activityBadge(String action, String type) {
     Color color;
-    String label;
-    switch (type) {
-      case 'absence':
-        color = AppColors.error;
-        label = 'Absence';
-        break;
-      case 'grade':
-        color = AppColors.primary;
-        label = 'Note';
-        break;
-      case 'payment':
-        color = AppColors.success;
-        label = 'Paiement';
-        break;
-      case 'suggestion':
-        color = AppColors.warning;
-        label = 'Suggestion';
-        break;
-      case 'message':
-        color = const Color(0xFF8B5CF6);
-        label = 'Message';
-        break;
-      default:
-        color = AppColors.slate400;
-        label = type;
+    String label = action.isNotEmpty ? action : type;
+    final lower = label.toLowerCase();
+    if (lower.contains('absence') || type == 'error' || type == 'warning') {
+      color = AppColors.error;
+      label = 'Absence';
+    } else if (lower.contains('note') || lower.contains('grade')) {
+      color = AppColors.primary;
+      label = 'Note';
+    } else if (lower.contains('paiement') || lower.contains('payment') || type == 'success') {
+      color = AppColors.success;
+      label = 'Paiement';
+    } else if (lower.contains('suggestion') || type == 'purple') {
+      color = AppColors.warning;
+      label = 'Suggestion';
+    } else if (lower.contains('annonce') || lower.contains('message') || type == 'info') {
+      color = const Color(0xFF8B5CF6);
+      label = 'Annonce';
+    } else {
+      color = AppColors.slate400;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

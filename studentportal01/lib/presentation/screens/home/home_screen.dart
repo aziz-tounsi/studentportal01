@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/enrollment_model.dart';
 import '../../../data/models/school_model.dart';
@@ -95,7 +96,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       extendBody: true,
-      drawerScrimColor: Colors.black.withOpacity(0.25),
+      drawerScrimColor: Colors.black.withValues(alpha: 0.25),
       drawer: _buildDrawer(context, l10n, ref),
       onDrawerChanged: (isOpen) {
         if (_isDrawerOpen != isOpen) {
@@ -220,8 +221,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       alignment: Alignment.topCenter,
                       transform: Matrix4.identity()
                         ..setEntry(3, 2, 0.0012)
-                        ..translate(0.0, translateY, 0.0)
-                        ..scale(scale, scale, 1.0)
+                        ..translateByDouble(0.0, translateY, 0.0, 1.0)
+                        ..scaleByDouble(scale, scale, 1.0, 1.0)
                         ..rotateX(rotateX),
                       child: Opacity(
                         opacity: opacity,
@@ -248,6 +249,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     await ref.read(authProvider.notifier).refreshUserData();
                   },
                   color: const Color(0xFFFF2D78),
+                  backgroundColor: Colors.white,
                   child: SingleChildScrollView(
                     controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(
@@ -314,7 +316,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 110),
+                                  const SizedBox(height: 16),
                                 ],
                               ),
                             ),
@@ -439,7 +441,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         onMenuTap: () => Scaffold.of(context).openDrawer(),
         onTap: _expandCard,
       ),
-      error: (_, __) => StudentCard(
+      error: (_, _) => StudentCard(
         key: _cardKey,
         user: userModel,
         enrollment: enrollmentModel,
@@ -539,10 +541,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.65),
+              color: Colors.white.withValues(alpha: 0.65),
               border: Border(
                 right: BorderSide(
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),
@@ -599,7 +601,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           borderRadius: BorderRadius.circular(28),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
+                              color: Colors.black.withValues(alpha: 0.06),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -611,15 +613,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             Icon(
                               Icons.logout_rounded,
                               color: Colors.grey[700],
-                              size: 20,
+                              size: 22,
                             ),
                             const SizedBox(width: 8),
                             Text(
                               l10n.logout,
-                              style: TextStyle(
+                              style: ArabicTypography.headerStyle(
+                                context,
                                 color: Colors.grey[700],
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
+                                fontSize: Localizations.localeOf(context).languageCode == 'ar' ? 17.5 : 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.3,
                               ),
                             ),
                           ],
@@ -649,28 +653,33 @@ class _DrawerItem extends StatelessWidget {
     required this.onTap,
   });
 
+  @override
   Widget build(BuildContext context) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
     return Material(
       color: Colors.transparent,
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
         leading: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF5F7FB),
-          shape: BoxShape.circle,
+          width: 48,
+          height: 48,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF5F7FB),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: const Color(0xFF374151), size: 24),
         ),
-        child: Icon(icon, color: const Color(0xFF374151), size: 22),
-      ),
-      title: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFF374151),
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
+        title: Text(
+          label,
+          style: ArabicTypography.headerStyle(
+            context,
+            color: const Color(0xFF1F2937),
+            fontWeight: FontWeight.w800,
+            fontSize: isAr ? 17.5 : 16,
+            letterSpacing: -0.3,
+          ),
         ),
-      ),
-      onTap: onTap,
+        onTap: onTap,
       ),
     );
   }
@@ -770,7 +779,7 @@ class _ExpandedStudentCard extends AnimatedWidget {
               transform: Matrix4.identity()
                 ..setEntry(3, 2, 0.001)
                 ..rotateZ(rotateZ)
-                ..scale(scale, scale),
+                ..scaleByDouble(scale, scale, 1.0, 1.0),
               child: SizedBox(
                 width: baseCardWidth,
                 child: StudentCard(

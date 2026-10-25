@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../widgets/ios_loader.dart';
 import '../../providers/auth_provider.dart';
@@ -37,8 +38,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     if (success && mounted) {
       await ref.read(avatarProvider.notifier).reloadForCurrentUser();
-      context.go('/');
+      if (mounted) context.go('/');
     }
+  }
+
+  String _formatLoginError(String rawError, AppLocalizations l10n) {
+    final lower = rawError.toLowerCase();
+    if (lower.contains('invalid') ||
+        lower.contains('credentials') ||
+        lower.contains('grant') ||
+        lower.contains('password')) {
+      return l10n.translate('invalid_credentials');
+    }
+    if (lower.contains('network') ||
+        lower.contains('socket') ||
+        lower.contains('connection') ||
+        lower.contains('offline')) {
+      return l10n.translate('network_error');
+    }
+    if (lower.contains('schema') ||
+        lower.contains('database') ||
+        lower.contains('unexpected') ||
+        lower.contains('server') ||
+        lower.contains('500') ||
+        rawError.contains('{')) {
+      return l10n.translate('server_error');
+    }
+    return rawError;
   }
 
   void _showForgotPasswordDialog(BuildContext context) {
@@ -250,7 +276,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           return;
                         }
                         setDialogState(() => isSubmitting = true);
-
+                        final messenger = ScaffoldMessenger.of(context);
                         try {
                           await ref
                               .read(authProvider.notifier)
@@ -263,14 +289,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           });
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Erreur: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Erreur: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                         }
                       },
                 style: ElevatedButton.styleFrom(
@@ -344,7 +368,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 24),
                               child: Text(
                                 l10n.translate('welcome_portal'),
-                                style: TextStyle(
+                                style: ArabicTypography.headerStyle(
+                                  context,
                                   fontSize: 34,
                                   fontWeight: FontWeight.w700,
                                   color: const Color(0xFF1A1A1A),
@@ -368,7 +393,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         padding: const EdgeInsets.only(left: 20, bottom: 8),
                                         child: Text(
                                           l10n.translate('email_address'),
-                                          style: TextStyle(
+                                          style: ArabicTypography.bodyStyle(
+                                            context,
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
                                             color: AppColors.textSecondary.withValues(alpha: 0.5),
@@ -379,13 +405,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         controller: _emailController,
                                         keyboardType: TextInputType.emailAddress,
                                         textInputAction: TextInputAction.next,
-                                        style: const TextStyle(
-                                          color: Color(0xFF1A1A1A),
+                                        style: ArabicTypography.bodyStyle(
+                                          context,
+                                          color: const Color(0xFF1A1A1A),
                                           fontSize: 16,
                                         ),
                                         decoration: InputDecoration(
                                           hintText: l10n.translate('email_hint'),
-                                          hintStyle: TextStyle(
+                                          hintStyle: ArabicTypography.bodyStyle(
+                                            context,
                                             color: Colors.grey.shade400,
                                           ),
                                           filled: true,
@@ -445,7 +473,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         padding: const EdgeInsets.only(left: 20, bottom: 8),
                                         child: Text(
                                           l10n.password,
-                                          style: TextStyle(
+                                          style: ArabicTypography.bodyStyle(
+                                            context,
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
                                             color: AppColors.textSecondary.withValues(alpha: 0.5),
@@ -457,13 +486,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         obscureText: _obscurePassword,
                                         textInputAction: TextInputAction.done,
                                         onFieldSubmitted: (_) => _handleLogin(),
-                                        style: const TextStyle(
-                                          color: Color(0xFF1A1A1A),
+                                        style: ArabicTypography.bodyStyle(
+                                          context,
+                                          color: const Color(0xFF1A1A1A),
                                           fontSize: 16,
                                         ),
                                         decoration: InputDecoration(
                                           hintText: '••••••••',
-                                          hintStyle: TextStyle(
+                                          hintStyle: ArabicTypography.bodyStyle(
+                                            context,
                                             color: Colors.grey.shade400,
                                           ),
                                           filled: true,
@@ -541,7 +572,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         ),
                                         child: Text(
                                           l10n.translate('forgot_password_q'),
-                                          style: TextStyle(
+                                          style: ArabicTypography.bodyStyle(
+                                            context,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
                                             letterSpacing: 0.02,
@@ -620,8 +652,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              authState.errorMessage!,
-                                              style: const TextStyle(color: AppColors.error),
+                                              _formatLoginError(authState.errorMessage!, l10n),
+                                              style: ArabicTypography.bodyStyle(
+                                                context,
+                                                color: AppColors.error,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -654,7 +691,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                                 children: [
                                                   Text(
                                                     l10n.signIn,
-                                                    style: const TextStyle(
+                                                    style: ArabicTypography.buttonStyle(
+                                                      context,
                                                       fontSize: 20,
                                                       fontWeight: FontWeight.w600,
                                                     ),

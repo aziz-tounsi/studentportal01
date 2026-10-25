@@ -87,7 +87,7 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
   final int? badgeCount;
 
-  _NavItem({
+  const _NavItem({
     required this.icon,
     required this.label,
     required this.onTap,

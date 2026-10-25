@@ -11,6 +11,12 @@ class UserModel {
   final String? address;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? niveau;
+  final String? niveauCode;
+  final String? sectionCode;
+  final String? niveauId;
+  final String? sectionId;
+  final String? initialPassword;
 
   UserModel({
     required this.id,
@@ -25,6 +31,12 @@ class UserModel {
     this.address,
     required this.createdAt,
     required this.updatedAt,
+    this.niveau,
+    this.niveauCode,
+    this.sectionCode,
+    this.niveauId,
+    this.sectionId,
+    this.initialPassword,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -55,6 +67,12 @@ class UserModel {
       address: json['address'] as String?,
       createdAt: parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: parseDate(json['updated_at']) ?? DateTime.now(),
+      niveau: json['niveau'] as String?,
+      niveauCode: json['niveau_code'] as String?,
+      sectionCode: json['section_code'] as String?,
+      niveauId: json['niveau_id'] as String?,
+      sectionId: json['section_id'] as String?,
+      initialPassword: json['initial_password'] as String?,
     );
   }
 
@@ -72,6 +90,12 @@ class UserModel {
       'address': address,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'niveau': niveau,
+      'niveau_code': niveauCode,
+      'section_code': sectionCode,
+      'niveau_id': niveauId,
+      'section_id': sectionId,
+      'initial_password': initialPassword,
     };
   }
 
@@ -88,6 +112,12 @@ class UserModel {
     String? address,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? niveau,
+    String? niveauCode,
+    String? sectionCode,
+    String? niveauId,
+    String? sectionId,
+    String? initialPassword,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -102,6 +132,12 @@ class UserModel {
       address: address ?? this.address,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      niveau: niveau ?? this.niveau,
+      niveauCode: niveauCode ?? this.niveauCode,
+      sectionCode: sectionCode ?? this.sectionCode,
+      niveauId: niveauId ?? this.niveauId,
+      sectionId: sectionId ?? this.sectionId,
+      initialPassword: initialPassword ?? this.initialPassword,
     );
   }
 }

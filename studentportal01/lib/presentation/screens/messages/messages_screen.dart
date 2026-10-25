@@ -326,6 +326,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     }
 
     return RefreshIndicator(
+      color: const Color(0xFFFF2D78),
+      backgroundColor: Colors.white,
       onRefresh: () => ref.read(messagesNotifierProvider(widget.classId).notifier).refresh(),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -462,7 +464,7 @@ class _MessageCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
@@ -503,7 +505,7 @@ class _MessageCard extends StatelessWidget {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.7),
+                                      color: Colors.black.withValues(alpha: 0.7),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
@@ -620,7 +622,7 @@ class _MessageCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: info.color.withOpacity(0.1),
+        color: info.color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppSizes.radiusXS),
       ),
       child: Row(
@@ -645,9 +647,9 @@ class _MessageCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSizes.paddingS),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(AppSizes.radiusS),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

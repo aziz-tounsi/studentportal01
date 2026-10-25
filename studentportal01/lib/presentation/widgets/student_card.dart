@@ -79,10 +79,11 @@ class _StudentCardState extends ConsumerState<StudentCard> {
       if (mounted) {
         ref.read(authProvider.notifier).refreshUserData();
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+          SnackBar(content: Text(l10n.translate('photo_upload_error'))),
         );
       }
     } finally {
@@ -322,10 +323,10 @@ class _CardContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _detailRow(l10n.cardName, user.fullName, s),
-                    _detailRow(l10n.cardClass, '\u200E$classText', s),
-                    _detailRow(l10n.cardDob, '\u200E$dobText', s),
-                    _detailRow(l10n.cardAddress, user.address ?? '—', s),
+                    _detailRow(l10n.cardName, user.fullName, s, isArabic),
+                    _detailRow(l10n.cardClass, '\u200E$classText', s, isArabic),
+                    _detailRow(l10n.cardDob, '\u200E$dobText', s, isArabic),
+                    _detailRow(l10n.cardAddress, user.address ?? '—', s, isArabic),
                   ],
                 ),
               ),
@@ -337,6 +338,7 @@ class _CardContent extends StatelessWidget {
                   child: Text(
                     '\u200E${user.studentCode ?? '—'}',
                     style: TextStyle(
+                      fontFamily: isArabic ? GoogleFonts.tajawal().fontFamily : null,
                       fontSize: s(22),
                       fontWeight: FontWeight.w500,
                       letterSpacing: 0.5,
@@ -371,7 +373,7 @@ class _CardContent extends StatelessWidget {
   );
   }
 
-  Widget _detailRow(String label, String value, double Function(double) s) {
+  Widget _detailRow(String label, String value, double Function(double) s, bool isArabic) {
     return Padding(
       padding: EdgeInsets.only(bottom: s(16)),
       child: Row(
@@ -382,6 +384,7 @@ class _CardContent extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
+                fontFamily: isArabic ? GoogleFonts.tajawal().fontFamily : null,
                 fontWeight: FontWeight.w500,
                 fontSize: s(18),
                 color: const Color(0xFF3B2A32),
@@ -403,6 +406,7 @@ class _CardContent extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
+                fontFamily: isArabic ? GoogleFonts.tajawal().fontFamily : null,
                 fontWeight: FontWeight.w500,
                 fontSize: s(18),
                 color: const Color(0xFF3B2A32),
@@ -421,7 +425,7 @@ class _CardContent extends StatelessWidget {
         fit: BoxFit.cover,
         width: s(164),
         height: s(164),
-        errorWidget: (_, __, ___) => _buildInitials(s),
+        errorWidget: (_, _, _) => _buildInitials(s),
       );
     }
     return _buildInitials(s);
@@ -464,7 +468,7 @@ class _WavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withOpacity(0.7)
+      ..color = color.withValues(alpha: 0.7)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;

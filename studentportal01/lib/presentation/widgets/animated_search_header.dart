@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/l10n/app_localizations.dart';
 
 /// Reusable animated search header component
@@ -37,7 +38,7 @@ class AnimatedSearchHeader extends StatelessWidget {
         final fadeIn = slideValue;
 
         return SizedBox(
-          height: 64,
+          height: 72,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -63,7 +64,7 @@ class AnimatedSearchHeader extends StatelessWidget {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: gradientColors.first.withOpacity(0.4),
+                                color: gradientColors.first.withValues(alpha: 0.4),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -79,29 +80,47 @@ class AnimatedSearchHeader extends StatelessWidget {
                       const SizedBox(width: 16),
                       // Title
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.grey[900],
-                                letterSpacing: -0.8,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitle,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
+                        child: Builder(
+                          builder: (context) {
+                            final isAr = Localizations.localeOf(context).languageCode == 'ar';
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  title,
+                                  style: isAr
+                                      ? GoogleFonts.cairo(
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.grey[900],
+                                          letterSpacing: -0.5,
+                                        )
+                                      : TextStyle(
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.grey[900],
+                                          letterSpacing: -0.8,
+                                        ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle,
+                                  style: isAr
+                                      ? GoogleFonts.cairo(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[600],
+                                        )
+                                      : TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[600],
+                                        ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ),
                       // Search button
@@ -111,11 +130,11 @@ class AnimatedSearchHeader extends StatelessWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -149,11 +168,11 @@ class AnimatedSearchHeader extends StatelessWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -172,11 +191,11 @@ class AnimatedSearchHeader extends StatelessWidget {
                         child: Container(
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
+                            color: Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -192,29 +211,46 @@ class AnimatedSearchHeader extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: TextField(
-                                  controller: searchController,
-                                  focusNode: searchFocusNode,
-                                  cursorColor: Colors.grey[600],
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[800],
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: AppLocalizations.of(context).search,
-                                    hintStyle: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
+                                child: Builder(
+                                  builder: (context) {
+                                    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+                                    return TextField(
+                                      controller: searchController,
+                                      focusNode: searchFocusNode,
+                                      cursorColor: Colors.grey[600],
+                                      style: isAr
+                                          ? GoogleFonts.tajawal(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[800],
+                                            )
+                                          : TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[800],
+                                            ),
+                                      decoration: InputDecoration(
+                                        hintText: AppLocalizations.of(context).search,
+                                        hintStyle: isAr
+                                            ? GoogleFonts.tajawal(
+                                                color: Colors.grey[400],
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w400,
+                                              )
+                                            : TextStyle(
+                                                color: Colors.grey[400],
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w400,
+                                              ),
+                                        filled: false,
+                                        border: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 16),

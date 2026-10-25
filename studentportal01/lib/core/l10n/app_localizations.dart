@@ -50,6 +50,9 @@ class AppLocalizations {
       'already_account': 'Already have an account?',
       'sign_in': 'Sign In',
       'sign_up': 'Sign Up',
+      'invalid_credentials': 'Email or password is incorrect.',
+      'server_error': 'Server connection error. Please try again later.',
+      'network_error': 'Please check your internet connection.',
 
       // Home Menu Items
       'note_info': 'Info Notes',
@@ -169,6 +172,8 @@ class AppLocalizations {
       'tp_hours': 'TP Hours',
       'absences_count': 'absences',
       'no_absences': 'No absences recorded',
+      'no_absences_desc': 'You have no absences recorded for this semester.',
+      'no_search_results_desc': 'No matching subjects found.',
       'absence_warning':
           'Warning! You are approaching the allowed absence threshold.',
       'absence_critical':
@@ -206,6 +211,7 @@ class AppLocalizations {
       // Payments Extended
       'payment_plan': 'Payment Plan',
       'remaining_balance': 'Remaining Balance',
+      'remaining_short': 'Remaining',
       'paid': 'Paid',
       'total': 'Total',
       'fully_paid': 'Fully Paid',
@@ -251,6 +257,25 @@ class AppLocalizations {
       'document_administrative': 'Administrative',
       'document_exams': 'Exams',
       'document_other': 'Other',
+      'sort_by': 'Sort by',
+      'all_types': 'All types',
+      'no_docs_for_semester': 'No documents for Semester {sem}',
+      'no_matching_documents': 'No matching documents',
+      'try_select_another_type': 'Try selecting another type',
+      'doc_type_administrative': 'Administrative',
+      'doc_type_attestation': 'School Attendance Certificate',
+      'doc_type_releve_notes': 'Transcript of Records',
+      'doc_type_certificat': 'Registration Certificate',
+      'doc_type_carte_etudiant': 'Student Card',
+      'doc_type_exams': 'Exams & Evaluations',
+      'doc_type_planning': 'Timetable & Schedule',
+      'doc_type_courses': 'Course Materials & Syllabus',
+      'doc_type_stage_pfe': 'Internship Agreement / FYP',
+      'doc_type_reglement': 'Internal Regulations',
+      'doc_type_other': 'Other document',
+      'application_developer': 'Application Developer',
+      'lead_software_engineer': 'Full-Stack & Mobile Developer',
+      'visit_portfolio': 'Visit Portfolio',
 
       // Timetable Extended
       'no_courses': 'No courses scheduled',
@@ -279,6 +304,24 @@ class AppLocalizations {
       'about_desc':
           'Student Portal is your comprehensive academic companion, designed to help you stay connected with your school and manage your academic journey effectively.',
       'features': 'Features',
+      'feature_academic_tracking_title': 'Smart Academic Tracking',
+      'feature_academic_tracking_desc':
+          'Live averages, weighted coefficients and in-depth performance analytics',
+      'feature_dynamic_schedule_title': 'Dynamic Class Timetable',
+      'feature_dynamic_schedule_desc':
+          'Interactive weekly schedule, room assignments and live period updates',
+      'feature_attendance_title': 'Attendance & Absences Monitoring',
+      'feature_attendance_desc':
+          'Accurate hourly calculation, automatic threshold alerts and justification management',
+      'feature_documents_title': 'Digital School Documents',
+      'feature_documents_desc':
+          'Direct access and fast download of certificates, transcripts and course files',
+      'feature_financial_title': 'Financial & Payment Tracking',
+      'feature_financial_desc':
+          'Transparent tuition management, upcoming installments and payment receipts',
+      'feature_ai_title': 'NOVA AI & Direct Assistance',
+      'feature_ai_desc':
+          '24/7 intelligent academic assistant and direct school suggestions box',
       'feature_announcements': 'Real-time announcements and messages',
       'feature_grades': 'View your grades and academic performance',
       'feature_absences': 'Track your attendance and absences',
@@ -341,7 +384,6 @@ class AppLocalizations {
       'card_address': 'Address',
       'schedule_title': 'Opening Hours',
       'open_to_all': 'Open to all',
-      'closed': 'Closed',
       'location_access': 'Location & Access',
       'directions': 'Directions',
       'website': 'Website',
@@ -360,7 +402,6 @@ class AppLocalizations {
       'overall_absence_rate': 'Overall absence rate',
       'unknown_subject': 'Unknown subject',
       'critical': 'critical',
-      'no_absences': 'No absences recorded',
       'no_absences_month': 'No absences this month',
       'no_absences_week': 'No absences this week',
       'justified_absence': 'Justified Absence',
@@ -375,6 +416,13 @@ class AppLocalizations {
       'academic_subject': 'Subject',
       'emploi_subtitle': 'Class Timetable',
       'exam_timetable_subtitle': 'Exam Schedule',
+      'upcoming_semester': 'Upcoming Semester',
+      'timetable_available_from': 'Timetable will be available from {date}.',
+      'timetable_available_start': 'Timetable will be available at the start of the semester.',
+      'no_exams_scheduled': 'No Exams Scheduled',
+      'no_exams_desc': 'Exam schedules for this semester have not yet been published by administration.',
+      'timetable_not_available': 'Timetable Not Available',
+      'timetable_not_available_desc': 'Class timetable for this semester has not yet been created by administration.',
       'results_subtitle': 'Track your grades',
       'solde_subtitle': 'Payment tracking',
       'suggestion_type': 'Suggestion type',
@@ -479,28 +527,35 @@ class AppLocalizations {
       'access_denied': 'Access Denied',
       'access_denied_student_only': 'This application is for students only.',
       'access_denied_admin_dashboard': 'If you are an administrator, please use the admin dashboard.',
-      'teacher': 'Teacher',
       'not_assigned': 'Not assigned',
       'file_label': 'File',
       'size_label': 'Size',
-      'download': 'Download',
       'downloading_status': 'Downloading...',
       'pinned': 'Pinned',
       'important': 'Important',
       'sent_by': 'Sent by',
       'delete_conversation': 'Delete conversation',
-      'delete': 'Delete',
       'change_photo': 'Change your photo',
       'choose_photo_source': 'Choose a source to update your profile picture:',
       'take_photo': 'Take a photo',
+      'take_photo_subtitle': 'Use your camera directly',
       'choose_gallery': 'Choose from gallery',
-      'change_password': 'Change password',
+      'choose_gallery_subtitle': 'Select an image from your device',
       'current_password': 'Current password',
       'new_password': 'New password',
       'confirm_new_password': 'Confirm new password',
       'passwords_mismatch': 'New passwords do not match',
       'password_updated_success': 'Password updated successfully!',
-      'save': 'Save',
+      'current_password_required': 'Please enter your current password',
+      'password_too_short': 'Password must be at least 6 characters',
+      'current_password_incorrect': 'Current password is incorrect',
+      'password_update_failed': 'Failed to update password. Please try again',
+      'cache_cleared_success': 'Cache cleared successfully! (14.8 MB freed)',
+      'photo_updated_success': 'Profile photo updated successfully!',
+      'photo_upload_error': 'Failed to upload photo. Please try again',
+      'user_not_connected': 'User not connected',
+      'base_education': 'Basic Education',
+      'general_branch': 'Common Core',
       'saving': 'Saving...',
       'notifications_subtitle': 'Stay informed',
       'messages_subtitle': 'Class messages',
@@ -537,6 +592,26 @@ class AppLocalizations {
       'at_conseil_discipline': 'Disciplinary council',
       'at_exclusion_definitive': 'Permanent expulsion',
       'at_general': 'General',
+
+      // AI Chat
+      'ai_assistant_name': 'NOVA',
+      'ai_assistant_role': 'Student Assistant',
+      'ai_thinking': 'Thinking...',
+      'ai_welcome_message': 'Hello, how can I help you today?',
+      'ask_ai_question_hint': 'Ask your question...',
+      'attached_image': 'Attached image',
+      'attach_title': 'Attach',
+      'photo_library': 'Photo library',
+      'photo_library_desc': 'Share an image or document',
+      'take_photo_desc': 'Capture a document or note',
+      'chat_history': 'Chat History',
+      'no_conversations': 'No conversations yet',
+      'new_conversation': 'New conversation',
+      'delete_conversation_confirm': 'Are you sure you want to delete this conversation?',
+      'time_just_now': 'Just now',
+      'time_mins_ago': '{min}m ago',
+      'time_hours_ago': '{hours}h ago',
+      'time_days_ago': '{days}d ago',
     },
     'fr': {
       // App
@@ -559,6 +634,9 @@ class AppLocalizations {
       'already_account': 'Vous avez déjà un compte?',
       'sign_in': 'Se connecter',
       'sign_up': 'S\'inscrire',
+      'invalid_credentials': 'Email ou mot de passe incorrect.',
+      'server_error': 'Erreur de connexion au serveur. Veuillez réessayer plus tard.',
+      'network_error': 'Veuillez vérifier votre connexion Internet.',
 
       // Home Menu Items
       'note_info': 'Notifications',
@@ -678,6 +756,8 @@ class AppLocalizations {
       'tp_hours': 'Nbr H TP',
       'absences_count': 'absences',
       'no_absences': 'Aucune absence enregistrée',
+      'no_absences_desc': 'Aucune absence enregistrée pour ce semestre.',
+      'no_search_results_desc': 'Aucune matière correspondante trouvée.',
       'absence_warning':
           'Attention! Vous approchez du seuil d\'absences autorisé.',
       'absence_critical':
@@ -716,6 +796,7 @@ class AppLocalizations {
       // Payments Extended
       'payment_plan': 'Plan de Paiement',
       'remaining_balance': 'Solde Restant',
+      'remaining_short': 'Reste',
       'paid': 'Payé',
       'total': 'Total',
       'fully_paid': 'Entièrement Payé',
@@ -761,6 +842,25 @@ class AppLocalizations {
       'document_administrative': 'Administratif',
       'document_exams': 'Examens',
       'document_other': 'Autre',
+      'sort_by': 'Trier par',
+      'all_types': 'Tous les types',
+      'no_docs_for_semester': 'Aucun document pour le Semestre {sem}',
+      'no_matching_documents': 'Aucun document correspondant',
+      'try_select_another_type': 'Essayez de sélectionner un autre type',
+      'doc_type_administrative': 'Administratif',
+      'doc_type_attestation': 'Attestation de scolarité',
+      'doc_type_releve_notes': 'Relevé de notes',
+      'doc_type_certificat': 'Certificat d\'inscription',
+      'doc_type_carte_etudiant': 'Carte d\'étudiant',
+      'doc_type_exams': 'Examens & Évaluations',
+      'doc_type_planning': 'Emploi du temps & Planning',
+      'doc_type_courses': 'Supports de cours & Syllabus',
+      'doc_type_stage_pfe': 'Convention de stage / PFE',
+      'doc_type_reglement': 'Règlement intérieur',
+      'doc_type_other': 'Autre document',
+      'application_developer': 'Développeur de l\'application',
+      'lead_software_engineer': 'Développeur Full-Stack & Mobile',
+      'visit_portfolio': 'Voir le portfolio',
 
       // Timetable Extended FR
       'no_courses': 'Pas de cours programmés',
@@ -789,6 +889,24 @@ class AppLocalizations {
       'about_desc':
           'Le Portail Étudiant est votre compagnon académique complet, conçu pour vous aider à rester connecté avec votre école et à gérer efficacement votre parcours académique.',
       'features': 'Fonctionnalités',
+      'feature_academic_tracking_title': 'Suivi Académique Intelligent',
+      'feature_academic_tracking_desc':
+          'Moyennes en direct, coefficients et analyses détaillées des performances',
+      'feature_dynamic_schedule_title': 'Emploi du Temps Dynamique',
+      'feature_dynamic_schedule_desc':
+          'Planning hebdomadaire interactif, salles de cours et mises à jour synchronisées',
+      'feature_attendance_title': 'Assiduité & Contrôle des Présences',
+      'feature_attendance_desc':
+          'Décompte horaire précis, seuils d\'alerte automatisés et justifications',
+      'feature_documents_title': 'E-Documents Scolaires',
+      'feature_documents_desc':
+          'Téléchargement direct d\'attestations, relevés et supports pédagogiques',
+      'feature_financial_title': 'Suivi Financier & Échéanciers',
+      'feature_financial_desc':
+          'Transparence totale des règlements, échéances de paiement et reçus',
+      'feature_ai_title': 'Assistant IA NOVA & Boîte à Idées',
+      'feature_ai_desc':
+          'Assistance intelligente 24h/24 et canal direct de suggestions avec l\'administration',
       'feature_announcements': 'Annonces et messages en temps réel',
       'feature_grades': 'Consultez vos notes et performances académiques',
       'feature_absences': 'Suivez votre présence et vos absences',
@@ -851,7 +969,6 @@ class AppLocalizations {
       'card_address': 'Adresse',
       'schedule_title': 'Horaires',
       'open_to_all': 'Ouvert à tous',
-      'closed': 'Fermé',
       'location_access': 'Emplacement & Accès',
       'directions': 'Itinéraire',
       'website': 'Site Web',
@@ -870,7 +987,6 @@ class AppLocalizations {
       'overall_absence_rate': "Taux d'absence global",
       'unknown_subject': 'Matière inconnue',
       'critical': 'critique',
-      'no_absences': 'Aucune absence enregistrée',
       'no_absences_month': 'Aucune absence ce mois-ci',
       'no_absences_week': 'Aucune absence cette semaine',
       'justified_absence': 'Absence Justifiée',
@@ -885,6 +1001,13 @@ class AppLocalizations {
       'academic_subject': 'Matière',
       'emploi_subtitle': 'Emploi du temps de la classe',
       'exam_timetable_subtitle': 'Horaires des épreuves d\'examen',
+      'upcoming_semester': 'Semestre à venir',
+      'timetable_available_from': 'L\'emploi du temps sera disponible à partir du {date}.',
+      'timetable_available_start': 'L\'emploi du temps sera disponible dès le début du semestre.',
+      'no_exams_scheduled': 'Aucun examen planifié',
+      'no_exams_desc': 'Les horaires des examens pour ce semestre n\'ont pas encore été publiés par l\'administration.',
+      'timetable_not_available': 'Emploi du temps non disponible',
+      'timetable_not_available_desc': 'L\'emploi du temps de la classe pour ce semestre n\'a pas encore été créé par l\'administration.',
       'results_subtitle': 'Suivi de vos notes',
       'solde_subtitle': 'Suivi des paiements',
       'suggestion_type': 'Type de suggestion',
@@ -989,28 +1112,35 @@ class AppLocalizations {
       'access_denied': 'Accès Refusé',
       'access_denied_student_only': 'Cette application est réservée aux étudiants uniquement.',
       'access_denied_admin_dashboard': 'Si vous êtes administrateur, veuillez utiliser le tableau de bord admin.',
-      'teacher': 'Enseignant',
       'not_assigned': 'Non assigné',
       'file_label': 'Fichier',
       'size_label': 'Taille',
-      'download': 'Télécharger',
       'downloading_status': 'Téléchargement en cours...',
       'pinned': 'Épinglé',
       'important': 'Important',
       'sent_by': 'Envoyé par',
       'delete_conversation': 'Supprimer la conversation',
-      'delete': 'Supprimer',
       'change_photo': 'Modifier votre photo',
       'choose_photo_source': 'Choisissez une source pour mettre à jour votre photo de profil :',
       'take_photo': 'Prendre une photo',
+      'take_photo_subtitle': 'Utiliser l\'appareil photo directement',
       'choose_gallery': 'Choisir depuis la galerie',
-      'change_password': 'Changer le mot de passe',
+      'choose_gallery_subtitle': 'Sélectionner une image de votre téléphone',
       'current_password': 'Mot de passe actuel',
       'new_password': 'Nouveau mot de passe',
       'confirm_new_password': 'Confirmer le nouveau mot de passe',
       'passwords_mismatch': 'Les nouveaux mots de passe ne correspondent pas',
       'password_updated_success': 'Mot de passe mis à jour avec succès!',
-      'save': 'Enregistrer',
+      'current_password_required': 'Veuillez saisir votre mot de passe actuel',
+      'password_too_short': 'Le mot de passe doit comporter au moins 6 caractères',
+      'current_password_incorrect': 'Le mot de passe actuel est incorrect',
+      'password_update_failed': 'Échec de la mise à jour du mot de passe. Veuillez réessayer',
+      'cache_cleared_success': 'Cache vidé avec succès ! (14.8 Mo libérés)',
+      'photo_updated_success': 'Photo de profil mise à jour avec succès !',
+      'photo_upload_error': 'Échec de l\'envoi de la photo. Veuillez réessayer',
+      'user_not_connected': 'Utilisateur non connecté',
+      'base_education': 'Enseignement de Base',
+      'general_branch': 'Tronc Commun',
       'saving': 'Modification...',
       'notifications_subtitle': 'Restez informé',
       'messages_subtitle': 'Messages de classe',
@@ -1047,6 +1177,26 @@ class AppLocalizations {
       'at_conseil_discipline': 'Conseil discipline',
       'at_exclusion_definitive': 'Exclusion définitive',
       'at_general': 'Général',
+
+      // AI Chat
+      'ai_assistant_name': 'NOVA',
+      'ai_assistant_role': 'Assistant Étudiant',
+      'ai_thinking': 'Réfléchit...',
+      'ai_welcome_message': 'Bonjour, comment puis-je vous aider aujourd\'hui ?',
+      'ask_ai_question_hint': 'Posez votre question...',
+      'attached_image': 'Image attachée',
+      'attach_title': 'Joindre',
+      'photo_library': 'Bibliothèque photo',
+      'photo_library_desc': 'Partager une image ou un document',
+      'take_photo_desc': 'Capturer un document ou une note',
+      'chat_history': 'Historique',
+      'no_conversations': 'Aucune conversation',
+      'new_conversation': 'Nouvelle conversation',
+      'delete_conversation_confirm': 'Voulez-vous vraiment supprimer cette conversation ?',
+      'time_just_now': 'À l\'instant',
+      'time_mins_ago': 'Il y a {min} min',
+      'time_hours_ago': 'Il y a {hours}h',
+      'time_days_ago': 'Il y a {days} jours',
     },
     'ar': {
       // App
@@ -1069,6 +1219,9 @@ class AppLocalizations {
       'already_account': 'لديك حساب بالفعل؟',
       'sign_in': 'دخول',
       'sign_up': 'إنشاء حساب',
+      'invalid_credentials': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+      'server_error': 'خطأ في الاتصال بالخادم. يرجى المحاولة لاحقاً.',
+      'network_error': 'يرجى التحقق من الاتصال بالإنترنت.',
 
       // Home Menu Items
       'note_info': 'ملاحظات',
@@ -1183,6 +1336,8 @@ class AppLocalizations {
       'tp_hours': 'ساعات التطبيق',
       'absences_count': 'غيابات',
       'no_absences': 'لا يوجد غياب مسجل',
+      'no_absences_desc': 'سجلك خالٍ تماماً من أي غيابات لهذا الفصل الدراسي.',
+      'no_search_results_desc': 'لم يتم العثور على أي مادة مطابقة للبحث.',
       'absence_warning': 'تحذير! أنت تقترب من حد الغياب المسموح.',
       'absence_critical': 'حرج! لقد تجاوزت حد الغياب الحرج.',
       'absence_fail': 'مستبعد! تم استبعادك من الجلسة الرئيسية للامتحانات.',
@@ -1217,6 +1372,7 @@ class AppLocalizations {
       // Payments Extended
       'payment_plan': 'خطة الدفع',
       'remaining_balance': 'الرصيد المتبقي',
+      'remaining_short': 'المتبقي',
       'paid': 'مدفوع',
       'total': 'الإجمالي',
       'fully_paid': 'مدفوع بالكامل',
@@ -1262,6 +1418,25 @@ class AppLocalizations {
       'document_administrative': 'إداري',
       'document_exams': 'امتحانات',
       'document_other': 'أخرى',
+      'sort_by': 'ترتيب حسب',
+      'all_types': 'جميع الأنواع',
+      'no_docs_for_semester': 'لا توجد وثائق للسداسي {sem}',
+      'no_matching_documents': 'لا توجد وثائق مطابقة',
+      'try_select_another_type': 'جرب تحديد نوع آخر',
+      'doc_type_administrative': 'إداري',
+      'doc_type_attestation': 'شهادة مدرسية',
+      'doc_type_releve_notes': 'كشف الأعداد',
+      'doc_type_certificat': 'شهادة ترسيم',
+      'doc_type_carte_etudiant': 'بطاقة طالب',
+      'doc_type_exams': 'امتحانات وتقييمات',
+      'doc_type_planning': 'جدول الأوقات والتخطيط',
+      'doc_type_courses': 'دروس ومناهج تعليمية',
+      'doc_type_stage_pfe': 'اتفاقية تدريب / تخرج',
+      'doc_type_reglement': 'النظام الداخلي',
+      'doc_type_other': 'وثيقة أخرى',
+      'application_developer': 'مطور التطبيق',
+      'lead_software_engineer': 'مطور تطبيقات ونظم متكاملة',
+      'visit_portfolio': 'زيارة معرض الأعمال',
 
       // Timetable Extended AR
       'no_courses': 'لا توجد حصص مجدولة',
@@ -1289,6 +1464,24 @@ class AppLocalizations {
       'about_desc':
           'بوابة الطالب هي رفيقك الأكاديمي الشامل، مصممة لمساعدتك على البقاء على اتصال بمدرستك وإدارة مسيرتك الأكاديمية بفعالية.',
       'features': 'المميزات',
+      'feature_academic_tracking_title': 'متابعة أكاديمية ذكية',
+      'feature_academic_tracking_desc':
+          'معدلات مباشرة، معاملات تفصيلية وتحليلات شاملة للمستوى الأكاديمي',
+      'feature_dynamic_schedule_title': 'جدول دراسي تفاعلي',
+      'feature_dynamic_schedule_desc':
+          'جدول الحصص الأسبوعي، تعيين القاعات وتحديثات مباشرة في الوقت الفعلي',
+      'feature_attendance_title': 'متابعة الحضور والغياب',
+      'feature_attendance_desc':
+          'احتساب دقيق لساعات الغياب مع تنبيهات استباقية وإدارة التبريرات',
+      'feature_documents_title': 'المستندات والوثائق الرقمية',
+      'feature_documents_desc':
+          'تحميل مباشر للشهادات المدرسية، كشوف الدرجات والمصادر التعليمية',
+      'feature_financial_title': 'متابعة الرسوم والمدفوعات',
+      'feature_financial_desc':
+          'شفافية كاملة للأقساط الدراسية، المواعيد المحددة وإيصالات الدفع',
+      'feature_ai_title': 'المساعد الذكي والتواصل المباشر',
+      'feature_ai_desc':
+          'مساعد ذكي على مدار الساعة وصندوق مقترحات مباشر للتواصل مع الإدارة',
       'feature_announcements': 'إعلانات ورسائل فورية',
       'feature_grades': 'عرض درجاتك وأدائك الأكاديمي',
       'feature_absences': 'تتبع حضورك وغيابك',
@@ -1353,7 +1546,6 @@ class AppLocalizations {
       'card_address': 'العنوان',
       'schedule_title': 'أوقات العمل',
       'open_to_all': 'مفتوح للجميع',
-      'closed': 'مغلق',
       'location_access': 'الموقع والوصول',
       'directions': 'الاتجاهات',
       'website': 'الموقع الإلكتروني',
@@ -1372,7 +1564,6 @@ class AppLocalizations {
       'overall_absence_rate': 'نسبة الغياب الإجمالية',
       'unknown_subject': 'مادة غير معروفة',
       'critical': 'حرجة',
-      'no_absences': 'لا توجد غيابات مسجلة',
       'no_absences_month': 'لا توجد غيابات هذا الشهر',
       'no_absences_week': 'لا توجد غيابات هذا الأسبوع',
       'justified_absence': 'غياب مبرر',
@@ -1387,6 +1578,13 @@ class AppLocalizations {
       'academic_subject': 'المادة',
       'emploi_subtitle': 'جدول أوقات القسم',
       'exam_timetable_subtitle': 'جدول أوقات الامتحانات',
+      'upcoming_semester': 'الفصل الدراسي القادم',
+      'timetable_available_from': 'سيكون جدول الأوقات متاحاً ابتداءً من {date}.',
+      'timetable_available_start': 'سيكون جدول الأوقات متاحاً مع بداية الفصل الدراسي.',
+      'no_exams_scheduled': 'لا توجد امتحانات مبرمجة',
+      'no_exams_desc': 'لم يتم نشر مواعيد الامتحانات لهذا الفصل بعد من قبل الإدارة.',
+      'timetable_not_available': 'جدول الأوقات غير متوفر',
+      'timetable_not_available_desc': 'لم يتم إنشاء جدول أوقات الفصل بعد من قبل الإدارة.',
       'results_subtitle': 'متابعة نقاطك',
       'solde_subtitle': 'متابعة المدفوعات',
       'suggestion_type': 'نوع الاقتراح',
@@ -1491,28 +1689,35 @@ class AppLocalizations {
       'access_denied': 'تم رفض الوصول',
       'access_denied_student_only': 'هذا التطبيق مخصص للطلاب فقط.',
       'access_denied_admin_dashboard': 'إذا كنت مسؤولاً، يرجى استخدام لوحة تحكم المسؤول.',
-      'teacher': 'الأستاذ',
       'not_assigned': 'غير محدد',
       'file_label': 'الملف',
       'size_label': 'الحجم',
-      'download': 'تحميل',
       'downloading_status': 'جاري التحميل...',
       'pinned': 'مثبت',
       'important': 'هام',
       'sent_by': 'مرسل من',
       'delete_conversation': 'حذف المحادثة',
-      'delete': 'حذف',
       'change_photo': 'تعديل صورتك',
       'choose_photo_source': 'اختر مصدراً لتحديث صورتك الشخصية:',
       'take_photo': 'التقاط صورة',
+      'take_photo_subtitle': 'استخدام الكاميرا مباشرة',
       'choose_gallery': 'اختيار من المعرض',
-      'change_password': 'تغيير كلمة المرور',
+      'choose_gallery_subtitle': 'اختيار صورة من هاتفك',
       'current_password': 'كلمة المرور الحالية',
       'new_password': 'كلمة المرور الجديدة',
       'confirm_new_password': 'تأكيد كلمة المرور الجديدة',
       'passwords_mismatch': 'كلمات المرور الجديدة غير متطابقة',
       'password_updated_success': 'تم تحديث كلمة المرور بنجاح!',
-      'save': 'حفظ',
+      'current_password_required': 'يرجى إدخال كلمة المرور الحالية',
+      'password_too_short': 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل',
+      'current_password_incorrect': 'كلمة المرور الحالية غير صحيحة',
+      'password_update_failed': 'فشل تحديث كلمة المرور. يرجى المحاولة مرة أخرى',
+      'cache_cleared_success': 'تم تفريغ الذاكرة المؤقتة بنجاح! (تم تحرير 14.8 ميغابايت)',
+      'photo_updated_success': 'تم تحديث الصورة الشخصية بنجاح!',
+      'photo_upload_error': 'فشل تحميل الصورة الشخصية. يرجى المحاولة مرة أخرى',
+      'user_not_connected': 'المستخدم غير متصل',
+      'base_education': 'التعليم الأساسي',
+      'general_branch': 'جذع مشترك',
       'saving': 'جاري الحفظ...',
       'notifications_subtitle': 'ابقَ على اطلاع',
       'messages_subtitle': 'رسائل القسم',
@@ -1549,13 +1754,39 @@ class AppLocalizations {
       'at_conseil_discipline': 'مجلس التأديب',
       'at_exclusion_definitive': 'رفت نهائي',
       'at_general': 'عام',
+
+      // AI Chat
+      'ai_assistant_name': 'نوفا',
+      'ai_assistant_role': 'المساعد الأكاديمي الذكي',
+      'ai_thinking': 'يفكّر...',
+      'ai_welcome_message': 'مرحباً، كيف يمكنني مساعدتك اليوم؟',
+      'ask_ai_question_hint': 'اطرح سؤالك هنا...',
+      'attached_image': 'صورة مرفقة',
+      'attach_title': 'إرفاق',
+      'photo_library': 'مكتبة الصور',
+      'photo_library_desc': 'مشاركة صورة أو مستند',
+      'take_photo_desc': 'تصوير وثيقة أو ملاحظة',
+      'chat_history': 'سجل المحادثات',
+      'no_conversations': 'لا توجد محادثات سابقة',
+      'new_conversation': 'محادثة جديدة',
+      'delete_conversation_confirm': 'هل أنت متأكد من حذف هذه المحادثة؟',
+      'time_just_now': 'الآن',
+      'time_mins_ago': 'منذ {min} دقيقة',
+      'time_hours_ago': 'منذ {hours} ساعة',
+      'time_days_ago': 'منذ {days} أيام',
     },
   };
 
-  String translate(String key) {
-    return _localizedValues[locale.languageCode]?[key] ??
+  String translate(String key, [Map<String, String>? params]) {
+    var text = _localizedValues[locale.languageCode]?[key] ??
         _localizedValues['en']?[key] ??
         key;
+    if (params != null) {
+      params.forEach((k, v) {
+        text = text.replaceAll('{$k}', v);
+      });
+    }
+    return text;
   }
 
   // Convenience getters
@@ -1601,6 +1832,7 @@ class AppLocalizations {
   String get retry => translate('retry');
   String get refresh => translate('refresh');
   String get cancel => translate('cancel');
+  String get delete => translate('delete');
   String get save => translate('save');
   String get noData => translate('no_data');
   String get search => translate('search');
@@ -1720,6 +1952,14 @@ class AppLocalizations {
   String get documentAdministrative => translate('document_administrative');
   String get documentExams => translate('document_exams');
   String get documentOther => translate('document_other');
+  String get sortBy => translate('sort_by');
+  String get allTypes => translate('all_types');
+  String noDocsForSemester(int sem) => translate('no_docs_for_semester').replaceAll('{sem}', sem.toString());
+  String get noMatchingDocuments => translate('no_matching_documents');
+  String get trySelectAnotherType => translate('try_select_another_type');
+  String get applicationDeveloper => translate('application_developer');
+  String get leadSoftwareEngineer => translate('lead_software_engineer');
+  String get visitPortfolio => translate('visit_portfolio');
 
   // Timetable Extended
   String get noCourses => translate('no_courses');
@@ -1746,6 +1986,30 @@ class AppLocalizations {
   // About
   String get aboutDesc => translate('about_desc');
   String get features => translate('features');
+  String get featureAcademicTrackingTitle =>
+      translate('feature_academic_tracking_title');
+  String get featureAcademicTrackingDesc =>
+      translate('feature_academic_tracking_desc');
+  String get featureDynamicScheduleTitle =>
+      translate('feature_dynamic_schedule_title');
+  String get featureDynamicScheduleDesc =>
+      translate('feature_dynamic_schedule_desc');
+  String get featureAttendanceTitle =>
+      translate('feature_attendance_title');
+  String get featureAttendanceDesc =>
+      translate('feature_attendance_desc');
+  String get featureDocumentsTitle =>
+      translate('feature_documents_title');
+  String get featureDocumentsDesc =>
+      translate('feature_documents_desc');
+  String get featureFinancialTitle =>
+      translate('feature_financial_title');
+  String get featureFinancialDesc =>
+      translate('feature_financial_desc');
+  String get featureAiTitle =>
+      translate('feature_ai_title');
+  String get featureAiDesc =>
+      translate('feature_ai_desc');
   String get featureAnnouncements => translate('feature_announcements');
   String get featureGrades => translate('feature_grades');
   String get featureAbsences => translate('feature_absences');
@@ -1851,6 +2115,8 @@ class AppLocalizations {
   String get aboutSubtitle => translate('about_subtitle');
   String get noAbsencesMonth => translate('no_absences_month');
   String get noAbsencesWeek => translate('no_absences_week');
+  String get noAbsencesDesc => translate('no_absences_desc');
+  String get noSearchResultsDesc => translate('no_search_results_desc');
   String get justifiedAbsence => translate('justified_absence');
   String get unjustifiedAbsence => translate('unjustified_absence');
   String get sessionsCount => translate('sessions_count');
@@ -1863,6 +2129,12 @@ class AppLocalizations {
   String get academicSubject => translate('academic_subject');
   String get emploiSubtitle => translate('emploi_subtitle');
   String get examTimetableSubtitle => translate('exam_timetable_subtitle');
+  String get remainingShort => translate('remaining_short');
+  String get upcomingSemester => translate('upcoming_semester');
+  String get noExamsScheduled => translate('no_exams_scheduled');
+  String get noExamsDesc => translate('no_exams_desc');
+  String get timetableNotAvailable => translate('timetable_not_available');
+  String get timetableNotAvailableDesc => translate('timetable_not_available_desc');
   String get resultsSubtitle => translate('results_subtitle');
   String get soldeSubtitle => translate('solde_subtitle');
   String get suggestionTypeLabel => translate('suggestion_type');

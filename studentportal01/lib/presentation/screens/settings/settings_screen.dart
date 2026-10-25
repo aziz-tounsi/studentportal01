@@ -1,9 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 
@@ -28,17 +30,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _cacheCleared = false;
 
   void _clearAppCache() {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _cacheCleared = true;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Row(
+        content: Row(
           children: [
-            Icon(Icons.cleaning_services_rounded, color: Colors.white),
-            SizedBox(width: 10),
-            Text('Cache vidé avec succès ! (14.8 Mo libérés)'),
+            const Icon(Icons.cleaning_services_rounded, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(child: Text(l10n.translate('cache_cleared_success'))),
           ],
         ),
         backgroundColor: const Color(0xFF10B981),
@@ -56,156 +59,252 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     bool isSaving = false;
     bool obscureOld = true;
     bool obscureNew = true;
+    bool obscureConfirm = true;
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text(
-            l10n.translate('change_password'),
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: oldPasswordCtrl,
-                  obscureText: obscureOld,
-                  decoration: InputDecoration(
-                    labelText: l10n.translate('current_password'),
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureOld ? Icons.visibility_off : Icons.visibility, size: 18),
-                      onPressed: () => setDialogState(() => obscureOld = !obscureOld),
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isAr = Localizations.localeOf(context).languageCode == 'ar';
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Text(
+                l10n.translate('change_password'),
+                style: isAr
+                    ? ArabicTypography.sectionHeader(fontSize: 18, color: const Color(0xFF1E293B))
+                    : const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1E293B)),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: oldPasswordCtrl,
+                      obscureText: obscureOld,
+                      style: isAr
+                          ? ArabicTypography.body(color: const Color(0xFF1E293B))
+                          : const TextStyle(color: Color(0xFF1E293B)),
+                      decoration: InputDecoration(
+                        labelText: l10n.translate('current_password'),
+                        labelStyle: isAr
+                            ? ArabicTypography.formLabel(color: Colors.grey.shade600)
+                            : TextStyle(color: Colors.grey.shade600),
+                        prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20, color: Color(0xFF64748B)),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscureOld ? Icons.visibility_off : Icons.visibility, size: 18, color: const Color(0xFF64748B)),
+                          onPressed: () => setDialogState(() => obscureOld = !obscureOld),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: _navPink, width: 1.5),
+                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
                     ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: newPasswordCtrl,
+                      obscureText: obscureNew,
+                      style: isAr
+                          ? ArabicTypography.body(color: const Color(0xFF1E293B))
+                          : const TextStyle(color: Color(0xFF1E293B)),
+                      decoration: InputDecoration(
+                        labelText: l10n.translate('new_password'),
+                        labelStyle: isAr
+                            ? ArabicTypography.formLabel(color: Colors.grey.shade600)
+                            : TextStyle(color: Colors.grey.shade600),
+                        prefixIcon: const Icon(Icons.lock_reset_rounded, size: 20, color: Color(0xFF64748B)),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility, size: 18, color: const Color(0xFF64748B)),
+                          onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: _navPink, width: 1.5),
+                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: confirmPasswordCtrl,
+                      obscureText: obscureConfirm,
+                      style: isAr
+                          ? ArabicTypography.body(color: const Color(0xFF1E293B))
+                          : const TextStyle(color: Color(0xFF1E293B)),
+                      decoration: InputDecoration(
+                        labelText: l10n.translate('confirm_new_password'),
+                        labelStyle: isAr
+                            ? ArabicTypography.formLabel(color: Colors.grey.shade600)
+                            : TextStyle(color: Colors.grey.shade600),
+                        prefixIcon: const Icon(Icons.check_circle_outline_rounded, size: 20, color: Color(0xFF64748B)),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility, size: 18, color: const Color(0xFF64748B)),
+                          onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: _navPink, width: 1.5),
+                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.of(ctx).pop(),
+                  child: Text(
+                    l10n.cancel,
+                    style: isAr
+                        ? ArabicTypography.actionText(color: const Color(0xFF64748B))
+                        : const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600),
                   ),
                 ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: newPasswordCtrl,
-                  obscureText: obscureNew,
-                  decoration: InputDecoration(
-                    labelText: l10n.translate('new_password'),
-                    prefixIcon: const Icon(Icons.lock_reset_rounded, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility, size: 18),
-                      onPressed: () => setDialogState(() => obscureNew = !obscureNew),
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final oldPassword = oldPasswordCtrl.text.trim();
+                          final newPassword = newPasswordCtrl.text;
+                          final confirmPassword = confirmPasswordCtrl.text;
+
+                          // 1. Current password empty check
+                          if (oldPassword.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  l10n.translate('current_password_required'),
+                                  style: isAr ? ArabicTypography.alert(color: Colors.white) : null,
+                                ),
+                                backgroundColor: const Color(0xFFEF4444),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            );
+                            return;
+                          }
+
+                          // 2. Minimum length check
+                          if (newPassword.length < 6) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  l10n.translate('password_too_short'),
+                                  style: isAr ? ArabicTypography.alert(color: Colors.white) : null,
+                                ),
+                                backgroundColor: const Color(0xFFEF4444),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            );
+                            return;
+                          }
+
+                          // 3. Mismatch check
+                          if (newPassword != confirmPassword) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  l10n.translate('passwords_mismatch'),
+                                  style: isAr ? ArabicTypography.alert(color: Colors.white) : null,
+                                ),
+                                backgroundColor: const Color(0xFFEF4444),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => isSaving = true);
+                          try {
+                            await ref.read(authProvider.notifier).changePassword(
+                                  currentPassword: oldPassword,
+                                  newPassword: newPassword,
+                                );
+                            if (context.mounted) {
+                              Navigator.of(ctx).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    l10n.translate('password_updated_success'),
+                                    style: isAr ? ArabicTypography.alert(color: Colors.white) : null,
+                                  ),
+                                  backgroundColor: const Color(0xFF10B981),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              );
+                            }
+                          } catch (errorKey) {
+                            setDialogState(() => isSaving = false);
+                            if (context.mounted) {
+                              final errorKeyStr = errorKey.toString();
+                              final message = l10n.translate(errorKeyStr).isNotEmpty && l10n.translate(errorKeyStr) != errorKeyStr
+                                  ? l10n.translate(errorKeyStr)
+                                  : l10n.translate('password_update_failed');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    message,
+                                    style: isAr ? ArabicTypography.alert(color: Colors.white) : null,
+                                  ),
+                                  backgroundColor: const Color(0xFFEF4444),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _navPink,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                   ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: confirmPasswordCtrl,
-                  obscureText: obscureNew,
-                  decoration: InputDecoration(
-                    labelText: l10n.translate('confirm_new_password'),
-                    prefixIcon: const Icon(Icons.check_circle_outline_rounded, size: 20),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Text(
+                    isSaving ? l10n.translate('saving') : l10n.translate('save'),
+                    style: isAr
+                        ? ArabicTypography.button(color: Colors.white)
+                        : const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: isSaving ? null : () => Navigator.of(ctx).pop(),
-              child: Text(l10n.cancel, style: const TextStyle(color: Color(0xFF64748B))),
-            ),
-            ElevatedButton(
-              onPressed: isSaving
-                  ? null
-                  : () async {
-                      if (newPasswordCtrl.text.isEmpty ||
-                          newPasswordCtrl.text != confirmPasswordCtrl.text) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.translate('passwords_mismatch')),
-                            backgroundColor: Color(0xFFEF4444),
-                          ),
-                        );
-                        return;
-                      }
-
-                      setDialogState(() => isSaving = true);
-                      try {
-                        final supabase = Supabase.instance.client;
-                        await supabase.auth.updateUser(
-                          UserAttributes(password: newPasswordCtrl.text),
-                        );
-                        if (context.mounted) {
-                          Navigator.of(ctx).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(l10n.translate('password_updated_success')),
-                              backgroundColor: Color(0xFF10B981),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        setDialogState(() => isSaving = false);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Erreur: $e'),
-                              backgroundColor: const Color(0xFFEF4444),
-                            ),
-                          );
-                        }
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _navPink,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text(isSaving ? l10n.translate('saving') : l10n.translate('save')),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Future<void> _handleLogout() async {
-    final l10n = AppLocalizations.of(context);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          l10n.logout,
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-        ),
-        content: Text(l10n.logoutConfirmMsg),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.cancel, style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(l10n.logout, style: const TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
 
-    if (confirm == true) {
-      await ref.read(authProvider.notifier).signOut();
-      if (mounted) {
-        context.go('/login');
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -276,21 +375,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               children: [
                                   Text(
                                     l10n.settings,
-                                    style: const TextStyle(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -0.6,
-                                      color: Color(0xFF1F2937),
-                                    ),
+                                    style: isRtl
+                                        ? ArabicTypography.screenHeader(color: const Color(0xFF1F2937))
+                                        : const TextStyle(
+                                            fontSize: 26,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: -0.6,
+                                            color: Color(0xFF1F2937),
+                                          ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     l10n.settingsSubtitle,
-                                    style: TextStyle(
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey.shade600,
-                                    ),
+                                    style: isRtl
+                                        ? ArabicTypography.subtitle(color: Colors.grey.shade600)
+                                        : TextStyle(
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey.shade600,
+                                          ),
                                   ),
                                 ],
                               ),
@@ -520,14 +623,21 @@ class _SettingsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 17.5,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF0F172A),
-              letterSpacing: -0.3,
-            ),
+          Builder(
+            builder: (context) {
+              final isAr = Localizations.localeOf(context).languageCode == 'ar';
+              return Text(
+                title,
+                style: isAr
+                    ? ArabicTypography.sectionHeader(fontSize: 17.5, color: const Color(0xFF0F172A))
+                    : const TextStyle(
+                        fontSize: 17.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.3,
+                      ),
+              );
+            },
           ),
           const SizedBox(height: 16),
           ...children,
@@ -561,10 +671,12 @@ class _LanguageChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: isSelected ? _navPink : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? _navPink : const Color(0xFFE2E8F0),
-              width: 1.5,
-            ),
+            border: isSelected
+                ? Border.all(
+                    color: _navPink,
+                    width: 1.5,
+                  )
+                : null,
             boxShadow: isSelected
                 ? [
                     BoxShadow(
@@ -578,11 +690,17 @@ class _LanguageChip extends StatelessWidget {
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-              color: isSelected ? Colors.white : const Color(0xFF475569),
-            ),
+            style: code == 'ar'
+                ? GoogleFonts.cairo(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? Colors.white : const Color(0xFF475569),
+                  )
+                : TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? Colors.white : const Color(0xFF475569),
+                  ),
           ),
         ),
       ),
@@ -621,26 +739,35 @@ class _SettingsSwitchRow extends StatelessWidget {
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-            ],
+          child: Builder(
+            builder: (context) {
+              final isAr = Localizations.localeOf(context).languageCode == 'ar';
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: isAr
+                        ? ArabicTypography.cardTitle(fontSize: 14.5, color: const Color(0xFF1E293B))
+                        : const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
+                          ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: isAr
+                        ? ArabicTypography.bodyLight(fontSize: 12, color: const Color(0xFF64748B))
+                        : const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         Switch(
@@ -673,6 +800,7 @@ class _SettingsActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -695,19 +823,23 @@ class _SettingsActionRow extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B),
-                    ),
+                    style: isAr
+                        ? ArabicTypography.cardTitle(fontSize: 14.5, color: const Color(0xFF1E293B))
+                        : const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
+                          ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
-                    ),
+                    style: isAr
+                        ? ArabicTypography.bodyLight(fontSize: 12, color: const Color(0xFF64748B))
+                        : const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
                   ),
                 ],
               ),
@@ -721,10 +853,10 @@ class _SettingsActionRow extends StatelessWidget {
                   color: Color(0xFFF8FAFC),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.arrow_forward_ios_rounded,
+                child: Icon(
+                  isAr ? Icons.arrow_back_ios_new_rounded : Icons.arrow_forward_ios_rounded,
                   size: 13,
-                  color: Color(0xFF94A3B8),
+                  color: const Color(0xFF94A3B8),
                 ),
               ),
           ],

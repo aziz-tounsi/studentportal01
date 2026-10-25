@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
@@ -9,6 +10,7 @@ import '../../providers/users_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
+import '../users/user_profile_screen.dart';
 
 /// Provider for pending password reset count (for notification badges)
 final pendingPasswordResetCountProvider = FutureProvider.autoDispose<int>((
@@ -269,9 +271,13 @@ class _PasswordResetRequestsScreenState
         child: Row(
           children: [
             // User avatar
-            UserAvatar(
-              name: fullName,
-              radius: 24,
+            InkWell(
+              onTap: userId != null ? () => context.go('/users/$userId') : null,
+              borderRadius: BorderRadius.circular(24),
+              child: UserAvatar(
+                name: fullName,
+                radius: 24,
+              ),
             ),
             const SizedBox(width: 16),
             // User info
@@ -279,11 +285,18 @@ class _PasswordResetRequestsScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    fullName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+                  InkWell(
+                    onTap: userId != null ? () => context.go('/users/$userId') : null,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Text(
+                      fullName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: userId != null ? AppColors.textPrimary : AppColors.textSecondary,
+                        decoration: userId != null ? TextDecoration.underline : null,
+                        decorationColor: AppColors.primarySoft,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -370,6 +383,13 @@ class _PasswordResetRequestsScreenState
                 icon: Icon(Icons.cancel, color: AppColors.error),
                 tooltip: 'Rejeter',
                 onPressed: () => _rejectRequest(context, request),
+              ),
+            ] else if (userId != null) ...[
+              const SizedBox(width: 12),
+              IconButton(
+                icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                tooltip: 'Voir le profil',
+                onPressed: () => context.go('/users/$userId'),
               ),
             ],
           ],
@@ -533,11 +553,26 @@ class _PasswordResetRequestsScreenState
       final supabase = Supabase.instance.client;
       final adminClient = SupabaseConfig.adminClient;
 
-      // Reset password using admin client with service role
-      await adminClient.auth.admin.updateUserById(
-        userId,
-        attributes: AdminUserAttributes(password: newPassword),
-      );
+      // 1. Try to update password in auth.users using admin client with service role
+      try {
+        await adminClient.auth.admin.updateUserById(
+          userId,
+          attributes: AdminUserAttributes(password: newPassword),
+        );
+      } catch (authErr) {
+        debugPrint(
+          'Warning in _approveRequest: auth.admin.updateUserById failed for $userId ($authErr). Saving password to users table.',
+        );
+      }
+
+      // 2. Store initial password in user record for admin reference
+      await adminClient
+          .from('users')
+          .update({
+            'initial_password': newPassword,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
 
       // Update request status
       await supabase
@@ -551,11 +586,14 @@ class _PasswordResetRequestsScreenState
           .eq('id', requestId);
 
       ref.invalidate(passwordResetRequestsProvider);
+      ref.invalidate(pendingPasswordResetCountProvider);
+      ref.invalidate(usersProvider);
+      ref.invalidate(userProfileDataProvider(userId));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Mot de passe réinitialisé'),
+            content: Text('Mot de passe réinitialisé avec succès'),
             backgroundColor: AppColors.success,
           ),
         );

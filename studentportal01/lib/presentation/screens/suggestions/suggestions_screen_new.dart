@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/detail_modal_sheet.dart';
 import 'write_suggestion_screen.dart';
@@ -33,8 +34,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
   late Animation<double> _searchWidthAnimation;
   bool _isSearching = false;
   String _searchQuery = '';
-  String _selectedFilter = 'all';
-  List<PlatformFile> _attachedFiles = [];
+  final String _selectedFilter = 'all';
+  final List<PlatformFile> _attachedFiles = [];
   bool _isSubmitting = false;
 
   @override
@@ -104,9 +105,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
             bottom: false,
             child: RefreshIndicator(
               color: const Color(0xFFFF2D78),
+              backgroundColor: Colors.white,
               onRefresh: () async {
                 ref.read(suggestionsRefreshingProvider.notifier).state = true;
                 try {
+                  // ignore: unused_result
                   await ref.refresh(suggestionsProvider.future);
                 } finally {
                   ref.read(suggestionsRefreshingProvider.notifier).state = false;
@@ -168,7 +171,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                     }).toList();
 
                     return SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 110),
+                      padding: EdgeInsets.fromLTRB(24, 0, 24, 124 + MediaQuery.of(context).padding.bottom),
                       sliver: SliverList(
                         delegate: SliverChildListDelegate([
                           if (filtered.isNotEmpty) ...[
@@ -267,7 +270,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                 l10n.noResults,
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Colors.black.withOpacity(0.6),
+                                  color: Colors.black.withValues(alpha: 0.6),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -336,15 +339,15 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               width: 1.5,
             ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
+                    color: Colors.black.withValues(alpha: 0.12),
                     blurRadius: 30,
                     offset: const Offset(0, 12),
                   ),
@@ -527,7 +530,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.25),
+            color: Colors.white.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
@@ -565,15 +568,15 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.85),
+                color: Colors.white.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 25,
                     offset: const Offset(0, 10),
                   ),
@@ -592,12 +595,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                            gradient: LinearGradient(
                              begin: Alignment.topLeft,
                              end: Alignment.bottomRight,
-                             colors: [color, color.withOpacity(0.7)],
+                             colors: [color, color.withValues(alpha: 0.7)],
                            ),
                            borderRadius: BorderRadius.circular(12),
                            boxShadow: [
                              BoxShadow(
-                               color: color.withOpacity(0.3),
+                               color: color.withValues(alpha: 0.3),
                                blurRadius: 8,
                                offset: const Offset(0, 3),
                              ),
@@ -778,7 +781,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
             final bytes = file.bytes;
             if (bytes != null) {
               final timestamp = DateTime.now().millisecondsSinceEpoch;
-              final storePath = '$userId/$timestamp\_${file.name}';
+              final storePath = '$userId/${timestamp}_${file.name}';
 
               await supabase.storage
                   .from('suggestions')
@@ -793,7 +796,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
               attachmentTypes.add(file.extension ?? '');
             }
           } catch (e) {
-            print('Error uploading file: $e');
+            debugPrint('Error uploading file: $e');
           }
         }
       }
@@ -908,7 +911,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6).withOpacity(0.05),
+                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -1527,7 +1530,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
             decoration: BoxDecoration(
-              color: const Color(0xFFFF2D78).withOpacity(0.15),
+              color: const Color(0xFFFF2D78).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -1561,7 +1564,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
         final fadeIn = slideValue;
 
         return SizedBox(
-          height: 64,
+          height: 72,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -1586,7 +1589,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF8B5CF6).withOpacity(0.4),
+                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -1607,20 +1610,22 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                           children: [
                             Text(
                               l10n.suggestions,
-                              style: const TextStyle(
+                              style: ArabicTypography.headerStyle(
+                                context,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF1F2937),
+                                color: const Color(0xFF1F2937),
                                 letterSpacing: -0.8,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               l10n.shareIdeas,
-                              style: const TextStyle(
+                              style: ArabicTypography.subtitleStyle(
+                                context,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF1F2937),
+                                color: const Color(0xFF1F2937),
                               ),
                             ),
                           ],
@@ -1632,11 +1637,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -1669,11 +1674,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -1692,11 +1697,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                         child: Container(
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
+                            color: Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -1719,14 +1724,16 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                   onChanged: (value) => setState(
                                     () => _searchQuery = value.toLowerCase(),
                                   ),
-                                  style: TextStyle(
+                                  style: ArabicTypography.bodyStyle(
+                                    context,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,
                                     color: Colors.grey[800],
                                   ),
                                   decoration: InputDecoration(
                                     hintText: AppLocalizations.of(context).search,
-                                    hintStyle: TextStyle(
+                                    hintStyle: ArabicTypography.bodyStyle(
+                                      context,
                                       color: Colors.grey[400],
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,

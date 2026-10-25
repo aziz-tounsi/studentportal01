@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/course_model.dart';
@@ -134,7 +135,7 @@ class CourseRepository {
     } catch (e) {
       // Silently fail if marking as viewed fails
       // This is not critical functionality
-      print('Failed to mark course as viewed: $e');
+      debugPrint('Failed to mark course as viewed: $e');
     }
   }
 

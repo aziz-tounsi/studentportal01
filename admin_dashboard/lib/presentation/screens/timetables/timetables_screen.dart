@@ -688,27 +688,6 @@ final selectedSubjectFilterProvider = StateProvider<String?>((ref) => null);
 // <id> = selected semester
 final selectedSemesterOverrideProvider = StateProvider<String?>((ref) => null);
 
-// Current active semester ID (from semesters where is_current == true or date range fallback)
-final currentActiveSemesterIdProvider = Provider<String?>((ref) {
-  final semestersAsync = ref.watch(semestersProvider);
-  return semestersAsync.whenOrNull(
-    data: (state) {
-      if (state.current != null) return state.current!.id;
-      final list = state.filteredSemesters.isNotEmpty
-          ? state.filteredSemesters
-          : state.semesters;
-      final now = DateTime.now();
-      final byDate = list.firstWhereOrNull(
-        (s) => !now.isBefore(s.startDate) && !now.isAfter(s.endDate),
-      );
-      if (byDate != null) return byDate.id;
-      final currentFlag = list.firstWhereOrNull((s) => s.isCurrent);
-      if (currentFlag != null) return currentFlag.id;
-      return list.isNotEmpty ? list.first.id : null;
-    },
-  );
-});
-
 // Effective Semester ID selected for timetable grid and slot actions
 final effectiveSemesterIdProvider = Provider<String?>((ref) {
   final override = ref.watch(selectedSemesterOverrideProvider);

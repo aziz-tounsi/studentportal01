@@ -7,7 +7,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/grade_model.dart';
 import '../../../data/repositories/results_repository.dart';
-import '../../../data/services/core_data_service.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/ios_loader.dart';
 
@@ -43,12 +42,13 @@ final resultatsRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Grades provider - fetches real data
 final gradesProvider = FutureProvider.family<List<SubjectGradesSummary>, int>((ref, semesterNumber) async {
+  final studentCtx = await ref.watch(ctx.studentContextProvider.future);
   final enrollment = await ref.watch(currentEnrollmentProvider.future);
   final semesters = await ref.watch(semestersProvider.future);
   
-  if (enrollment == null || semesters.isEmpty) {
-    // Return demo data if no enrollment found
-    return _getDemoGrades(semesterNumber);
+  final enrollmentId = studentCtx?.enrollmentId ?? enrollment?['id'] as String?;
+  if (enrollmentId == null || semesters.isEmpty) {
+    return <SubjectGradesSummary>[];
   }
   
   // Find the semester by number
@@ -58,24 +58,19 @@ final gradesProvider = FutureProvider.family<List<SubjectGradesSummary>, int>((r
   );
   
   if (semester.isEmpty || semester['id'] == null) {
-    return _getDemoGrades(semesterNumber);
+    return <SubjectGradesSummary>[];
   }
   
   final repo = ref.watch(resultsRepositoryProvider);
   final grades = await repo.getStudentGrades(
-    enrollmentId: enrollment['id'],
+    enrollmentId: enrollmentId,
     semesterId: semester['id'],
   );
-  
-  // If no grades found, return demo data
-  if (grades.isEmpty) {
-    return _getDemoGrades(semesterNumber);
-  }
   
   return grades;
 });
 
-// Demo grades for testing
+// ignore: unused_element
 List<SubjectGradesSummary> _getDemoGrades(int semesterId) {
   if (semesterId == 1) {
     return [
@@ -587,7 +582,7 @@ class _SemesterAverageCard extends StatelessWidget {
           gradient: LinearGradient(
             colors: [
               isPassing ? AppColors.success : AppColors.error,
-              isPassing ? AppColors.success.withOpacity(0.8) : AppColors.error.withOpacity(0.8),
+              isPassing ? AppColors.success.withValues(alpha: 0.8) : AppColors.error.withValues(alpha: 0.8),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -678,7 +673,7 @@ class _SubjectGradeCardState extends State<_SubjectGradeCard> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: averageColor.withOpacity(0.1),
+                      color: averageColor.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                       border: Border.all(color: averageColor, width: 2),
                     ),

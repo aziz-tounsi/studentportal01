@@ -1,14 +1,15 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as rp;
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_theme.dart';
 import '../providers/results_provider.dart';
+import '../providers/semesters_provider.dart';
 import '../widgets/results/grading_config_dialog.dart';
 import '../widgets/results/bulk_grade_entry_dialog.dart';
 import '../widgets/results/single_student_grade_entry.dart';
 import '../widgets/admin_sidebar.dart';
-import '../widgets/ios_loader.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/user_avatar.dart';
 
@@ -200,6 +201,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
             ],
           ),
           const Spacer(),
+          _buildSemesterDropdown(context, provider),
           // Toolbar: pinned far right
           SizedBox(
             width: 320,
@@ -266,6 +268,129 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
         ],
       ),
+    );
+  }
+
+  Widget _buildSemesterDropdown(BuildContext context, ResultsProvider provider) {
+    return rp.Consumer(
+      builder: (context, ref, _) {
+        final semestersAsync = ref.watch(semestersProvider);
+        final activeSemesterId = ref.watch(currentActiveSemesterIdProvider);
+        final currentSelectedId = provider.selectedSemesterId;
+
+        return semestersAsync.when(
+          data: (semestersState) {
+            final rawSemesters = semestersState.filteredSemesters.isNotEmpty
+                ? semestersState.filteredSemesters
+                : semestersState.semesters;
+
+            if (rawSemesters.isEmpty) return const SizedBox.shrink();
+
+            final Map<String, SemesterModel> uniqueMap = {};
+            for (final sem in rawSemesters) {
+              uniqueMap[sem.id] = sem;
+            }
+            final semesters = uniqueMap.values.toList()
+              ..sort((a, b) => a.number.compareTo(b.number));
+
+            String? effectiveSelectedId;
+            if (currentSelectedId != null && uniqueMap.containsKey(currentSelectedId)) {
+              effectiveSelectedId = currentSelectedId;
+            } else if (activeSemesterId != null && uniqueMap.containsKey(activeSemesterId)) {
+              effectiveSelectedId = activeSemesterId;
+            } else if (semesters.isNotEmpty) {
+              effectiveSelectedId = semesters.first.id;
+            }
+
+            // Sync with provider if not initialized or mismatched
+            if (effectiveSelectedId != null && provider.selectedSemesterId != effectiveSelectedId) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                provider.setSemester(effectiveSelectedId);
+              });
+            }
+
+            final periodLabel = semestersState.periodLabel;
+
+            return Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: AppColors.slate100,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  value: effectiveSelectedId,
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: Colors.white,
+                  elevation: 6,
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: Color(0xFF8B5CF6),
+                    size: 18,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  items: semesters.map((sem) {
+                    final now = DateTime.now();
+                    final isSemCurrent = sem.id == activeSemesterId ||
+                        sem.isCurrent ||
+                        (!now.isBefore(sem.startDate) && !now.isAfter(sem.endDate));
+
+                    return DropdownMenuItem<String?>(
+                      value: sem.id,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            sem.name.isNotEmpty
+                                ? sem.name
+                                : '$periodLabel ${sem.number}',
+                            style: TextStyle(
+                              fontWeight: isSemCurrent ? FontWeight.bold : FontWeight.w500,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          if (isSemCurrent) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F0FF),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'En cours',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6D4CF6),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      provider.setSemester(val);
+                    }
+                  },
+                ),
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        );
+      },
     );
   }
 
@@ -413,6 +538,26 @@ class _ResultsScreenState extends State<ResultsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (provider.semesters.isNotEmpty) ...[
+                      _buildFilterLabel('SEMESTRE'),
+                      const SizedBox(height: 8),
+                      _buildFilterDropdown<String?>(
+                        value: provider.selectedSemesterId,
+                        hint: 'Sélectionner un semestre',
+                        items: provider.semesters.map((s) {
+                          final name = s['name']?.toString() ?? '';
+                          final number = s['number']?.toString() ?? '1';
+                          final label = name.isNotEmpty ? name : 'Semestre $number';
+                          return DropdownMenuItem(
+                            value: s['id']?.toString(),
+                            child: Text(label),
+                          );
+                        }).toList(),
+                        onChanged: (v) => provider.setSemester(v),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     _buildFilterLabel('NIVEAU'),
                     const SizedBox(height: 8),
                     _buildFilterDropdown<String?>(
@@ -466,7 +611,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     child: SizedBox(
                       height: 48,
                       child: OutlinedButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          provider.setNiveau(null);
+                          provider.setSection(null);
+                          provider.setClass(null);
+                        },
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF374151),
                           backgroundColor: Colors.white,
@@ -553,6 +702,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   /// Direct navigation to grade entry for any student
   void _navigateToStudentGradeEntry(ResultsProvider provider, Map<String, dynamic> student) {
+    final academicYearId = student['academic_year_id'] as String?;
+    if (academicYearId != null && academicYearId != provider.selectedAcademicYearId) {
+      provider.setAcademicYear(academicYearId);
+    }
     final classId = student['class_id'] as String? ?? student['classes']?['id'] as String?;
     if (classId != null) {
       provider.setClass(classId);
@@ -565,14 +718,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
   /// Build search results view — searches ALL enrolled students globally
   Widget _buildSearchResults(BuildContext context, ResultsProvider provider) {
     final query = provider.searchQuery.toLowerCase();
-    final all = provider.allEnrolledStudents;
+    final all = provider.allEnrolledStudents.isNotEmpty
+        ? provider.allEnrolledStudents
+        : provider.enrolledStudents;
     final students = query.isEmpty
         ? all
         : all.where((s) {
             final user = s['users'] as Map<String, dynamic>? ?? {};
             final name = (user['full_name'] ?? '').toString().toLowerCase();
             final code = (s['student_code'] ?? user['student_code'] ?? '').toString().toLowerCase();
-            return name.contains(query) || code.contains(query);
+            final className = (s['classes']?['name'] ?? '').toString().toLowerCase();
+            return name.contains(query) || code.contains(query) || className.contains(query);
           }).toList();
 
     return Container(
@@ -1338,6 +1494,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // ═══════════════════════════════════════════════════
   // STUDENT SEARCH DIALOG
   // ═══════════════════════════════════════════════════
+  // ignore: unused_element
   void _showStudentSearchDialog(BuildContext context, ResultsProvider provider) {
     showDialog(
       context: context,
@@ -1345,7 +1502,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
       builder: (ctx) => _StudentSearchDialog(
         provider: provider,
         onStudentSelected: (student) {
-          final classId = student['class_id'] as String?;
+          final academicYearId = student['academic_year_id'] as String?;
+          if (academicYearId != null && academicYearId != provider.selectedAcademicYearId) {
+            provider.setAcademicYear(academicYearId);
+          }
+          final classId = student['class_id'] as String? ?? student['classes']?['id'] as String?;
           if (classId != null) {
             provider.setClass(classId);
             _selectStudentForGradeEntry(student);
@@ -1371,6 +1532,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
     return cls?['name'] ?? '';
   }
 
+  // ignore: unused_element
   void _showSettingsDialog(BuildContext context, ResultsProvider provider) {
     showDialog(
       context: context,
@@ -1397,7 +1559,6 @@ class _HoverableNiveauRow extends StatefulWidget {
   final void Function(String classId) onClassTap;
 
   const _HoverableNiveauRow({
-    super.key,
     required this.niveau,
     required this.classes,
     required this.onClassTap,
@@ -1580,14 +1741,17 @@ class _StudentSearchDialogState extends State<_StudentSearchDialog> {
   }
 
   List<Map<String, dynamic>> get _filtered {
-    final all = widget.provider.enrolledStudents;
+    final all = widget.provider.allEnrolledStudents.isNotEmpty
+        ? widget.provider.allEnrolledStudents
+        : widget.provider.enrolledStudents;
     if (_query.isEmpty) return all;
     final q = _query.toLowerCase();
     return all.where((s) {
       final user = s['users'] as Map<String, dynamic>? ?? {};
       final name = (user['full_name'] ?? '').toString().toLowerCase();
       final code = (s['student_code'] ?? user['student_code'] ?? '').toString().toLowerCase();
-      return name.contains(q) || code.contains(q);
+      final className = (s['classes']?['name'] ?? '').toString().toLowerCase();
+      return name.contains(q) || code.contains(q) || className.contains(q);
     }).toList();
   }
 
