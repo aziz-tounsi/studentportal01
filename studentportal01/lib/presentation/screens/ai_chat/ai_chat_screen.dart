@@ -1179,7 +1179,10 @@ I have **complete** access to your academic data — grades, timetable, absences
               child: Row(
                 children: [
                   // Attach button (on the left)
-                  GestureDetector(
+                  BouncingWrapper(
+                    shrinkScale: 0.86,
+                    overshootScale: 1.10,
+                    delayNavigation: false,
                     onTap: () => setState(() => _showAttachModal = true),
                     child: Container(
                       width: 40,

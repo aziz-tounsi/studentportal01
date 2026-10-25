@@ -780,7 +780,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: BouncingWrapper(
-        shrinkScale: 0.96,
+        shrinkScale: 0.90,
+        overshootScale: 1.055,
+        delayNavigation: false,
         onTap: () => _showAnnouncementDetail(announcement),
         child: ClipRRect(
       borderRadius: BorderRadius.circular(28),

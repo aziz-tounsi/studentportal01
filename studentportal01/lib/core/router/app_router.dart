@@ -129,14 +129,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 '/mon-solde',
               ].contains(state.matchedLocation);
 
-              final isSideDrawerOpen = ref.watch(sideDrawerOpenProvider);
               final backSwipeInterceptor = ref.watch(backSwipeInterceptorProvider);
 
               final backgroundWidget = isWriteSuggestion
                   ? const SuggestionsScreen()
                   : fromAIChat
                       ? const AIChatScreen()
-                      : (isSideNavPage && isSideDrawerOpen)
+                      : isSideNavPage
                           ? const HomeScreen(forceDrawerOpen: true)
                           : const HomeScreen();
 
@@ -152,23 +151,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       : fromAIChat
                           ? () {
                               ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                              if (Navigator.of(context).canPop()) {
-                                Navigator.of(context).pop();
-                              } else if (context.canPop()) {
-                                context.pop();
-                              } else {
-                                context.go('/ai-chat');
-                              }
+                              context.go('/ai-chat');
                             }
-                          : () {
-                              if (Navigator.of(context).canPop()) {
-                                Navigator.of(context).pop();
-                              } else if (context.canPop()) {
-                                context.pop();
-                              } else {
-                                context.go('/');
-                              }
-                            };
+                          : isSideNavPage
+                              ? () {
+                                  ref.read(sideDrawerOpenProvider.notifier).state = true;
+                                  ref.read(navBarHiddenProvider.notifier).state = true;
+                                  context.go('/');
+                                }
+                              : () {
+                                  if (Navigator.of(context).canPop()) {
+                                    Navigator.of(context).pop();
+                                  } else if (context.canPop()) {
+                                    context.pop();
+                                  } else {
+                                    context.go('/');
+                                  }
+                                };
 
               if (isAIChat) {
                 return IosEdgeSwipeBack(
@@ -190,7 +189,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         backgroundPage: backgroundWidget,
                         backgroundGradient: backgroundGradient,
                         onReturn: onReturnCallback,
-                        onInterceptSwipe: backSwipeInterceptor,
+                        onInterceptSwipe: isSideNavPage ? null : backSwipeInterceptor,
                         child: child,
                       ),
                 bottomNavigationBar: hideNavBar

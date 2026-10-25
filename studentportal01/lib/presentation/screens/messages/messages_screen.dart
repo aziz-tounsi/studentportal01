@@ -400,7 +400,9 @@ class _MessageCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSizes.paddingM),
       child: BouncingWrapper(
-        shrinkScale: 0.96,
+        shrinkScale: 0.90,
+        overshootScale: 1.055,
+        delayNavigation: false,
         onTap: () => _showDetail(context),
         child: Card(
           margin: EdgeInsets.zero,

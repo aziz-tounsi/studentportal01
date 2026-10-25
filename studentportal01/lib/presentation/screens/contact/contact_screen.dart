@@ -8,6 +8,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/contact_skeleton.dart';
+import '../../widgets/bouncing_wrapper.dart';
 
 // Provider to fetch contact info from Supabase
 final contactInfoProvider = FutureProvider<Map<String, dynamic>>((ref) async {
@@ -126,17 +127,18 @@ class ContactScreen extends ConsumerWidget {
                         final isRtl = Directionality.of(ctx) == TextDirection.rtl;
                         return Row(
                           children: [
-                            GestureDetector(
+                            BouncingWrapper(
+                              shrinkScale: 0.86,
+                              overshootScale: 1.10,
+                              delayNavigation: true,
                               onTap: () {
                                 final fromAIChat = ref.read(navigatedFromAIChatProvider);
                                 if (fromAIChat) {
                                   ref.read(navigatedFromAIChatProvider.notifier).state = false;
                                   context.go('/ai-chat');
-                                } else if (Navigator.of(context).canPop()) {
-                                  Navigator.of(context).pop();
-                                } else if (context.canPop()) {
-                                  context.pop();
                                 } else {
+                                  ref.read(sideDrawerOpenProvider.notifier).state = true;
+                                  ref.read(navBarHiddenProvider.notifier).state = true;
                                   context.go('/');
                                 }
                               },

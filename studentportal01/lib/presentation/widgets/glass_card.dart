@@ -2,8 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/arabic_typography.dart';
+import 'bouncing_wrapper.dart';
 
-class GlassCard extends StatefulWidget {
+class GlassCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String subtitle;
@@ -24,52 +25,15 @@ class GlassCard extends StatefulWidget {
   });
 
   @override
-  State<GlassCard> createState() => _GlassCardState();
-}
-
-class _GlassCardState extends State<GlassCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 100),
-      reverseDuration: const Duration(milliseconds: 320),
-    );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.93,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.elasticOut,
-    ));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isIconLeft = widget.iconAlignment == Alignment.topLeft;
+    final isIconLeft = iconAlignment == Alignment.topLeft;
 
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
+    return BouncingWrapper(
+      shrinkScale: 0.90,
+      overshootScale: 1.055,
+      delayNavigation: true,
+      onTap: onTap,
+      child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
@@ -114,11 +78,11 @@ class _GlassCardState extends State<GlassCard>
                                   gradient: LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: widget.gradientColors,
+                                    colors: gradientColors,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: widget.gradientColors.first
+                                      color: gradientColors.first
                                           .withValues(alpha: 0.35),
                                       blurRadius: 16,
                                       offset: const Offset(0, 6),
@@ -126,7 +90,7 @@ class _GlassCardState extends State<GlassCard>
                                   ],
                                 ),
                                 child: Icon(
-                                  widget.icon,
+                                  icon,
                                   color: Colors.white,
                                   size: 36,
                                 ),
@@ -136,7 +100,7 @@ class _GlassCardState extends State<GlassCard>
                           const Spacer(),
                           // Title
                           Text(
-                            widget.label,
+                            label,
                             style: ArabicTypography.headerStyle(
                               context,
                               fontSize: 20,
@@ -151,7 +115,7 @@ class _GlassCardState extends State<GlassCard>
                           const SizedBox(height: 4),
                           // Subtitle
                           Text(
-                            widget.subtitle,
+                            subtitle,
                             style: ArabicTypography.bodyStyle(
                               context,
                               fontSize: 14,
@@ -168,7 +132,7 @@ class _GlassCardState extends State<GlassCard>
                     ),
 
                     // Badge
-                    if (widget.badgeCount != null && widget.badgeCount! > 0)
+                    if (badgeCount != null && badgeCount! > 0)
                       Positioned(
                         top: 14,
                         right: isIconLeft ? 14 : null,
@@ -192,7 +156,7 @@ class _GlassCardState extends State<GlassCard>
                             ],
                           ),
                           child: Text(
-                            widget.badgeCount.toString(),
+                            badgeCount.toString(),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -207,7 +171,6 @@ class _GlassCardState extends State<GlassCard>
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }

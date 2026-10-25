@@ -584,7 +584,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: BouncingWrapper(
-        shrinkScale: 0.96,
+        shrinkScale: 0.90,
+        overshootScale: 1.055,
+        delayNavigation: false,
         onTap: () => _showSuggestionDetail(suggestion),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),

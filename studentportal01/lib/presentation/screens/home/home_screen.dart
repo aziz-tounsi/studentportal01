@@ -28,11 +28,12 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _expanded = false;
   bool _isDrawerOpen = false;
   late AnimationController _expandCtrl;
   late Animation<double> _expandAnim;
+  late AnimationController _drawerCtrl;
   late ScrollController _scrollController;
   Offset _expandDragOffset = Offset.zero;
   Rect? _cardRect;
@@ -41,9 +42,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _drawerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+
     final shouldOpen = widget.forceDrawerOpen || ref.read(sideDrawerOpenProvider);
     _isDrawerOpen = shouldOpen;
     if (shouldOpen) {
+      _drawerCtrl.value = 1.0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ref.read(navBarHiddenProvider.notifier).state = true;
@@ -54,6 +61,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
       });
     }
+
+    _drawerCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (!_isDrawerOpen) setState(() => _isDrawerOpen = true);
+        ref.read(sideDrawerOpenProvider.notifier).state = true;
+        ref.read(navBarHiddenProvider.notifier).state = true;
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _closeDrawer();
+          return true;
+        };
+      } else if (status == AnimationStatus.dismissed) {
+        if (_isDrawerOpen) setState(() => _isDrawerOpen = false);
+        ref.read(sideDrawerOpenProvider.notifier).state = false;
+        ref.read(navBarHiddenProvider.notifier).state = false;
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
+      }
+    });
+
     _scrollController = ScrollController();
     _expandCtrl = AnimationController(
       vsync: this,
@@ -74,13 +99,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _closeDrawer();
       return true;
     };
+    _drawerCtrl.forward();
   }
 
   void _closeDrawer() {
-    setState(() => _isDrawerOpen = false);
-    ref.read(navBarHiddenProvider.notifier).state = false;
-    ref.read(sideDrawerOpenProvider.notifier).state = false;
     ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    _drawerCtrl.reverse();
   }
 
   @override
@@ -91,6 +115,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.read(navBarHiddenProvider.notifier).state = false;
     _scrollController.dispose();
     _expandCtrl.dispose();
+    _drawerCtrl.dispose();
     super.dispose();
   }
 
@@ -423,8 +448,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           );
 
-          final isRtl = Directionality.of(context) == TextDirection.rtl;
-
           return Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -440,72 +463,123 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 stops: [0.0, 0.25, 0.5, 0.75, 1.0],
               ),
             ),
-            child: Stack(
-              children: [
-                AnimatedScale(
-                  scale: _isDrawerOpen ? 0.93 : 1.0,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(_isDrawerOpen ? 24 : 0),
-                      boxShadow: _isDrawerOpen
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(
-                        sigmaX: _isDrawerOpen ? 10.0 : 0.0,
-                        sigmaY: _isDrawerOpen ? 10.0 : 0.0,
-                      ),
-                      child: bodyStack,
-                    ),
-                  ),
-                ),
-                if (_isDrawerOpen)
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _closeDrawer,
-                      onHorizontalDragUpdate: (details) {
-                        if (isRtl) {
-                          if ((details.primaryDelta ?? 0) > 8) _closeDrawer();
-                        } else {
-                          if ((details.primaryDelta ?? 0) < -8) _closeDrawer();
-                        }
-                      },
+            child: AnimatedBuilder(
+              animation: _drawerCtrl,
+              builder: (context, _) {
+                final drawerVal = _drawerCtrl.value;
+                final isRtl = Directionality.of(context) == TextDirection.rtl;
+                final drawerWidth = math.min(320.0, constraints.maxWidth * 0.78);
+
+                return Stack(
+                  children: [
+                    Transform.scale(
+                      scale: 1.0 - (0.07 * drawerVal),
+                      alignment: isRtl ? Alignment.centerLeft : Alignment.centerRight,
                       child: Container(
-                        color: Colors.black.withValues(alpha: 0.25),
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24.0 * drawerVal),
+                          boxShadow: drawerVal > 0.01
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15 * drawerVal),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 10.0 * drawerVal,
+                            sigmaY: 10.0 * drawerVal,
+                          ),
+                          child: bodyStack,
+                        ),
                       ),
                     ),
-                  ),
-                if (_isDrawerOpen)
-                  PositionedDirectional(
-                    start: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: math.min(320.0, constraints.maxWidth * 0.78),
-                    child: GestureDetector(
-                      onHorizontalDragUpdate: (details) {
-                        if (isRtl) {
-                          if ((details.primaryDelta ?? 0) > 8) _closeDrawer();
-                        } else {
-                          if ((details.primaryDelta ?? 0) < -8) _closeDrawer();
-                        }
-                      },
-                      child: _buildDrawer(context, l10n, ref),
-                    ),
-                  ),
-              ],
+                    if (drawerVal > 0.001)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _closeDrawer,
+                          onHorizontalDragUpdate: (details) {
+                            final delta = details.primaryDelta ?? 0;
+                            final dragDir = isRtl ? delta : -delta;
+                            if (dragDir > 0) {
+                              _drawerCtrl.value = (_drawerCtrl.value - (dragDir / drawerWidth)).clamp(0.0, 1.0);
+                            }
+                          },
+                          onHorizontalDragEnd: (details) {
+                            final vx = details.primaryVelocity ?? 0;
+                            final vel = isRtl ? vx : -vx;
+                            if (vel > 300 || _drawerCtrl.value < 0.6) {
+                              _closeDrawer();
+                            } else {
+                              _drawerCtrl.forward();
+                            }
+                          },
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.25 * drawerVal),
+                          ),
+                        ),
+                      ),
+                    if (drawerVal > 0.001 || _isDrawerOpen)
+                      PositionedDirectional(
+                        start: -drawerWidth * (1.0 - drawerVal),
+                        top: 0,
+                        bottom: 0,
+                        width: drawerWidth,
+                        child: GestureDetector(
+                          onHorizontalDragUpdate: (details) {
+                            final delta = details.primaryDelta ?? 0;
+                            final dragDir = isRtl ? delta : -delta;
+                            _drawerCtrl.value = (_drawerCtrl.value - (dragDir / drawerWidth)).clamp(0.0, 1.0);
+                          },
+                          onHorizontalDragEnd: (details) {
+                            final vx = details.primaryVelocity ?? 0;
+                            final vel = isRtl ? vx : -vx;
+                            if (vel > 300 || _drawerCtrl.value < 0.6) {
+                              _closeDrawer();
+                            } else {
+                              _drawerCtrl.forward();
+                            }
+                          },
+                          child: _buildDrawer(context, l10n, ref),
+                        ),
+                      ),
+                    if (drawerVal < 0.99)
+                      PositionedDirectional(
+                        start: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 35,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onHorizontalDragStart: (_) {
+                            ref.read(navBarHiddenProvider.notifier).state = true;
+                          },
+                          onHorizontalDragUpdate: (details) {
+                            final delta = details.primaryDelta ?? 0;
+                            final dragDir = isRtl ? -delta : delta;
+                            if (dragDir > 0) {
+                              _drawerCtrl.value = (_drawerCtrl.value + (dragDir / drawerWidth)).clamp(0.0, 1.0);
+                            }
+                          },
+                          onHorizontalDragEnd: (details) {
+                            final vx = details.primaryVelocity ?? 0;
+                            final vel = isRtl ? -vx : vx;
+                            if (vel > 300 || _drawerCtrl.value > 0.35) {
+                              _openDrawer();
+                            } else {
+                              _closeDrawer();
+                            }
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           );
         },
@@ -660,6 +734,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   label: l10n.monProfil,
                   onTap: () {
                     ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
                     context.go('/profile');
                   },
                 ),
@@ -669,6 +744,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   label: l10n.settings,
                   onTap: () {
                     ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
                     context.go('/settings');
                   },
                 ),
@@ -677,6 +753,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   label: l10n.contactUs,
                   onTap: () {
                     ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
                     context.go('/contact');
                   },
                 ),
@@ -685,6 +762,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   label: l10n.about,
                   onTap: () {
                     ref.read(sideDrawerOpenProvider.notifier).state = true;
+                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
                     context.go('/about');
                   },
                 ),
@@ -762,30 +840,42 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
-    return Material(
-      color: Colors.transparent,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: const BoxDecoration(
-            color: Color(0xFFF5F7FB),
-            shape: BoxShape.circle,
+    return BouncingWrapper(
+      shrinkScale: 0.94,
+      overshootScale: 1.05,
+      delayNavigation: true,
+      onTap: onTap,
+      child: Material(
+        color: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF5F7FB),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: const Color(0xFF374151), size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: ArabicTypography.headerStyle(
+                    context,
+                    color: const Color(0xFF1F2937),
+                    fontWeight: FontWeight.w800,
+                    fontSize: isAr ? 17.5 : 16,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: Icon(icon, color: const Color(0xFF374151), size: 24),
         ),
-        title: Text(
-          label,
-          style: ArabicTypography.headerStyle(
-            context,
-            color: const Color(0xFF1F2937),
-            fontWeight: FontWeight.w800,
-            fontSize: isAr ? 17.5 : 16,
-            letterSpacing: -0.3,
-          ),
-        ),
-        onTap: onTap,
       ),
     );
   }

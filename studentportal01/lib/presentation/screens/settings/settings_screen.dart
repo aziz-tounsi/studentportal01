@@ -9,6 +9,7 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/nav_bar_provider.dart';
+import '../../widgets/bouncing_wrapper.dart';
 
 const Color _navPink = Color(0xFFFF2D78);
 
@@ -344,17 +345,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       final isRtl = Directionality.of(ctx) == TextDirection.rtl;
                       return Row(
                         children: [
-                          GestureDetector(
+                          BouncingWrapper(
+                            shrinkScale: 0.86,
+                            overshootScale: 1.10,
+                            delayNavigation: true,
                             onTap: () {
                               final fromAIChat = ref.read(navigatedFromAIChatProvider);
                               if (fromAIChat) {
                                 ref.read(navigatedFromAIChatProvider.notifier).state = false;
                                 context.go('/ai-chat');
-                              } else if (Navigator.of(context).canPop()) {
-                                Navigator.of(context).pop();
-                              } else if (context.canPop()) {
-                                context.pop();
                               } else {
+                                ref.read(sideDrawerOpenProvider.notifier).state = true;
+                                ref.read(navBarHiddenProvider.notifier).state = true;
                                 context.go('/');
                               }
                             },

@@ -833,7 +833,9 @@ class _DocumentCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: BouncingWrapper(
-        shrinkScale: 0.96,
+        shrinkScale: 0.90,
+        overshootScale: 1.055,
+        delayNavigation: false,
         onTap: () => _showDocumentDetails(context, document),
         child: Container(
           padding: const EdgeInsets.all(16),
