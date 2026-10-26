@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
@@ -770,6 +771,7 @@ I have **complete** access to your academic data — grades, timetable, absences
                 ),
                 child: SafeArea(
                   top: false,
+                  bottom: false,
                   child: Column(
                     children: [
                       // Top Bar with safe spacing
@@ -828,21 +830,27 @@ I have **complete** access to your academic data — grades, timetable, absences
                           child: _buildAttachmentPreview(),
                         ),
 
-                      // Bottom Input Bar - direct child of Column with iOS keyboard clearance
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          2,
-                          16,
-                          MediaQuery.of(context).viewInsets.bottom > 0 ? 22 : 8,
-                        ),
-                        child: Center(
-                          child: Container(
-                            constraints:
-                                const BoxConstraints(maxWidth: 600),
-                            child: _buildInputBar(isRtl),
-                          ),
-                        ),
+                      // Bottom Input Bar - direct child of Column with keyboard clearance
+                      Builder(
+                        builder: (context) {
+                          final bottomInset = MediaQuery.of(context).padding.bottom;
+                          final isKeyboardOpen =
+                              MediaQuery.of(context).viewInsets.bottom > 50;
+                          final bottomPadding = isKeyboardOpen
+                              ? 26.0
+                              : (bottomInset > 0 ? bottomInset + 4.0 : 12.0);
+
+                          return Padding(
+                            padding: EdgeInsets.fromLTRB(16, 2, 16, bottomPadding),
+                            child: Center(
+                              child: Container(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 600),
+                                child: _buildInputBar(isRtl),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -923,6 +931,8 @@ I have **complete** access to your academic data — grades, timetable, absences
                       ),
                     ),
                     child: SafeArea(
+                      top: true,
+                      bottom: false,
                       child: Material(
                         type: MaterialType.transparency,
                         child: _buildHistoryPanel(),
@@ -1553,21 +1563,29 @@ I have **complete** access to your academic data — grades, timetable, absences
 
         // New conversation
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: GestureDetector(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            math.max(MediaQuery.of(context).padding.bottom, 16.0) + 4.0,
+          ),
+          child: BouncingWrapper(
+            shrinkScale: 0.94,
+            overshootScale: 1.04,
             onTap: () {
               _closeHistory();
               _startNewChat();
             },
             child: Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),
                 ],

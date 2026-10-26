@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -191,8 +192,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                                   }
                                 };
 
+              final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
+
               return Scaffold(
                 extendBody: true,
+                resizeToAvoidBottomInset: false,
                 body: Stack(
                   children: [
                     isHome
@@ -217,24 +221,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                                 : (isSideNavPage ? null : backSwipeInterceptor),
                             child: child,
                           ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AnimatedSlide(
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 220),
+                          opacity: hideNavBar ? 0.0 : 1.0,
+                          child: IgnorePointer(
+                            ignoring: hideNavBar,
+                            child: ImageFiltered(
+                              imageFilter: ImageFilter.blur(
+                                sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                              ),
+                              child: BubbleNavBar(
+                                currentIndex: _getNavBarIndex(state.matchedLocation),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     if (isHome)
                       const HomeSideDrawer(),
                   ],
-                ),
-                bottomNavigationBar: AnimatedSlide(
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeOutCubic,
-                  offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 220),
-                    opacity: hideNavBar ? 0.0 : 1.0,
-                    child: IgnorePointer(
-                      ignoring: hideNavBar,
-                      child: BubbleNavBar(
-                        currentIndex: _getNavBarIndex(state.matchedLocation),
-                      ),
-                    ),
-                  ),
                 ),
               );
             },

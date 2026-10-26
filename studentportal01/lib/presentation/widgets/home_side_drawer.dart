@@ -19,7 +19,7 @@ class HomeSideDrawer extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final screenWidth = MediaQuery.of(context).size.width;
-    final drawerWidth = math.min(320.0, screenWidth * 0.78);
+    final drawerWidth = math.min(300.0, screenWidth * 0.76);
 
     return Stack(
       children: [
@@ -67,7 +67,7 @@ class HomeSideDrawer extends ConsumerWidget {
             ),
           ),
 
-        // 3. Sliding Drawer Panel (matching AI chat screen history side nav)
+        // 3. Sliding Drawer Panel matching exact design from image
         AnimatedPositioned(
           left: isRtl ? null : (isDrawerOpen ? 0 : -drawerWidth),
           right: isRtl ? (isDrawerOpen ? 0 : -drawerWidth) : null,
@@ -95,7 +95,7 @@ class HomeSideDrawer extends ConsumerWidget {
                 filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.82),
+                    color: Colors.white.withValues(alpha: 0.78),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.12),
@@ -107,7 +107,7 @@ class HomeSideDrawer extends ConsumerWidget {
                   child: SafeArea(
                     child: Column(
                       children: [
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 32),
                         _DrawerItem(
                           icon: Icons.person_rounded,
                           label: l10n.monProfil,
@@ -116,7 +116,7 @@ class HomeSideDrawer extends ConsumerWidget {
                             context.go('/profile');
                           },
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         _DrawerItem(
                           icon: Icons.settings_rounded,
                           label: l10n.settings,
@@ -125,16 +125,16 @@ class HomeSideDrawer extends ConsumerWidget {
                             context.go('/settings');
                           },
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         _DrawerItem(
-                          icon: Icons.contact_support_rounded,
+                          icon: Icons.help_rounded,
                           label: l10n.contactUs,
                           onTap: () {
                             ref.read(sideDrawerOpenProvider.notifier).state = true;
                             context.go('/contact');
                           },
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         _DrawerItem(
                           icon: Icons.info_rounded,
                           label: l10n.about,
@@ -144,9 +144,14 @@ class HomeSideDrawer extends ConsumerWidget {
                           },
                         ),
                         const Spacer(),
-                        // White Logout Button with Bounce
+                        // White Pill Logout Button with Bounce
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            0,
+                            16,
+                            math.max(MediaQuery.of(context).padding.bottom, 16.0) + 12,
+                          ),
                           child: BouncingWrapper(
                             shrinkScale: 0.94,
                             overshootScale: 1.04,
@@ -162,17 +167,12 @@ class HomeSideDrawer extends ConsumerWidget {
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(28),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.08),
                                     blurRadius: 16,
                                     offset: const Offset(0, 4),
-                                  ),
-                                  BoxShadow(
-                                    color: const Color(0xFFEF4444).withValues(alpha: 0.12),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
@@ -181,16 +181,16 @@ class HomeSideDrawer extends ConsumerWidget {
                                 children: [
                                   const Icon(
                                     Icons.logout_rounded,
-                                    color: Color(0xFFEF4444),
+                                    color: Color(0xFF374151),
                                     size: 20,
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 10),
                                   Text(
                                     l10n.logout,
                                     style: ArabicTypography.cardTitle(
                                       fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFFEF4444),
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF374151),
                                     ),
                                   ),
                                 ],
@@ -198,7 +198,6 @@ class HomeSideDrawer extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
@@ -226,44 +225,46 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: BouncingWrapper(
-        shrinkScale: 0.96,
+        shrinkScale: 0.95,
         overshootScale: 1.04,
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
+          color: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, color: Colors.grey[800], size: 20),
+                child: Icon(
+                  icon,
+                  color: const Color(0xFF2D3748),
+                  size: 22,
+                ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Text(
                   label,
                   style: ArabicTypography.cardTitle(
-                    fontSize: 14,
+                    fontSize: 15.5,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
+                    color: const Color(0xFF2D3748),
                   ),
                 ),
-              ),
-              Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.arrow_back_ios_rounded
-                    : Icons.arrow_forward_ios_rounded,
-                size: 14,
-                color: Colors.grey[400],
               ),
             ],
           ),
