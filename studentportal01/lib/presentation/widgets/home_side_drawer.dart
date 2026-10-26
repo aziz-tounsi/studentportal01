@@ -24,7 +24,7 @@ class HomeSideDrawer extends ConsumerWidget {
 
     return Stack(
       children: [
-        // 1. Dimmed Backdrop Overlay
+        // 1. Dimmed Backdrop Overlay (Scrim)
         IgnorePointer(
           ignoring: !isDrawerOpen,
           child: AnimatedOpacity(
@@ -35,6 +35,30 @@ class HomeSideDrawer extends ConsumerWidget {
               behavior: HitTestBehavior.opaque,
               onTap: () {
                 ref.read(sideDrawerOpenProvider.notifier).state = false;
+              },
+              onHorizontalDragUpdate: (details) {
+                final delta = details.primaryDelta ?? 0;
+                if (isRtl) {
+                  if (delta > 6) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                } else {
+                  if (delta < -6) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                }
+              },
+              onHorizontalDragEnd: (details) {
+                final vel = details.primaryVelocity ?? 0;
+                if (isRtl) {
+                  if (vel > 80) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                } else {
+                  if (vel < -80) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                }
               },
               child: Container(
                 color: Colors.black.withValues(alpha: 0.25),
@@ -81,11 +105,23 @@ class HomeSideDrawer extends ConsumerWidget {
             onHorizontalDragUpdate: (details) {
               final delta = details.primaryDelta ?? 0;
               if (isRtl) {
-                if (delta > 8) {
+                if (delta > 6) {
                   ref.read(sideDrawerOpenProvider.notifier).state = false;
                 }
               } else {
-                if (delta < -8) {
+                if (delta < -6) {
+                  ref.read(sideDrawerOpenProvider.notifier).state = false;
+                }
+              }
+            },
+            onHorizontalDragEnd: (details) {
+              final vel = details.primaryVelocity ?? 0;
+              if (isRtl) {
+                if (vel > 80) {
+                  ref.read(sideDrawerOpenProvider.notifier).state = false;
+                }
+              } else {
+                if (vel < -80) {
                   ref.read(sideDrawerOpenProvider.notifier).state = false;
                 }
               }

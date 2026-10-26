@@ -27,6 +27,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  static double _savedScrollOffset = 0.0;
   bool _expanded = false;
   late AnimationController _expandCtrl;
   late Animation<double> _expandAnim;
@@ -34,7 +35,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Offset _expandDragOffset = Offset.zero;
   Rect? _cardRect;
   final GlobalKey _cardKey = GlobalKey();
-  bool _isTransitionReady = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -42,18 +42,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {
-          _isTransitionReady = true;
-        });
-      }
-    });
 
-    final initialOffset = ref.read(homeScrollOffsetProvider);
+    final providerOffset = ref.read(homeScrollOffsetProvider);
+    final initialOffset = providerOffset > 0 ? providerOffset : _savedScrollOffset;
     _scrollController = ScrollController(initialScrollOffset: initialOffset);
     _scrollController.addListener(() {
-      if (_scrollController.hasClients) {
+      if (!ref.read(sideDrawerOpenProvider) && _scrollController.hasClients) {
+        _savedScrollOffset = _scrollController.offset;
         ref.read(homeScrollOffsetProvider.notifier).state =
             _scrollController.offset;
       }
@@ -77,6 +72,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void dispose() {
     if (_scrollController.hasClients) {
+      _savedScrollOffset = _scrollController.offset;
       ref.read(homeScrollOffsetProvider.notifier).state =
           _scrollController.offset;
     }
@@ -127,6 +123,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         extendBody: true,
         body: LayoutBuilder(
         builder: (context, constraints) {
+          final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
           final screenHeight = constraints.maxHeight;
           final screenWidth = constraints.maxWidth;
           final safeTop = MediaQuery.of(context).padding.top;
@@ -193,7 +190,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   builder: (context, child) {
                     final double rawOffset = _scrollController.hasClients
                         ? _scrollController.offset
-                        : 0.0;
+                        : _scrollController.initialScrollOffset;
 
                     final double maxExtent =
                         (baseCardHeight + 50.0).clamp(240.0, 360.0);
@@ -272,9 +269,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: SingleChildScrollView(
                     key: const PageStorageKey<String>('home_scroll_view'),
                     controller: _scrollController,
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
+                    physics: isDrawerOpen
+                        ? const NeverScrollableScrollPhysics()
+                        : const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minHeight: screenHeight),
                       child: Column(
@@ -417,7 +416,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           );
 
-          final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
           final isRtl = Directionality.of(context) == TextDirection.rtl;
 
           return Container(
@@ -461,7 +459,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     sigmaX: isDrawerOpen ? 10.0 : 0.0,
                     sigmaY: isDrawerOpen ? 10.0 : 0.0,
                   ),
-                  child: bodyStack,
+                  child: IgnorePointer(
+                    ignoring: isDrawerOpen,
+                    child: bodyStack,
+                  ),
                 ),
               ),
             ),
@@ -520,18 +521,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     AppLocalizations l10n,
     WidgetRef ref,
   ) {
-    if (!_isTransitionReady) {
-      return List.generate(
-        6,
-        (_) => Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(28),
-          ),
-        ),
-      );
-    }
-
     // Get count of suggestions that have been replied or marked as seen
     final suggestionBadgeCount = ref.watch(
       repliedOrSeenSuggestionsCountProvider,
@@ -598,7 +587,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             gradientColors: card.gradientColors,
             iconAlignment: card.iconAlignment,
             badgeCount: card.badgeCount,
-            onTap: () => context.go(card.route),
+            onTap: () {
+              if (_scrollController.hasClients) {
+                _savedScrollOffset = _scrollController.offset;
+                ref.read(homeScrollOffsetProvider.notifier).state =
+                    _scrollController.offset;
+              }
+              context.go(card.route);
+            },
           ),
         )
         .toList();
