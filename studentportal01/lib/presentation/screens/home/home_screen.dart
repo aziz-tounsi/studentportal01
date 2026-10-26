@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/arabic_typography.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/enrollment_model.dart';
 import '../../../data/models/school_model.dart';
@@ -12,6 +13,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../providers/school_provider.dart';
+import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/student_card.dart';
 import '../../widgets/student_card_skeleton.dart';
@@ -571,7 +573,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         )
         .toList();
   }
-}
 
 class _CardData {
   final IconData icon;

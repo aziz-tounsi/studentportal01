@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/router/app_router.dart';
 import '../../../data/models/timetable_model.dart';
 import '../../providers/student_context_provider.dart';
 import '../../providers/nav_bar_provider.dart';

@@ -1,5 +1,3 @@
-import 'dart:ui';
-import '../../presentation/widgets/home_side_drawer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -94,20 +92,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final fromAIChat = ref.watch(navigatedFromAIChatProvider);
               final isHome = state.matchedLocation == '/';
               final isAIChat = state.matchedLocation == '/ai-chat';
-              final isCardExpanded = ref.watch(studentCardExpandedProvider);
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
               final isReportBug = state.matchedLocation == '/report-bug';
               final isAbsenceDetail =
                   state.matchedLocation.startsWith('/absences/');
-              final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
-              final isTimetableZoomed = ref.watch(timetableZoomedProvider);
-
-              final hideNavBar = isAIChat ||
+              final hideNavBar = ref.watch(navBarHiddenProvider) ||
                   isWriteSuggestion ||
                   isReportBug ||
                   isAbsenceDetail ||
-                  isCardExpanded;
+                  isAIChat;
 
               const homeGradient = LinearGradient(
                 begin: Alignment.topLeft,
@@ -173,6 +167,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                             }
                   : isAIChat
                       ? () {
+                          ref.read(navBarHiddenProvider.notifier).state = false;
                           context.go('/');
                         }
                       : fromAIChat
@@ -183,6 +178,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           : isSideNavPage
                               ? () {
                                   ref.read(sideDrawerOpenProvider.notifier).state = true;
+                                  ref.read(navBarHiddenProvider.notifier).state = true;
                                   context.go('/');
                                 }
                               : () {
@@ -215,48 +211,33 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
               return Scaffold(
                 extendBody: true,
-                body: Stack(
-                  children: [
-                    isHome
-                        ? child
-                        : IosEdgeSwipeBack(
-                            key: ValueKey(state.matchedLocation),
-                            backgroundPage: backgroundWidget,
-                            backgroundGradient: backgroundGradient,
-                            onReturn: onReturnCallback,
-                            onInterceptSwipe: isSideNavPage ? null : backSwipeInterceptor,
-                            child: child,
-                          ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: AnimatedSlide(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
-                        offset: hideNavBar ? const Offset(0, 1.5) : Offset.zero,
+                body: isHome
+                    ? child
+                    : IosEdgeSwipeBack(
+                        key: ValueKey(state.matchedLocation),
+                        backgroundPage: backgroundWidget,
+                        backgroundGradient: backgroundGradient,
+                        onReturn: onReturnCallback,
+                        onInterceptSwipe: isSideNavPage ? null : backSwipeInterceptor,
+                        child: child,
+                      ),
+                bottomNavigationBar: hideNavBar
+                    ? null
+                    : AnimatedSlide(
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeInOut,
+                        offset: Offset.zero,
                         child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 220),
-                          opacity: hideNavBar ? 0.0 : 1.0,
+                          duration: const Duration(milliseconds: 180),
+                          opacity: 1.0,
                           child: IgnorePointer(
-                            ignoring: hideNavBar,
-                            child: ImageFiltered(
-                              imageFilter: ImageFilter.blur(
-                                sigmaX: (isDrawerOpen || isTimetableZoomed) ? 12.0 : 0.0,
-                                sigmaY: (isDrawerOpen || isTimetableZoomed) ? 12.0 : 0.0,
-                              ),
-                              child: BubbleNavBar(
-                                currentIndex: _getNavBarIndex(state.matchedLocation),
-                              ),
+                            ignoring: false,
+                            child: BubbleNavBar(
+                              currentIndex: _getNavBarIndex(state.matchedLocation),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    if (isHome)
-                      const HomeSideDrawer(),
-                  ],
-                ),
               );
             },
           );
