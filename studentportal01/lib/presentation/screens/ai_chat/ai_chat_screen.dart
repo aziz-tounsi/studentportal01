@@ -1232,25 +1232,28 @@ I have **complete** access to your academic data — grades, timetable, absences
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
+              GestureDetector(
+                onTap: () => _showExpandedImage(context, _pendingImage!.path),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.file(
+                      File(_pendingImage!.path),
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _fileIcon(),
                     ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Image.file(
-                    File(_pendingImage!.path),
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _fileIcon(),
                   ),
                 ),
               ),
@@ -2006,6 +2009,96 @@ class _DeleteDialog extends StatelessWidget {
   }
 }
 
+// ─── Expandable Full Image Modal Viewer ─────────────────────────────────────────
+void _showExpandedImage(BuildContext context, String? imagePath) {
+  if (imagePath == null) return;
+  final file = File(imagePath);
+  if (!file.existsSync()) return;
+
+  showDialog(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.9),
+    barrierDismissible: true,
+    builder: (ctx) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            // Tap outside image to dismiss
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(ctx).pop(),
+                child: const SizedBox.expand(),
+              ),
+            ),
+            // Pinch-to-zoom interactive viewer
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 60),
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4.0,
+                  clipBehavior: Clip.none,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(
+                      file,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Close button at top-right
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 14, right: 18),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
 // ─── Message Bubble with Markdown Rendering ────────────────────────────────────
 class _MessageBubble extends StatelessWidget {
   final _ChatMessage message;
@@ -2040,40 +2133,32 @@ class _MessageBubble extends StatelessWidget {
             const SizedBox(width: 8),
           ],
           Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.84,
-              ),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isUser ? _pink : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 5),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
-                ),
-                border: isUser ? null : Border.all(color: const Color(0xFFE8ECF1)),
-                boxShadow: isUser
-                    ? [
+            child: isUser
+                ? _buildUserBubble(context, isRtl)
+                : Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.84,
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                        bottomLeft: Radius.circular(5),
+                        bottomRight: Radius.circular(20),
+                      ),
+                      border: Border.all(color: const Color(0xFFE8ECF1)),
+                      boxShadow: const [
                         BoxShadow(
-                          color: _pink.withValues(alpha: 0.22),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : [
-                        const BoxShadow(
                           color: Color(0x1A64748B),
                           blurRadius: 12,
                           offset: Offset(0, 4),
                         ),
                       ],
-              ),
-              child: isUser
-                  ? _buildUserContent(context, isRtl)
-                  : _buildAssistantContent(context),
-            ),
+                    ),
+                    child: _buildAssistantContent(context),
+                  ),
           ),
           if (isUser) const SizedBox(width: 8),
         ],
@@ -2081,87 +2166,196 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildUserContent(BuildContext context, bool isRtl) {
-    final hasImg = (message.attachedImagePath != null && File(message.attachedImagePath!).existsSync()) ||
-        (message.attachedFileName != null &&
-            ['jpg', 'jpeg', 'png', 'webp', 'gif']
-                .contains(message.attachedFileName!.split('.').last.toLowerCase()));
+  Widget _buildUserBubble(BuildContext context, bool isRtl) {
+    final imagePath = message.attachedImagePath;
+    final hasImgFile = imagePath != null && File(imagePath).existsSync();
+    final hasImgExt = message.attachedFileName != null &&
+        ['jpg', 'jpeg', 'png', 'webp', 'gif']
+            .contains(message.attachedFileName!.split('.').last.toLowerCase());
+    final hasImg = hasImgFile || hasImgExt;
 
     String cleanText = message.content;
     if (message.attachedFileName != null) {
       cleanText = cleanText
-          .replaceFirst('📎 ${message.attachedFileName}\n\n', '')
-          .replaceFirst('📎 ${message.attachedFileName}', '')
+          .replaceAll('\n\n📎 ${message.attachedFileName}', '')
+          .replaceAll('\n📎 ${message.attachedFileName}', '')
+          .replaceAll('📎 ${message.attachedFileName}\n\n', '')
+          .replaceAll('📎 ${message.attachedFileName}', '')
           .trim();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (hasImg) ...[
-          Padding(
-            padding: EdgeInsets.only(bottom: cleanText.isNotEmpty ? 8 : 0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: message.attachedImagePath != null && File(message.attachedImagePath!).existsSync()
-                  ? Image.file(
-                      File(message.attachedImagePath!),
-                      width: 96,
-                      height: 96,
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.image_rounded, color: Colors.white, size: 36),
-                    ),
-            ),
+    final hasText = cleanText.isNotEmpty;
+    final hasNonImgFile = !hasImg && message.attachedFileName != null;
+
+    if (!hasImg) {
+      return Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.84,
+        ),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _pink,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+            bottomLeft: Radius.circular(20),
+            bottomRight: Radius.circular(4),
           ),
-        ] else if (message.attachedFileName != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: _pink.withValues(alpha: 0.22),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.attach_file, color: Colors.white, size: 14),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    message.attachedFileName!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: ArabicTypography.bodyStyle(
-                      context,
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontWeight: FontWeight.w500,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (hasNonImgFile) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.attach_file, color: Colors.white, size: 14),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        message.attachedFileName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ArabicTypography.bodyStyle(
+                          context,
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
+              if (hasText) const SizedBox(height: 8),
+            ],
+            if (hasText)
+              Text(
+                cleanText,
+                style: _aiTextStyle(
+                  context,
+                  text: cleanText,
+                  fontSize: 14.5,
+                  color: Colors.white,
+                  height: 1.5,
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // Has image: image preview thumbnail sits OUTSIDE and ON TOP OF the chat bubble
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Small preview thumbnail outside the bubble
+        BouncingWrapper(
+          shrinkScale: 0.92,
+          onTap: () => _showExpandedImage(context, imagePath),
+          child: Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFE2E8F0),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
-          ),
-          if (cleanText.isNotEmpty) const SizedBox(height: 8),
-        ],
-        if (cleanText.isNotEmpty)
-          Text(
-            cleanText,
-            style: _aiTextStyle(
-              context,
-              text: cleanText,
-              fontSize: 14.5,
-              color: Colors.white,
-              height: 1.5,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12.5),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasImgFile)
+                    Image.file(
+                      File(imagePath),
+                      fit: BoxFit.cover,
+                    )
+                  else
+                    Container(
+                      color: const Color(0xFFF1F5F9),
+                      child: const Icon(Icons.image_rounded, color: Color(0xFF94A3B8), size: 36),
+                    ),
+                  // Subtle expand icon badge
+                  Positioned(
+                    bottom: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.fullscreen_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+        ),
+        if (hasText) ...[
+          const SizedBox(height: 6),
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.84,
+            ),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _pink,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(4),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _pink.withValues(alpha: 0.22),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Text(
+              cleanText,
+              style: _aiTextStyle(
+                context,
+                text: cleanText,
+                fontSize: 14.5,
+                color: Colors.white,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
