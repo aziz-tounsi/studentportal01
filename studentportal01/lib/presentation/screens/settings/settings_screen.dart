@@ -431,7 +431,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
               // Settings Sections List
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 150),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                   // Section 1: Langue
@@ -608,7 +608,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
                 ]),
               ),
             ),

@@ -143,7 +143,7 @@ class AboutScreen extends ConsumerWidget {
 
               // Content
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     // 1. Logo & School Hero Card

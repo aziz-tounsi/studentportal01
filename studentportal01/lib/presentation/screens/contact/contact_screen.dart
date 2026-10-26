@@ -197,7 +197,7 @@ class ContactScreen extends ConsumerWidget {
                 
                 // Content
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 150),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       // 1. Header Card - Solid Light White & Borderless

@@ -191,12 +191,12 @@ class HomeSideDrawer extends ConsumerWidget {
                                     style: ArabicTypography.isArabic(context)
                                         ? GoogleFonts.cairo(
                                             fontSize: 15.5,
-                                            fontWeight: FontWeight.w700,
+                                            fontWeight: FontWeight.w500,
                                             color: const Color(0xFF374151),
                                           )
                                         : GoogleFonts.poppins(
                                             fontSize: 15.5,
-                                            fontWeight: FontWeight.w700,
+                                            fontWeight: FontWeight.w500,
                                             color: const Color(0xFF374151),
                                             letterSpacing: -0.2,
                                           ),
@@ -236,12 +236,12 @@ class _DrawerItem extends StatelessWidget {
     final textStyle = isAr
         ? GoogleFonts.cairo(
             fontSize: 16.5,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
             color: const Color(0xFF2D3748),
           )
         : GoogleFonts.poppins(
             fontSize: 16.5,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
             color: const Color(0xFF2D3748),
             letterSpacing: -0.2,
           );
