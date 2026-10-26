@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
@@ -132,16 +133,23 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
 
   Future<void> _pickFiles() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        withData: true,
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif'],
-      );
-
-      if (result != null) {
+      final picker = ImagePicker();
+      final List<XFile> images = await picker.pickMultiImage();
+      if (images.isNotEmpty) {
+        final List<PlatformFile> newFiles = [];
+        for (final img in images) {
+          final bytes = await img.readAsBytes();
+          newFiles.add(
+            PlatformFile(
+              name: img.name,
+              size: bytes.length,
+              path: img.path,
+              bytes: bytes,
+            ),
+          );
+        }
         setState(() {
-          _attachedFiles.addAll(result.files);
+          _attachedFiles.addAll(newFiles);
         });
       }
     } catch (e) {
@@ -421,8 +429,11 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: SafeArea(
-          child: Column(
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: SafeArea(
+            child: Column(
             children: [
               // Custom Header
               Padding(
@@ -500,6 +511,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
               // Content
               Expanded(
                 child: SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(28),
@@ -843,6 +855,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

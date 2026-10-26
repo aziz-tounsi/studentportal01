@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -80,14 +81,23 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
 
   Future<void> _pickScreenshots() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: true,
-        withData: true,
-      );
-      if (result != null && result.files.isNotEmpty) {
+      final picker = ImagePicker();
+      final List<XFile> images = await picker.pickMultiImage();
+      if (images.isNotEmpty) {
+        final List<PlatformFile> newFiles = [];
+        for (final img in images) {
+          final bytes = await img.readAsBytes();
+          newFiles.add(
+            PlatformFile(
+              name: img.name,
+              size: bytes.length,
+              path: img.path,
+              bytes: bytes,
+            ),
+          );
+        }
         setState(() {
-          _attachments.addAll(result.files);
+          _attachments.addAll(newFiles);
         });
       }
     } catch (e) {
@@ -406,10 +416,14 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
         ),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          body: SafeArea(
-            bottom: false,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          body: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: SafeArea(
+              bottom: false,
+              child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               padding: EdgeInsets.fromLTRB(
                 20,
                 16,
@@ -836,6 +850,7 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

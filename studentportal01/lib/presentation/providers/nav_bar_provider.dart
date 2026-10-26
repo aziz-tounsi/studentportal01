@@ -23,3 +23,6 @@ final aiChatOriginRouteProvider = StateProvider<String>((ref) => '/');
 /// Preserves the HomeScreen scroll offset across navigations to feature cards.
 final homeScrollOffsetProvider = StateProvider<double>((ref) => 0.0);
 
+/// Triggers smooth scrolling to top on the HomeScreen when Home tab is tapped while already on Home.
+final homeScrollToTopTriggerProvider = StateProvider<int>((ref) => 0);
+

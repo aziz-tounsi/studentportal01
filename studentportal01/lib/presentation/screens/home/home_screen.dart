@@ -122,6 +122,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final school = schoolAsync.valueOrNull;
     final l10n = AppLocalizations.of(context);
 
+    ref.listen<int>(homeScrollToTopTriggerProvider, (prev, next) {
+      if (next > 0) {
+        if (_expanded) {
+          _dismissExpanded();
+        }
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutCubic,
+          );
+          _savedScrollOffset = 0.0;
+          ref.read(homeScrollOffsetProvider.notifier).state = 0.0;
+        }
+      }
+    });
+
     return RepaintBoundary(
       child: Scaffold(
         extendBody: true,
