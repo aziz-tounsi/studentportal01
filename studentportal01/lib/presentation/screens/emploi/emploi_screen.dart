@@ -12,6 +12,7 @@ import '../../providers/student_context_provider.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/emploi_skeleton.dart';
+import '../../providers/nav_bar_provider.dart';
 
 final emploiSemesterProvider = StateProvider<int>((ref) => 1);
 
@@ -266,14 +267,70 @@ class EmploiScreen extends ConsumerStatefulWidget {
   ConsumerState<EmploiScreen> createState() => _EmploiScreenState();
 }
 
-class _EmploiScreenState extends ConsumerState<EmploiScreen> {
+class _EmploiScreenState extends ConsumerState<EmploiScreen>
+    with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
+  late final AnimationController _expandAnimationController;
+  late final Animation<double> _expandFadeAnimation;
+  late final Animation<double> _expandScaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _expandAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+      reverseDuration: const Duration(milliseconds: 280),
+    );
+    _expandFadeAnimation = CurvedAnimation(
+      parent: _expandAnimationController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _expandScaleAnimation = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _expandAnimationController,
+        curve: Curves.easeOutBack,
+        reverseCurve: Curves.easeInCubic,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    if (_isExpanded) {
+      ref.read(timetableExpandedProvider.notifier).state = false;
+      ref.read(backSwipeInterceptorProvider.notifier).state = null;
+    }
+    _expandAnimationController.dispose();
+    super.dispose();
+  }
 
   void _setExpanded(bool expanded) {
-    if (_isExpanded != expanded) {
-      setState(() {
-        _isExpanded = expanded;
-      });
+    if (expanded) {
+      if (!_isExpanded) {
+        ref.read(timetableExpandedProvider.notifier).state = true;
+        ref.read(backSwipeInterceptorProvider.notifier).state = () {
+          _setExpanded(false);
+          return true;
+        };
+        setState(() {
+          _isExpanded = true;
+        });
+        _expandAnimationController.forward(from: 0.0);
+      }
+    } else {
+      if (_isExpanded) {
+        ref.read(timetableExpandedProvider.notifier).state = false;
+        ref.read(backSwipeInterceptorProvider.notifier).state = null;
+        _expandAnimationController.reverse().then((_) {
+          if (mounted) {
+            setState(() {
+              _isExpanded = false;
+            });
+          }
+        });
+      }
     }
   }
 
@@ -506,57 +563,69 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
               if (_isExpanded)
                 timetableAsync.when(
                   data: (slots) => Positioned.fill(
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFF8F0FC),
-                            Color(0xFFF0E6F8),
-                            Color(0xFFEAF0FA),
-                            Color(0xFFF4F8FC),
-                            Color(0xFFFAFCFD),
-                          ],
-                          stops: [0.0, 0.25, 0.5, 0.75, 1.0],
-                        ),
-                      ),
-                      child: SafeArea(
-                        child: Stack(
-                          children: [
-                            Center(
-                              child: _buildScrollableTimetable(context, slots, isFullScreen: true),
+                    child: FadeTransition(
+                      opacity: _expandFadeAnimation,
+                      child: ScaleTransition(
+                        scale: _expandScaleAnimation,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFFF8F0FC),
+                                Color(0xFFF0E6F8),
+                                Color(0xFFEAF0FA),
+                                Color(0xFFF4F8FC),
+                                Color(0xFFFAFCFD),
+                              ],
+                              stops: [0.0, 0.25, 0.5, 0.75, 1.0],
                             ),
-                            Positioned(
-                              top: 16,
-                              right: 20,
-                              child: BouncingWrapper(
-                                shrinkScale: 0.86,
-                                overshootScale: 1.10,
-                                onTap: () => _setExpanded(false),
-                                child: Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.12),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(
-                                    Icons.close_rounded,
-                                    size: 24,
-                                    color: Color(0xFF1F2937),
+                          ),
+                          child: SafeArea(
+                            child: Stack(
+                              children: [
+                                Center(
+                                  child: ZoomableTimetable(
+                                    child: _buildScrollableTimetable(
+                                      context,
+                                      slots,
+                                      isFullScreen: true,
+                                    ),
                                   ),
                                 ),
-                              ),
+                                Positioned(
+                                  top: 16,
+                                  right: 20,
+                                  child: BouncingWrapper(
+                                    shrinkScale: 0.86,
+                                    overshootScale: 1.10,
+                                    onTap: () => _setExpanded(false),
+                                    child: Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.12),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.close_rounded,
+                                        size: 24,
+                                        color: Color(0xFF1F2937),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -616,6 +685,14 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
+                    // Base tap catcher for empty cells in the timetable
+                    if (!isFullScreen)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _setExpanded(true),
+                        ),
+                      ),
                     ...List.generate(_timeSlots.length * 2 + 1, (i) {
                       final isHour = i % 2 == 0;
                       return Positioned(
@@ -746,13 +823,19 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
       ),
     ));
 
+    final interactiveContainer = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: !isFullScreen ? () => _setExpanded(true) : null,
+      child: container,
+    );
+
     if (isFullScreen) {
-      return container;
+      return interactiveContainer;
     }
 
     return SizedBox(
       height: (MediaQuery.of(context).size.height * 0.68).clamp(580.0, 750.0),
-      child: container,
+      child: interactiveContainer,
     );
   }
 
@@ -918,6 +1001,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
       barrierDismissible: true,
       barrierLabel: '',
       barrierColor: Colors.black.withValues(alpha: 0.35),
+      transitionDuration: const Duration(milliseconds: 340),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return Center(
           child: Dialog(
@@ -1059,14 +1143,27 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInBack,
+        );
+        final fade = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOut,
+          reverseCurve: Curves.easeIn,
+        );
         return BackdropFilter(
           filter: ImageFilter.blur(
-            sigmaX: 8 * animation.value,
-            sigmaY: 8 * animation.value,
+            sigmaX: (8 * fade.value).clamp(0.001, 8.0),
+            sigmaY: (8 * fade.value).clamp(0.001, 8.0),
           ),
           child: FadeTransition(
-            opacity: animation,
-            child: child,
+            opacity: fade,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.82, end: 1.0).animate(curved),
+              child: child,
+            ),
           ),
         );
       },
@@ -1219,6 +1316,117 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A pinch-to-zoom viewer with bounce-back spring animation:
+/// 1. Zoom around the pinch point, so you can zoom anywhere on the timetable.
+/// 2. Keep the timetable inside the screen (boundaryMargin: EdgeInsets.zero).
+/// 3. Snap back with a spring animation if scale goes below minScale or above maxScale.
+/// 4. Double tap to zoom in at tap point or reset to 1.0.
+class ZoomableTimetable extends StatefulWidget {
+  final Widget child;
+  const ZoomableTimetable({super.key, required this.child});
+
+  @override
+  State<ZoomableTimetable> createState() => _ZoomableTimetableState();
+}
+
+class _ZoomableTimetableState extends State<ZoomableTimetable>
+    with SingleTickerProviderStateMixin {
+  static const double _minScale = 1.0; // normal size
+  static const double _maxScale = 4.0; // max allowed zoom
+  static const double _overshoot = 0.6; // how far below 1 / above max it can stretch
+
+  final _controller = TransformationController();
+  late final AnimationController _anim;
+  Animation<Matrix4>? _animation;
+  Offset _doubleTapPos = Offset.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    )..addListener(() {
+        if (_animation != null) _controller.value = _animation!.value;
+      });
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _animateTo(Matrix4 target) {
+    _animation = Matrix4Tween(begin: _controller.value, end: target).animate(
+      CurvedAnimation(parent: _anim, curve: Curves.easeOutBack), // slight bounce
+    );
+    _anim.forward(from: 0);
+  }
+
+  void _onInteractionStart(ScaleStartDetails details) {
+    if (_anim.isAnimating) {
+      _anim.stop();
+    }
+  }
+
+  // When the fingers lift, snap back into the allowed range.
+  void _onInteractionEnd(ScaleEndDetails details) {
+    final scale = _controller.value.getMaxScaleOnAxis();
+
+    if (scale < _minScale) {
+      _animateTo(Matrix4.identity()); // back to normal size and centered
+    } else if (scale > _maxScale) {
+      final size = context.size ?? MediaQuery.of(context).size;
+      final focal = _controller.toScene(
+        Offset(size.width / 2, size.height / 2),
+      );
+      final m = Matrix4.identity()
+        ..translateByDouble(focal.dx, focal.dy, 0.0, 1.0)
+        ..scaleByDouble(_maxScale / scale, _maxScale / scale, 1.0, 1.0)
+        ..translateByDouble(-focal.dx, -focal.dy, 0.0, 1.0);
+      _animateTo(_controller.value * m);
+    }
+  }
+
+  // Double tap: zoom in at the tap point, or reset if already zoomed.
+  void _onDoubleTap() {
+    if (_anim.isAnimating) _anim.stop();
+    final scale = _controller.value.getMaxScaleOnAxis();
+    if (scale > 1.05) {
+      _animateTo(Matrix4.identity());
+    } else {
+      const target = 2.5;
+      final p = _doubleTapPos;
+      _animateTo(
+        Matrix4.identity()
+          ..translateByDouble(-p.dx * (target - 1), -p.dy * (target - 1), 0.0, 1.0)
+          ..scaleByDouble(target, target, 1.0, 1.0),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onDoubleTapDown: (d) => _doubleTapPos = d.localPosition,
+      onDoubleTap: _onDoubleTap,
+      child: InteractiveViewer(
+        transformationController: _controller,
+        minScale: _minScale - _overshoot, // allows stretching below 1 (the bounce)
+        maxScale: _maxScale + _overshoot, // allows stretching above max
+        boundaryMargin: EdgeInsets.zero, // content can't be dragged off screen
+        onInteractionStart: _onInteractionStart,
+        onInteractionEnd: _onInteractionEnd,
+        child: Center(
+          child: widget.child,
         ),
       ),
     );

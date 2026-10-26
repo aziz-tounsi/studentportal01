@@ -48,9 +48,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _scrollController = ScrollController(initialScrollOffset: initialOffset);
     _scrollController.addListener(() {
       if (!ref.read(sideDrawerOpenProvider) && _scrollController.hasClients) {
-        _savedScrollOffset = _scrollController.offset;
-        ref.read(homeScrollOffsetProvider.notifier).state =
-            _scrollController.offset;
+        final currentOffset = _scrollController.offset;
+        if (currentOffset > 0 ||
+            (_scrollController.position.haveDimensions &&
+                _scrollController.position.isScrollingNotifier.value)) {
+          _savedScrollOffset = currentOffset;
+          ref.read(homeScrollOffsetProvider.notifier).state = currentOffset;
+        }
       }
     });
 
@@ -71,7 +75,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
-    if (_scrollController.hasClients) {
+    if (_scrollController.hasClients && _scrollController.offset > 0) {
       _savedScrollOffset = _scrollController.offset;
       ref.read(homeScrollOffsetProvider.notifier).state =
           _scrollController.offset;
@@ -267,12 +271,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   color: const Color(0xFFFF2D78),
                   backgroundColor: Colors.white,
                   child: SingleChildScrollView(
-                    key: const PageStorageKey<String>('home_scroll_view'),
                     controller: _scrollController,
                     physics: isDrawerOpen
                         ? const NeverScrollableScrollPhysics()
-                        : const AlwaysScrollableScrollPhysics(
-                            parent: BouncingScrollPhysics(),
+                        : const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics(),
                           ),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minHeight: screenHeight),
@@ -588,7 +591,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             iconAlignment: card.iconAlignment,
             badgeCount: card.badgeCount,
             onTap: () {
-              if (_scrollController.hasClients) {
+              if (_scrollController.hasClients && _scrollController.offset > 0) {
                 _savedScrollOffset = _scrollController.offset;
                 ref.read(homeScrollOffsetProvider.notifier).state =
                     _scrollController.offset;

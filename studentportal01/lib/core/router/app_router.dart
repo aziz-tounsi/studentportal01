@@ -134,6 +134,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final isAIChat = state.matchedLocation == '/ai-chat';
               final originRoute = ref.watch(aiChatOriginRouteProvider);
               final isCardExpanded = ref.watch(studentCardExpandedProvider);
+              final isTimetableExpanded = ref.watch(timetableExpandedProvider);
+              final isNavBarHidden = ref.watch(navBarHiddenProvider);
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
               final isReportBug = state.matchedLocation == '/report-bug';
@@ -144,13 +146,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 '/contact',
                 '/about',
                 '/profile',
-                '/mon-solde',
+                '/report-bug',
               ].contains(state.matchedLocation);
               final hideNavBar = isWriteSuggestion ||
                   isReportBug ||
                   isAbsenceDetail ||
                   isAIChat ||
                   isCardExpanded ||
+                  isTimetableExpanded ||
+                  isNavBarHidden ||
                   isSideNavPage;
 
               final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
@@ -281,36 +285,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                               child: child,
                             ),
                     ),
-                    Positioned(
-                      key: const ValueKey('shell_nav_bar_positioned'),
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: RepaintBoundary(
-                        child: AnimatedSlide(
-                          duration: const Duration(milliseconds: 320),
-                          curve: Curves.easeOutCubic,
-                          offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 220),
-                            opacity: hideNavBar ? 0.0 : 1.0,
-                            child: IgnorePointer(
-                              ignoring: hideNavBar,
-                              child: ImageFiltered(
-                                imageFilter: ImageFilter.blur(
-                                  sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
-                                  sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
-                                ),
-                                child: BubbleNavBar(
-                                  key: bubbleNavBarKey,
-                                  currentIndex: _getNavBarIndex(state.matchedLocation),
+                    if (!isSideNavPage)
+                      Positioned(
+                        key: const ValueKey('shell_nav_bar_positioned'),
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: RepaintBoundary(
+                          child: AnimatedSlide(
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeOutCubic,
+                            offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 220),
+                              opacity: hideNavBar ? 0.0 : 1.0,
+                              child: IgnorePointer(
+                                ignoring: hideNavBar,
+                                child: ImageFiltered(
+                                  imageFilter: ImageFilter.blur(
+                                    sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                    sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                  ),
+                                  child: BubbleNavBar(
+                                    key: bubbleNavBarKey,
+                                    currentIndex: _getNavBarIndex(state.matchedLocation),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
                     if (isHome)
                       const HomeSideDrawer(),
                   ],
