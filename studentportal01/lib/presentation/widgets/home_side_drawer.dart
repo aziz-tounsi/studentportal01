@@ -36,6 +36,30 @@ class HomeSideDrawer extends ConsumerWidget {
               onTap: () {
                 ref.read(sideDrawerOpenProvider.notifier).state = false;
               },
+              onHorizontalDragUpdate: (details) {
+                final delta = details.primaryDelta ?? 0;
+                if (isRtl) {
+                  if (delta > 3 || delta < -16) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                } else {
+                  if (delta < -3 || delta > 16) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                }
+              },
+              onHorizontalDragEnd: (details) {
+                final vel = details.primaryVelocity ?? 0;
+                if (isRtl) {
+                  if (vel > 50 || vel < -200) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                } else {
+                  if (vel < -50 || vel > 200) {
+                    ref.read(sideDrawerOpenProvider.notifier).state = false;
+                  }
+                }
+              },
               child: Container(
                 color: Colors.black.withValues(alpha: 0.25),
               ),
