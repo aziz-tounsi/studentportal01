@@ -264,8 +264,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
     _loadConversations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(navBarHiddenProvider.notifier).state = true;
-      _initAI();
+            _initAI();
     });
   }
 
@@ -702,8 +701,7 @@ I have **complete** access to your academic data — grades, timetable, absences
     if (_showHistory) {
       ref.read(backSwipeInterceptorProvider.notifier).state = null;
     }
-    ref.read(navBarHiddenProvider.notifier).state = false;
-    _inputController.dispose();
+        _inputController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     _inputFocus.dispose();
@@ -744,8 +742,7 @@ I have **complete** access to your academic data — grades, timetable, absences
           return;
         }
         if (didPop) {
-          ref.read(navBarHiddenProvider.notifier).state = false;
-        }
+                  }
       },
       child: Stack(
         children: [
@@ -972,8 +969,7 @@ I have **complete** access to your academic data — grades, timetable, absences
                 // Back
                 GestureDetector(
                   onTap: () {
-                    ref.read(navBarHiddenProvider.notifier).state = false;
-                    if (context.canPop()) {
+                                        if (context.canPop()) {
                       context.pop();
                     } else {
                       context.go('/');

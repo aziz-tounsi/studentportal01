@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n/app_localizations.dart';
-import '../../../core/theme/arabic_typography.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/enrollment_model.dart';
 import '../../../data/models/school_model.dart';
@@ -13,7 +12,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../providers/school_provider.dart';
-import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/student_card.dart';
 import '../../widgets/student_card_skeleton.dart';
@@ -30,10 +28,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with TickerProviderStateMixin {
   bool _expanded = false;
-  bool _isDrawerOpen = false;
   late AnimationController _expandCtrl;
   late Animation<double> _expandAnim;
-  late AnimationController _drawerCtrl;
   late ScrollController _scrollController;
   Offset _expandDragOffset = Offset.zero;
   Rect? _cardRect;
@@ -42,42 +38,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _drawerCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
-
-    final shouldOpen = widget.forceDrawerOpen || ref.read(sideDrawerOpenProvider);
-    _isDrawerOpen = shouldOpen;
-    if (shouldOpen) {
-      _drawerCtrl.value = 1.0;
+    if (widget.forceDrawerOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          ref.read(navBarHiddenProvider.notifier).state = true;
-          ref.read(backSwipeInterceptorProvider.notifier).state = () {
-            _closeDrawer();
-            return true;
-          };
+          ref.read(sideDrawerOpenProvider.notifier).state = true;
         }
       });
     }
-
-    _drawerCtrl.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        if (!_isDrawerOpen) setState(() => _isDrawerOpen = true);
-        ref.read(sideDrawerOpenProvider.notifier).state = true;
-        ref.read(navBarHiddenProvider.notifier).state = true;
-        ref.read(backSwipeInterceptorProvider.notifier).state = () {
-          _closeDrawer();
-          return true;
-        };
-      } else if (status == AnimationStatus.dismissed) {
-        if (_isDrawerOpen) setState(() => _isDrawerOpen = false);
-        ref.read(sideDrawerOpenProvider.notifier).state = false;
-        ref.read(navBarHiddenProvider.notifier).state = false;
-        ref.read(backSwipeInterceptorProvider.notifier).state = null;
-      }
-    });
 
     _scrollController = ScrollController();
     _expandCtrl = AnimationController(
@@ -92,38 +59,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   void _openDrawer() {
-    setState(() => _isDrawerOpen = true);
-    ref.read(navBarHiddenProvider.notifier).state = true;
     ref.read(sideDrawerOpenProvider.notifier).state = true;
-    ref.read(backSwipeInterceptorProvider.notifier).state = () {
-      _closeDrawer();
-      return true;
-    };
-    _drawerCtrl.animateTo(
-      1.0,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  void _closeDrawer() {
-    ref.read(backSwipeInterceptorProvider.notifier).state = null;
-    _drawerCtrl.animateTo(
-      0.0,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-    );
   }
 
   @override
   void dispose() {
-    if (_isDrawerOpen) {
-      ref.read(backSwipeInterceptorProvider.notifier).state = null;
-    }
-    ref.read(navBarHiddenProvider.notifier).state = false;
     _scrollController.dispose();
     _expandCtrl.dispose();
-    _drawerCtrl.dispose();
     super.dispose();
   }
 
@@ -133,12 +75,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _expanded = true;
       _expandDragOffset = Offset.zero;
     });
-    ref.read(navBarHiddenProvider.notifier).state = true;
+    ref.read(studentCardExpandedProvider.notifier).state = true;
     _expandCtrl.forward();
   }
 
   void _dismissExpanded() {
-    ref.read(navBarHiddenProvider.notifier).state = false;
+    ref.read(studentCardExpandedProvider.notifier).state = false;
     _expandCtrl.reverse().whenComplete(() {
       if (mounted) setState(() => _expanded = false);
     });
@@ -456,6 +398,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           );
 
+          final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
+          final isRtl = Directionality.of(context) == TextDirection.rtl;
+
           return Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -471,123 +416,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 stops: [0.0, 0.25, 0.5, 0.75, 1.0],
               ),
             ),
-            child: AnimatedBuilder(
-              animation: _drawerCtrl,
-              builder: (context, _) {
-                final drawerVal = _drawerCtrl.value;
-                final isRtl = Directionality.of(context) == TextDirection.rtl;
-                final drawerWidth = math.min(320.0, constraints.maxWidth * 0.78);
-
-                return Stack(
-                  children: [
-                    Transform.scale(
-                      scale: 1.0 - (0.07 * drawerVal),
-                      alignment: isRtl ? Alignment.centerLeft : Alignment.centerRight,
-                      child: Container(
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(24.0 * drawerVal),
-                          boxShadow: drawerVal > 0.01
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.15 * drawerVal),
-                                    blurRadius: 24,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: ImageFiltered(
-                          imageFilter: ImageFilter.blur(
-                            sigmaX: 10.0 * drawerVal,
-                            sigmaY: 10.0 * drawerVal,
+            child: AnimatedScale(
+              scale: isDrawerOpen ? 0.93 : 1.0,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              alignment: isRtl ? Alignment.centerLeft : Alignment.centerRight,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(isDrawerOpen ? 24.0 : 0.0),
+                  boxShadow: isDrawerOpen
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
                           ),
-                          child: bodyStack,
-                        ),
-                      ),
-                    ),
-                    if (drawerVal > 0.001)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _closeDrawer,
-                          onHorizontalDragUpdate: (details) {
-                            final delta = details.primaryDelta ?? 0;
-                            final dragDir = isRtl ? delta : -delta;
-                            if (dragDir > 0) {
-                              _drawerCtrl.value = (_drawerCtrl.value - (dragDir / drawerWidth)).clamp(0.0, 1.0);
-                            }
-                          },
-                          onHorizontalDragEnd: (details) {
-                            final vx = details.primaryVelocity ?? 0;
-                            final vel = isRtl ? vx : -vx;
-                            if (vel > 300 || _drawerCtrl.value < 0.6) {
-                              _closeDrawer();
-                            } else {
-                              _openDrawer();
-                            }
-                          },
-                          child: Container(
-                            color: Colors.black.withValues(alpha: 0.25 * drawerVal),
-                          ),
-                        ),
-                      ),
-                    if (drawerVal > 0.001 || _isDrawerOpen)
-                      PositionedDirectional(
-                        start: -drawerWidth * (1.0 - drawerVal),
-                        top: 0,
-                        bottom: 0,
-                        width: drawerWidth,
-                        child: GestureDetector(
-                          onHorizontalDragUpdate: (details) {
-                            final delta = details.primaryDelta ?? 0;
-                            final dragDir = isRtl ? delta : -delta;
-                            _drawerCtrl.value = (_drawerCtrl.value - (dragDir / drawerWidth)).clamp(0.0, 1.0);
-                          },
-                          onHorizontalDragEnd: (details) {
-                            final vx = details.primaryVelocity ?? 0;
-                            final vel = isRtl ? vx : -vx;
-                            if (vel > 300 || _drawerCtrl.value < 0.6) {
-                              _closeDrawer();
-                            } else {
-                              _openDrawer();
-                            }
-                          },
-                          child: _buildDrawer(context, l10n, ref),
-                        ),
-                      ),
-                    if (drawerVal < 0.99)
-                      PositionedDirectional(
-                        start: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: 35,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onHorizontalDragStart: (_) {
-                            ref.read(navBarHiddenProvider.notifier).state = true;
-                          },
-                          onHorizontalDragUpdate: (details) {
-                            final delta = details.primaryDelta ?? 0;
-                            final dragDir = isRtl ? -delta : delta;
-                            if (dragDir > 0) {
-                              _drawerCtrl.value = (_drawerCtrl.value + (dragDir / drawerWidth)).clamp(0.0, 1.0);
-                            }
-                          },
-                          onHorizontalDragEnd: (details) {
-                            final vx = details.primaryVelocity ?? 0;
-                            final vel = isRtl ? -vx : vx;
-                            if (vel > 300 || _drawerCtrl.value > 0.35) {
-                              _openDrawer();
-                            } else {
-                              _closeDrawer();
-                            }
-                          },
-                        ),
-                      ),
-                  ],
-                );
-              },
+                        ]
+                      : null,
+                ),
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: isDrawerOpen ? 10.0 : 0.0,
+                    sigmaY: isDrawerOpen ? 10.0 : 0.0,
+                  ),
+                  child: bodyStack,
+                ),
+              ),
             ),
           );
         },
@@ -713,179 +570,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         )
         .toList();
-  }
-
-  Widget _buildDrawer(
-    BuildContext context,
-    AppLocalizations l10n,
-    WidgetRef ref,
-  ) {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.65),
-            border: Border(
-              right: BorderSide(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 1,
-              ),
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                _DrawerItem(
-                  icon: Icons.person_rounded,
-                  label: l10n.monProfil,
-                  onTap: () {
-                    ref.read(sideDrawerOpenProvider.notifier).state = true;
-                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
-                    context.go('/profile');
-                  },
-                ),
-                const SizedBox(height: 4),
-                _DrawerItem(
-                  icon: Icons.settings_rounded,
-                  label: l10n.settings,
-                  onTap: () {
-                    ref.read(sideDrawerOpenProvider.notifier).state = true;
-                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
-                    context.go('/settings');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.contact_support_rounded,
-                  label: l10n.contactUs,
-                  onTap: () {
-                    ref.read(sideDrawerOpenProvider.notifier).state = true;
-                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
-                    context.go('/contact');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.info_rounded,
-                  label: l10n.about,
-                  onTap: () {
-                    ref.read(sideDrawerOpenProvider.notifier).state = true;
-                    ref.read(backSwipeInterceptorProvider.notifier).state = null;
-                    context.go('/about');
-                  },
-                ),
-                const Spacer(),
-                // White Logout Button with Bounce
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: BouncingWrapper(
-                    shrinkScale: 0.94,
-                    onTap: () async {
-                      _closeDrawer();
-                      await ref.read(authProvider.notifier).signOut();
-                      if (context.mounted) {
-                        context.go('/login');
-                      }
-                    },
-                    child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.logout_rounded,
-                              color: Colors.grey[700],
-                              size: 22,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              l10n.logout,
-                              style: ArabicTypography.headerStyle(
-                                context,
-                                color: Colors.grey[700],
-                                fontSize: Localizations.localeOf(context).languageCode == 'ar' ? 17.5 : 16,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-  }
-}
-
-class _DrawerItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _DrawerItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isAr = Localizations.localeOf(context).languageCode == 'ar';
-    return BouncingWrapper(
-      shrinkScale: 0.94,
-      overshootScale: 1.05,
-      delayNavigation: true,
-      onTap: onTap,
-      child: Material(
-        color: Colors.transparent,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF5F7FB),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: const Color(0xFF374151), size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  label,
-                  style: ArabicTypography.headerStyle(
-                    context,
-                    color: const Color(0xFF1F2937),
-                    fontWeight: FontWeight.w800,
-                    fontSize: isAr ? 17.5 : 16,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

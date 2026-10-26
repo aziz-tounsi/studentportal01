@@ -144,8 +144,7 @@ class ContactScreen extends ConsumerWidget {
                                     context.go('/ai-chat');
                                   } else {
                                     ref.read(sideDrawerOpenProvider.notifier).state = true;
-                                    ref.read(navBarHiddenProvider.notifier).state = true;
-                                    context.go('/');
+                                                                        context.go('/');
                                   }
                                 }
                               },

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -179,11 +180,9 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
             ),
             backgroundColor: const Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            duration: const Duration(seconds: 4),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
         );
-
         final swipeBack = IosEdgeSwipeBack.of(context);
         if (swipeBack != null) {
           swipeBack.animateBack();
@@ -203,9 +202,7 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -218,12 +215,16 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF64748B).withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -295,7 +296,7 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
             duration: const Duration(milliseconds: 280),
             curve: Curves.easeOutBack,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   Container(
@@ -461,310 +462,348 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
                   ),
                 ),
 
-                // Form Content
+                // Form Content enclosed inside rounded frosted-glass card
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Category Selector
-                        Text(
-                          l10n.bugTypeLabel,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey[700],
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _buildCategorySelector(l10n),
-                        const SizedBox(height: 24),
-
-                        // Title Field (Borderless with high radius)
-                        Text(
-                          l10n.bugTitleLabel,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey[700],
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(24),
+                            color: Colors.white.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(28),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              width: 1.5,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 30,
+                                offset: const Offset(0, 10),
                               ),
                             ],
                           ),
-                          child: TextField(
-                            controller: _titleCtrl,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E293B),
-                            ),
-                            decoration: InputDecoration(
-                              hintText: l10n.bugTitleHint,
-                              hintStyle: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              focusedErrorBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Description Field (Borderless with high radius)
-                        Text(
-                          l10n.bugDescLabel,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey[700],
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(26),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _descCtrl,
-                            maxLines: 6,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF1E293B),
-                              height: 1.5,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: l10n.bugDescHint,
-                              hintStyle: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              focusedErrorBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.all(20),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Screenshots Section
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              l10n.addScreenshots,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.grey[700],
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                            if (_attachments.isNotEmpty)
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 1. Category Selector
                               Text(
-                                '${_attachments.length}',
-                                style: const TextStyle(
-                                  fontSize: 12,
+                                l10n.bugTypeLabel,
+                                style: TextStyle(
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFFFF2D78),
+                                  color: Colors.grey[700],
+                                  letterSpacing: 0.3,
                                 ),
                               ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
+                              const SizedBox(height: 10),
+                              _buildCategorySelector(l10n),
+                              const SizedBox(height: 24),
 
-                        // Pick Button
-                        BouncingWrapper(
-                          shrinkScale: 0.95,
-                          overshootScale: 1.04,
-                          delayNavigation: false,
-                          onTap: _pickScreenshots,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(22),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 3),
+                              // 2. Title Field (Borderless inside high radius container)
+                              Text(
+                                l10n.bugTitleLabel,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey[700],
+                                  letterSpacing: 0.3,
                                 ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFF2D78).withValues(alpha: 0.1),
-                                    shape: BoxShape.circle,
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                clipBehavior: Clip.antiAlias,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                    width: 1.2,
                                   ),
-                                  child: const Icon(
-                                    Icons.add_photo_alternate_rounded,
-                                    color: Color(0xFFFF2D78),
-                                    size: 20,
-                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF64748B).withValues(alpha: 0.06),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  l10n.addScreenshots,
+                                child: TextField(
+                                  controller: _titleCtrl,
                                   style: const TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF1E293B),
                                   ),
+                                  decoration: InputDecoration(
+                                    hintText: l10n.bugTitleHint,
+                                    hintStyle: TextStyle(
+                                      color: Colors.grey.shade400,
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    errorBorder: InputBorder.none,
+                                    focusedErrorBorder: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                  ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
+                              ),
+                              const SizedBox(height: 24),
 
-                        // Image Previews (WITHOUT file name text!)
-                        if (_attachments.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: List.generate(_attachments.length, (index) {
-                              final file = _attachments[index];
-                              return Stack(
+                              // 3. Description Field (Borderless inside high radius container)
+                              Text(
+                                l10n.bugDescLabel,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey[700],
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                clipBehavior: Clip.antiAlias,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF64748B).withValues(alpha: 0.06),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: TextField(
+                                  controller: _descCtrl,
+                                  maxLines: 6,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF1E293B),
+                                    height: 1.5,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: l10n.bugDescHint,
+                                    hintStyle: TextStyle(
+                                      color: Colors.grey.shade400,
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    errorBorder: InputBorder.none,
+                                    focusedErrorBorder: InputBorder.none,
+                                    contentPadding: const EdgeInsets.all(20),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // 4. Screenshots Section
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Container(
-                                    width: 88,
-                                    height: 88,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(18),
-                                      image: DecorationImage(
-                                        image: file.bytes != null
-                                            ? MemoryImage(file.bytes!) as ImageProvider
-                                            : (file.path != null
-                                                ? FileImage(File(file.path!))
-                                                : const AssetImage('assets/images/placeholder.png')),
-                                        fit: BoxFit.cover,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.08),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 3),
-                                        ),
-                                      ],
+                                  Text(
+                                    l10n.addScreenshots,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey[700],
+                                      letterSpacing: 0.3,
                                     ),
                                   ),
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: GestureDetector(
-                                      onTap: () => setState(() => _attachments.removeAt(index)),
-                                      child: Container(
-                                        width: 24,
-                                        height: 24,
+                                  if (_attachments.isNotEmpty)
+                                    Text(
+                                      '${_attachments.length}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFFFF2D78),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Pick Button
+                              BouncingWrapper(
+                                shrinkScale: 0.95,
+                                overshootScale: 1.04,
+                                delayNavigation: false,
+                                onTap: _pickScreenshots,
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(22),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
+                                      width: 1.2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF64748B).withValues(alpha: 0.05),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.65),
+                                          color: const Color(0xFFFF2D78).withValues(alpha: 0.1),
                                           shape: BoxShape.circle,
                                         ),
                                         child: const Icon(
-                                          Icons.close_rounded,
-                                          size: 14,
-                                          color: Colors.white,
+                                          Icons.add_photo_alternate_rounded,
+                                          color: Color(0xFFFF2D78),
+                                          size: 20,
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }),
-                          ),
-                        ],
-                        const SizedBox(height: 36),
-
-                        // Submit Button
-                        BouncingWrapper(
-                          shrinkScale: 0.93,
-                          overshootScale: 1.052,
-                          delayNavigation: false,
-                          onTap: _isSubmitting ? null : () => _submitReport(l10n),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
-                              ),
-                              borderRadius: BorderRadius.circular(22),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFFF2D78).withValues(alpha: 0.35),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: _isSubmitting
-                                  ? const IosLoader(color: Colors.white, size: 22)
-                                  : Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(
-                                          Icons.send_rounded,
-                                          color: Colors.white,
-                                          size: 18,
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        l10n.addScreenshots,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1E293B),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          l10n.submitBugReport,
-                                          style: ArabicTypography.buttonStyle(
-                                            context,
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.2,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              // Image Previews (without file names)
+                              if (_attachments.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: List.generate(_attachments.length, (index) {
+                                    final file = _attachments[index];
+                                    return Stack(
+                                      children: [
+                                        Container(
+                                          width: 88,
+                                          height: 88,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(18),
+                                            image: DecorationImage(
+                                              image: file.bytes != null
+                                                  ? MemoryImage(file.bytes!) as ImageProvider
+                                                  : (file.path != null
+                                                      ? FileImage(File(file.path!))
+                                                      : const AssetImage('assets/images/placeholder.png')),
+                                              fit: BoxFit.cover,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.08),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Positioned(
+                                          top: 4,
+                                          right: 4,
+                                          child: GestureDetector(
+                                            onTap: () => setState(() => _attachments.removeAt(index)),
+                                            child: Container(
+                                              width: 24,
+                                              height: 24,
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withValues(alpha: 0.65),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.close_rounded,
+                                                size: 14,
+                                                color: Colors.white,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ],
+                                    );
+                                  }),
+                                ),
+                              ],
+                              const SizedBox(height: 32),
+
+                              // 5. Submit Button
+                              BouncingWrapper(
+                                shrinkScale: 0.93,
+                                overshootScale: 1.052,
+                                delayNavigation: false,
+                                onTap: _isSubmitting ? null : () => _submitReport(l10n),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
                                     ),
-                            ),
+                                    borderRadius: BorderRadius.circular(22),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFFF2D78).withValues(alpha: 0.35),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: _isSubmitting
+                                        ? const IosLoader(color: Colors.white, size: 22)
+                                        : Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(
+                                                Icons.send_rounded,
+                                                color: Colors.white,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                l10n.submitBugReport,
+                                                style: ArabicTypography.buttonStyle(
+                                                  context,
+                                                  color: Colors.white,
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: 0.2,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

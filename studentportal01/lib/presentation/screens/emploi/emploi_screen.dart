@@ -7,7 +7,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
-import '../../../core/router/app_router.dart';
 import '../../../data/models/timetable_model.dart';
 import '../../providers/student_context_provider.dart';
 import '../../providers/nav_bar_provider.dart';
@@ -276,8 +275,6 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
   late final AnimationController _blurAnimCtrl;
   Animation<Matrix4>? _zoomAnimation;
   bool _isZoomed = false;
-  OverlayEntry? _overlayEntry;
-  List<TimetableSlotModel>? _currentSlots;
 
   @override
   void initState() {
@@ -285,125 +282,12 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     _zoomController = TransformationController();
     _zoomAnimCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 440),
+      duration: const Duration(milliseconds: 380),
     );
     _blurAnimCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 300),
     );
-    _zoomController.addListener(_onZoomChanged);
-  }
-
-  void _removeZoomOverlay() {
-    try {
-      _overlayEntry?.remove();
-    } catch (_) {}
-    _overlayEntry = null;
-  }
-
-  void _showZoomOverlay(List<TimetableSlotModel> slots) {
-    _removeZoomOverlay();
-    final overlay = rootNavigatorKey.currentState?.overlay;
-    if (overlay == null) return;
-
-    _overlayEntry = OverlayEntry(
-      builder: (overlayContext) {
-        return Material(
-          type: MaterialType.transparency,
-          child: Stack(
-            children: [
-              AnimatedBuilder(
-                animation: _blurAnimCtrl,
-                builder: (context, _) {
-                  final blurVal = 16.0 * _blurAnimCtrl.value;
-                  return Positioned.fill(
-                    child: ClipRect(
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
-                        child: Container(
-                          color: Colors.white.withValues(alpha: 0.06 * _blurAnimCtrl.value),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              SafeArea(
-                child: Center(
-                  child: InteractiveViewer(
-                    transformationController: _zoomController,
-                    minScale: 0.85,
-                    maxScale: 6.0,
-                    boundaryMargin: const EdgeInsets.all(400),
-                    onInteractionEnd: _handleInteractionEnd,
-                    child: GestureDetector(
-                      onDoubleTap: _resetZoom,
-                      child: _buildScrollableTimetable(overlayContext, slots, isFullScreen: true),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: MediaQuery.of(overlayContext).padding.top + 16,
-                right: 20,
-                child: BouncingWrapper(
-                  shrinkScale: 0.86,
-                  overshootScale: 1.10,
-                  onTap: _resetZoom,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.20),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 24,
-                      color: Color(0xFF1F2937),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    overlay.insert(_overlayEntry!);
-  }
-
-  void _startZoom(List<TimetableSlotModel> slots) {
-    if (!_isZoomed) {
-      _currentSlots = slots;
-      setState(() {
-        _isZoomed = true;
-      });
-      _blurAnimCtrl.forward();
-      _showZoomOverlay(slots);
-    }
-  }
-
-  void _onZoomChanged() {
-    final scale = _zoomController.value.getMaxScaleOnAxis();
-    if (scale > 1.05 && !_isZoomed && _currentSlots != null) {
-      _startZoom(_currentSlots!);
-    }
-  }
-
-  void _handleInteractionEnd(ScaleEndDetails details) {
-    final scale = _zoomController.value.getMaxScaleOnAxis();
-    if (scale < 1.15) {
-      _resetZoom();
-    }
   }
 
   void _resetZoom() {
@@ -425,11 +309,11 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     _zoomAnimation!.addListener(listener);
     _zoomAnimCtrl.forward().then((_) {
       _zoomAnimation?.removeListener(listener);
-      _removeZoomOverlay();
       if (mounted) {
         setState(() {
           _isZoomed = false;
         });
+        ref.read(timetableZoomedProvider.notifier).state = false;
       }
     });
   }
@@ -442,28 +326,15 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
       setState(() {
         _isExpanded = expanded;
       });
-      ref.read(navBarHiddenProvider.notifier).state = expanded;
     }
-  }
-
-  @override
-  void deactivate() {
-    _removeZoomOverlay();
-    super.deactivate();
   }
 
   @override
   void dispose() {
-    _removeZoomOverlay();
-    _zoomController.removeListener(_onZoomChanged);
+    ref.read(timetableZoomedProvider.notifier).state = false;
     _zoomController.dispose();
     _zoomAnimCtrl.dispose();
     _blurAnimCtrl.dispose();
-    if (_isExpanded) {
-      Future.microtask(() {
-        ref.read(navBarHiddenProvider.notifier).state = false;
-      });
-    }
     super.dispose();
   }
 
@@ -523,14 +394,27 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                     }
                   },
                   child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    clipBehavior: Clip.none,
+                    physics: _isZoomed
+                        ? const NeverScrollableScrollPhysics()
+                        : const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                     slivers: [
                       SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                          child: SizedBox(
-                            height: 72,
-                            child: Row(
+                        child: AnimatedBuilder(
+                          animation: _blurAnimCtrl,
+                          builder: (context, child) {
+                            final blurVal = 10.0 * _blurAnimCtrl.value;
+                            if (blurVal < 0.2) return child!;
+                            return ImageFiltered(
+                              imageFilter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
+                              child: child,
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                            child: SizedBox(
+                              height: 72,
+                              child: Row(
                               children: [
                                 Container(
                                   width: 56,
@@ -632,11 +516,22 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                             ),
                           ),
                         ),
+                        ),
                       ),
                       SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: DynamicSemesterNav(
+                        child: AnimatedBuilder(
+                          animation: _blurAnimCtrl,
+                          builder: (context, child) {
+                            final blurVal = 10.0 * _blurAnimCtrl.value;
+                            if (blurVal < 0.2) return child!;
+                            return ImageFiltered(
+                              imageFilter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
+                              child: child,
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: DynamicSemesterNav(
                             selectedSemesterNumber: selectedSemester,
                             accentColor: selectedType == 'exam'
                                 ? const Color(0xFFEA580C)
@@ -648,6 +543,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                                 .read(emploiSemesterProvider.notifier)
                                 .state = v,
                           ),
+                        ),
                         ),
                       ),
                       const SliverToBoxAdapter(child: SizedBox(height: 16)),
@@ -696,6 +592,36 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                   ),
                 ),
               ),
+              if (_isZoomed)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  right: 20,
+                  child: BouncingWrapper(
+                    shrinkScale: 0.86,
+                    overshootScale: 1.10,
+                    onTap: _resetZoom,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.20),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 24,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                  ),
+                ),
               if (_isExpanded && !_isZoomed)
                 timetableAsync.when(
                   data: (slots) => Positioned.fill(
@@ -939,47 +865,77 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
       ),
     ));
 
-    if (isFullScreen) {
-      return GestureDetector(
-        onScaleStart: (details) {
-          if (details.pointerCount >= 2) {
-            _startZoom(slots);
+    final interactiveTimetable = InteractiveViewer(
+      transformationController: _zoomController,
+      minScale: 0.85,
+      maxScale: 6.0,
+      panEnabled: true,
+      scaleEnabled: true,
+      clipBehavior: Clip.none,
+      boundaryMargin: const EdgeInsets.symmetric(horizontal: 500, vertical: 800),
+      onInteractionStart: (details) {
+        if (details.pointerCount >= 2 && !_isZoomed) {
+          setState(() => _isZoomed = true);
+          ref.read(timetableZoomedProvider.notifier).state = true;
+          _blurAnimCtrl.forward();
+        }
+      },
+      onInteractionUpdate: (details) {
+        final scale = _zoomController.value.getMaxScaleOnAxis();
+        if (scale > 1.05 && !_isZoomed) {
+          setState(() => _isZoomed = true);
+          ref.read(timetableZoomedProvider.notifier).state = true;
+          _blurAnimCtrl.forward();
+        } else if (scale <= 1.05 && _isZoomed) {
+          setState(() => _isZoomed = false);
+          ref.read(timetableZoomedProvider.notifier).state = false;
+          _blurAnimCtrl.reverse();
+        }
+      },
+      onInteractionEnd: (details) {
+        final scale = _zoomController.value.getMaxScaleOnAxis();
+        if (scale < 1.08) {
+          _resetZoom();
+        }
+      },
+      child: GestureDetector(
+        onDoubleTap: () {
+          if (_isZoomed) {
+            _resetZoom();
+          } else {
+            setState(() => _isZoomed = true);
+            ref.read(timetableZoomedProvider.notifier).state = true;
+            _blurAnimCtrl.forward();
+            _zoomAnimation = Matrix4Tween(
+              begin: _zoomController.value,
+              end: Matrix4.diagonal3Values(1.8, 1.8, 1.0),
+            ).animate(CurvedAnimation(
+              parent: _zoomAnimCtrl,
+              curve: Curves.easeOutCubic,
+            ));
+            _zoomAnimCtrl.reset();
+            void listener() {
+              if (_zoomAnimation != null) {
+                _zoomController.value = _zoomAnimation!.value;
+              }
+            }
+            _zoomAnimation!.addListener(listener);
+            _zoomAnimCtrl.forward().then((_) {
+              _zoomAnimation?.removeListener(listener);
+            });
           }
         },
         child: container,
-      );
+      ),
+    );
+
+    if (isFullScreen) {
+      return interactiveTimetable;
     }
 
     return SizedBox(
       height: (MediaQuery.of(context).size.height * 0.68).clamp(580.0, 750.0),
-      child: GestureDetector(
-        onScaleStart: (details) {
-          if (details.pointerCount >= 2) {
-            _startZoom(slots);
-          }
-        },
-        onDoubleTap: () {
-          _startZoom(slots);
-          _zoomAnimation = Matrix4Tween(
-            begin: Matrix4.identity(),
-            end: Matrix4.diagonal3Values(1.5, 1.5, 1.0),
-          ).animate(CurvedAnimation(
-            parent: _zoomAnimCtrl,
-            curve: Curves.easeOutCubic,
-          ));
-          _zoomAnimCtrl.reset();
-          void listener() {
-            if (_zoomAnimation != null) {
-              _zoomController.value = _zoomAnimation!.value;
-            }
-          }
-          _zoomAnimation!.addListener(listener);
-          _zoomAnimCtrl.forward().then((_) {
-            _zoomAnimation?.removeListener(listener);
-          });
-        },
-        child: container,
-      ),
+      child: interactiveTimetable,
     );
   }
 
