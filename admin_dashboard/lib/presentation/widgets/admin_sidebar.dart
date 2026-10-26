@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../screens/settings/password_reset_requests_screen.dart';
+import '../providers/auth_provider.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // ░░░  AURORA GLASS — Sidebar Navigation  ░░░
@@ -23,6 +24,7 @@ class AdminSidebar extends ConsumerWidget {
       loading: () => 0,
       error: (_, __) => 0,
     );
+    final isSuperAdmin = ref.watch(authProvider).user?.role == 'super_admin';
 
     return Container(
       width: 272,
@@ -290,6 +292,16 @@ class AdminSidebar extends ConsumerWidget {
                         route: '/settings',
                         currentRoute: currentRoute,
                       ),
+                      if (isSuperAdmin) ...[
+                        const SizedBox(height: 16),
+                        _SectionTitle(title: 'PLATEFORME SAAS'),
+                        _NavItem(
+                          icon: Icons.admin_panel_settings_outlined,
+                          label: 'Console Fondateur',
+                          route: '/platform-console',
+                          currentRoute: currentRoute,
+                        ),
+                      ],
                       const SizedBox(height: 20),
                     ],
                   ),

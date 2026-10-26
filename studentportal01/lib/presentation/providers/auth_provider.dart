@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/models/user_model.dart';
 import '../../data/models/enrollment_model.dart';
+import '../../data/models/school_model.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier();
@@ -14,6 +15,7 @@ class AuthState {
   final bool isLoading;
   final bool isAuthenticated;
   final UserModel? user;
+  final SchoolModel? school;
   final EnrollmentModel? enrollment;
   final String? errorMessage;
   final bool accessDenied; // Non-student tried to login
@@ -22,6 +24,7 @@ class AuthState {
     this.isLoading = false,
     this.isAuthenticated = false,
     this.user,
+    this.school,
     this.enrollment,
     this.errorMessage,
     this.accessDenied = false,
@@ -31,6 +34,7 @@ class AuthState {
     bool? isLoading,
     bool? isAuthenticated,
     UserModel? user,
+    SchoolModel? school,
     EnrollmentModel? enrollment,
     String? errorMessage,
     bool? accessDenied,
@@ -39,6 +43,7 @@ class AuthState {
       isLoading: isLoading ?? this.isLoading,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       user: user ?? this.user,
+      school: school ?? this.school,
       enrollment: enrollment ?? this.enrollment,
       errorMessage: errorMessage,
       accessDenied: accessDenied ?? this.accessDenied,
@@ -361,15 +366,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
         debugPrint('AuthProvider: No enrollment found for user');
       }
 
+      SchoolModel? school;
+      if (user.schoolId != null) {
+        try {
+          final schoolResp = await _supabase
+              .from('schools')
+              .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, created_at')
+              .eq('id', user.schoolId!)
+              .maybeSingle();
+          if (schoolResp != null) {
+            school = SchoolModel.fromJson(schoolResp);
+            debugPrint('AuthProvider: School loaded: ${school.name}, code=${school.code}');
+          }
+        } catch (e) {
+          debugPrint('AuthProvider: Error loading school branding: $e');
+        }
+      }
+
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: true,
         user: user,
+        school: school,
         enrollment: enrollment,
         errorMessage: null,
         accessDenied: false,
       );
-      debugPrint('AuthProvider: Authentication complete, isAuthenticated=true, hasEnrollment=${enrollment != null}');
+      debugPrint('AuthProvider: Authentication complete, isAuthenticated=true, hasEnrollment=${enrollment != null}, school=${school?.name}');
     } catch (e, stack) {
       debugPrint('AuthProvider: Error loading user data: $e');
       debugPrint('AuthProvider: Stack: $stack');

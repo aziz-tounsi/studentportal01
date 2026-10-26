@@ -5,6 +5,9 @@ class SchoolModel {
   final String? address;
   final String? phone;
   final String? email;
+  final String? code;
+  final String? primaryColor;
+  final String? secondaryColor;
   final DateTime createdAt;
 
   SchoolModel({
@@ -14,6 +17,9 @@ class SchoolModel {
     this.address,
     this.phone,
     this.email,
+    this.code,
+    this.primaryColor,
+    this.secondaryColor,
     required this.createdAt,
   });
 
@@ -25,7 +31,12 @@ class SchoolModel {
       address: json['address'] as String?,
       phone: json['phone'] as String?,
       email: json['email'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      code: json['code'] as String?,
+      primaryColor: json['primary_color'] as String?,
+      secondaryColor: json['secondary_color'] as String?,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
     );
   }
 }
