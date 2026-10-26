@@ -472,7 +472,7 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                         child: Container(
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(28),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.85),
                             borderRadius: BorderRadius.circular(28),
@@ -618,7 +618,7 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    l10n.addScreenshots,
+                                    l10n.bugScreenshotLabel,
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w700,

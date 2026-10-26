@@ -25,6 +25,7 @@ import '../../presentation/screens/bug_report/report_bug_screen.dart';
 import '../../presentation/screens/stats/stats_screen.dart';
 import '../../presentation/screens/ai_chat/ai_chat_screen.dart';
 import '../../presentation/widgets/bubble_nav_bar.dart';
+import '../../presentation/widgets/home_side_drawer.dart';
 import '../../presentation/widgets/ios_edge_swipe_back.dart';
 import '../../presentation/providers/nav_bar_provider.dart';
 
@@ -92,16 +93,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final fromAIChat = ref.watch(navigatedFromAIChatProvider);
               final isHome = state.matchedLocation == '/';
               final isAIChat = state.matchedLocation == '/ai-chat';
+              final isCardExpanded = ref.watch(studentCardExpandedProvider);
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
               final isReportBug = state.matchedLocation == '/report-bug';
               final isAbsenceDetail =
                   state.matchedLocation.startsWith('/absences/');
-              final hideNavBar = ref.watch(navBarHiddenProvider) ||
-                  isWriteSuggestion ||
+              final hideNavBar = isWriteSuggestion ||
                   isReportBug ||
                   isAbsenceDetail ||
-                  isAIChat;
+                  isAIChat ||
+                  isCardExpanded;
 
               const homeGradient = LinearGradient(
                 begin: Alignment.topLeft,
@@ -167,7 +169,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                             }
                   : isAIChat
                       ? () {
-                          ref.read(navBarHiddenProvider.notifier).state = false;
                           context.go('/');
                         }
                       : fromAIChat
@@ -178,7 +179,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           : isSideNavPage
                               ? () {
                                   ref.read(sideDrawerOpenProvider.notifier).state = true;
-                                  ref.read(navBarHiddenProvider.notifier).state = true;
                                   context.go('/');
                                 }
                               : () {
@@ -191,53 +191,51 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                                   }
                                 };
 
-              if (isAIChat) {
-                return IosEdgeSwipeBack(
-                  key: const ValueKey('/ai-chat'),
-                  backgroundPage: const HomeScreen(),
-                  backgroundGradient: homeGradient,
-                  onReturn: onReturnCallback,
-                  onInterceptSwipe: () {
-                    final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 50;
-                    if (isKeyboardOpen) {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                      return true;
-                    }
-                    return backSwipeInterceptor != null ? backSwipeInterceptor() : false;
-                  },
-                  child: child,
-                );
-              }
-
               return Scaffold(
                 extendBody: true,
-                body: isHome
-                    ? child
-                    : IosEdgeSwipeBack(
-                        key: ValueKey(state.matchedLocation),
-                        backgroundPage: backgroundWidget,
-                        backgroundGradient: backgroundGradient,
-                        onReturn: onReturnCallback,
-                        onInterceptSwipe: isSideNavPage ? null : backSwipeInterceptor,
-                        child: child,
-                      ),
-                bottomNavigationBar: hideNavBar
-                    ? null
-                    : AnimatedSlide(
-                        duration: const Duration(milliseconds: 260),
-                        curve: Curves.easeInOut,
-                        offset: Offset.zero,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 180),
-                          opacity: 1.0,
-                          child: IgnorePointer(
-                            ignoring: false,
-                            child: BubbleNavBar(
-                              currentIndex: _getNavBarIndex(state.matchedLocation),
-                            ),
+                body: Stack(
+                  children: [
+                    isHome
+                        ? child
+                        : IosEdgeSwipeBack(
+                            key: ValueKey(state.matchedLocation),
+                            backgroundPage: backgroundWidget,
+                            backgroundGradient: backgroundGradient,
+                            onReturn: onReturnCallback,
+                            onInterceptSwipe: isAIChat
+                                ? () {
+                                    final isKeyboardOpen =
+                                        MediaQuery.of(context).viewInsets.bottom > 50;
+                                    if (isKeyboardOpen) {
+                                      FocusManager.instance.primaryFocus?.unfocus();
+                                      return true;
+                                    }
+                                    return backSwipeInterceptor != null
+                                        ? backSwipeInterceptor()
+                                        : false;
+                                  }
+                                : (isSideNavPage ? null : backSwipeInterceptor),
+                            child: child,
                           ),
-                        ),
+                    if (isHome)
+                      const HomeSideDrawer(),
+                  ],
+                ),
+                bottomNavigationBar: AnimatedSlide(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 220),
+                    opacity: hideNavBar ? 0.0 : 1.0,
+                    child: IgnorePointer(
+                      ignoring: hideNavBar,
+                      child: BubbleNavBar(
+                        currentIndex: _getNavBarIndex(state.matchedLocation),
                       ),
+                    ),
+                  ),
+                ),
               );
             },
           );

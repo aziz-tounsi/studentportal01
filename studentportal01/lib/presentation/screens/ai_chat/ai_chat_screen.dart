@@ -15,6 +15,7 @@ import '../../../data/services/ai_data_provider.dart';
 import '../../../data/services/ai_service.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
+import '../../widgets/ios_edge_swipe_back.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const Color _pink = Color(0xFFFF2D78);
@@ -969,7 +970,10 @@ I have **complete** access to your academic data — grades, timetable, absences
                 // Back
                 GestureDetector(
                   onTap: () {
-                                        if (context.canPop()) {
+                    final swipeBack = IosEdgeSwipeBack.of(context);
+                    if (swipeBack != null) {
+                      swipeBack.animateBack();
+                    } else if (context.canPop()) {
                       context.pop();
                     } else {
                       context.go('/');

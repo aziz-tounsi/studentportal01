@@ -288,6 +288,7 @@ class AppLocalizations {
       'bug_type_crash': 'Crash or freeze',
       'bug_type_other': 'Other problem',
       'add_screenshots': 'Attach Screenshots (optional)',
+      'bug_screenshot_label': 'Screenshots',
       'submit_bug_report': 'Send Bug Report',
       'bug_report_success': 'Bug report submitted successfully! The developers have received it.',
 
@@ -886,6 +887,7 @@ class AppLocalizations {
       'bug_type_crash': 'Plantage ou blocage',
       'bug_type_other': 'Autre problème',
       'add_screenshots': 'Captures d\'écran (optionnel)',
+      'bug_screenshot_label': 'Capture d\'écran',
       'submit_bug_report': 'Envoyer le signalement',
       'bug_report_success': 'Signalement envoyé avec succès ! Il a été transmis aux développeurs.',
 
@@ -1475,6 +1477,7 @@ class AppLocalizations {
       'bug_type_crash': 'توقف أو تجمد التطبيق',
       'bug_type_other': 'مشكلة أخرى',
       'add_screenshots': 'لقطات الشاشة (اختياري)',
+      'bug_screenshot_label': 'لقطة الشاشة',
       'submit_bug_report': 'إرسال تقرير الخلل',
       'bug_report_success': 'تم إرسال التقرير بنجاح! تم تسليمه لفريق التطوير.',
 
@@ -2011,6 +2014,7 @@ class AppLocalizations {
   String get bugTypeCrash => translate('bug_type_crash');
   String get bugTypeOther => translate('bug_type_other');
   String get addScreenshots => translate('add_screenshots');
+  String get bugScreenshotLabel => translate('bug_screenshot_label');
   String get submitBugReport => translate('submit_bug_report');
   String get bugReportSuccess => translate('bug_report_success');
 
