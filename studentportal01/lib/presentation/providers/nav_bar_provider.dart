@@ -14,3 +14,11 @@ final backSwipeInterceptorProvider = StateProvider<bool Function()?>((ref) => nu
 /// Tracks whether the side drawer was open when navigating to side-nav pages
 /// (/profile, /settings, /contact, /about, /mon-solde) so that sliding back reveals the drawer open.
 final sideDrawerOpenProvider = StateProvider<bool>((ref) => false);
+
+/// Tracks which route the user was on before opening the AI chat page
+/// (e.g. '/', '/messages', '/notifications'), so exiting AI chat returns to that exact tab.
+final aiChatOriginRouteProvider = StateProvider<String>((ref) => '/');
+
+/// Preserves the HomeScreen scroll offset across navigations to feature cards.
+final homeScrollOffsetProvider = StateProvider<double>((ref) => 0.0);
+

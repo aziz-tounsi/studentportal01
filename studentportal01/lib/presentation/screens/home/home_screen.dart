@@ -26,7 +26,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   bool _expanded = false;
   late AnimationController _expandCtrl;
   late Animation<double> _expandAnim;
@@ -34,19 +34,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Offset _expandDragOffset = Offset.zero;
   Rect? _cardRect;
   final GlobalKey _cardKey = GlobalKey();
+  bool _isTransitionReady = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    if (widget.forceDrawerOpen) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ref.read(sideDrawerOpenProvider.notifier).state = true;
-        }
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _isTransitionReady = true;
+        });
+      }
+    });
 
-    _scrollController = ScrollController();
+    final initialOffset = ref.read(homeScrollOffsetProvider);
+    _scrollController = ScrollController(initialScrollOffset: initialOffset);
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients) {
+        ref.read(homeScrollOffsetProvider.notifier).state =
+            _scrollController.offset;
+      }
+    });
+
     _expandCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -64,6 +76,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
+    if (_scrollController.hasClients) {
+      ref.read(homeScrollOffsetProvider.notifier).state =
+          _scrollController.offset;
+    }
     _scrollController.dispose();
     _expandCtrl.dispose();
     super.dispose();
@@ -98,6 +114,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final enrollment = authState.enrollment;
@@ -105,9 +122,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final school = schoolAsync.valueOrNull;
     final l10n = AppLocalizations.of(context);
 
-    return Scaffold(
-      extendBody: true,
-      body: LayoutBuilder(
+    return RepaintBoundary(
+      child: Scaffold(
+        extendBody: true,
+        body: LayoutBuilder(
         builder: (context, constraints) {
           final screenHeight = constraints.maxHeight;
           final screenWidth = constraints.maxWidth;
@@ -252,6 +270,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   color: const Color(0xFFFF2D78),
                   backgroundColor: Colors.white,
                   child: SingleChildScrollView(
+                    key: const PageStorageKey<String>('home_scroll_view'),
                     controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
@@ -449,6 +468,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           );
         },
       ),
+    ),
     );
   }
 
@@ -500,6 +520,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     AppLocalizations l10n,
     WidgetRef ref,
   ) {
+    if (!_isTransitionReady) {
+      return List.generate(
+        6,
+        (_) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(28),
+          ),
+        ),
+      );
+    }
+
     // Get count of suggestions that have been replied or marked as seen
     final suggestionBadgeCount = ref.watch(
       repliedOrSeenSuggestionsCountProvider,

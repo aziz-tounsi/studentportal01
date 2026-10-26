@@ -10,10 +10,13 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../data/services/ai_data_provider.dart';
 import '../../../data/services/ai_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
@@ -239,8 +242,10 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   late AnimationController _suggestionsAnimCtrl;
   int _suggestionBatchIndex = 0;
 
-  // Cached snapshot
+  // Cached snapshot & greeting cache
   StudentAISnapshot? _cachedSnapshot;
+  static String? _cachedStudentFirstName;
+  static String? _cachedWelcomeGreeting;
 
   @override
   void initState() {
@@ -264,10 +269,38 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
       }
     });
 
+    SharedPreferences.getInstance().then((prefs) {
+      final savedName = prefs.getString('cached_student_first_name');
+      if (savedName != null && savedName.isNotEmpty) {
+        _cachedStudentFirstName = savedName;
+      }
+    });
+
     _loadConversations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-            _initAI();
+      _initAI();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Render initial cached greeting message immediately on mount without waiting for network
+    if (_messages.isEmpty && _currentConversationId == null) {
+      final authName = ref.read(authProvider).user?.fullName.split(' ').first;
+      final name = authName ?? _cachedStudentFirstName ?? '';
+      if (name.isNotEmpty) {
+        _cachedStudentFirstName = name;
+      }
+      final greeting = _cachedWelcomeGreeting ?? _buildWelcomeMessage(name);
+      _cachedWelcomeGreeting = greeting;
+      _messages.add(_ChatMessage(
+        id: 'welcome',
+        role: 'assistant',
+        content: greeting,
+        timestamp: DateTime.now(),
+      ));
+    }
   }
 
   void _openHistory() {
@@ -291,9 +324,36 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
       // Pre-fetch snapshot in background (will be ready when first message sent)
       final snapshot = await ref.read(studentAISnapshotProvider.future);
       _cachedSnapshot = snapshot;
+      final fullName = snapshot.studentContext?.fullName;
+      if (fullName != null && fullName.isNotEmpty) {
+        final firstName = fullName.split(' ').first;
+        if (firstName.isNotEmpty) {
+          _cachedStudentFirstName = firstName;
+          SharedPreferences.getInstance().then((prefs) {
+            prefs.setString('cached_student_first_name', firstName);
+          });
+          // Update welcome greeting if needed
+          if (_messages.isNotEmpty &&
+              _messages.first.id == 'welcome' &&
+              !_messages.first.content.contains(firstName)) {
+            final updatedGreeting = _buildWelcomeMessage(firstName);
+            _cachedWelcomeGreeting = updatedGreeting;
+            setState(() {
+              _messages[0] = _ChatMessage(
+                id: 'welcome',
+                role: 'assistant',
+                content: updatedGreeting,
+                timestamp: _messages.first.timestamp,
+              );
+            });
+          }
+        }
+      }
     } catch (_) {}
     if (!mounted) return;
-    _addWelcome();
+    if (_messages.isEmpty && _currentConversationId == null) {
+      _addWelcome();
+    }
   }
 
   // ─── Conversation Persistence ───────────────────────────────────────────────
@@ -393,8 +453,16 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
   void _addWelcome() {
     if (_messages.isNotEmpty) return;
-    final name = _cachedSnapshot?.studentContext?.fullName?.split(' ').first ?? '';
+    final authName = ref.read(authProvider).user?.fullName.split(' ').first;
+    final name = _cachedSnapshot?.studentContext?.fullName?.split(' ').first ??
+        authName ??
+        _cachedStudentFirstName ??
+        '';
+    if (name.isNotEmpty) {
+      _cachedStudentFirstName = name;
+    }
     final greeting = _buildWelcomeMessage(name);
+    _cachedWelcomeGreeting = greeting;
     setState(() {
       _messages.add(_ChatMessage(
         id: 'welcome',
@@ -753,7 +821,7 @@ I have **complete** access to your academic data — grades, timetable, absences
             enabled: _showHistory,
             imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Scaffold(
-              resizeToAvoidBottomInset: true,
+              resizeToAvoidBottomInset: false,
               body: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -834,10 +902,11 @@ I have **complete** access to your academic data — grades, timetable, absences
                       Builder(
                         builder: (context) {
                           final bottomInset = MediaQuery.of(context).padding.bottom;
-                          final isKeyboardOpen =
-                              MediaQuery.of(context).viewInsets.bottom > 50;
+                          final viewInsetsBottom =
+                              MediaQuery.of(context).viewInsets.bottom;
+                          final isKeyboardOpen = viewInsetsBottom > 50;
                           final bottomPadding = isKeyboardOpen
-                              ? 26.0
+                              ? (viewInsetsBottom + 14.0)
                               : (bottomInset > 0 ? bottomInset + 4.0 : 12.0);
 
                           return Padding(
@@ -986,7 +1055,8 @@ I have **complete** access to your academic data — grades, timetable, absences
                     } else if (context.canPop()) {
                       context.pop();
                     } else {
-                      context.go('/');
+                      final origin = ref.read(aiChatOriginRouteProvider);
+                      context.go(origin);
                     }
                   },
                   child: Container(

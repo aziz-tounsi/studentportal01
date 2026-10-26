@@ -33,6 +33,7 @@ import '../../presentation/providers/nav_bar_provider.dart';
 // Navigator keys for clean overlay/popup dismissal across tabs
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'rootNav');
 final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellNav');
+final bubbleNavBarKey = GlobalKey(debugLabel: 'bubbleNavBar');
 
 /// Dismisses any open menus, dialogs, bottom sheets or popup overlays
 void dismissAllOverlaysAndPopups() {
@@ -58,6 +59,43 @@ int _getNavBarIndex(String location) {
   if (location == '/ai-chat') return 3;
   return 0;
 }
+
+Widget _getWidgetForRoute(String route) {
+  switch (route) {
+    case '/messages':
+      return const MessagesScreen();
+    case '/notifications':
+      return const NotificationsScreen();
+    case '/stats':
+      return const StatsScreen();
+    case '/courses':
+      return const CoursesScreen();
+    case '/suggestions':
+      return const SuggestionsScreen();
+    case '/absences':
+      return const AbsencesScreen();
+    case '/resultats':
+      return const ResultatsScreenV2();
+    case '/emploi':
+      return const EmploiScreen();
+    case '/mon-solde':
+      return const MonSoldeScreen();
+    case '/documents':
+      return const DocumentsScreen();
+    case '/profile':
+      return const ProfileScreen();
+    case '/settings':
+      return const SettingsScreen();
+    case '/contact':
+      return const ContactScreen();
+    case '/about':
+      return const AboutScreen();
+    case '/':
+    default:
+      return const HomeScreen();
+  }
+}
+
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -94,6 +132,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final fromAIChat = ref.watch(navigatedFromAIChatProvider);
               final isHome = state.matchedLocation == '/';
               final isAIChat = state.matchedLocation == '/ai-chat';
+              final originRoute = ref.watch(aiChatOriginRouteProvider);
               final isCardExpanded = ref.watch(studentCardExpandedProvider);
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
@@ -105,6 +144,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 '/contact',
                 '/about',
                 '/profile',
+                '/mon-solde',
               ].contains(state.matchedLocation);
               final hideNavBar = isWriteSuggestion ||
                   isReportBug ||
@@ -112,6 +152,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   isAIChat ||
                   isCardExpanded ||
                   isSideNavPage;
+
+              final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
+
+              // Update origin route for AI chat when navigating other screens
+              if (!isAIChat && !state.matchedLocation.startsWith('/ai-chat')) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (ref.read(aiChatOriginRouteProvider) != state.matchedLocation) {
+                    ref.read(aiChatOriginRouteProvider.notifier).state = state.matchedLocation;
+                  }
+                });
+              }
 
               const homeGradient = LinearGradient(
                 begin: Alignment.topLeft,
@@ -149,9 +200,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           ? (fromAIChat ? const AIChatScreen() : const AbsencesScreen())
                           : fromAIChat
                               ? const AIChatScreen()
-                              : isSideNavPage
-                                  ? const HomeScreen(forceDrawerOpen: true)
-                                  : const HomeScreen();
+                              : isAIChat
+                                  ? _getWidgetForRoute(originRoute)
+                                  : (isSideNavPage || isDrawerOpen)
+                                      ? const Stack(
+                                          children: [
+                                            HomeScreen(),
+                                            HomeSideDrawer(),
+                                          ],
+                                        )
+                                      : const HomeScreen();
 
               final backgroundGradient = fromAIChat ? aiChatGradient : homeGradient;
 
@@ -170,77 +228,83 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                             }
                   : isAIChat
                       ? () {
+                          final origin = ref.read(aiChatOriginRouteProvider);
+                          context.go(origin);
+                        }
+                  : fromAIChat
+                      ? () {
+                          ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                          context.go('/ai-chat');
+                        }
+                  : (isSideNavPage || isDrawerOpen)
+                      ? () {
+                          ref.read(sideDrawerOpenProvider.notifier).state = true;
                           context.go('/');
                         }
-                      : fromAIChat
-                          ? () {
-                              ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                              context.go('/ai-chat');
-                            }
-                          : isSideNavPage
-                              ? () {
-                                  ref.read(sideDrawerOpenProvider.notifier).state = true;
-                                  context.go('/');
-                                }
-                              : () {
-                                  if (Navigator.of(context).canPop()) {
-                                    Navigator.of(context).pop();
-                                  } else if (context.canPop()) {
-                                    context.pop();
-                                  } else {
-                                    context.go('/');
-                                  }
-                                };
-
-              final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
+                  : () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/');
+                      }
+                    };
 
               return Scaffold(
                 extendBody: true,
                 resizeToAvoidBottomInset: false,
                 body: Stack(
                   children: [
-                    isHome
-                        ? child
-                        : IosEdgeSwipeBack(
-                            key: ValueKey(state.matchedLocation),
-                            backgroundPage: backgroundWidget,
-                            backgroundGradient: backgroundGradient,
-                            onReturn: onReturnCallback,
-                            onInterceptSwipe: isAIChat
-                                ? () {
-                                    final isKeyboardOpen =
-                                        MediaQuery.of(context).viewInsets.bottom > 50;
-                                    if (isKeyboardOpen) {
-                                      FocusManager.instance.primaryFocus?.unfocus();
-                                      return true;
+                    RepaintBoundary(
+                      key: const ValueKey('shell_body_layer'),
+                      child: isHome
+                          ? child
+                          : IosEdgeSwipeBack(
+                              key: ValueKey(state.matchedLocation),
+                              backgroundPage: backgroundWidget,
+                              backgroundGradient: backgroundGradient,
+                              onReturn: onReturnCallback,
+                              onInterceptSwipe: isAIChat
+                                  ? () {
+                                      final isKeyboardOpen =
+                                          MediaQuery.of(context).viewInsets.bottom > 50;
+                                      if (isKeyboardOpen) {
+                                        FocusManager.instance.primaryFocus?.unfocus();
+                                        return true;
+                                      }
+                                      return backSwipeInterceptor != null
+                                          ? backSwipeInterceptor()
+                                          : false;
                                     }
-                                    return backSwipeInterceptor != null
-                                        ? backSwipeInterceptor()
-                                        : false;
-                                  }
-                                : (isSideNavPage ? null : backSwipeInterceptor),
-                            child: child,
-                          ),
+                                  : (isSideNavPage ? null : backSwipeInterceptor),
+                              child: child,
+                            ),
+                    ),
                     Positioned(
+                      key: const ValueKey('shell_nav_bar_positioned'),
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: AnimatedSlide(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
-                        offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 220),
-                          opacity: hideNavBar ? 0.0 : 1.0,
-                          child: IgnorePointer(
-                            ignoring: hideNavBar,
-                            child: ImageFiltered(
-                              imageFilter: ImageFilter.blur(
-                                sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
-                                sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
-                              ),
-                              child: BubbleNavBar(
-                                currentIndex: _getNavBarIndex(state.matchedLocation),
+                      child: RepaintBoundary(
+                        child: AnimatedSlide(
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                          offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 220),
+                            opacity: hideNavBar ? 0.0 : 1.0,
+                            child: IgnorePointer(
+                              ignoring: hideNavBar,
+                              child: ImageFiltered(
+                                imageFilter: ImageFilter.blur(
+                                  sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                  sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                ),
+                                child: BubbleNavBar(
+                                  key: bubbleNavBarKey,
+                                  currentIndex: _getNavBarIndex(state.matchedLocation),
+                                ),
                               ),
                             ),
                           ),

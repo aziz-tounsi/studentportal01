@@ -1,7 +1,7 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../widgets/absences_skeleton.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -165,8 +165,10 @@ class AbsenceDetailScreen extends ConsumerWidget {
           ),
         ),
         child: detailAsync.when(
-          data: (data) => data != null ? _DetailBody(data: data) : const _ErrorBody(),
-          loading: () => const AbsenceDetailSkeleton(),
+          data: (data) => data != null
+              ? _DetailBody(data: data, isLoading: false)
+              : const _ErrorBody(),
+          loading: () => const _DetailBody(data: null, isLoading: true),
           error: (_, _) => const _ErrorBody(),
         ),
       ),
@@ -192,8 +194,9 @@ class _ErrorBody extends StatelessWidget {
 }
 
 class _DetailBody extends ConsumerStatefulWidget {
-  final AbsenceDetailData data;
-  const _DetailBody({required this.data});
+  final AbsenceDetailData? data;
+  final bool isLoading;
+  const _DetailBody({this.data, this.isLoading = false});
   @override
   ConsumerState<_DetailBody> createState() => _DetailBodyState();
 }
@@ -206,19 +209,29 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   @override
   Widget build(BuildContext context) {
     final d = widget.data;
+    final isLoading = widget.isLoading || d == null;
     final absencesByDate = <DateTime, List<AbsenceRecordModel>>{};
-    for (final r in d.records) {
-      final day = DateTime(r.date.year, r.date.month, r.date.day);
-      absencesByDate.putIfAbsent(day, () => []).add(r);
+    if (d != null) {
+      for (final r in d.records) {
+        final day = DateTime(r.date.year, r.date.month, r.date.day);
+        absencesByDate.putIfAbsent(day, () => []).add(r);
+      }
     }
-    final totalAbsent = d.records.fold<double>(0, (s, r) => s + r.hoursAbsent);
-    final ciHours = d.records.where((r) => r.sessionType == 'CI').fold<double>(0, (s, r) => s + r.hoursAbsent);
-    final overallPct = d.totalHours > 0 ? totalAbsent / d.totalHours : 0.0;
+    final totalAbsent = d != null
+        ? d.records.fold<double>(0, (s, r) => s + r.hoursAbsent)
+        : 0.0;
+    final ciHours = d != null
+        ? d.records
+            .where((r) => r.sessionType == 'CI')
+            .fold<double>(0, (s, r) => s + r.hoursAbsent)
+        : 0.0;
+    final overallPct =
+        (d != null && d.totalHours > 0) ? totalAbsent / d.totalHours : 0.0;
 
     return SafeArea(
       child: Column(
         children: [
-          _buildHeader(context, d, overallPct),
+          _buildHeader(context, d, overallPct, isLoading),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
@@ -228,19 +241,19 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      _buildStatsPanel(d),
+                      _buildStatsPanel(d, isLoading),
                       Positioned(
                         left: 0,
                         right: 0,
                         bottom: -22,
-                        child: _buildChipsRow(totalAbsent, ciHours),
+                        child: _buildChipsRow(totalAbsent, ciHours, isLoading),
                       ),
                     ],
                   ),
                   const SizedBox(height: 100),
                   _buildTogglePills(),
                   const SizedBox(height: 20),
-                  _buildTimelinePanel(d, absencesByDate),
+                  _buildTimelinePanel(d, absencesByDate, isLoading),
                 ],
               ),
             ),
@@ -250,7 +263,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     );
   }
 
-  String _getShortcutOrName(AbsenceDetailData d) {
+  String _getShortcutOrName(AbsenceDetailData? d) {
+    if (d == null) return '';
     final name = d.subjectName.trim();
     if (name.length > 15) {
       if (d.subjectCode != null && d.subjectCode!.trim().isNotEmpty) {
@@ -287,7 +301,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return name;
   }
 
-  Widget _buildHeader(BuildContext context, AbsenceDetailData d, double overallPct) {
+  Widget _buildHeader(BuildContext context, AbsenceDetailData? d, double overallPct, bool isLoading) {
     final isAr = Localizations.localeOf(context).languageCode == 'ar' ||
         Directionality.of(context) == TextDirection.rtl;
     final l10n = AppLocalizations.of(context);
@@ -343,20 +357,34 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  _getShortcutOrName(d),
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    fontFamily: isAr ? GoogleFonts.cairo().fontFamily : null,
-                    color: _onSurface,
+                if (isLoading || d == null)
+                  Shimmer.fromColors(
+                    baseColor: const Color(0xFFE2E8F0),
+                    highlightColor: Colors.white,
+                    child: Container(
+                      width: 140,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    _getShortcutOrName(d),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                      fontFamily: isAr ? GoogleFonts.cairo().fontFamily : null,
+                      color: _onSurface,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 2),
                 Text(
                   l10n.academicSubject,
@@ -371,7 +399,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             ),
           ),
           const SizedBox(width: 16),
-          _buildProgressRing(overallPct),
+          if (isLoading || d == null)
+            Shimmer.fromColors(
+              baseColor: const Color(0xFFE2E8F0),
+              highlightColor: Colors.white,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          else
+            _buildProgressRing(overallPct),
         ],
       ),
     );
@@ -404,13 +446,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             ),
           ),
           Text('${(clamped * 100).toStringAsFixed(0)}%',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _primaryPink)),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _primaryPink)),
         ],
       ),
     );
   }
 
-  Widget _buildStatsPanel(AbsenceDetailData d) {
+  Widget _buildStatsPanel(AbsenceDetailData? d, bool isLoading) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
@@ -431,11 +473,35 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ),
           child: Row(
             children: [
-              _statItem(icon: Icons.balance_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: d.coefficient.toStringAsFixed(1), unit: AppLocalizations.of(context).coeffLabel, isPrimary: false),
+              _statItem(
+                icon: Icons.balance_rounded,
+                iconBg: _surfaceColor,
+                iconColor: _secondaryText,
+                value: (isLoading || d == null) ? null : d.coefficient.toStringAsFixed(1),
+                unit: AppLocalizations.of(context).coeffLabel,
+                isPrimary: false,
+              ),
               Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withValues(alpha: 0.5)),
-              _statItem(icon: Icons.schedule_rounded, iconBg: _primaryPink.withValues(alpha: 0.1), iconColor: _primaryPink, value: '${d.totalHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}', unit: AppLocalizations.of(context).totalLabel, isPrimary: true, iconSize: 26),
+              _statItem(
+                icon: Icons.schedule_rounded,
+                iconBg: _primaryPink.withValues(alpha: 0.1),
+                iconColor: _primaryPink,
+                value: (isLoading || d == null)
+                    ? null
+                    : '${d.totalHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}',
+                unit: AppLocalizations.of(context).totalLabel,
+                isPrimary: true,
+                iconSize: 26,
+              ),
               Container(width: 1, height: 48, color: const Color(0xFFE1E5F2).withValues(alpha: 0.5)),
-              _statItem(icon: Icons.view_week_rounded, iconBg: _surfaceColor, iconColor: _secondaryText, value: '${d.weeks}', unit: AppLocalizations.of(context).semLabel, isPrimary: false),
+              _statItem(
+                icon: Icons.view_week_rounded,
+                iconBg: _surfaceColor,
+                iconColor: _secondaryText,
+                value: (isLoading || d == null) ? null : '${d.weeks}',
+                unit: AppLocalizations.of(context).semLabel,
+                isPrimary: false,
+              ),
             ],
           ),
         ),
@@ -443,7 +509,15 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     );
   }
 
-  Widget _statItem({required IconData icon, required Color iconBg, required Color iconColor, required String value, required String unit, required bool isPrimary, double iconSize = 20}) {
+  Widget _statItem({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String? value,
+    required String unit,
+    required bool isPrimary,
+    double iconSize = 20,
+  }) {
     return Expanded(
       child: Column(
         children: [
@@ -453,7 +527,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             child: Icon(icon, size: iconSize, color: iconColor),
           ),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: isPrimary ? 24 : 20, fontWeight: FontWeight.w800, color: _onSurface, letterSpacing: -0.5)),
+          if (value == null)
+            Shimmer.fromColors(
+              baseColor: const Color(0xFFE2E8F0),
+              highlightColor: Colors.white,
+              child: Container(
+                width: 42,
+                height: isPrimary ? 24 : 20,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            )
+          else
+            Text(value, style: TextStyle(fontSize: isPrimary ? 24 : 20, fontWeight: FontWeight.w800, color: _onSurface, letterSpacing: -0.5)),
           const SizedBox(height: 2),
           Text(unit, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: isPrimary ? _primaryPink : _secondaryText)),
         ],
@@ -461,21 +549,33 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     );
   }
 
-  Widget _buildChipsRow(double totalAbsent, double ciHours) {
+  Widget _buildChipsRow(double totalAbsent, double ciHours, bool isLoading) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _glassChip(color: _redAbsence, label: AppLocalizations.of(context).absentLabel, value: '${totalAbsent.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}'),
+          _glassChip(
+            color: _redAbsence,
+            label: AppLocalizations.of(context).absentLabel,
+            value: isLoading
+                ? null
+                : '${totalAbsent.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}',
+          ),
           const SizedBox(width: 12),
-          _glassChip(color: _blueCI, label: AppLocalizations.of(context).ciLabel, value: '${ciHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}'),
+          _glassChip(
+            color: _blueCI,
+            label: AppLocalizations.of(context).ciLabel,
+            value: isLoading
+                ? null
+                : '${ciHours.toStringAsFixed(0)} ${AppLocalizations.of(context).translate('hour_unit')}',
+          ),
         ],
       ),
     );
   }
 
-  Widget _glassChip({required Color color, required String label, required String value}) {
+  Widget _glassChip({required Color color, required String label, required String? value}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -494,7 +594,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]),
           ),
           const SizedBox(width: 8),
-          Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color)),
+          if (value == null)
+            Shimmer.fromColors(
+              baseColor: const Color(0xFFE2E8F0),
+              highlightColor: Colors.white,
+              child: Container(
+                width: 38,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            )
+          else
+            Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color)),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: _secondaryText)),
         ],
@@ -611,10 +725,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     );
   }
 
-  Widget _buildTimelinePanel(AbsenceDetailData d, Map<DateTime, List<AbsenceRecordModel>> absencesByDate) {
+  Widget _buildTimelinePanel(AbsenceDetailData? d, Map<DateTime, List<AbsenceRecordModel>> absencesByDate, bool isLoading) {
     final localeCode = Localizations.localeOf(context).languageCode;
     final rawMonth = DateFormat('MMMM yyyy', localeCode).format(_currentMonth);
     final monthName = ArabicTypography.toLatinDigits(rawMonth);
+
+    if (isLoading || d == null) {
+      return _glassPanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildMonthHeader(
+              monthName[0].toUpperCase() + monthName.substring(1),
+              onPrev: () => setState(() => _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1)),
+              onNext: () => setState(() => _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1)),
+            ),
+            const SizedBox(height: 16),
+            _buildTimelineSkeletonItem(),
+            _buildTimelineSkeletonItem(),
+          ],
+        ),
+      );
+    }
 
     if (_showWeekView) {
       final startOfWeek = _currentMonth.add(Duration(days: _currentWeekIndex * 7));
@@ -677,6 +809,79 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             _buildEmptyState()
           else
             ...sortedMonth.map((e) => _buildTimelineItem(e.key, e.value)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineSkeletonItem() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Shimmer.fromColors(
+            baseColor: const Color(0xFFE2E8F0),
+            highlightColor: Colors.white,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Shimmer.fromColors(
+                  baseColor: const Color(0xFFE2E8F0),
+                  highlightColor: Colors.white,
+                  child: Container(
+                    width: 140,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Shimmer.fromColors(
+                  baseColor: const Color(0xFFE2E8F0),
+                  highlightColor: Colors.white,
+                  child: Container(
+                    width: 70,
+                    height: 11,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Shimmer.fromColors(
+            baseColor: const Color(0xFFE2E8F0),
+            highlightColor: Colors.white,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
         ],
       ),
     );

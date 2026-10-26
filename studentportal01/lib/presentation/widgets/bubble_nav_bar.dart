@@ -129,6 +129,9 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     }
 
     // Navigating to a different route
+    if (targetRoute == '/ai-chat' && currentRoute != '/ai-chat') {
+      ref.read(aiChatOriginRouteProvider.notifier).state = currentRoute;
+    }
     ref.read(navigatedFromAIChatProvider.notifier).state = false;
     setState(() {
       _fromIndex = _selectedIndex;
