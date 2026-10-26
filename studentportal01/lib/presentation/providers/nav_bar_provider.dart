@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final navBarHiddenProvider = StateProvider<bool>((ref) => false);
-final aiChatExitStartedProvider = StateProvider<bool>((ref) => false);
 final studentCardExpandedProvider = StateProvider<bool>((ref) => false);
 
 /// Tracks when navigation originated from within the AI chat so that returning

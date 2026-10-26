@@ -43,6 +43,9 @@ AS $$
   SELECT school_id FROM public.users WHERE id = auth.uid() LIMIT 1;
 $$;
 
+-- Drop previous get_user_role() if return type was enum user_role to prevent 42P13 error
+DROP FUNCTION IF EXISTS public.get_user_role() CASCADE;
+
 -- Returns current user's role safely
 CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS TEXT
@@ -52,6 +55,19 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT role::TEXT FROM public.users WHERE id = auth.uid() LIMIT 1;
+$$;
+
+-- Maintain backward-compatibility for legacy is_admin callers
+DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(public.get_user_role() IN ('super_admin', 'owner', 'admin'), false);
 $$;
 
 -- Checks if the authenticated user is the SaaS platform super admin
@@ -78,6 +94,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_user_school_id() TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.get_user_role() TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.is_super_admin() TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.is_school_admin() TO authenticated, anon;
 

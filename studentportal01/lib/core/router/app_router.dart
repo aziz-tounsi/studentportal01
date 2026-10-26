@@ -38,8 +38,14 @@ final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellNav');
 void dismissAllOverlaysAndPopups() {
   try {
     final rootNav = rootNavigatorKey.currentState;
-    if (rootNav != null && rootNav.canPop()) {
-      rootNav.maybePop();
+    while (rootNav != null && rootNav.canPop()) {
+      rootNav.pop();
+    }
+  } catch (_) {}
+  try {
+    final shellNav = shellNavigatorKey.currentState;
+    while (shellNav != null && shellNav.canPop()) {
+      shellNav.pop();
     }
   } catch (_) {}
 }
@@ -88,7 +94,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final fromAIChat = ref.watch(navigatedFromAIChatProvider);
               final isHome = state.matchedLocation == '/';
               final isAIChat = state.matchedLocation == '/ai-chat';
-              final aiChatExitStarted = ref.watch(aiChatExitStartedProvider);
               final isCardExpanded = ref.watch(studentCardExpandedProvider);
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
@@ -101,10 +106,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 '/about',
                 '/profile',
               ].contains(state.matchedLocation);
-              final hideNavBar = (isAIChat ? !aiChatExitStarted : false) ||
-                  isWriteSuggestion ||
+              final hideNavBar = isWriteSuggestion ||
                   isReportBug ||
                   isAbsenceDetail ||
+                  isAIChat ||
                   isCardExpanded ||
                   isSideNavPage;
 
@@ -165,7 +170,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                             }
                   : isAIChat
                       ? () {
-                          ref.read(aiChatExitStartedProvider.notifier).state = false;
                           context.go('/');
                         }
                       : fromAIChat
@@ -202,16 +206,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                             backgroundPage: backgroundWidget,
                             backgroundGradient: backgroundGradient,
                             onReturn: onReturnCallback,
-                            onSwipeExitStarted: () {
-                              if (isAIChat) {
-                                ref.read(aiChatExitStartedProvider.notifier).state = true;
-                              }
-                            },
-                            onSwipeCancel: () {
-                              if (isAIChat) {
-                                ref.read(aiChatExitStartedProvider.notifier).state = false;
-                              }
-                            },
                             onInterceptSwipe: isAIChat
                                 ? () {
                                     final isKeyboardOpen =
@@ -236,16 +230,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         curve: Curves.easeOutCubic,
                         offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
                         child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 280),
-                          curve: Curves.easeOutCubic,
+                          duration: const Duration(milliseconds: 220),
                           opacity: hideNavBar ? 0.0 : 1.0,
                           child: IgnorePointer(
                             ignoring: hideNavBar,
                             child: ImageFiltered(
-                              enabled: isHome && isDrawerOpen,
                               imageFilter: ImageFilter.blur(
-                                sigmaX: 14.0,
-                                sigmaY: 14.0,
+                                sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
                               ),
                               child: BubbleNavBar(
                                 currentIndex: _getNavBarIndex(state.matchedLocation),
@@ -381,27 +373,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/ai-chat',
             name: 'ai-chat',
-            pageBuilder: (context, state) {
-              return CustomTransitionPage(
-                key: state.pageKey,
-                child: const AIChatScreen(),
-                transitionDuration: const Duration(milliseconds: 300),
-                reverseTransitionDuration: const Duration(milliseconds: 250),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  final isRtl = Directionality.of(context) == TextDirection.rtl;
-                  final begin = Offset(isRtl ? -1.0 : 1.0, 0.0);
-                  const end = Offset.zero;
-                  final curve = CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  );
-                  return SlideTransition(
-                    position: Tween<Offset>(begin: begin, end: end).animate(curve),
-                    child: child,
-                  );
-                },
-              );
-            },
+            pageBuilder: (context, state) =>
+                NoTransitionPage(child: const AIChatScreen()),
           ),
         ],
       ),

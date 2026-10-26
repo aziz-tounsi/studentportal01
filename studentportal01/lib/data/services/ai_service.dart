@@ -9,11 +9,13 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'ai_data_provider.dart';
 
-/// Default OpenRouter API key
-const String kDefaultOpenRouterApiKey = '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';
+/// Default OpenRouter API key - Kept empty in client builds for security.
+/// All production AI requests are securely proxied via the 'nova-ai-proxy' Edge Function.
+const String kDefaultOpenRouterApiKey = '';
 
 /// Core operational directive for NOVA - Output Design System & Accurate Data Delivery
 const String _coreAssistantDirectives = '''
@@ -310,12 +312,54 @@ Future<String> callOpenRouter({
   required String userQuery,
   required String languageCode,
 }) async {
+  // 1. Primary Secure Path: Invoke Supabase Edge Function 'nova-ai-proxy'
+  try {
+    final client = Supabase.instance.client;
+    final response = await client.functions.invoke(
+      'nova-ai-proxy',
+      body: {
+        'userQuery': userQuery,
+        'history': history,
+        'model': model,
+        'snapshot': buildAISystemContext(snapshot),
+        'languageCode': languageCode,
+      },
+    );
+
+    if (response.status == 200 && response.data != null) {
+      final data = response.data;
+      if (data is Map) {
+        final reply = data['reply'] as String?;
+        if (reply != null && reply.trim().isNotEmpty) {
+          return reply.trim();
+        }
+      }
+    } else if (response.data is Map && response.data['error'] != null) {
+      throw Exception(response.data['error'].toString());
+    }
+  } catch (e) {
+    debugPrint('nova-ai-proxy exception: $e');
+    final errStr = e.toString().toLowerCase();
+    if (errStr.contains('limite') || errStr.contains('quota') || errStr.contains('maintenance')) {
+      rethrow;
+    }
+
+    final effectiveApiKey = apiKey.isNotEmpty
+        ? apiKey
+        : const String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: kDefaultOpenRouterApiKey);
+
+    if (effectiveApiKey.trim().isEmpty) {
+      rethrow;
+    }
+  }
+
+  // 2. Local Fallback (only active if an explicit --dart-define=OPENROUTER_API_KEY is supplied)
   final effectiveApiKey = apiKey.isNotEmpty
       ? apiKey
       : const String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: kDefaultOpenRouterApiKey);
 
   if (effectiveApiKey.trim().isEmpty) {
-    throw Exception('Clé API OpenRouter manquante.');
+    throw Exception('Service IA indisponible. Veuillez vérifier votre connexion ou contacter votre école.');
   }
 
   final modelsToTry = model != null && model.isNotEmpty
