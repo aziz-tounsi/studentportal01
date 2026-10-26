@@ -19,7 +19,7 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -45,7 +45,7 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
       body: Column(
         children: [
           _buildTopBar(authState.user),
-          _buildTabBar(),
+          _buildTabBar(platformState),
           Expanded(
             child: platformState.isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -73,6 +73,7 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
                           _buildBillingTab(platformState),
                           _buildAiTelemetryTab(platformState),
                           _buildAuditTab(platformState),
+                          _buildBugReportsTab(platformState),
                         ],
                       ),
           ),
@@ -145,7 +146,8 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
     );
   }
 
-  Widget _buildTabBar() {
+  Widget _buildTabBar(PlatformState state) {
+    final bugCount = state.bugReports.length;
     return Container(
       color: const Color(0xFF0B1120),
       child: TabBar(
@@ -155,12 +157,16 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
         labelColor: ConsoleColors.primaryLight,
         unselectedLabelColor: Colors.white60,
         indicatorColor: ConsoleColors.primary,
-        tabs: const [
-          Tab(icon: Icon(Icons.insights, size: 18), text: 'Vue d\'ensemble & MRR'),
-          Tab(icon: Icon(Icons.domain, size: 18), text: 'Établissements Clients'),
-          Tab(icon: Icon(Icons.receipt_long, size: 18), text: 'Factures & Règlements'),
-          Tab(icon: Icon(Icons.auto_awesome, size: 18), text: 'Télémétrie IA & Coûts'),
-          Tab(icon: Icon(Icons.history, size: 18), text: 'Journal d\'Audit'),
+        tabs: [
+          const Tab(icon: Icon(Icons.insights, size: 18), text: 'Vue d\'ensemble & MRR'),
+          const Tab(icon: Icon(Icons.domain, size: 18), text: 'Établissements Clients'),
+          const Tab(icon: Icon(Icons.receipt_long, size: 18), text: 'Factures & Règlements'),
+          const Tab(icon: Icon(Icons.auto_awesome, size: 18), text: 'Télémétrie IA & Coûts'),
+          const Tab(icon: Icon(Icons.history, size: 18), text: 'Journal d\'Audit'),
+          Tab(
+            icon: const Icon(Icons.bug_report_outlined, size: 18),
+            text: bugCount > 0 ? 'Rapports de Bugs ($bugCount)' : 'Rapports de Bugs',
+          ),
         ],
       ),
     );
@@ -823,6 +829,310 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
         border: Border.all(color: fg.withValues(alpha: 0.3)),
       ),
       child: Text(status.toUpperCase(), style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  // 6. Bug Reports Tab (Super Admin Exclusive)
+  Widget _buildBugReportsTab(PlatformState state) {
+    final reports = state.bugReports;
+    final total = reports.length;
+    final openCount = reports.where((b) => b['status'] == 'open' || b['status'] == 'sent').length;
+    final inProgressCount = reports.where((b) => b['status'] == 'in_progress').length;
+    final resolvedCount = reports.where((b) => b['status'] == 'resolved' || b['status'] == 'closed').length;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricCard(
+                  'Total Signalements',
+                  '$total',
+                  'Tous les rapports reçus',
+                  Icons.bug_report,
+                  ConsoleColors.primaryLight,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildMetricCard(
+                  'Bugs Ouverts',
+                  '$openCount',
+                  'En attente d\'analyse',
+                  Icons.error_outline,
+                  ConsoleColors.error,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildMetricCard(
+                  'En Cours de Traitement',
+                  '$inProgressCount',
+                  'Pris en charge',
+                  Icons.hourglass_top,
+                  ConsoleColors.warning,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildMetricCard(
+                  'Résolus / Fermés',
+                  '$resolvedCount',
+                  'Corrigés avec succès',
+                  Icons.check_circle_outline,
+                  ConsoleColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: ConsoleColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: ConsoleColors.cardBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Rapports de Bugs des Utilisateurs',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: Colors.white70),
+                      onPressed: () => ref.read(platformProvider.notifier).loadAll(),
+                      tooltip: 'Actualiser',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (reports.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(40),
+                    alignment: Alignment.center,
+                    child: Column(
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 54, color: ConsoleColors.success.withValues(alpha: 0.7)),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Aucun rapport de bug soumis pour l\'instant',
+                          style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Les bugs signalés par les étudiants ou écoles apparaîtront exclusivement ici.',
+                          style: TextStyle(color: ConsoleColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: reports.length,
+                    separatorBuilder: (_, index) => const Divider(color: ConsoleColors.cardBorder, height: 24),
+                    itemBuilder: (context, idx) {
+                      final bug = reports[idx];
+                      final id = bug['id']?.toString() ?? '';
+                      final title = bug['title']?.toString() ?? 'Sans titre';
+                      final desc = bug['description']?.toString() ?? '';
+                      final status = bug['status']?.toString().toLowerCase() ?? 'open';
+                      final category = bug['category']?.toString() ?? 'Général';
+                      final studentName = bug['student_name']?.toString() ?? 'Étudiant anonyme';
+                      final studentCode = bug['student_code']?.toString();
+                      final schoolName = bug['schools']?['name']?.toString() ?? bug['school_id']?.toString() ?? 'Non spécifié';
+                      final createdAt = bug['created_at']?.toString() ?? '';
+                      final isFallback = bug['_source'] == 'suggestions';
+                      final attachments = (bug['attachment_urls'] as List?)?.map((e) => e.toString()).toList() ?? [];
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF111827),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: ConsoleColors.cardBorder.withValues(alpha: 0.6)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: ConsoleColors.primary.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: ConsoleColors.primary.withValues(alpha: 0.4)),
+                                  ),
+                                  child: Text(
+                                    category.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: ConsoleColors.primaryLight,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Signalé par: $studentName ${studentCode != null ? "($studentCode)" : ""} • Établissement: $schoolName • Date: ${createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt}',
+                                        style: const TextStyle(
+                                          color: ConsoleColors.textSecondary,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                PopupMenuButton<String>(
+                                  initialValue: status,
+                                  onSelected: (val) {
+                                    ref.read(platformProvider.notifier).updateBugReportStatus(
+                                      id,
+                                      val,
+                                      isFallback: isFallback,
+                                    );
+                                  },
+                                  child: _buildBugStatusBadge(status),
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(value: 'open', child: Text('Marquer Ouvert')),
+                                    const PopupMenuItem(value: 'in_progress', child: Text('Marquer En cours')),
+                                    const PopupMenuItem(value: 'resolved', child: Text('Marquer Résolu')),
+                                    const PopupMenuItem(value: 'closed', child: Text('Marquer Fermé')),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0B1120),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                desc,
+                                style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                              ),
+                            ),
+                            if (attachments.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: attachments.map((url) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: ConsoleColors.card,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: ConsoleColors.cardBorder),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.attachment, size: 14, color: ConsoleColors.primaryLight),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          url.split('/').last,
+                                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBugStatusBadge(String status) {
+    Color bg;
+    Color fg;
+    String label;
+    switch (status.toLowerCase()) {
+      case 'open':
+      case 'sent':
+        bg = ConsoleColors.error.withValues(alpha: 0.2);
+        fg = ConsoleColors.error;
+        label = 'OUVERT';
+        break;
+      case 'in_progress':
+        bg = ConsoleColors.warning.withValues(alpha: 0.2);
+        fg = ConsoleColors.warning;
+        label = 'EN COURS';
+        break;
+      case 'resolved':
+        bg = ConsoleColors.success.withValues(alpha: 0.2);
+        fg = ConsoleColors.success;
+        label = 'RÉSOLU';
+        break;
+      case 'closed':
+        bg = Colors.grey.withValues(alpha: 0.2);
+        fg = Colors.grey;
+        label = 'FERMÉ';
+        break;
+      default:
+        bg = ConsoleColors.error.withValues(alpha: 0.2);
+        fg = ConsoleColors.error;
+        label = status.toUpperCase();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: fg.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 4),
+          Icon(Icons.arrow_drop_down, color: fg, size: 16),
+        ],
+      ),
     );
   }
 }

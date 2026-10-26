@@ -160,7 +160,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
 
               // Update origin route for AI chat when navigating other screens
-              if (!isAIChat && !state.matchedLocation.startsWith('/ai-chat')) {
+              if (!isAIChat && !state.matchedLocation.startsWith('/ai-chat') && !fromAIChat) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (ref.read(aiChatOriginRouteProvider) != state.matchedLocation) {
                     ref.read(aiChatOriginRouteProvider.notifier).state = state.matchedLocation;
@@ -197,9 +197,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final backSwipeInterceptor = ref.watch(backSwipeInterceptorProvider);
 
               final backgroundWidget = isWriteSuggestion
-                  ? const SuggestionsScreen()
+                  ? (fromAIChat ? const AIChatScreen() : const SuggestionsScreen())
                   : isReportBug
-                      ? const AboutScreen()
+                      ? (fromAIChat ? const AIChatScreen() : const AboutScreen())
                       : isAbsenceDetail
                           ? (fromAIChat ? const AIChatScreen() : const AbsencesScreen())
                           : fromAIChat
@@ -217,29 +217,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
               final backgroundGradient = fromAIChat ? aiChatGradient : homeGradient;
 
-              final onReturnCallback = isWriteSuggestion
-                  ? () => context.go('/suggestions')
-                  : isReportBug
-                      ? () => context.go('/about')
-                      : isAbsenceDetail
-                          ? () {
-                              if (fromAIChat) {
-                                ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                                context.go('/ai-chat');
-                              } else {
-                                context.go('/absences');
-                              }
-                            }
-                  : isAIChat
-                      ? () {
-                          final origin = ref.read(aiChatOriginRouteProvider);
-                          context.go(origin);
-                        }
-                  : fromAIChat
-                      ? () {
-                          ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                          context.go('/ai-chat');
-                        }
+              final onReturnCallback = fromAIChat
+                  ? () {
+                      ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                      context.go('/ai-chat');
+                    }
+                  : isWriteSuggestion
+                      ? () => context.go('/suggestions')
+                      : isReportBug
+                          ? () => context.go('/about')
+                          : isAbsenceDetail
+                              ? () => context.go('/absences')
+                              : isAIChat
+                                  ? () {
+                                      final origin = ref.read(aiChatOriginRouteProvider);
+                                      context.go(origin);
+                                    }
                   : (isSideNavPage || isDrawerOpen)
                       ? () {
                           ref.read(sideDrawerOpenProvider.notifier).state = true;

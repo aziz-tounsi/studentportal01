@@ -32,18 +32,22 @@ final userDetailProvider = FutureProvider.family<UserDetailData?, String>((ref, 
           .maybeSingle();
     }
     
-    // Get suggestions count
+    // Get suggestions count (excluding bug reports)
     final suggestionsCount = await supabase
         .from('suggestions')
         .select('id')
         .eq('student_id', userId)
+        .neq('suggestion_type', 'bug_report')
+        .not('subject', 'ilike', '%[BUG REPORT%')
         .count();
     
-    // Get recent suggestions
+    // Get recent suggestions (excluding bug reports)
     final recentSuggestions = await supabase
         .from('suggestions')
         .select('id, subject, status, suggestion_type, created_at')
         .eq('student_id', userId)
+        .neq('suggestion_type', 'bug_report')
+        .not('subject', 'ilike', '%[BUG REPORT%')
         .order('created_at', ascending: false)
         .limit(5);
     

@@ -1,4 +1,4 @@
-﻿// ignore_for_file: unused_local_variable
+// ignore_for_file: unused_local_variable
 
 import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -395,6 +395,13 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
         .order('created_at', ascending: false);
 
     final suggestionsData = (data as List).where((e) {
+      // Exclude bug reports (they belong to Super Admin platform console)
+      final type = e['suggestion_type']?.toString().toLowerCase() ?? '';
+      final subject = (e['subject'] ?? e['title'] ?? '').toString();
+      final content = (e['content'] ?? e['body'] ?? e['message'] ?? '').toString();
+      if (type == 'bug_report' || type == 'bug') return false;
+      if (subject.contains('[BUG REPORT') || content.contains('[BUG REPORT')) return false;
+
       // Filter by school
       final userSchool = e['users']?['school_id'];
       final suggestionSchool = e['school_id'];

@@ -134,6 +134,8 @@ final userProfileDataProvider =
           .from('suggestions')
           .select('id, subject, status, suggestion_type, created_at')
           .eq('student_id', userId)
+          .neq('suggestion_type', 'bug_report')
+          .not('subject', 'ilike', '%[BUG REPORT%')
           .order('created_at', ascending: false)
           .limit(10);
       suggestions = (resp as List).cast<Map<String, dynamic>>();

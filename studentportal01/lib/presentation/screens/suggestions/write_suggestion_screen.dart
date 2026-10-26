@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -186,7 +187,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
 
         for (final file in _attachedFiles) {
           try {
-            final bytes = file.bytes;
+            final bytes = file.bytes ?? (file.path != null ? await File(file.path!).readAsBytes() : null);
             if (bytes != null) {
               final timestamp = DateTime.now().millisecondsSinceEpoch;
               final storePath = '$userId/${timestamp}_${file.name}';
@@ -592,115 +593,174 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                 ),
                               ),
                             ),
-                             const SizedBox(height: 24),
-                             // Attached files preview - show image previews for images, icons for documents
-                             if (_attachedFiles.isNotEmpty) ...[
-                               const SizedBox(height: 16),
-                               Wrap(
-                                 spacing: 12,
-                                 runSpacing: 12,
-                                 children: [
-                                   ...List.generate(_attachedFiles.length, (index) {
-                                     final file = _attachedFiles[index];
-                                     final isImage = ['jpg', 'jpeg', 'png', 'gif']
-                                         .contains(file.extension?.toLowerCase());
-                                     
-                                      return Stack(
-                                        children: [
-                                          Container(
-                                            width: 80,
-                                            height: 80,
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(12),
-                                              color: isImage 
-                                                  ? null 
-                                                  : Colors.grey[100] ?? Colors.transparent,
-                                              border: isImage 
-                                                ? null
-                                                  : Border.all(
-                                                      color: Colors.grey[300]!,
-                                                      width: 1,
-                                                    ),
-                                               image: isImage
-                                                   ? DecorationImage(
-                                                       image: file.bytes != null 
-                                                           ? MemoryImage(file.bytes!) as ImageProvider
-                                                           : const AssetImage('assets/images/placeholder.png'), // Placeholder
-                                                       fit: BoxFit.cover,
-                                                     )
-                    : null,
-                                            ),
-                                              child: !isImage
-                                                  ? Column(
-                                                     mainAxisAlignment: MainAxisAlignment.center,
-                                                     children: [
-                                                       Icon(
-                                                         Icons.insert_drive_file_rounded,
-                                                         size: 28,
-                                                         color: Colors.grey[600],
-                                                       ),
-                                                       const SizedBox(height: 4),
-                                                       Text(
-                                                         file.extension?.toUpperCase() ?? 'FILE',
-                                                         style: TextStyle(
-                                                           fontSize: 10,
-                                                           color: Colors.grey[600],
-                                                           fontWeight: FontWeight.w500,
-                                                         ),
-                                                       ),
-                                                     ],
-                                                   )
-                                                 : null,
-                                           ),
-                                           Positioned(
-                                             top: 4,
-                                             right: 4,
-                                             child: GestureDetector(
-                                               onTap: () {
-                                                 setState(() {
-                                                   _attachedFiles.removeAt(index);
-                                                 });
-                                               },
-                                               child: Container(
-                                                 width: 22,
-                                                 height: 22,
-                                                 decoration: BoxDecoration(
-                                                   color: Colors.black.withValues(alpha: 0.6),
-                                                   shape: BoxShape.circle,
-                                                 ),
-                                                 child: const Icon(
-                                                   Icons.close,
-                                                   color: Colors.white,
-                                                   size: 14,
-                                                 ),
-                                               ),
-                                             ),
-                                           ),
-                                         ],
-                                       );
-                                     }),
-                                     // Add more files button
-                                     GestureDetector(
-                                       onTap: _pickFiles,
-                                       child: Container(
-                                         width: 80,
-                                         height: 80,
-                                         decoration: BoxDecoration(
-                                           borderRadius: BorderRadius.circular(12),
-                                           color: Colors.grey[200],
-                                         ),
-                                         child: Icon(
-                                           Icons.add_rounded,
-                                           color: Colors.grey[600],
-                                           size: 36,
-                                         ),
-                                       ),
-                                     ),
+                            const SizedBox(height: 24),
+
+                            // Section Header (Matching report_bug_screen.dart)
+                            Row(
+                              children: [
+                                Text(
+                                  l10n.attachments,
+                                  style: ArabicTypography.headerStyle(
+                                    context,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey[700],
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                if (_attachedFiles.isNotEmpty)
+                                  Text(
+                                    '  ${_attachedFiles.length}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFFFF2D78),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Pick Button (Matching report_bug_screen.dart)
+                            BouncingWrapper(
+                              shrinkScale: 0.95,
+                              overshootScale: 1.04,
+                              delayNavigation: false,
+                              onTap: _pickFiles,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF64748B).withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
                                   ],
                                 ),
-                                const SizedBox(height: 24),
-                              ],
-                             // Action buttons
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF2D78).withValues(alpha: 0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.add_photo_alternate_rounded,
+                                        color: Color(0xFFFF2D78),
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      l10n.addScreenshots,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // Image & File Previews (Matching report_bug_screen.dart)
+                            if (_attachedFiles.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: List.generate(_attachedFiles.length, (index) {
+                                  final file = _attachedFiles[index];
+                                  final isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif']
+                                      .contains(file.extension?.toLowerCase());
+
+                                  return Stack(
+                                    children: [
+                                      Container(
+                                        width: 88,
+                                        height: 88,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(18),
+                                          color: isImage ? null : const Color(0xFFF1F5F9),
+                                          image: isImage
+                                              ? DecorationImage(
+                                                  image: file.bytes != null
+                                                      ? MemoryImage(file.bytes!) as ImageProvider
+                                                      : (file.path != null
+                                                          ? FileImage(File(file.path!))
+                                                          : const AssetImage('assets/images/placeholder.png')),
+                                                  fit: BoxFit.cover,
+                                                )
+                                              : null,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.08),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: !isImage
+                                            ? Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.insert_drive_file_rounded,
+                                                    size: 32,
+                                                    color: Color(0xFF6366F1),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    file.extension?.toUpperCase() ?? 'FILE',
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: Color(0xFF475569),
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              )
+                                            : null,
+                                      ),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () => setState(() => _attachedFiles.removeAt(index)),
+                                          child: Container(
+                                            width: 24,
+                                            height: 24,
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(alpha: 0.65),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.close_rounded,
+                                              size: 14,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }),
+                              ),
+                            ],
+                            const SizedBox(height: 24),
+
+                            // Action buttons
                             Container(
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.8),

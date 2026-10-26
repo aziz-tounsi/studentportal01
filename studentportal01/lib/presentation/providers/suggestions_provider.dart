@@ -170,6 +170,14 @@ final suggestionsProvider = FutureProvider.autoDispose<List<Suggestion>>((ref) a
   }
 
   return suggestions
+      .where((json) {
+        final type = json['suggestion_type']?.toString().toLowerCase() ?? '';
+        final title = (json['title'] ?? json['subject'] ?? '').toString();
+        final body = (json['body'] ?? json['content'] ?? json['message'] ?? '').toString();
+        if (type == 'bug_report' || type == 'bug') return false;
+        if (title.contains('[BUG REPORT') || body.contains('[BUG REPORT')) return false;
+        return true;
+      })
       .map(
         (json) => Suggestion.fromJson(
           json,

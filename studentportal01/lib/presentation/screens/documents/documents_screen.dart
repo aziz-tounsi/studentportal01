@@ -456,7 +456,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                       child: _buildEmptyFilterState(l10n),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 140),
                       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       itemCount: filteredDocs.length,
                       itemBuilder: (context, index) => _DocumentCard(document: filteredDocs[index]),
@@ -994,7 +994,11 @@ class _DocumentCard extends StatelessWidget {
     DetailModalSheet.show(
       context: context,
       initialChildSize: 0.58,
-      bottomAction: GestureDetector(
+      bottomAction: BouncingWrapper(
+        behavior: HitTestBehavior.opaque,
+        shrinkScale: 0.94,
+        overshootScale: 1.05,
+        delayNavigation: true,
         onTap: () {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(

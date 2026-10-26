@@ -177,7 +177,14 @@ final studentProfileProvider =
           user: userResponse,
           currentEnrollment: currentEnrollment,
           enrollments: (enrollments as List).cast<Map<String, dynamic>>(),
-          suggestions: (suggestions as List).cast<Map<String, dynamic>>(),
+          suggestions: (suggestions as List)
+              .cast<Map<String, dynamic>>()
+              .where((s) {
+                final type = s['suggestion_type']?.toString().toLowerCase() ?? '';
+                final subject = s['subject']?.toString() ?? '';
+                return type != 'bug_report' && type != 'bug' && !subject.contains('[BUG REPORT');
+              })
+              .toList(),
           monthlyAbsences: monthlyAbsences,
           totalAbsences: totalAbsences,
           payments: payments,

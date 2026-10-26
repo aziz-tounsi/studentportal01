@@ -13,6 +13,8 @@ import '../../presentation/providers/student_context_provider.dart';
 import '../../presentation/providers/announcements_provider.dart';
 import '../../presentation/providers/suggestions_provider.dart';
 import '../../presentation/screens/resultats/resultats_screen.dart' show gradesProvider;
+import '../../presentation/screens/absences/absences_screen.dart' show absencesProvider;
+import '../models/absence_model.dart' show SubjectAbsenceSummary;
 
 /// Complete financial summary for the AI
 class StudentFinancialSummary {
@@ -65,6 +67,7 @@ class StudentAISnapshot {
   final SemesterInfo? currentSemester;
   final List<TimetableSlotInfo> timetable;
   final List<AbsenceSummary> absences;
+  final Map<String, List<SubjectAbsenceSummary>> allSemesterAbsences;
   final SemesterResults results;
   final Map<String, SemesterResults> allSemesterResults;
   final List<PaymentPlanInfo> payments;
@@ -84,6 +87,7 @@ class StudentAISnapshot {
     this.currentSemester,
     this.timetable = const [],
     this.absences = const [],
+    this.allSemesterAbsences = const {},
     required this.results,
     this.allSemesterResults = const {},
     this.payments = const [],
@@ -300,64 +304,25 @@ final studentAISnapshotProvider = FutureProvider<StudentAISnapshot>((ref) async 
     } catch (_) {}
   }
 
-  // Fallback for Absences if RPC was empty
-  if (absences.isEmpty && ctx?.enrollmentId != null) {
+  // 5a. Primary: Load complete screen-aligned absences for ALL semesters directly from absencesProvider
+  final allSemesterAbsences = <String, List<SubjectAbsenceSummary>>{};
+  for (final sem in semesters) {
     try {
-      final absResp = await supabase
-          .from('absence_records')
-          .select('''
-            hours_absent, date, justified, reason,
-            subject_offerings (
-              subjects (name, code),
-              total_hours
-            )
-          ''')
-          .eq('enrollment_id', ctx!.enrollmentId!)
-          .order('date', ascending: false);
-
-      final subjectAbsMap = <String, List<AbsenceRecord>>{};
-      final subjectNames = <String, String>{};
-      final subjectCodes = <String, String>{};
-      final subjectTotals = <String, double>{};
-
-      for (final row in (absResp as List)) {
-        final so = row['subject_offerings'] as Map<String, dynamic>?;
-        final sub = so?['subjects'] as Map<String, dynamic>?;
-        final subId = sub?['name']?.toString() ?? 'Général';
-        final subName = sub?['name']?.toString() ?? 'Matière';
-        final subCode = sub?['code']?.toString() ?? '';
-        final totalH = (so?['total_hours'] as num?)?.toDouble() ?? 40.0;
-
-        subjectNames[subId] = subName;
-        subjectCodes[subId] = subCode;
-        subjectTotals[subId] = totalH;
-
-        final rec = AbsenceRecord(
-          id: '',
-          date: row['date'] != null
-              ? DateTime.tryParse(row['date'].toString()) ?? DateTime.now()
-              : DateTime.now(),
-          hoursAbsent: (row['hours_absent'] as num?)?.toDouble() ?? 1.0,
-          justified: row['justified'] == true,
-          reason: row['reason']?.toString(),
-        );
-        subjectAbsMap.putIfAbsent(subId, () => []).add(rec);
+      final screenAbs = await ref.read(absencesProvider(sem.number).future);
+      allSemesterAbsences[sem.id] = screenAbs;
+      allSemesterAbsences[sem.number.toString()] = screenAbs;
+      allSemesterAbsences['Semestre ${sem.number}'] = screenAbs;
+      if (sem.number == (currentSemester?.number ?? 1) || sem.id == currentSemester?.id) {
+        absences = screenAbs.map((sa) => AbsenceSummary(
+          subjectOfferingId: sa.subjectOfferingId,
+          subjectCode: sa.subjectCode ?? '',
+          subjectName: sa.subjectName,
+          totalHours: sa.totalHours,
+          totalAbsentHours: sa.totalAbsentHours,
+          absencePercent: sa.absencePercent,
+          absences: [],
+        )).toList();
       }
-
-      absences = subjectAbsMap.entries.map((e) {
-        final recs = e.value;
-        final absentH = recs.fold<double>(0, (sum, r) => sum + r.hoursAbsent);
-        final totalH = subjectTotals[e.key] ?? 40.0;
-        return AbsenceSummary(
-          subjectOfferingId: '',
-          subjectCode: subjectCodes[e.key] ?? '',
-          subjectName: subjectNames[e.key] ?? e.key,
-          totalHours: totalH,
-          totalAbsentHours: absentH,
-          absencePercent: totalH > 0 ? (absentH / totalH * 100) : 0,
-          absences: recs,
-        );
-      }).toList();
     } catch (_) {}
   }
 
@@ -653,6 +618,7 @@ final studentAISnapshotProvider = FutureProvider<StudentAISnapshot>((ref) async 
     currentSemester: currentSemester,
     timetable: timetable,
     absences: absences,
+    allSemesterAbsences: allSemesterAbsences,
     results: grades,
     allSemesterResults: allSemesterResults,
     payments: payments,
@@ -889,29 +855,72 @@ String buildAISystemContext(StudentAISnapshot snap) {
     sb.writeln('No academic grades published yet.');
   }
 
-  // 5. Absences
-  sb.writeln('\n=== 5. ABSENCES & ATTENDANCE RECORD (${snap.currentSemester?.name ?? 'Semestre en cours'}) ===');
-  if (snap.absences.isEmpty) {
-    sb.writeln('No absences recorded. 100% regular attendance.');
-  } else {
+  // 5. Absences & Attendance Record
+  sb.writeln('\n=== 5. ABSENCES & ATTENDANCE RECORD (PER SEMESTER) ===');
+  bool wroteAnyAbsences = false;
+
+  if (snap.semesters.isNotEmpty) {
+    for (final sem in snap.semesters) {
+      final semAbsList = snap.allSemesterAbsences[sem.id] ??
+          snap.allSemesterAbsences[sem.number.toString()] ??
+          snap.allSemesterAbsences['Semestre ${sem.number}'];
+
+      final isCurrent = sem.number == activeSemNum || sem.id == activeSem?.id;
+      sb.writeln('\n--- ${sem.name.toUpperCase()}${isCurrent ? ' [CURRENT ACTIVE SEMESTER - USE THIS BY DEFAULT]' : ' [OTHER SEMESTER - ONLY IF EXPLICITLY ASKED]'} ---');
+
+      if (semAbsList == null || semAbsList.isEmpty) {
+        sb.writeln('No absences recorded for ${sem.name}. 100% regular attendance (0h missed out of 0h, 0.0%).');
+      } else {
+        wroteAnyAbsences = true;
+        double totalH = 0;
+        double absentH = 0;
+        final subjectsWithAbsences = <SubjectAbsenceSummary>[];
+
+        for (final a in semAbsList) {
+          totalH += a.totalHours;
+          absentH += a.totalAbsentHours;
+          if (a.totalAbsentHours > 0) {
+            subjectsWithAbsences.add(a);
+          }
+        }
+
+        final semPct = totalH > 0 ? (absentH / totalH * 100) : 0.0;
+        final attendanceRate = totalH > 0 ? ((totalH - absentH) / totalH * 100).clamp(0, 100) : 100.0;
+
+        sb.writeln('TOTAL ${sem.name.toUpperCase()} ABSENCES: ${absentH.toStringAsFixed(0)}h missed out of ${totalH.toStringAsFixed(0)}h (${semPct.toStringAsFixed(1)}%)');
+        sb.writeln('Attendance Rate (Taux d\'assiduité): ${attendanceRate.toStringAsFixed(1)}%');
+
+        if (subjectsWithAbsences.isEmpty) {
+          sb.writeln('No absences in any subject for this semester. 100% regular attendance.');
+        } else {
+          sb.writeln('Subjects with recorded absences:');
+          for (final a in subjectsWithAbsences) {
+            sb.writeln('  • ${a.subjectName}: ${a.totalAbsentHours.toStringAsFixed(0)}h absent / ${a.totalHours.toStringAsFixed(0)}h total (${a.absencePercent.toStringAsFixed(1)}%) [${a.level.name.toUpperCase()}]');
+          }
+        }
+
+        if (absentH >= 10 || (totalH > 0 && (absentH / totalH) > 0.15)) {
+          sb.writeln('⚠️ WARNING STATUS: Risque d\'avertissement pour absences.');
+        } else {
+          sb.writeln('Attendance Status: Assiduité régulière et satisfaisante.');
+        }
+      }
+    }
+  }
+
+  if (!wroteAnyAbsences && snap.absences.isNotEmpty) {
     double totalH = 0;
     double absentH = 0;
     for (final a in snap.absences) {
       totalH += a.totalHours;
       absentH += a.totalAbsentHours;
       sb.writeln('• ${a.subjectName}: ${a.totalAbsentHours}h absent / ${a.totalHours}h total (${a.absencePercent.toStringAsFixed(1)}%)');
-      for (final r in a.absences) {
-        sb.writeln('    - ${_fmtDate(r.date)}: ${r.hoursAbsent}h (${r.justified ? "Justifiée" : "Non justifiée"})${r.reason != null ? " [Motif: ${r.reason}]" : ""}');
-      }
     }
     final attendanceRate = totalH > 0 ? ((totalH - absentH) / totalH * 100).clamp(0, 100) : 100.0;
     sb.writeln('TOTAL ABSENCES: ${absentH}h missed out of ${totalH}h (${totalH > 0 ? (absentH / totalH * 100).toStringAsFixed(1) : 0}%)');
     sb.writeln('Attendance Rate (Taux d\'assiduité): ${attendanceRate.toStringAsFixed(1)}%');
-    if (absentH >= 10 || (totalH > 0 && (absentH / totalH) > 0.15)) {
-      sb.writeln('⚠️ WARNING STATUS: Risque élevé d\'avertissement pour absences excessives.');
-    } else {
-      sb.writeln('Attendance Status: Assiduité régulière et satisfaisante.');
-    }
+  } else if (!wroteAnyAbsences && snap.semesters.isEmpty) {
+    sb.writeln('No absences recorded. 100% regular attendance.');
   }
 
   // 6. Full Weekly Timetable

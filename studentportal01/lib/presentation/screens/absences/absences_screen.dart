@@ -715,6 +715,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                   onTap: () => context.go('/absences/${a.subjectOfferingId}'),
                 ),
               )),
+            const SizedBox(height: 120),
           ],
         ),
       ),

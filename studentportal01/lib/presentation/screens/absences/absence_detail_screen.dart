@@ -672,9 +672,17 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   Row(
                     children: [
                       Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => _showWeekView = false),
+                        child: BouncingWrapper(
+                          behavior: HitTestBehavior.opaque,
+                          hitPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          delayNavigation: false,
+                          shrinkScale: 0.92,
+                          overshootScale: 1.06,
+                          onTap: () {
+                            if (_showWeekView) setState(() => _showWeekView = false);
+                          },
                           child: Container(
+                            height: double.infinity,
                             alignment: Alignment.center,
                             child: AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 250),
@@ -693,9 +701,17 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         ),
                       ),
                       Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => _showWeekView = true),
+                        child: BouncingWrapper(
+                          behavior: HitTestBehavior.opaque,
+                          hitPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          delayNavigation: false,
+                          shrinkScale: 0.92,
+                          overshootScale: 1.06,
+                          onTap: () {
+                            if (!_showWeekView) setState(() => _showWeekView = true);
+                          },
                           child: Container(
+                            height: double.infinity,
                             alignment: Alignment.center,
                             child: AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 250),
@@ -713,8 +729,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                           ),
                         ),
                       ),
-                      ],
-                    ),
+                    ],
+                  ),
                   ],
                 ),
               );

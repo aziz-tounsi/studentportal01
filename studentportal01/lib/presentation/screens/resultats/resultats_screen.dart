@@ -547,7 +547,7 @@ class ResultatsScreen extends ConsumerWidget {
                     ],
                     // Subject grades
                     ...grades.map((subject) => _SubjectGradeCard(subject: subject)),
-                    const SizedBox(height: AppSizes.paddingM),
+                    const SizedBox(height: 140),
                   ],
                 );
               },

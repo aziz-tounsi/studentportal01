@@ -1084,7 +1084,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
     final l10n = AppLocalizations.of(context);
     final isImage = _isImageFile(url);
 
-    return GestureDetector(
+    return BouncingWrapper(
+      behavior: HitTestBehavior.opaque,
+      shrinkScale: 0.94,
+      overshootScale: 1.05,
+      delayNavigation: false,
       onTap: () => _openAttachment(url),
       child: isImage
           ? ClipRRect(
@@ -1239,7 +1243,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
     final l10n = AppLocalizations.of(context);
     final isImage = _isImageFile(url);
 
-    return GestureDetector(
+    return BouncingWrapper(
+      behavior: HitTestBehavior.opaque,
+      shrinkScale: 0.94,
+      overshootScale: 1.05,
+      delayNavigation: false,
       onTap: () => _openAttachment(url),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

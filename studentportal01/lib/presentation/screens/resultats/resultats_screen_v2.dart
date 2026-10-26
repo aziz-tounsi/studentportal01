@@ -447,7 +447,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 110),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 140),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
           // Semester Average Card (only if all completed)
@@ -477,14 +477,15 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
           const SizedBox(height: 16),
 
           // Subject Cards
-          if (filteredGrades.isNotEmpty)
+          if (filteredGrades.isNotEmpty) ...[
             ...filteredGrades.map(
               (subject) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _GlassySubjectCard(subject: subject),
               ),
-            )
-          else
+            ),
+            const SizedBox(height: 20),
+          ] else
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),

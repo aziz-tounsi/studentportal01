@@ -10,7 +10,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/suggestions_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
 import '../../widgets/ios_loader.dart';
@@ -142,27 +141,50 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
         }
       }
 
-      final repo = ref.read(suggestionRepositoryProvider);
       final categoryLabel = _getCategoryLabel(_selectedCategory, l10n);
       final fullDesc = '[BUG REPORT - $categoryLabel]\n$desc';
 
-      await repo.createSuggestion(
-        title: title,
-        body: fullDesc,
-        suggestionType: 'autre',
-        attachmentUrls: uploadedUrls,
-      );
-
+      // 1. Try saving directly into the dedicated bug_reports table (for Super Admin console)
+      bool savedToBugReports = false;
       try {
         await supabase.from('bug_reports').insert({
           'user_id': user?.id,
+          'school_id': user?.schoolId,
+          'student_name': user?.fullName,
+          'student_code': user?.studentCode,
           'title': title,
           'description': desc,
           'category': _selectedCategory,
           'attachment_urls': uploadedUrls,
+          'status': 'open',
           'created_at': DateTime.now().toIso8601String(),
         });
-      } catch (_) {}
+        savedToBugReports = true;
+      } catch (brErr) {
+        debugPrint('bug_reports table insert note: $brErr');
+      }
+
+      // 2. Fallback if bug_reports table is not yet created: store tagged as bug_report
+      if (!savedToBugReports) {
+        try {
+          await supabase.from('suggestions').insert({
+            'student_id': user?.id,
+            'school_id': user?.schoolId,
+            'subject': title,
+            'title': title,
+            'message': fullDesc,
+            'body': fullDesc,
+            'suggestion_type': 'bug_report', // Isolated type: filtered out from student app & school admin
+            'status': 'sent',
+            'has_attachment': uploadedUrls.isNotEmpty,
+            'student_name': user?.fullName,
+            'student_code': user?.studentCode,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('Fallback suggestion bug report insert error: $e');
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

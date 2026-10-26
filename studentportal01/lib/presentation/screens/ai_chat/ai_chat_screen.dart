@@ -134,12 +134,16 @@ class _ConversationMessage {
   final String role;
   final String content;
   final DateTime timestamp;
+  final String? attachedFileName;
+  final String? attachedImagePath;
 
   const _ConversationMessage({
     required this.id,
     required this.role,
     required this.content,
     required this.timestamp,
+    this.attachedFileName,
+    this.attachedImagePath,
   });
 
   Map<String, dynamic> toJson() => {
@@ -147,6 +151,8 @@ class _ConversationMessage {
         'role': role,
         'content': content,
         'timestamp': timestamp.toIso8601String(),
+        if (attachedFileName != null) 'attachedFileName': attachedFileName,
+        if (attachedImagePath != null) 'attachedImagePath': attachedImagePath,
       };
 
   factory _ConversationMessage.fromJson(Map<String, dynamic> json) =>
@@ -155,6 +161,8 @@ class _ConversationMessage {
         role: json['role'] as String,
         content: json['content'] as String,
         timestamp: DateTime.parse(json['timestamp'] as String),
+        attachedFileName: json['attachedFileName'] as String?,
+        attachedImagePath: json['attachedImagePath'] as String?,
       );
 }
 
@@ -194,6 +202,7 @@ class _ChatMessage {
   final String content;
   final DateTime timestamp;
   final String? attachedFileName;
+  final String? attachedImagePath;
 
   const _ChatMessage({
     required this.id,
@@ -201,6 +210,7 @@ class _ChatMessage {
     required this.content,
     required this.timestamp,
     this.attachedFileName,
+    this.attachedImagePath,
   });
 }
 
@@ -247,6 +257,21 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   static String? _cachedStudentFirstName;
   static String? _cachedWelcomeGreeting;
 
+  // Persistent active session cache so ongoing conversation & scroll offset are never lost
+  static List<_ChatMessage>? _activeSessionMessages;
+  static String? _activeSessionConversationId;
+  static double? _activeSessionScrollOffset;
+
+  static void syncActiveSession(List<_ChatMessage> messages, String? convId, [double? scrollOffset]) {
+    if (messages.isNotEmpty) {
+      _activeSessionMessages = List.from(messages);
+      _activeSessionConversationId = convId;
+      if (scrollOffset != null) {
+        _activeSessionScrollOffset = scrollOffset;
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -276,6 +301,18 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
       }
     });
 
+    if (_activeSessionMessages != null && _activeSessionMessages!.isNotEmpty) {
+      _messages.addAll(_activeSessionMessages!);
+      _currentConversationId = _activeSessionConversationId;
+      if (_activeSessionScrollOffset != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scrollController.hasClients && _activeSessionScrollOffset != null) {
+            _scrollController.jumpTo(_activeSessionScrollOffset!);
+          }
+        });
+      }
+    }
+
     _loadConversations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initAI();
@@ -286,7 +323,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Render initial cached greeting message immediately on mount without waiting for network
-    if (_messages.isEmpty && _currentConversationId == null) {
+    if (_messages.isEmpty && _currentConversationId == null && (_activeSessionMessages == null || _activeSessionMessages!.isEmpty)) {
       final authName = ref.read(authProvider).user?.fullName.split(' ').first;
       final name = authName ?? _cachedStudentFirstName ?? '';
       if (name.isNotEmpty) {
@@ -442,9 +479,12 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
           role: m.role,
           content: m.content,
           timestamp: m.timestamp,
+          attachedFileName: m.attachedFileName,
+          attachedImagePath: m.attachedImagePath,
         ));
       }
       _currentConversationId = conv.id;
+      syncActiveSession(_messages, _currentConversationId, 0.0);
       _showHistory = false;
       ref.read(backSwipeInterceptorProvider.notifier).state = null;
     });
@@ -518,6 +558,7 @@ I have **complete** access to your academic data — grades, timetable, absences
 
     final fileName = _pendingFileName;
     final fileText = _pendingFileText;
+    final imagePath = _pendingImage?.path;
 
     String displayContent = trimmed;
     if (fileName != null) {
@@ -534,7 +575,9 @@ I have **complete** access to your academic data — grades, timetable, absences
         content: displayContent,
         timestamp: ts,
         attachedFileName: fileName,
+        attachedImagePath: imagePath,
       ));
+      syncActiveSession(_messages, _currentConversationId);
       _isTyping = true;
       _inputController.clear();
       _pendingFileText = null;
@@ -606,6 +649,7 @@ I have **complete** access to your academic data — grades, timetable, absences
           content: reply,
           timestamp: ts,
         ));
+        syncActiveSession(_messages, _currentConversationId);
       });
       _scrollToBottom();
       _saveCurrentConversation();
@@ -627,6 +671,7 @@ I have **complete** access to your academic data — grades, timetable, absences
           content: errorMessage,
           timestamp: ts,
         ));
+        syncActiveSession(_messages, _currentConversationId);
       });
       _scrollToBottom();
       _saveCurrentConversation();
@@ -755,6 +800,9 @@ I have **complete** access to your academic data — grades, timetable, absences
   }
 
   void _startNewChat() {
+    _activeSessionMessages = null;
+    _activeSessionConversationId = null;
+    _activeSessionScrollOffset = null;
     _currentConversationId = null;
     _searchQuery = '';
     _searchController.clear();
@@ -768,10 +816,17 @@ I have **complete** access to your academic data — grades, timetable, absences
 
   @override
   void dispose() {
+    if (_messages.isNotEmpty) {
+      _activeSessionMessages = List.from(_messages);
+      _activeSessionConversationId = _currentConversationId;
+      if (_scrollController.hasClients) {
+        _activeSessionScrollOffset = _scrollController.offset;
+      }
+    }
     if (_showHistory) {
       ref.read(backSwipeInterceptorProvider.notifier).state = null;
     }
-        _inputController.dispose();
+    _inputController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     _inputFocus.dispose();
@@ -1169,67 +1224,116 @@ I have **complete** access to your academic data — grades, timetable, absences
   }
 
   Widget _buildAttachmentPreview() {
+    if (_pendingImage != null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.file(
+                    File(_pendingImage!.path),
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _fileIcon(),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: _clearAttachment,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _pink.withValues(alpha: 0.3)),
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: _pink.withValues(alpha: 0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Preview thumbnail or icon
-          if (_pendingImage != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                File(_pendingImage!.path),
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _fileIcon(),
+          _fileIcon(),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              _pendingFileName ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ArabicTypography.bodyStyle(
+                context,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF1E293B),
               ),
-            )
-          else
-            _fileIcon(),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _pendingFileName ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: ArabicTypography.bodyStyle(
-                    context,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1E293B),
-                  ),
-                ),
-                Text(
-                  '✅ Ready to send',
-                  style: ArabicTypography.bodyStyle(
-                    context,
-                    fontSize: 11,
-                    color: Colors.green,
-                  ),
-                ),
-              ],
             ),
           ),
+          const SizedBox(width: 10),
           GestureDetector(
             onTap: _clearAttachment,
-            child: const Icon(Icons.close_rounded,
-                size: 20, color: Color(0xFF94A3B8)),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: Color(0xFF64748B),
+              ),
+            ),
           ),
         ],
       ),
@@ -1238,13 +1342,13 @@ I have **complete** access to your academic data — grades, timetable, absences
 
   Widget _fileIcon() {
     return Container(
-      width: 40,
-      height: 40,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
-        color: _pink.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: const Icon(Icons.insert_drive_file_rounded, color: _pink, size: 22),
+      child: const Icon(Icons.insert_drive_file_rounded, color: Color(0xFF6366F1), size: 20),
     );
   }
 
@@ -1978,10 +2082,46 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _buildUserContent(BuildContext context, bool isRtl) {
+    final hasImg = (message.attachedImagePath != null && File(message.attachedImagePath!).existsSync()) ||
+        (message.attachedFileName != null &&
+            ['jpg', 'jpeg', 'png', 'webp', 'gif']
+                .contains(message.attachedFileName!.split('.').last.toLowerCase()));
+
+    String cleanText = message.content;
+    if (message.attachedFileName != null) {
+      cleanText = cleanText
+          .replaceFirst('📎 ${message.attachedFileName}\n\n', '')
+          .replaceFirst('📎 ${message.attachedFileName}', '')
+          .trim();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (message.attachedFileName != null) ...[
+        if (hasImg) ...[
+          Padding(
+            padding: EdgeInsets.only(bottom: cleanText.isNotEmpty ? 8 : 0),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: message.attachedImagePath != null && File(message.attachedImagePath!).existsSync()
+                  ? Image.file(
+                      File(message.attachedImagePath!),
+                      width: 96,
+                      height: 96,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.image_rounded, color: Colors.white, size: 36),
+                    ),
+            ),
+          ),
+        ] else if (message.attachedFileName != null) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -2009,17 +2149,14 @@ class _MessageBubble extends StatelessWidget {
               ],
             ),
           ),
-          if (message.content.isNotEmpty &&
-              message.content != '📎 ${message.attachedFileName}')
-            const SizedBox(height: 8),
+          if (cleanText.isNotEmpty) const SizedBox(height: 8),
         ],
-        if (message.content.isNotEmpty &&
-            !(message.content == '📎 ${message.attachedFileName}'))
+        if (cleanText.isNotEmpty)
           Text(
-            message.content.replaceFirst('📎 ${message.attachedFileName}\n\n', '').trim(),
+            cleanText,
             style: _aiTextStyle(
               context,
-              text: message.content,
+              text: cleanText,
               fontSize: 14.5,
               color: Colors.white,
               height: 1.5,

@@ -11,6 +11,7 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../../data/services/core_data_service.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/mon_solde_skeleton.dart';
+import '../../widgets/bouncing_wrapper.dart';
 
 // Semester state provider for this screen
 final soldeSemesterProvider = StateProvider<int>((ref) => 1);
@@ -1074,11 +1075,16 @@ class _PaymentCarousel extends StatefulWidget {
   State<_PaymentCarousel> createState() => _PaymentCarouselState();
 }
 
-class _PaymentCarouselState extends State<_PaymentCarousel> {
+class _PaymentCarouselState extends State<_PaymentCarousel>
+    with TickerProviderStateMixin {
   static const double _centerSize = 160.0;
 
   late PageController _pageController;
   late double _currentPage;
+  late AnimationController _pressCtrl;
+  late AnimationController _bounceCtrl;
+  late Animation<double> _bounceAnim;
+  bool _isCenterPressed = false;
 
   @override
   void initState() {
@@ -1088,12 +1094,66 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
       viewportFraction: 0.5,
       initialPage: widget.initialIndex,
     );
+    _pageController.addListener(_onPageScroll);
+
+    _pressCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+    _bounceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+
+    const shrink = 0.92;
+    const overshoot = 1.06;
+    final secondaryUndershoot = 1.0 - (1.0 - shrink) * 0.24;
+    final secondaryOvershoot = 1.0 + (overshoot - 1.0) * 0.28;
+
+    _bounceAnim = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: shrink, end: overshoot)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 38,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: overshoot, end: secondaryUndershoot)
+            .chain(CurveTween(curve: Curves.easeInOutQuad)),
+        weight: 26,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: secondaryUndershoot, end: secondaryOvershoot)
+            .chain(CurveTween(curve: Curves.easeInOutQuad)),
+        weight: 18,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: secondaryOvershoot, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOutQuad)),
+        weight: 18,
+      ),
+    ]).animate(_bounceCtrl);
+  }
+
+  void _onPageScroll() {
+    if (_pageController.hasClients && _pageController.page != null) {
+      _currentPage = _pageController.page!;
+    }
   }
 
   @override
   void dispose() {
+    _pageController.removeListener(_onPageScroll);
     _pageController.dispose();
+    _pressCtrl.dispose();
+    _bounceCtrl.dispose();
     super.dispose();
+  }
+
+  double get _currentCenterBounceScale {
+    if (_bounceCtrl.isAnimating) {
+      return _bounceAnim.value;
+    }
+    return 1.0 - (_pressCtrl.value * (1.0 - 0.92));
   }
 
   double _scaleForDistance(double distance) {
@@ -1160,7 +1220,7 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
               // Visual circles animated reactively with 60fps hardware acceleration
               Positioned.fill(
                 child: AnimatedBuilder(
-                  animation: _pageController,
+                  animation: Listenable.merge([_pageController, _pressCtrl, _bounceCtrl]),
                   builder: (context, _) {
                     final currentPage = _pageController.hasClients && _pageController.page != null
                         ? _pageController.page!
@@ -1172,6 +1232,8 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                         final distB = (b - currentPage).abs();
                         return distB.compareTo(distA);
                       });
+
+                    final activeCenterIndex = currentPage.round().clamp(0, widget.payments.length - 1);
 
                     return Stack(
                       clipBehavior: Clip.none,
@@ -1186,7 +1248,8 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                         final scale = _scaleForDistance(distance);
                         final xOffset = _xOffsetForDistance(distance);
                         final vOffset = _verticalOffset(distance);
-                        final isCenter = absDistance < 0.5;
+                        final isCenter = index == activeCenterIndex && absDistance < 0.6;
+                        final centerScaleMultiplier = isCenter ? _currentCenterBounceScale : 1.0;
 
                         // Depth-of-field blur for circles receding into the background
                         double blurSigma = 0.0;
@@ -1218,7 +1281,7 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                             width: _centerSize,
                             height: _centerSize,
                             child: Transform.scale(
-                              scale: scale,
+                              scale: scale * centerScaleMultiplier,
                               child: Opacity(
                                 opacity: opacity,
                                 child: circleCard,
@@ -1242,15 +1305,48 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                     controller: _pageController,
                     itemCount: widget.payments.length,
                     physics: const BouncingScrollPhysics(),
+                    onPageChanged: (idx) {
+                      _currentPage = idx.toDouble();
+                    },
                     itemBuilder: (context, index) {
                       return GestureDetector(
                         behavior: HitTestBehavior.translucent,
+                        onTapDown: (_) {
+                          final page = _pageController.hasClients && _pageController.page != null
+                              ? _pageController.page!
+                              : _currentPage;
+                          final activeCenterIndex = page.round().clamp(0, widget.payments.length - 1);
+                          final isCenter = index == activeCenterIndex || (page - index).abs() < 0.5;
+                          if (isCenter) {
+                            _isCenterPressed = true;
+                            _bounceCtrl.stop();
+                            _pressCtrl.animateTo(1.0, duration: const Duration(milliseconds: 120));
+                          }
+                        },
+                        onTapUp: (_) {
+                          if (_isCenterPressed) {
+                            _isCenterPressed = false;
+                            _pressCtrl.value = 0.0;
+                            _bounceCtrl.forward(from: 0.0);
+                          }
+                        },
+                        onTapCancel: () {
+                          if (_isCenterPressed) {
+                            _isCenterPressed = false;
+                            _pressCtrl.animateTo(0.0, duration: const Duration(milliseconds: 140));
+                          }
+                        },
                         onTap: () {
-                          final isCenter = (_currentPage - index).abs() < 0.5;
+                          final page = _pageController.hasClients && _pageController.page != null
+                              ? _pageController.page!
+                              : _currentPage;
+                          final activeCenterIndex = page.round().clamp(0, widget.payments.length - 1);
+                          final isCenter = index == activeCenterIndex || (page - index).abs() < 0.5;
+
                           if (isCenter) {
                             _showPaymentDetailsDialog(
                               context,
-                              widget.payments[index],
+                              widget.payments[activeCenterIndex],
                               widget.currency,
                               DateFormat('dd/MM/yyyy'),
                             );
@@ -1478,8 +1574,11 @@ class _GlassyCategoryCard extends StatelessWidget {
     final cat = category.category;
     final isPaid = category.amount > 0 && category.remaining <= 0;
 
-    return GestureDetector(
+    return BouncingWrapper(
       behavior: HitTestBehavior.opaque,
+      shrinkScale: 0.94,
+      overshootScale: 1.05,
+      delayNavigation: false,
       onTap: () => _showCategoryDetailsDialog(context, category, currency),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),

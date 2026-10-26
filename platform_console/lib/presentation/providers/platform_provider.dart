@@ -14,6 +14,7 @@ class PlatformState {
   final List<Map<String, dynamic>> pendingPayments;
   final List<Map<String, dynamic>> recentAiLogs;
   final List<Map<String, dynamic>> auditLogs;
+  final List<Map<String, dynamic>> bugReports;
   final Map<String, dynamic>? platformSettings;
   final Map<String, dynamic> kpis;
 
@@ -26,6 +27,7 @@ class PlatformState {
     this.pendingPayments = const [],
     this.recentAiLogs = const [],
     this.auditLogs = const [],
+    this.bugReports = const [],
     this.platformSettings,
     this.kpis = const {},
   });
@@ -39,6 +41,7 @@ class PlatformState {
     List<Map<String, dynamic>>? pendingPayments,
     List<Map<String, dynamic>>? recentAiLogs,
     List<Map<String, dynamic>>? auditLogs,
+    List<Map<String, dynamic>>? bugReports,
     Map<String, dynamic>? platformSettings,
     Map<String, dynamic>? kpis,
   }) {
@@ -51,6 +54,7 @@ class PlatformState {
       pendingPayments: pendingPayments ?? this.pendingPayments,
       recentAiLogs: recentAiLogs ?? this.recentAiLogs,
       auditLogs: auditLogs ?? this.auditLogs,
+      bugReports: bugReports ?? this.bugReports,
       platformSettings: platformSettings ?? this.platformSettings,
       kpis: kpis ?? this.kpis,
     );
@@ -116,7 +120,44 @@ class PlatformNotifier extends Notifier<PlatformState> {
       ''').order('created_at', ascending: false).limit(100);
       final auditLogs = List<Map<String, dynamic>>.from(auditResp);
 
-      // 7. KPIs
+      // 7. Bug Reports
+      List<Map<String, dynamic>> bugReports = [];
+      try {
+        final brResp = await _supabase.from('bug_reports').select('''
+          id, user_id, school_id, student_name, student_code, title, description, category, attachment_urls, status, severity, created_at,
+          schools:school_id(name, code)
+        ''').order('created_at', ascending: false);
+        bugReports = List<Map<String, dynamic>>.from(brResp);
+      } catch (_) {
+        // Fallback: fetch suggestions that were isolated as bug reports
+        try {
+          final brFallback = await _supabase.from('suggestions').select('''
+            id, student_id, school_id, student_name, student_code, subject, title, message, body, suggestion_type, created_at, status,
+            schools:school_id(name, code)
+          ''').or('suggestion_type.eq.bug_report,body.ilike.%[BUG REPORT%,message.ilike.%[BUG REPORT%').order('created_at', ascending: false);
+
+          bugReports = List<Map<String, dynamic>>.from(brFallback).map((s) {
+            final desc = s['body'] ?? s['message'] ?? '';
+            return {
+              'id': s['id'],
+              'user_id': s['student_id'],
+              'school_id': s['school_id'],
+              'student_name': s['student_name'],
+              'student_code': s['student_code'],
+              'title': s['title'] ?? s['subject'] ?? 'Bug Report',
+              'description': desc,
+              'category': 'App',
+              'attachment_urls': <String>[],
+              'status': s['status'] ?? 'open',
+              'created_at': s['created_at'],
+              'schools': s['schools'],
+              '_source': 'suggestions',
+            };
+          }).toList();
+        } catch (_) {}
+      }
+
+      // 8. KPIs
       double mrr = 0.0;
       double aiSpend = 0.0;
       for (final s in schools) {
@@ -142,6 +183,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
         pendingPayments: pendingPayments,
         recentAiLogs: aiLogs,
         auditLogs: auditLogs,
+        bugReports: bugReports,
         platformSettings: settings,
         kpis: {
           'totalSchools': schools.length,
@@ -149,6 +191,8 @@ class PlatformNotifier extends Notifier<PlatformState> {
           'mrrTnd': mrr,
           'aiSpendUsd': aiSpend,
           'pendingCount': pendingPayments.length,
+          'bugReportsCount': bugReports.length,
+          'openBugsCount': bugReports.where((b) => b['status'] != 'resolved' && b['status'] != 'closed').length,
         },
       );
     } catch (e) {
@@ -156,6 +200,35 @@ class PlatformNotifier extends Notifier<PlatformState> {
         isLoading: false,
         errorMessage: 'Erreur chargement plateforme: $e',
       );
+    }
+  }
+
+  Future<void> updateBugReportStatus(String id, String newStatus, {bool isFallback = false}) async {
+    try {
+      if (isFallback) {
+        await _supabase.from('suggestions').update({'status': newStatus}).eq('id', id);
+      } else {
+        await _supabase.from('bug_reports').update({'status': newStatus}).eq('id', id);
+      }
+      final updated = state.bugReports.map((br) {
+        if (br['id'] == id) {
+          return {...br, 'status': newStatus};
+        }
+        return br;
+      }).toList();
+      state = state.copyWith(bugReports: updated);
+    } catch (e) {
+      // If table doesn't exist, try fallback table
+      try {
+        await _supabase.from('suggestions').update({'status': newStatus}).eq('id', id);
+        final updated = state.bugReports.map((br) {
+          if (br['id'] == id) {
+            return {...br, 'status': newStatus};
+          }
+          return br;
+        }).toList();
+        state = state.copyWith(bugReports: updated);
+      } catch (_) {}
     }
   }
 
