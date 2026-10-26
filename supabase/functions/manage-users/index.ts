@@ -1,0 +1,392 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
+import { corsHeaders } from "../_shared/cors.ts";
+
+interface RequestBody {
+  action: "create_user" | "delete_user" | "reset_password" | "bulk_delete_users";
+  email?: string;
+  password?: string;
+  role?: string;
+  full_name?: string;
+  phone?: string;
+  student_code?: string;
+  date_of_birth?: string;
+  address?: string;
+  niveau_code?: string;
+  section_code?: string;
+  gender?: string;
+  nationality?: string;
+  initial_password?: string;
+  class_id?: string;
+  group_id?: string;
+  academic_year_id?: string;
+  school_id?: string;
+  user_id?: string;
+  user_ids?: string[];
+  new_password?: string;
+}
+
+function generateSecurePassword(length = 12): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*";
+  const array = new Uint32Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array, (x) => chars[x % chars.length]).join("");
+}
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      return new Response(
+        JSON.stringify({ error: "Missing server environment configuration" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 1. Authenticate caller via JWT
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const callerClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user: callerUser }, error: callerAuthError } = await callerClient.auth.getUser();
+    if (callerAuthError || !callerUser) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired token", details: callerAuthError }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Admin Client with Service Role Key for privileged operations
+    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+    // 2. Fetch caller role and school_id
+    const { data: callerProfile, error: profileError } = await adminClient
+      .from("users")
+      .select("id, school_id, role, full_name")
+      .eq("id", callerUser.id)
+      .maybeSingle();
+
+    if (profileError || !callerProfile) {
+      return new Response(
+        JSON.stringify({ error: "Caller profile not found" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const allowedRoles = ["super_admin", "owner", "admin", "staff"];
+    if (!allowedRoles.includes(callerProfile.role)) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: You do not have permission to manage users" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const isSuperAdmin = callerProfile.role === "super_admin";
+    const body: RequestBody = await req.json();
+    const action = body.action;
+
+    // ------------------------------------------------------------------------
+    // ACTION: CREATE USER
+    // ------------------------------------------------------------------------
+    if (action === "create_user") {
+      const email = body.email?.trim().toLowerCase();
+      const password = body.password || generateSecurePassword();
+      const fullName = body.full_name?.trim();
+      const role = body.role || "student";
+
+      if (!email || !fullName) {
+        return new Response(
+          JSON.stringify({ error: "Email and full_name are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Enforce tenant boundary: school admins can ONLY create users in their own school
+      const schoolId = isSuperAdmin ? (body.school_id || callerProfile.school_id) : callerProfile.school_id;
+
+      if (!schoolId) {
+        return new Response(
+          JSON.stringify({ error: "school_id could not be resolved" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create Supabase Auth User
+      const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          role,
+          full_name: fullName,
+          school_id: schoolId,
+        },
+      });
+
+      if (authError || !authData.user) {
+        return new Response(
+          JSON.stringify({ error: authError?.message || "Failed to create auth user" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const newUserId = authData.user.id;
+
+      // Insert profile in public.users
+      const { error: userInsertError } = await adminClient.from("users").insert({
+        id: newUserId,
+        school_id: schoolId,
+        email,
+        full_name: fullName,
+        role,
+        phone: body.phone || null,
+        student_code: body.student_code || null,
+        date_of_birth: body.date_of_birth || null,
+        address: body.address || null,
+        niveau_code: body.niveau_code || null,
+        section_code: body.section_code || null,
+        gender: body.gender || null,
+        nationality: body.nationality || null,
+        initial_password: password,
+      });
+
+      if (userInsertError) {
+        // Rollback created auth user to maintain state consistency
+        await adminClient.auth.admin.deleteUser(newUserId);
+        return new Response(
+          JSON.stringify({ error: "Failed to create user record", details: userInsertError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // If student and class assigned, create enrollment
+      if (role === "student" && body.class_id) {
+        let yearId = body.academic_year_id;
+        if (!yearId) {
+          const { data: currentYear } = await adminClient
+            .from("academic_years")
+            .select("id")
+            .eq("school_id", schoolId)
+            .eq("is_current", true)
+            .maybeSingle();
+          yearId = currentYear?.id;
+        }
+
+        if (yearId) {
+          await adminClient.from("enrollments").insert({
+            school_id: schoolId,
+            user_id: newUserId,
+            class_id: body.class_id,
+            group_id: body.group_id || null,
+            academic_year_id: yearId,
+            student_code: body.student_code || null,
+            is_active: true,
+          });
+        }
+      }
+
+      // Record audit log
+      await adminClient.from("audit_logs").insert({
+        school_id: schoolId,
+        actor_id: callerUser.id,
+        actor_role: callerProfile.role,
+        action: "create_user",
+        target_table: "users",
+        target_id: newUserId,
+        new_data: { email, full_name: fullName, role, school_id: schoolId },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          user: {
+            id: newUserId,
+            email,
+            full_name: fullName,
+            role,
+            school_id: schoolId,
+            password,
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // ACTION: DELETE USER
+    // ------------------------------------------------------------------------
+    if (action === "delete_user") {
+      const targetUserId = body.user_id;
+      if (!targetUserId) {
+        return new Response(
+          JSON.stringify({ error: "user_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify target belongs to caller's school
+      const { data: targetUser } = await adminClient
+        .from("users")
+        .select("id, school_id, email, full_name")
+        .eq("id", targetUserId)
+        .maybeSingle();
+
+      if (!targetUser) {
+        return new Response(
+          JSON.stringify({ error: "User not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!isSuperAdmin && targetUser.school_id !== callerProfile.school_id) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: Cannot delete user from another school" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Delete from auth & DB
+      await adminClient.auth.admin.deleteUser(targetUserId);
+      await adminClient.from("users").delete().eq("id", targetUserId);
+
+      // Audit log
+      await adminClient.from("audit_logs").insert({
+        school_id: targetUser.school_id,
+        actor_id: callerUser.id,
+        actor_role: callerProfile.role,
+        action: "delete_user",
+        target_table: "users",
+        target_id: targetUserId,
+        old_data: { email: targetUser.email, full_name: targetUser.full_name },
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, user_id: targetUserId }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // ACTION: RESET PASSWORD
+    // ------------------------------------------------------------------------
+    if (action === "reset_password") {
+      const targetUserId = body.user_id;
+      if (!targetUserId) {
+        return new Response(
+          JSON.stringify({ error: "user_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: targetUser } = await adminClient
+        .from("users")
+        .select("id, school_id")
+        .eq("id", targetUserId)
+        .maybeSingle();
+
+      if (!targetUser) {
+        return new Response(
+          JSON.stringify({ error: "User not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!isSuperAdmin && targetUser.school_id !== callerProfile.school_id) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: Cannot reset password for user in another school" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const newPassword = body.new_password || generateSecurePassword();
+
+      await adminClient.auth.admin.updateUserById(targetUserId, {
+        password: newPassword,
+      });
+
+      await adminClient
+        .from("users")
+        .update({
+          initial_password: newPassword,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", targetUserId);
+
+      await adminClient.from("audit_logs").insert({
+        school_id: targetUser.school_id,
+        actor_id: callerUser.id,
+        actor_role: callerProfile.role,
+        action: "reset_password",
+        target_table: "users",
+        target_id: targetUserId,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, password: newPassword }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // ACTION: BULK DELETE USERS
+    // ------------------------------------------------------------------------
+    if (action === "bulk_delete_users") {
+      const userIds = body.user_ids || [];
+      let deleted = 0;
+      let failed = 0;
+
+      for (const id of userIds) {
+        try {
+          const { data: target } = await adminClient
+            .from("users")
+            .select("id, school_id")
+            .eq("id", id)
+            .maybeSingle();
+
+          if (!target || (!isSuperAdmin && target.school_id !== callerProfile.school_id)) {
+            failed++;
+            continue;
+          }
+
+          await adminClient.auth.admin.deleteUser(id);
+          await adminClient.from("users").delete().eq("id", id);
+          deleted++;
+        } catch (_) {
+          failed++;
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, deleted, failed }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ error: `Unknown action: ${action}` }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", details: message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/class_model.dart';
 import '../../data/models/school_models.dart';
+import '../../data/services/user_management_service.dart';
 import '../../core/config/supabase_config.dart';
 
 final usersProvider = AsyncNotifierProvider<UsersNotifier, UsersState>(
@@ -242,61 +243,28 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
         }
       }
 
-      // Create auth user using ADMIN client with service_role key
-      final authResp = await _adminSupabase.auth.admin.createUser(
-        AdminUserAttributes(
-          email: email,
-          password: password,
-          emailConfirm: true,
-        ),
+      // Create user securely through Edge Function
+      final result = await UserManagementService.createUser(
+        email: email,
+        password: password,
+        fullName: fullName,
+        role: role,
+        phone: phone,
+        studentCode: code,
+        classId: classId,
+        groupId: groupId,
+        academicYearId: academicYearId,
+        dateOfBirth: dateOfBirth,
+        address: address,
+        niveauCode: niveauCode,
+        sectionCode: sectionCode,
+        gender: gender,
+        nationality: nationality,
+        schoolId: schoolId,
       );
-      final newUserId = authResp.user?.id;
-      if (newUserId == null) throw Exception('Failed to create auth user');
-
-      // Get current academic year if not provided
-      String? yearId = academicYearId;
-      if (yearId == null && classId != null) {
-        final yearResp = await _supabase
-            .from('academic_years')
-            .select('id')
-            .eq('school_id', schoolId)
-            .eq('is_current', true)
-            .maybeSingle();
-        yearId = yearResp?['id'];
-      }
-
-      // Insert profile using admin client (bypasses RLS)
-      await _adminSupabase.from('users').insert({
-        'id': newUserId,
-        'school_id': schoolId,
-        'email': email,
-        'full_name': fullName,
-        'role': role,
-        'phone': phone,
-        'student_code': code,
-        'date_of_birth': dateOfBirth,
-        'address': address,
-        'niveau_code': niveauCode,
-        'section_code': sectionCode,
-        'gender': gender,
-        'nationality': nationality,
-        'initial_password': password, // Store for admin reference
-      });
-
-      // Create enrollment if student with class assigned
-      if (role == 'student' && classId != null) {
-        await _adminSupabase.from('enrollments').insert({
-          'user_id': newUserId,
-          'class_id': classId,
-          'group_id': groupId,
-          'academic_year_id': yearId,
-          'student_code': code,
-          'is_active': true,
-        });
-      }
 
       await refresh();
-      return true;
+      return result['success'] == true;
     } catch (e) {
       state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
       return false;
@@ -452,29 +420,7 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
   /// Reset user password (for password reset requests)
   Future<String?> resetUserPassword(String userId) async {
     try {
-      final newPassword = generatePassword();
-
-      // 1. Try to update password in auth.users via admin API (service role)
-      try {
-        await _adminSupabase.auth.admin.updateUserById(
-          userId,
-          attributes: AdminUserAttributes(password: newPassword),
-        );
-      } catch (authErr) {
-        debugPrint(
-          'Warning in resetUserPassword: auth.admin.updateUserById failed for $userId ($authErr). Saving password to users table.',
-        );
-      }
-
-      // 2. Always store initial password in user record for admin reference
-      await _adminSupabase
-          .from('users')
-          .update({
-            'initial_password': newPassword,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', userId);
-
+      final newPassword = await UserManagementService.resetPassword(userId);
       await refresh();
       return newPassword;
     } catch (e) {
@@ -559,55 +505,24 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
 
   Future<bool> deleteUser(String id) async {
     try {
-      // First delete from auth using admin client (service_role key)
-      try {
-        await _adminSupabase.auth.admin.deleteUser(id);
-      } catch (authError) {
-        print('Auth delete error: $authError');
-      }
-      // Then delete from users table
-      await _adminSupabase.from('users').delete().eq('id', id);
+      final success = await UserManagementService.deleteUser(id);
       await refresh();
-      return true;
+      return success;
     } catch (e) {
       state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
       return false;
     }
   }
 
-  /// Bulk delete users in parallel - much faster than deleting one by one
+  /// Bulk delete users securely through Edge Function
   Future<Map<String, int>> bulkDeleteUsers(List<String> ids) async {
-    int deleted = 0;
-    int failed = 0;
-
-    // Delete in batches of 5 to avoid overwhelming the server
-    const batchSize = 5;
-    for (var i = 0; i < ids.length; i += batchSize) {
-      final batch = ids.skip(i).take(batchSize).toList();
-      final results = await Future.wait(
-        batch.map((id) async {
-          try {
-            // Delete from auth
-            try {
-              await _adminSupabase.auth.admin.deleteUser(id);
-            } catch (authError) {
-              debugPrint('Auth delete error for $id: $authError');
-            }
-            // Delete from users table
-            await _adminSupabase.from('users').delete().eq('id', id);
-            return true;
-          } catch (e) {
-            debugPrint('Delete failed for $id: $e');
-            return false;
-          }
-        }),
-      );
-      deleted += results.where((r) => r).length;
-      failed += results.where((r) => !r).length;
+    try {
+      final result = await UserManagementService.bulkDeleteUsers(ids);
+      await refresh();
+      return result;
+    } catch (e) {
+      debugPrint('bulkDeleteUsers failed: $e');
+      return {'deleted': 0, 'failed': ids.length};
     }
-
-    // Refresh only once at the end
-    await refresh();
-    return {'deleted': deleted, 'failed': failed};
   }
 }

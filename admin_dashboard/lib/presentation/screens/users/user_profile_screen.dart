@@ -1,3 +1,4 @@
+import '../../../data/services/user_management_service.dart';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -889,26 +890,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     if (result == null || result.isEmpty) return;
 
     try {
-      // 1. Try to update actual Auth password via admin client with service role
-      try {
-        await SupabaseConfig.adminClient.auth.admin.updateUserById(
-          widget.userId,
-          attributes: AdminUserAttributes(password: result),
-        );
-      } catch (authErr) {
-        debugPrint(
-          'Warning in _setPasswordManually: auth update failed for ${widget.userId} ($authErr). Saving password to users table.',
-        );
-      }
-
-      // 2. Save the password to initial_password field
-      await SupabaseConfig.adminClient
-          .from('users')
-          .update({
-            'initial_password': result,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', widget.userId);
+      // Update password securely via Edge Function
+      await UserManagementService.resetPassword(widget.userId, newPassword: result);
 
       // Refresh the profile
       ref.invalidate(userProfileDataProvider(widget.userId));

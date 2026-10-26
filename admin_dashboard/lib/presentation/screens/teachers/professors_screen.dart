@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/services/user_management_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
@@ -101,17 +103,21 @@ final professorsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
 });
 
 final _subjectsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  // Get school_id from an existing user
-  String? schoolId;
-  try {
-    final existing = await Supabase.instance.client
-        .from('users')
-        .select('school_id')
-        .not('school_id', 'is', null)
-        .limit(1)
-        .maybeSingle();
-    schoolId = existing?['school_id'] as String?;
-  } catch (_) {}
+  // Get school_id from authenticated user
+  String? schoolId = ref.watch(authProvider).user?.schoolId;
+  if (schoolId == null) {
+    try {
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (currentUserId != null) {
+        final profile = await Supabase.instance.client
+            .from('users')
+            .select('school_id')
+            .eq('id', currentUserId)
+            .maybeSingle();
+        schoolId = profile?['school_id'] as String?;
+      }
+    } catch (_) {}
+  }
 
   var query = Supabase.instance.client
       .from('subjects')
@@ -875,8 +881,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 ElevatedButton.icon(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    try { await SupabaseConfig.adminClient.auth.admin.deleteUser(id); } catch (_) {}
-                    try { await SupabaseConfig.adminClient.from('users').delete().eq('id', id); } catch (_) {}
+                    try { await UserManagementService.deleteUser(id); } catch (_) {}
                     ref.invalidate(professorsProvider);
                     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" supprimé'), backgroundColor: AppColors.error));
                   },
@@ -1112,10 +1117,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   onPressed: () async {
                     Navigator.pop(ctx);
                     try {
-                      for (final id in _selectedProfIds.toList()) {
-                        try { await SupabaseConfig.adminClient.auth.admin.deleteUser(id); } catch (_) {}
-                        try { await SupabaseConfig.adminClient.from('users').delete().eq('id', id); } catch (_) {}
-                      }
+                      await UserManagementService.bulkDeleteUsers(_selectedProfIds.toList());
                       setState(() => _selectedProfIds.clear());
                       ref.invalidate(professorsProvider);
                       if (mounted) {
@@ -1782,61 +1784,32 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                             try {
                               String? schoolId;
                               try {
-                                final existing = await SupabaseConfig.adminClient
-                                    .from('users')
-                                    .select('school_id')
-                                    .eq('role', 'teacher')
-                                    .limit(1)
-                                    .maybeSingle();
-                                schoolId = existing?['school_id'] as String?;
+                                final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+                                if (currentUserId != null) {
+                                  final profile = await Supabase.instance.client
+                                      .from('users')
+                                      .select('school_id')
+                                      .eq('id', currentUserId)
+                                      .maybeSingle();
+                                  schoolId = profile?['school_id'] as String?;
+                                }
                               } catch (_) {}
-                              schoolId ??= (await SupabaseConfig.adminClient
-                                  .from('users')
-                                  .select('school_id')
-                                  .not('school_id', 'is', null)
-                                  .limit(1)
-                                  .maybeSingle())?['school_id'] as String?;
 
                               final autoEmail = emailCtrl.text.trim();
                               final autoPass = 'Teacher@${DateTime.now().millisecondsSinceEpoch}';
                               final phoneVal = phoneCtrl.text.trim();
                               final phoneToStore = (phoneVal.isEmpty || phoneVal == '+216') ? null : phoneVal;
 
-                              String newTeacherId;
-                              try {
-                                final authResp = await SupabaseConfig.adminClient.auth.admin.createUser(
-                                  AdminUserAttributes(
-                                    email: autoEmail,
-                                    password: autoPass,
-                                    emailConfirm: true,
-                                    userMetadata: {
-                                      'full_name': nameCtrl.text.trim(),
-                                      'role': 'teacher',
-                                      if (schoolId != null) 'school_id': schoolId,
-                                    },
-                                  ),
-                                );
-                                newTeacherId = authResp.user!.id;
-                                await SupabaseConfig.adminClient.from('users').upsert({
-                                  'id': newTeacherId,
-                                  'full_name': nameCtrl.text.trim(),
-                                  'email': autoEmail,
-                                  'phone': phoneToStore,
-                                  'role': 'teacher',
-                                  if (schoolId != null) 'school_id': schoolId,
-                                  'is_active': true,
-                                });
-                              } catch (_) {
-                                final inserted = await SupabaseConfig.adminClient.from('users').insert({
-                                  'full_name': nameCtrl.text.trim(),
-                                  'email': autoEmail,
-                                  'phone': phoneToStore,
-                                  'role': 'teacher',
-                                  if (schoolId != null) 'school_id': schoolId,
-                                  'is_active': true,
-                                }).select('id').single();
-                                newTeacherId = inserted['id'] as String;
-                              }
+                              // Create teacher securely through Edge Function
+                              final createResult = await UserManagementService.createUser(
+                                email: autoEmail,
+                                password: autoPass,
+                                fullName: nameCtrl.text.trim(),
+                                role: 'teacher',
+                                phone: phoneToStore,
+                                schoolId: schoolId,
+                              );
+                              final newTeacherId = (createResult['user'] as Map)['id'] as String;
 
                               if (selectedSubjectId != null && schoolId != null) {
                                 await SupabaseConfig.adminClient.from('teacher_assignments').insert({

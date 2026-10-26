@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/config/supabase_config.dart';
+import '../../data/services/user_management_service.dart';
 import '../../data/models/academic_models.dart';
 import '../../data/models/school_models.dart';
 import '../../data/models/tunisian_coefficients.dart';
@@ -744,7 +745,6 @@ class SubjectsManagementNotifier
     String? phone,
   }) async {
     final schoolId = await _getSchoolId();
-    final adminClient = SupabaseConfig.adminClient;
 
     // Auto-generate email if not provided
     final effectiveEmail = email ?? '${fullName.toLowerCase().replaceAll(' ', '.').replaceAll(RegExp(r'[^a-z0-9.]'), '')}.${DateTime.now().millisecondsSinceEpoch}@auto.school';
@@ -752,29 +752,17 @@ class SubjectsManagementNotifier
     // Auto-generate password
     final password = '${fullName.split(' ').first.toLowerCase()}${DateTime.now().millisecondsSinceEpoch % 10000}';
 
-    // Create auth user using admin client (service_role key)
-    final authResponse = await adminClient.auth.admin.createUser(
-      AdminUserAttributes(
-        email: effectiveEmail,
-        password: password,
-        emailConfirm: true,
-      ),
+    // Create teacher securely through Edge Function
+    final createResult = await UserManagementService.createUser(
+      email: effectiveEmail,
+      password: password,
+      fullName: fullName,
+      role: 'teacher',
+      phone: phone,
+      schoolId: schoolId,
     );
 
-    final userId = authResponse.user?.id;
-    if (userId == null) throw Exception('Erreur lors de la création du compte');
-
-    // Create user profile using admin client
-    await adminClient.from('users').insert({
-      'id': userId,
-      'school_id': schoolId,
-      'role': 'teacher',
-      'full_name': fullName,
-      'email': effectiveEmail,
-      'phone': phone,
-      'initial_password': password,
-      'is_active': true,
-    });
+    final userId = (createResult['user'] as Map)['id'] as String;
 
     ref.invalidateSelf();
     return userId;

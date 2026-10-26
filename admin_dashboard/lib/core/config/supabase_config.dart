@@ -5,13 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseConfig {
   static const String url = 'https://cazuauxivrboygehrkij.supabase.co';
   
-  /// Service role key for admin operations (creating users, etc.).
-  /// Do not ship this in public client builds; prefer moving these operations
-  /// behind a trusted backend or edge function.
+  /// Optional Service Role Key for local development test environments only.
+  /// NEVER hardcode production service_role keys into client code.
+  /// All privileged actions are executed via secure Edge Functions.
   static const String serviceRoleKey = String.fromEnvironment(
     'SUPABASE_SERVICE_ROLE_KEY',
-    defaultValue:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhenVhdXhpdnJib3lnZWhya2lqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Nzg4NDMxNiwiZXhwIjoyMDgzNDYwMzE2fQ.Lc4xJVNGspo7sCHLg7nq_K_UAbgvpyIravgNtbVpmLE',
+    defaultValue: '',
   );
   
   static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhenVhdXhpdnJib3lnZWhya2lqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4ODQzMTYsImV4cCI6MjA4MzQ2MDMxNn0._rYkNtubGQo745cX-YApjWQyYC4s8r37SEa6AoiVppo';
@@ -27,16 +26,17 @@ class SupabaseConfig {
   /// Main client for user auth and normal operations
   static SupabaseClient get client => Supabase.instance.client;
   
-  /// Admin client with service_role key for creating users.
-  /// Falls back to the regular anon client when the key is not set,
-  /// so the app still works for read operations without --dart-define.
+  /// Admin operations are securely executed through Edge Functions.
+  /// For backward compatibility with existing screen queries, this returns the authenticated
+  /// client governed by tenant-isolated RLS. If an explicit environment key is supplied
+  /// during local testing, it uses it.
   static SupabaseClient? _adminClient;
   static SupabaseClient get adminClient {
-    if (serviceRoleKey.isEmpty) {
-      return client;
+    if (serviceRoleKey.isNotEmpty) {
+      _adminClient ??= SupabaseClient(url, serviceRoleKey);
+      return _adminClient!;
     }
-    _adminClient ??= SupabaseClient(url, serviceRoleKey);
-    return _adminClient!;
+    return client;
   }
 
   static Future<void> initialize() async {

@@ -1,4 +1,5 @@
-﻿import 'dart:ui';
+import '../../../data/services/user_management_service.dart';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -831,18 +832,13 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
       );
       debugPrint('UserFormDialog: updateUser returned $success');
 
-      // Update password if a new one was entered
+      // Update password securely via Edge Function if a new one was entered
       if (success && _passwordController.text.isNotEmpty) {
         try {
-          final supabase = Supabase.instance.client;
-          await supabase.auth.admin.updateUserById(
+          await UserManagementService.resetPassword(
             widget.user!.id,
-            attributes: AdminUserAttributes(password: _passwordController.text),
+            newPassword: _passwordController.text,
           );
-          await supabase.from('users').update({
-            'initial_password': _passwordController.text,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', widget.user!.id);
           debugPrint('UserFormDialog: password updated successfully');
         } catch (e) {
           debugPrint('UserFormDialog: password update error: $e');

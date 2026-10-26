@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../data/services/user_management_service.dart';
 import '../../providers/users_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
@@ -551,28 +552,8 @@ class _PasswordResetRequestsScreenState
 
     try {
       final supabase = Supabase.instance.client;
-      final adminClient = SupabaseConfig.adminClient;
-
-      // 1. Try to update password in auth.users using admin client with service role
-      try {
-        await adminClient.auth.admin.updateUserById(
-          userId,
-          attributes: AdminUserAttributes(password: newPassword),
-        );
-      } catch (authErr) {
-        debugPrint(
-          'Warning in _approveRequest: auth.admin.updateUserById failed for $userId ($authErr). Saving password to users table.',
-        );
-      }
-
-      // 2. Store initial password in user record for admin reference
-      await adminClient
-          .from('users')
-          .update({
-            'initial_password': newPassword,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', userId);
+      // 1. Update password securely through Edge Function
+      await UserManagementService.resetPassword(userId, newPassword: newPassword);
 
       // Update request status
       await supabase

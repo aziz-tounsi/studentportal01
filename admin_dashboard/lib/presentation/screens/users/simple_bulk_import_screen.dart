@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border, TextSpan, BorderStyle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
+import '../../../data/services/user_management_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/ios_loader.dart';
 
@@ -1249,17 +1250,15 @@ class _SimpleBulkImportScreenState
         final password = _generatePassword();
         final code = await _generateCode(user['role'] ?? 'student');
 
-        // Create auth user
-        final authResp = await adminClient.auth.admin.createUser(
-          AdminUserAttributes(
-            email: user['email']!,
-            password: password,
-            emailConfirm: true,
-          ),
+        // Create auth user securely via Edge Function
+        final createResult = await UserManagementService.createUser(
+          email: user['email']!,
+          password: password,
+          fullName: user['fullName'] ?? 'Utilisateur',
+          role: user['role'] ?? 'student',
+          schoolId: schoolId,
         );
-
-        final newUserId = authResp.user?.id;
-        if (newUserId == null) throw Exception('Failed to create auth user');
+        final newUserId = (createResult['user'] as Map)['id'] as String;
 
         // Resolve class ID from niveau and class name
         String? classId;
@@ -1372,7 +1371,7 @@ class _SimpleBulkImportScreenState
           }
         }
 
-        await adminClient.from('users').insert({
+        await adminClient.from('users').upsert({
           'id': newUserId,
           'school_id': schoolId,
           'email': user['email'],

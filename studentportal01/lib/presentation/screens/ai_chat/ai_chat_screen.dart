@@ -266,7 +266,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
     _loadConversations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-            _initAI();
+      ref.read(navBarHiddenProvider.notifier).state = true;
+      _initAI();
     });
   }
 
@@ -700,10 +701,12 @@ I have **complete** access to your academic data — grades, timetable, absences
 
   @override
   void dispose() {
+    ref.read(navBarHiddenProvider.notifier).state = false;
+    ref.read(aiChatExitStartedProvider.notifier).state = false;
     if (_showHistory) {
       ref.read(backSwipeInterceptorProvider.notifier).state = null;
     }
-        _inputController.dispose();
+    _inputController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     _inputFocus.dispose();
@@ -744,7 +747,9 @@ I have **complete** access to your academic data — grades, timetable, absences
           return;
         }
         if (didPop) {
-                  }
+          ref.read(navBarHiddenProvider.notifier).state = false;
+          ref.read(aiChatExitStartedProvider.notifier).state = false;
+        }
       },
       child: Stack(
         children: [
@@ -980,6 +985,8 @@ I have **complete** access to your academic data — grades, timetable, absences
                 // Back
                 GestureDetector(
                   onTap: () {
+                    ref.read(navBarHiddenProvider.notifier).state = false;
+                    ref.read(aiChatExitStartedProvider.notifier).state = true;
                     final swipeBack = IosEdgeSwipeBack.of(context);
                     if (swipeBack != null) {
                       swipeBack.animateBack();

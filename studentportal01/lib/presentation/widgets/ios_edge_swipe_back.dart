@@ -19,6 +19,8 @@ class IosEdgeSwipeBack extends StatefulWidget {
   final double edgeThreshold;
   final Gradient? backgroundGradient;
   final bool Function()? onInterceptSwipe;
+  final VoidCallback? onSwipeExitStarted;
+  final VoidCallback? onSwipeCancel;
 
   const IosEdgeSwipeBack({
     super.key,
@@ -28,6 +30,8 @@ class IosEdgeSwipeBack extends StatefulWidget {
     this.edgeThreshold = 44.0,
     this.backgroundGradient,
     this.onInterceptSwipe,
+    this.onSwipeExitStarted,
+    this.onSwipeCancel,
   });
 
   static IosEdgeSwipeBackState? of(BuildContext context) {
@@ -115,6 +119,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     final passedDist = _progress >= 0.22;
 
     if (passedDist || flicked) {
+      widget.onSwipeExitStarted?.call();
       // Animate slide completion and execute return
       _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
         CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
@@ -123,6 +128,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
         _executeReturn();
       });
     } else {
+      widget.onSwipeCancel?.call();
       // Snap back to closed state
       _progressAnim = Tween<double>(begin: _progress, end: 0.0).animate(
         CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
@@ -134,6 +140,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
   void _onDragCancel() {
     if (_isDragging) {
       _isDragging = false;
+      widget.onSwipeCancel?.call();
       _progressAnim = Tween<double>(begin: _progress, end: 0.0).animate(
         CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
@@ -143,6 +150,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
   void animateBack() {
     if (_animCtrl.isAnimating) return;
+    widget.onSwipeExitStarted?.call();
     _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
       CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
     );

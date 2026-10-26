@@ -61,11 +61,11 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     _fromIndex = widget.currentIndex;
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 850),
+      duration: const Duration(milliseconds: 380),
     );
     _animation = CurvedAnimation(
       parent: _animationController,
-      curve: Curves.elasticOut,
+      curve: Curves.easeOutBack,
     );
     _animationController.value = 1.0;
 
@@ -105,18 +105,6 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
 
     // Dismiss any pushed modals/sheets/popups so we cleanly show the destination tab
     dismissAllOverlaysAndPopups();
-    try {
-      final rootNav = Navigator.of(context, rootNavigator: true);
-      while (rootNav.canPop()) {
-        rootNav.pop();
-      }
-    } catch (_) {}
-    try {
-      final localNav = Navigator.of(context, rootNavigator: false);
-      while (localNav.canPop()) {
-        localNav.pop();
-      }
-    } catch (_) {}
 
     if (currentRoute == targetRoute) {
       // Truly on the same page: stay bouncing purely on the same button!
@@ -130,6 +118,7 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
 
     // Navigating to a different route
     ref.read(navigatedFromAIChatProvider.notifier).state = false;
+    ref.read(aiChatExitStartedProvider.notifier).state = false;
     setState(() {
       _fromIndex = _selectedIndex;
       _selectedIndex = index;
@@ -261,69 +250,68 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
   }
 
   Widget _buildItem(int index, List<_NavItem> items) {
+    final isSelected = _selectedIndex == index;
+    final iconColor = isSelected ? Colors.white : const Color(0xFF94A3B8);
+
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: _animationController,
-        builder: (context, _) {
-          final isSelected = _selectedIndex == index;
-          final iconColor =
-              isSelected ? Colors.white : const Color(0xFF94A3B8);
-
-          return Container(
-            width: 72,
-            height: 72,
-            color: Colors.transparent,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  items[index].icon,
-                  color: iconColor,
-                  size: 36,
-                ),
-                if (items[index].badgeCount != null &&
-                    items[index].badgeCount! > 0)
-                  Positioned(
-                    right: 2,
-                    top: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: _pink,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Text(
-                        items[index].badgeCount! > 9
-                            ? '9+'
-                            : '${items[index].badgeCount}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
+      child: Container(
+        width: 72,
+        height: 72,
+        color: Colors.transparent,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            AnimatedScale(
+              scale: isSelected ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              child: Icon(
+                items[index].icon,
+                color: iconColor,
+                size: 36,
+              ),
             ),
-          );
-        },
+            if (items[index].badgeCount != null &&
+                items[index].badgeCount! > 0)
+              Positioned(
+                right: 2,
+                top: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: _pink,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  child: Text(
+                    items[index].badgeCount! > 9
+                        ? '9+'
+                        : '${items[index].badgeCount}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -1088,10 +1088,18 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
       viewportFraction: 0.5,
       initialPage: widget.initialIndex,
     );
+    _pageController.addListener(_onPageScroll);
+  }
+
+  void _onPageScroll() {
+    if (_pageController.hasClients && _pageController.page != null) {
+      _currentPage = _pageController.page!;
+    }
   }
 
   @override
   void dispose() {
+    _pageController.removeListener(_onPageScroll);
     _pageController.dispose();
     super.dispose();
   }
@@ -1246,11 +1254,15 @@ class _PaymentCarouselState extends State<_PaymentCarousel> {
                       return GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         onTap: () {
-                          final isCenter = (_currentPage - index).abs() < 0.5;
+                          final current = (_pageController.hasClients && _pageController.page != null)
+                              ? _pageController.page!
+                              : _currentPage;
+                          final centerIndex = current.round().clamp(0, widget.payments.length - 1);
+                          final isCenter = index == centerIndex || (current - index).abs() < 0.5;
                           if (isCenter) {
                             _showPaymentDetailsDialog(
                               context,
-                              widget.payments[index],
+                              widget.payments[centerIndex],
                               widget.currency,
                               DateFormat('dd/MM/yyyy'),
                             );
