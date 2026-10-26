@@ -1171,7 +1171,7 @@ I have **complete** access to your academic data — grades, timetable, absences
   Widget _buildInputBar(bool isRtl) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(36),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF7A8698).withValues(alpha: 0.18),
@@ -1181,14 +1181,14 @@ I have **complete** access to your academic data — grades, timetable, absences
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(36),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(36),
             ),
             child: Directionality(
               textDirection: TextDirection.ltr,

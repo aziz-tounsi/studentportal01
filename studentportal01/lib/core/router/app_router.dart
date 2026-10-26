@@ -21,6 +21,7 @@ import '../../presentation/screens/profile/profile_screen.dart';
 import '../../presentation/screens/settings/settings_screen.dart';
 import '../../presentation/screens/contact/contact_screen.dart';
 import '../../presentation/screens/about/about_screen.dart';
+import '../../presentation/screens/bug_report/report_bug_screen.dart';
 import '../../presentation/screens/stats/stats_screen.dart';
 import '../../presentation/screens/ai_chat/ai_chat_screen.dart';
 import '../../presentation/widgets/bubble_nav_bar.dart';
@@ -93,10 +94,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final isAIChat = state.matchedLocation == '/ai-chat';
               final isWriteSuggestion =
                   state.matchedLocation == '/write-suggestion';
+              final isReportBug = state.matchedLocation == '/report-bug';
               final isAbsenceDetail =
                   state.matchedLocation.startsWith('/absences/');
               final hideNavBar = ref.watch(navBarHiddenProvider) ||
                   isWriteSuggestion ||
+                  isReportBug ||
                   isAbsenceDetail ||
                   isAIChat;
 
@@ -137,27 +140,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
               final backgroundWidget = isWriteSuggestion
                   ? const SuggestionsScreen()
-                  : isAbsenceDetail
-                      ? (fromAIChat ? const AIChatScreen() : const AbsencesScreen())
-                      : fromAIChat
-                          ? const AIChatScreen()
-                          : isSideNavPage
-                              ? const HomeScreen(forceDrawerOpen: true)
-                              : const HomeScreen();
+                  : isReportBug
+                      ? const AboutScreen()
+                      : isAbsenceDetail
+                          ? (fromAIChat ? const AIChatScreen() : const AbsencesScreen())
+                          : fromAIChat
+                              ? const AIChatScreen()
+                              : isSideNavPage
+                                  ? const HomeScreen(forceDrawerOpen: true)
+                                  : const HomeScreen();
 
               final backgroundGradient = fromAIChat ? aiChatGradient : homeGradient;
 
               final onReturnCallback = isWriteSuggestion
                   ? () => context.go('/suggestions')
-                  : isAbsenceDetail
-                      ? () {
-                          if (fromAIChat) {
-                            ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                            context.go('/ai-chat');
-                          } else {
-                            context.go('/absences');
-                          }
-                        }
+                  : isReportBug
+                      ? () => context.go('/about')
+                      : isAbsenceDetail
+                          ? () {
+                              if (fromAIChat) {
+                                ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                                context.go('/ai-chat');
+                              } else {
+                                context.go('/absences');
+                              }
+                            }
                   : isAIChat
                       ? () {
                           ref.read(navBarHiddenProvider.notifier).state = false;
@@ -278,6 +285,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'write-suggestion',
             pageBuilder: (context, state) =>
                 NoTransitionPage(child: const WriteSuggestionScreen()),
+          ),
+          GoRoute(
+            path: '/report-bug',
+            name: 'report-bug',
+            pageBuilder: (context, state) =>
+                NoTransitionPage(child: const ReportBugScreen()),
           ),
           // Feature pages WITH nav bar
           GoRoute(
