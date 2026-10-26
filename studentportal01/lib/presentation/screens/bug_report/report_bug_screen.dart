@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -384,12 +385,20 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           body: SafeArea(
-            child: Column(
-              children: [
-                // Header (aligned with page cards at x = 20)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                  child: Row(
+            bottom: false,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                math.max(MediaQuery.of(context).padding.bottom, 24.0) + 20.0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Header (aligned with page cards at x = 20)
+                  Row(
                     children: [
                       BouncingWrapper(
                         shrinkScale: 0.86,
@@ -460,14 +469,10 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 20),
 
-                // Form Content enclosed inside rounded frosted-glass card
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                    child: ClipRRect(
+                  // Form Content enclosed inside rounded frosted-glass card
+                  ClipRRect(
                       borderRadius: BorderRadius.circular(28),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -805,9 +810,8 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

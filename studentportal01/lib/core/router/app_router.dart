@@ -100,11 +100,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final isReportBug = state.matchedLocation == '/report-bug';
               final isAbsenceDetail =
                   state.matchedLocation.startsWith('/absences/');
+              final isSideNavPage = const [
+                '/settings',
+                '/contact',
+                '/about',
+                '/profile',
+              ].contains(state.matchedLocation);
               final hideNavBar = isWriteSuggestion ||
                   isReportBug ||
                   isAbsenceDetail ||
                   isAIChat ||
-                  isCardExpanded;
+                  isCardExpanded ||
+                  isSideNavPage;
 
               const homeGradient = LinearGradient(
                 begin: Alignment.topLeft,
@@ -131,13 +138,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ],
                 stops: [0.0, 0.25, 0.5, 0.75, 1.0],
               );
-
-              final isSideNavPage = const [
-                '/settings',
-                '/contact',
-                '/about',
-                '/profile',
-              ].contains(state.matchedLocation);
 
               final backSwipeInterceptor = ref.watch(backSwipeInterceptorProvider);
 

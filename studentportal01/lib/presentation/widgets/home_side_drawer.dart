@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/l10n/app_localizations.dart';
 import '../../core/theme/arabic_typography.dart';
@@ -187,11 +188,18 @@ class HomeSideDrawer extends ConsumerWidget {
                                   const SizedBox(width: 10),
                                   Text(
                                     l10n.logout,
-                                    style: ArabicTypography.cardTitle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF374151),
-                                    ),
+                                    style: ArabicTypography.isArabic(context)
+                                        ? GoogleFonts.cairo(
+                                            fontSize: 15.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF374151),
+                                          )
+                                        : GoogleFonts.poppins(
+                                            fontSize: 15.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF374151),
+                                            letterSpacing: -0.2,
+                                          ),
                                   ),
                                 ],
                               ),
@@ -224,6 +232,20 @@ class _DrawerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAr = ArabicTypography.isArabic(context);
+    final textStyle = isAr
+        ? GoogleFonts.cairo(
+            fontSize: 16.5,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF2D3748),
+          )
+        : GoogleFonts.poppins(
+            fontSize: 16.5,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF2D3748),
+            letterSpacing: -0.2,
+          );
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: BouncingWrapper(
@@ -259,11 +281,7 @@ class _DrawerItem extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: ArabicTypography.cardTitle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF2D3748),
-                  ),
+                  style: textStyle,
                 ),
               ),
             ],
