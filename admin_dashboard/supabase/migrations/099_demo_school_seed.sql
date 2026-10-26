@@ -1,3 +1,9 @@
+-- ==============================================================================
+-- Migration 099: Commercial SaaS Demo School Seed Generator
+-- Description: Creates a pre-populated, production-ready demo school for pitch demos.
+-- School: Lycée Pilote Pythagore (Démo) [code: demo]
+-- ==============================================================================
+
 DO $$
 DECLARE
   v_demo_school_id UUID;

@@ -34,6 +34,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Offset _expandDragOffset = Offset.zero;
   Rect? _cardRect;
   final GlobalKey _cardKey = GlobalKey();
+  bool _isTransitionReady = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -41,6 +42,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _isTransitionReady = true;
+        });
+      }
+    });
 
     final initialOffset = ref.read(homeScrollOffsetProvider);
     _scrollController = ScrollController(initialScrollOffset: initialOffset);
@@ -48,12 +56,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       if (_scrollController.hasClients) {
         ref.read(homeScrollOffsetProvider.notifier).state =
             _scrollController.offset;
-      }
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _restoreScrollOffset();
       }
     });
 
@@ -66,27 +68,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _restoreScrollOffset();
-  }
-
-  void _restoreScrollOffset() {
-    final savedOffset = ref.read(homeScrollOffsetProvider);
-    if (savedOffset > 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) return;
-        final maxScroll = _scrollController.position.maxScrollExtent;
-        final target =
-            savedOffset.clamp(0.0, maxScroll > 0 ? maxScroll : savedOffset);
-        if ((_scrollController.offset - target).abs() > 0.5) {
-          _scrollController.jumpTo(target);
-        }
-      });
-    }
   }
 
   void _openDrawer() {
@@ -146,7 +127,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         extendBody: true,
         body: LayoutBuilder(
         builder: (context, constraints) {
-          final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
           final screenHeight = constraints.maxHeight;
           final screenWidth = constraints.maxWidth;
           final safeTop = MediaQuery.of(context).padding.top;
@@ -292,11 +272,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: SingleChildScrollView(
                     key: const PageStorageKey<String>('home_scroll_view'),
                     controller: _scrollController,
-                    physics: isDrawerOpen
-                        ? const NeverScrollableScrollPhysics()
-                        : const AlwaysScrollableScrollPhysics(
-                            parent: BouncingScrollPhysics(),
-                          ),
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minHeight: screenHeight),
                       child: Column(
@@ -439,6 +417,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           );
 
+          final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
           final isRtl = Directionality.of(context) == TextDirection.rtl;
 
           return Container(
@@ -541,6 +520,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     AppLocalizations l10n,
     WidgetRef ref,
   ) {
+    if (!_isTransitionReady) {
+      return List.generate(
+        6,
+        (_) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(28),
+          ),
+        ),
+      );
+    }
+
     // Get count of suggestions that have been replied or marked as seen
     final suggestionBadgeCount = ref.watch(
       repliedOrSeenSuggestionsCountProvider,
@@ -607,13 +598,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             gradientColors: card.gradientColors,
             iconAlignment: card.iconAlignment,
             badgeCount: card.badgeCount,
-            onTap: () {
-              if (_scrollController.hasClients) {
-                ref.read(homeScrollOffsetProvider.notifier).state =
-                    _scrollController.offset;
-              }
-              context.go(card.route);
-            },
+            onTap: () => context.go(card.route),
           ),
         )
         .toList();
