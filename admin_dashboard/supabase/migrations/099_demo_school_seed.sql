@@ -22,23 +22,34 @@ BEGIN
   -- 1. Ensure Standard Plan exists
   SELECT id INTO v_standard_plan_id FROM public.subscription_plans WHERE code = 'standard' LIMIT 1;
 
-  -- 2. Create or Get Demo School
-  INSERT INTO public.schools (
-    name, code, email, phone, address, primary_color, secondary_color, is_active
-  ) VALUES (
-    'Lycée Pilote Pythagore (Démo)',
-    'demo',
-    'contact@demo-school.tn',
-    '+216 71 000 111',
-    'Avenue Habib Bourguiba, Tunis',
-    '#2563EB',
-    '#0D1321',
-    TRUE
-  )
-  ON CONFLICT (code) DO UPDATE SET
-    name = EXCLUDED.name,
-    is_active = TRUE
-  RETURNING id INTO v_demo_school_id;
+  -- Ensure columns exist
+  ALTER TABLE public.schools ADD COLUMN IF NOT EXISTS code TEXT;
+  ALTER TABLE public.schools ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#0052CC';
+  ALTER TABLE public.schools ADD COLUMN IF NOT EXISTS secondary_color TEXT DEFAULT '#172B4D';
+  ALTER TABLE public.schools ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+  -- 2. Create or Get Demo School (Safe Upsert)
+  SELECT id INTO v_demo_school_id FROM public.schools WHERE code = 'demo' LIMIT 1;
+  IF v_demo_school_id IS NULL THEN
+    INSERT INTO public.schools (
+      name, code, email, phone, address, primary_color, secondary_color, is_active
+    ) VALUES (
+      'Lycée Pilote Pythagore (Démo)',
+      'demo',
+      'contact@demo-school.tn',
+      '+216 71 000 111',
+      'Avenue Habib Bourguiba, Tunis',
+      '#2563EB',
+      '#0D1321',
+      TRUE
+    )
+    RETURNING id INTO v_demo_school_id;
+  ELSE
+    UPDATE public.schools
+    SET name = 'Lycée Pilote Pythagore (Démo)',
+        is_active = TRUE
+    WHERE id = v_demo_school_id;
+  END IF;
 
   -- 3. Set School AI Quota
   INSERT INTO public.ai_school_quotas (

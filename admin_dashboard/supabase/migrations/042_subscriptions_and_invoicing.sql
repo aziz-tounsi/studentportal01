@@ -12,14 +12,18 @@ ALTER TABLE public.schools
   ADD COLUMN IF NOT EXISTS secondary_color TEXT DEFAULT '#172B4D',
   ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_schools_code ON public.schools(code) WHERE code IS NOT NULL;
-
--- Auto-populate code for existing schools if null
+-- Auto-populate code for existing schools if null and add unique constraint
 DO $$
 BEGIN
   UPDATE public.schools
   SET code = LOWER(REGEXP_REPLACE(name, '[^a-zA-Z0-9]', '', 'g'))
   WHERE code IS NULL;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'schools_code_key') THEN
+    ALTER TABLE public.schools ADD CONSTRAINT schools_code_key UNIQUE (code);
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
 END $$;
 
 -- 2. Create Enums safely
