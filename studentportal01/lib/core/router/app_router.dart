@@ -29,6 +29,7 @@ import '../../presentation/widgets/bubble_nav_bar.dart';
 import '../../presentation/widgets/home_side_drawer.dart';
 import '../../presentation/widgets/ios_edge_swipe_back.dart';
 import '../../presentation/providers/nav_bar_provider.dart';
+import '../../presentation/widgets/bouncy_dropdown_selector.dart';
 
 // Navigator keys for clean overlay/popup dismissal across tabs
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'rootNav');
@@ -37,6 +38,7 @@ final bubbleNavBarKey = GlobalKey(debugLabel: 'bubbleNavBar');
 
 /// Dismisses any open menus, dialogs, bottom sheets or popup overlays
 void dismissAllOverlaysAndPopups() {
+  BouncyDropdownSelector.closeAll();
   try {
     final rootNav = rootNavigatorKey.currentState;
     while (rootNav != null && rootNav.canPop()) {

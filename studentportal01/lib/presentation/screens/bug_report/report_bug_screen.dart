@@ -14,6 +14,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/bouncy_dropdown_selector.dart';
 
 class ReportBugScreen extends ConsumerStatefulWidget {
   const ReportBugScreen({super.key});
@@ -26,7 +27,6 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
   final TextEditingController _titleCtrl = TextEditingController();
   final TextEditingController _descCtrl = TextEditingController();
   String _selectedCategory = 'functional';
-  bool _isCategoryDropdownOpen = false;
   final List<PlatformFile> _attachments = [];
   bool _isSubmitting = false;
 
@@ -241,153 +241,33 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
 
   Widget _buildCategorySelector(AppLocalizations l10n) {
     const categories = ['functional', 'visual', 'crash', 'other'];
-    final selectedColor = _getCategoryColor(_selectedCategory);
-    final selectedIcon = _getCategoryIcon(_selectedCategory);
-    final selectedLabel = _getCategoryLabel(_selectedCategory, l10n);
+    final items = categories.map((catKey) {
+      return BouncyDropdownItem<String>(
+        value: catKey,
+        label: _getCategoryLabel(catKey, l10n),
+        icon: _getCategoryIcon(catKey),
+        color: _getCategoryColor(catKey),
+      );
+    }).toList();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF64748B).withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+    return BouncyDropdownSelector<String>(
+      items: items,
+      selectedValue: _selectedCategory,
+      onSelected: (val) => setState(() => _selectedCategory = val),
+      categoryTitle: l10n.bugTypeLabel,
+      borderRadius: 22,
+      border: Border.all(
+        color: const Color(0xFFE2E8F0),
+        width: 1.2,
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          popupMenuTheme: PopupMenuThemeData(
-            color: Colors.white,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            elevation: 8,
-          ),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF64748B).withValues(alpha: 0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
         ),
-        child: PopupMenuButton<String>(
-          color: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          onOpened: () => setState(() => _isCategoryDropdownOpen = true),
-          onCanceled: () => setState(() => _isCategoryDropdownOpen = false),
-          onSelected: (value) => setState(() {
-            _selectedCategory = value;
-            _isCategoryDropdownOpen = false;
-          }),
-          offset: const Offset(0, 56),
-          itemBuilder: (context) => categories.map((catKey) {
-            final catColor = _getCategoryColor(catKey);
-            final catIcon = _getCategoryIcon(catKey);
-            final isSelected = _selectedCategory == catKey;
-            final catLabel = _getCategoryLabel(catKey, l10n);
-
-            return PopupMenuItem<String>(
-              value: catKey,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: catColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(catIcon, color: catColor, size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        catLabel,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                          color: isSelected ? catColor : Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                    if (isSelected)
-                      Icon(Icons.check_circle_rounded, color: catColor, size: 20),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-          child: AnimatedScale(
-            scale: _isCategoryDropdownOpen ? 0.98 : 1.0,
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutBack,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: selectedColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(selectedIcon, color: selectedColor, size: 22),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.bugTypeLabel,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          selectedLabel,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: selectedColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: AnimatedRotation(
-                      turns: _isCategoryDropdownOpen ? 0.5 : 0.0,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: Colors.grey[600],
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      ],
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 

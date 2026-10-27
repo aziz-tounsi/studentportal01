@@ -131,8 +131,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   backgroundColor: Colors.white,
                   surfaceTintColor: Colors.transparent,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(44),
                   ),
+                  contentPadding: const EdgeInsets.fromLTRB(28, 28, 28, 16),
+                  actionsPadding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
                   content: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -193,8 +195,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 backgroundColor: Colors.white,
                 surfaceTintColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
+                  borderRadius: BorderRadius.circular(44),
                 ),
+                titlePadding: const EdgeInsets.fromLTRB(28, 28, 28, 0),
+                contentPadding: const EdgeInsets.fromLTRB(28, 16, 28, 20),
+                actionsPadding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
                 title: Row(
                   children: [
                     const Icon(Icons.lock_reset, color: Color(0xFFFF2D78)),

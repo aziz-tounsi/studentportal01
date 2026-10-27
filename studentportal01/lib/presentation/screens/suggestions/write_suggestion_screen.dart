@@ -13,6 +13,7 @@ import '../../providers/suggestions_provider.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
+import '../../widgets/bouncy_dropdown_selector.dart';
 
 class WriteSuggestionScreen extends ConsumerStatefulWidget {
   const WriteSuggestionScreen({super.key});
@@ -117,7 +118,6 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
   final List<PlatformFile> _attachedFiles = [];
   bool _isSubmitting = false;
   String _selectedType = 'autre';
-  bool _isTypeDropdownOpen = false;
 
   @override
   void deactivate() {
@@ -258,153 +258,26 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
     }
   }
 
-  /// Build premium dropdown type selector
+  /// Build premium bouncy dropdown type selector
   Widget _buildTypeSelector(AppLocalizations l10n) {
-    final selectedColor = getTypeColor(_selectedType);
-    final selectedIcon = getTypeIcon(_selectedType);
     final typesMap = l10n.suggestionTypesList;
-    final selectedLabel = typesMap[_selectedType] ?? l10n.selectType;
+    final items = typesMap.entries.map((entry) {
+      return BouncyDropdownItem<String>(
+        value: entry.key,
+        label: entry.value,
+        icon: getTypeIcon(entry.key),
+        color: getTypeColor(entry.key),
+      );
+    }).toList();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          popupMenuTheme: PopupMenuThemeData(
-            color: Colors.white,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            elevation: 8,
-          ),
-        ),
-        child: PopupMenuButton<String>(
-          color: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          onOpened: () => setState(() => _isTypeDropdownOpen = true),
-          onCanceled: () => setState(() => _isTypeDropdownOpen = false),
-          onSelected: (value) => setState(() {
-            _selectedType = value;
-            _isTypeDropdownOpen = false;
-          }),
-          offset: const Offset(0, 56),
-          itemBuilder: (context) => typesMap.entries.map((entry) {
-            final typeColor = getTypeColor(entry.key);
-            final typeIcon = getTypeIcon(entry.key);
-            final isSelected = _selectedType == entry.key;
-
-            return PopupMenuItem<String>(
-              value: entry.key,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: typeColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(typeIcon, color: typeColor, size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        entry.value,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: isSelected ? typeColor : Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                    if (isSelected)
-                      Icon(Icons.check_circle, color: typeColor, size: 20),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-          child: AnimatedScale(
-            scale: _isTypeDropdownOpen ? 0.98 : 1.0,
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutBack,
-            child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: selectedColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(selectedIcon, color: selectedColor, size: 22),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.suggestionTypeLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        selectedLabel,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: selectedColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: AnimatedRotation(
-                    turns: _isTypeDropdownOpen ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.grey[600],
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
+    return BouncyDropdownSelector<String>(
+      items: items,
+      selectedValue: _selectedType,
+      onSelected: (val) => setState(() => _selectedType = val),
+      categoryTitle: l10n.suggestionTypeLabel,
+      borderRadius: 24,
+      maxHeight: 390.0,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
     );
   }
 

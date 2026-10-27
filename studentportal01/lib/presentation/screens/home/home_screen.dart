@@ -128,13 +128,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           _dismissExpanded();
         }
         if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            0.0,
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeOutCubic,
-          );
-          _savedScrollOffset = 0.0;
-          ref.read(homeScrollOffsetProvider.notifier).state = 0.0;
+          if (_scrollController.offset > 0) {
+            _scrollController.animateTo(
+              0.0,
+              duration: const Duration(milliseconds: 360),
+              curve: Curves.easeOutBack,
+            );
+            _savedScrollOffset = 0.0;
+            ref.read(homeScrollOffsetProvider.notifier).state = 0.0;
+          } else {
+            _scrollController
+                .animateTo(
+                  -30.0,
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutQuad,
+                )
+                .then((_) {
+                  if (_scrollController.hasClients) {
+                    _scrollController.animateTo(
+                      0.0,
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutBack,
+                    );
+                  }
+                });
+          }
         }
       }
     });
