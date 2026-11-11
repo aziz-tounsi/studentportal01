@@ -22,6 +22,7 @@ import '../../presentation/screens/contact/contact_screen.dart';
 import '../../presentation/screens/about/about_screen.dart';
 import '../../presentation/screens/bug_report/report_bug_screen.dart';
 import '../../presentation/screens/ai_chat/ai_chat_screen.dart';
+import '../../presentation/screens/shell/main_shell_screen.dart';
 import '../../presentation/widgets/bubble_nav_bar.dart';
 import '../../presentation/widgets/home_side_drawer.dart';
 import '../../presentation/widgets/ios_edge_swipe_back.dart';
@@ -157,6 +158,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               // Update origin route for AI chat when navigating other screens
               if (!isAIChat && !state.matchedLocation.startsWith('/ai-chat') && !fromAIChat) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!context.mounted) return;
                   if (ref.read(aiChatOriginRouteProvider) != state.matchedLocation) {
                     ref.read(aiChatOriginRouteProvider.notifier).state = state.matchedLocation;
                   }
@@ -243,70 +245,73 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       }
                     };
 
-              return Scaffold(
-                extendBody: true,
-                resizeToAvoidBottomInset: false,
-                body: Stack(
-                  children: [
-                    RepaintBoundary(
-                      key: const ValueKey('shell_body_layer'),
-                      child: isHome
-                          ? child
-                          : IosEdgeSwipeBack(
-                              key: ValueKey(state.matchedLocation),
-                              backgroundPage: backgroundWidget,
-                              backgroundGradient: backgroundGradient,
-                              onReturn: onReturnCallback,
-                              onInterceptSwipe: isAIChat
-                                  ? () {
-                                      final isKeyboardOpen =
-                                          MediaQuery.of(context).viewInsets.bottom > 50;
-                                      if (isKeyboardOpen) {
-                                        FocusManager.instance.primaryFocus?.unfocus();
-                                        return true;
+              return RealtimeNotificationWrapper(
+                key: const ValueKey('realtime_notification_wrapper'),
+                child: Scaffold(
+                  extendBody: true,
+                  resizeToAvoidBottomInset: false,
+                  body: Stack(
+                    children: [
+                      RepaintBoundary(
+                        key: const ValueKey('shell_body_layer'),
+                        child: isHome
+                            ? child
+                            : IosEdgeSwipeBack(
+                                key: ValueKey(state.matchedLocation),
+                                backgroundPage: backgroundWidget,
+                                backgroundGradient: backgroundGradient,
+                                onReturn: onReturnCallback,
+                                onInterceptSwipe: isAIChat
+                                    ? () {
+                                        final isKeyboardOpen =
+                                            MediaQuery.of(context).viewInsets.bottom > 50;
+                                        if (isKeyboardOpen) {
+                                          FocusManager.instance.primaryFocus?.unfocus();
+                                          return true;
+                                        }
+                                        return backSwipeInterceptor != null
+                                            ? backSwipeInterceptor()
+                                            : false;
                                       }
-                                      return backSwipeInterceptor != null
-                                          ? backSwipeInterceptor()
-                                          : false;
-                                    }
-                                  : (isSideNavPage ? null : backSwipeInterceptor),
-                              child: child,
-                            ),
-                    ),
-                    if (!isSideNavPage)
-                      Positioned(
-                        key: const ValueKey('shell_nav_bar_positioned'),
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: RepaintBoundary(
-                          child: AnimatedSlide(
-                            duration: const Duration(milliseconds: 320),
-                            curve: Curves.easeOutCubic,
-                            offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 220),
-                              opacity: hideNavBar ? 0.0 : 1.0,
-                              child: IgnorePointer(
-                                ignoring: hideNavBar,
-                                child: ImageFiltered(
-                                  imageFilter: ImageFilter.blur(
-                                    sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
-                                    sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
-                                  ),
-                                  child: BubbleNavBar(
-                                    key: bubbleNavBarKey,
-                                    currentIndex: _getNavBarIndex(state.matchedLocation),
+                                    : (isSideNavPage ? null : backSwipeInterceptor),
+                                child: child,
+                              ),
+                      ),
+                      if (!isSideNavPage)
+                        Positioned(
+                          key: const ValueKey('shell_nav_bar_positioned'),
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: RepaintBoundary(
+                            child: AnimatedSlide(
+                              duration: const Duration(milliseconds: 320),
+                              curve: Curves.easeOutCubic,
+                              offset: hideNavBar ? const Offset(0, 1.4) : Offset.zero,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 220),
+                                opacity: hideNavBar ? 0.0 : 1.0,
+                                child: IgnorePointer(
+                                  ignoring: hideNavBar,
+                                  child: ImageFiltered(
+                                    imageFilter: ImageFilter.blur(
+                                      sigmaX: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                      sigmaY: (isHome && isDrawerOpen) ? 14.0 : 0.0,
+                                    ),
+                                    child: BubbleNavBar(
+                                      key: bubbleNavBarKey,
+                                      currentIndex: _getNavBarIndex(state.matchedLocation),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    if (isHome)
-                      const HomeSideDrawer(),
-                  ],
+                      if (isHome)
+                        const HomeSideDrawer(),
+                    ],
+                  ),
                 ),
               );
             },

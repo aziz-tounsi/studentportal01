@@ -44,8 +44,13 @@ class FcmPushService {
 
       userIds = userIds.toSet().toList();
 
+      if (userIds.isEmpty) {
+        debugPrint('Push skipped: no target user IDs resolved');
+        return;
+      }
+
       // 2. Invoke Edge Function for push delivery
-      await _supabase.functions.invoke(
+      final response = await _supabase.functions.invoke(
         'send-push-notification',
         body: {
           'title': title,
@@ -55,7 +60,9 @@ class FcmPushService {
           'data': extraData ?? {},
         },
       );
-      debugPrint('Push dispatched via Edge Function for ${userIds.length} users');
+      debugPrint(
+        'Push dispatched via Edge Function for ${userIds.length} users -> status=${response.status}, data=${response.data}',
+      );
     } catch (e) {
       debugPrint('Push dispatch skipped or failed: $e');
     }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -22,6 +23,9 @@ class LocalNotificationService {
       FlutterLocalNotificationsPlugin();
 
   static bool _isInitialized = false;
+  static bool _permissionsRequested = false;
+  static StreamSubscription<String>? _tokenRefreshSub;
+  static final Map<String, DateTime> _recentNotifications = {};
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'student_portal_channel',
@@ -31,6 +35,11 @@ class LocalNotificationService {
     playSound: true,
     enableVibration: true,
   );
+
+  static int _safeNotificationId(Object? seed) {
+    final raw = (seed ?? DateTime.now().millisecondsSinceEpoch).hashCode;
+    return raw & 0x7fffffff;
+  }
 
   static Future<void> init() async {
     if (_isInitialized) return;
@@ -49,9 +58,9 @@ class LocalNotificationService {
       // 2. Initialize Local Notifications Plugin
       const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
       const iosInit = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
       );
 
       const initSettings = InitializationSettings(
@@ -77,40 +86,34 @@ class LocalNotificationService {
       );
 
       // 3. Create Android notification channel
-      if (!kIsWeb && Platform.isAndroid) {
+      if (Platform.isAndroid) {
         await _notificationsPlugin
             .resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>()
             ?.createNotificationChannel(_channel);
-
-        // Request runtime permission on Android 13+
-        await _notificationsPlugin
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
-            ?.requestNotificationsPermission();
       }
 
-      // 4. Request Firebase permissions
+      // 4. Configure Firebase messaging listeners
       try {
-        await FirebaseMessaging.instance.requestPermission(
+        await FirebaseMessaging.instance
+            .setForegroundNotificationPresentationOptions(
           alert: true,
-          announcement: false,
           badge: true,
-          carPlay: false,
-          criticalAlert: false,
-          provisional: false,
           sound: true,
         );
 
         // Foreground notification handling
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
           final notification = message.notification;
-          final title = notification?.title ?? message.data['title'] ?? 'Nouvelle notification';
-          final body = notification?.body ?? message.data['body'] ?? '';
-          final route = message.data['route'] as String?;
+          final title = notification?.title ??
+              message.data['title']?.toString() ??
+              'Nouvelle notification';
+          final body =
+              notification?.body ?? message.data['body']?.toString() ?? '';
+          final route = message.data['route']?.toString();
 
           showNotification(
-            id: message.messageId.hashCode,
+            id: _safeNotificationId(message.messageId),
             title: title,
             body: body,
             routePayload: route,
@@ -119,16 +122,17 @@ class LocalNotificationService {
 
         // App opened from background via notification tap
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-          final route = message.data['route'] as String?;
+          final route = message.data['route']?.toString();
           if (route != null && route.isNotEmpty) {
             rootNavigatorKey.currentContext?.push(route);
           }
         });
 
         // Check if opened from completely terminated state
-        final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+        final initialMessage =
+            await FirebaseMessaging.instance.getInitialMessage();
         if (initialMessage != null) {
-          final route = initialMessage.data['route'] as String?;
+          final route = initialMessage.data['route']?.toString();
           if (route != null && route.isNotEmpty) {
             Future.delayed(const Duration(milliseconds: 600), () {
               rootNavigatorKey.currentContext?.push(route);
@@ -145,10 +149,51 @@ class LocalNotificationService {
     }
   }
 
+  /// Request OS notification permissions safely once the Activity window is ready
+  static Future<void> requestPermissions() async {
+    if (kIsWeb || _permissionsRequested) return;
+    _permissionsRequested = true;
+
+    try {
+      if (!_isInitialized) {
+        await init();
+      }
+
+      if (Platform.isAndroid) {
+        await _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+      } else if (Platform.isIOS) {
+        await _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin>()
+            ?.requestPermissions(alert: true, badge: true, sound: true);
+      }
+
+      await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+    } catch (e) {
+      debugPrint('Notification permission request error: $e');
+    }
+  }
+
   /// Synchronize the student's device token with Supabase
   static Future<void> syncDeviceToken(String userId) async {
     try {
       if (kIsWeb) return;
+      if (!_isInitialized) {
+        await init();
+      }
+
+      // ignore: deprecated_member_use
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
         await Supabase.instance.client.from('user_fcm_tokens').upsert({
@@ -156,19 +201,28 @@ class LocalNotificationService {
           'token': token,
           'device_type': Platform.isIOS ? 'ios' : 'android',
           'updated_at': DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id, token');
+        }, onConflict: 'user_id,token');
         debugPrint('FCM token synchronized for user $userId');
+      } else {
+        debugPrint('FCM token is null/empty for user $userId');
       }
 
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      await _tokenRefreshSub?.cancel();
+      _tokenRefreshSub =
+          // ignore: deprecated_member_use
+          FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
         try {
+          if (newToken.isEmpty) return;
           await Supabase.instance.client.from('user_fcm_tokens').upsert({
             'user_id': userId,
             'token': newToken,
             'device_type': Platform.isIOS ? 'ios' : 'android',
             'updated_at': DateTime.now().toUtc().toIso8601String(),
-          }, onConflict: 'user_id, token');
-        } catch (_) {}
+          }, onConflict: 'user_id,token');
+          debugPrint('FCM token refreshed & synced for user $userId');
+        } catch (e) {
+          debugPrint('FCM token refresh sync error: $e');
+        }
       });
     } catch (e) {
       debugPrint('FCM token sync error: $e');
@@ -182,6 +236,20 @@ class LocalNotificationService {
     String? routePayload,
   }) async {
     try {
+      if (kIsWeb) return;
+      final now = DateTime.now();
+      final key = '$title|$body|${routePayload ?? ''}';
+      final prev = _recentNotifications[key];
+      if (prev != null && now.difference(prev).inSeconds < 5) {
+        return;
+      }
+      _recentNotifications[key] = now;
+      if (_recentNotifications.length > 30) {
+        _recentNotifications.removeWhere(
+          (_, ts) => now.difference(ts).inSeconds > 30,
+        );
+      }
+
       if (!_isInitialized) {
         await init();
       }
@@ -209,7 +277,7 @@ class LocalNotificationService {
       );
 
       await _notificationsPlugin.show(
-        id: id,
+        id: id & 0x7fffffff,
         title: title,
         body: body,
         notificationDetails: details,
@@ -220,3 +288,4 @@ class LocalNotificationService {
     }
   }
 }
+

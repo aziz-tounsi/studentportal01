@@ -27,6 +27,6 @@ FOR SELECT
 USING (
     EXISTS (
         SELECT 1 FROM public.users
-        WHERE id = auth.uid() AND role::text IN ('admin', 'staff')
+        WHERE id = auth.uid() AND role::text IN ('super_admin', 'owner', 'admin', 'staff', 'teacher')
     )
 );

@@ -3,6 +3,7 @@
 import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/supabase_config.dart';
+import '../../data/services/fcm_push_service.dart';
 
 // =====================================================
 // ENHANCED SUGGESTION MODEL WITH FILTERS
@@ -567,7 +568,36 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
     
     // Update suggestion status to replied
     await updateStatus(suggestionId, 'replied');
-    
+
+    String? studentId;
+    final list = state.value?.suggestions;
+    if (list != null) {
+      for (final s in list) {
+        if (s.id == suggestionId) {
+          studentId = s.studentId;
+          break;
+        }
+      }
+    }
+    if (studentId == null || studentId.isEmpty) {
+      try {
+        final row = await supabase
+            .from('suggestions')
+            .select('student_id')
+            .eq('id', suggestionId)
+            .maybeSingle();
+        studentId = row?['student_id']?.toString();
+      } catch (_) {}
+    }
+    if (studentId != null && studentId.isNotEmpty) {
+      FcmPushService.sendPush(
+        title: 'Réponse à votre suggestion',
+        body: content,
+        targetUserIds: [studentId],
+        route: '/suggestions',
+      );
+    }
+
     // Refresh the list
     ref.invalidateSelf();
   }
