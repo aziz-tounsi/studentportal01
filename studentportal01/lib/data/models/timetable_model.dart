@@ -58,8 +58,8 @@ class TimetableSlotModel {
       teacherPhotoUrl: json['teacher_photo_url'] as String?,
       sessionType: json['session_type'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
-      subjectName: subjectName,
-      subjectCode: subjectCode,
+      subjectName: (json['subject_name'] as String?) ?? subjectName,
+      subjectCode: (json['subject_code'] as String?) ?? subjectCode,
     );
   }
 
@@ -73,8 +73,11 @@ class TimetableSlotModel {
       'end_time': endTime,
       'room': room,
       'teacher_name': teacherName,
+      'teacher_photo_url': teacherPhotoUrl,
       'session_type': sessionType,
       'created_at': createdAt.toIso8601String(),
+      'subject_name': subjectName,
+      'subject_code': subjectCode,
     };
   }
 

@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/enrollment_model.dart';
 import '../../data/models/school_model.dart';
+import '../../core/services/connectivity_service.dart';
+import '../../data/services/offline_cache_service.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier();
@@ -62,6 +64,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void _init() {
     debugPrint('AuthNotifier: Initializing...');
     
+    // Immediately restore cached user if available for offline / instant launch
+    _loadCachedUserImmediately();
+
     _supabase.auth.onAuthStateChange.listen(
       (data) {
         final event = data.event;
@@ -75,9 +80,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
               _subscribeToUserChanges();
             });
           } else {
-            // No session, not authenticated
-            debugPrint('AuthNotifier: No session on $event');
-            state = AuthState(isLoading: false);
+            // Check if we have an offline cached user before giving up
+            final cached = OfflineCacheService.instance.getMap('cached_user');
+            if (cached == null) {
+              debugPrint('AuthNotifier: No session on $event');
+              state = AuthState(isLoading: false);
+            }
           }
         } else if (event == AuthChangeEvent.signedOut) {
           _unsubscribeFromUserChanges(); // Clean up subscription
@@ -93,6 +101,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         // Silently ignore token refresh network errors — the app keeps working
         // with the existing session until connectivity is restored.
         debugPrint('AuthNotifier: Auth stream error (network?): $error');
+        ConnectivityService.instance.reportNetworkError(error);
       },
     );
 
@@ -108,10 +117,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Wait for initialSession event, but set a timeout
       Future.delayed(const Duration(seconds: 2), () {
         if (state.isLoading && !state.isAuthenticated) {
-          debugPrint('AuthNotifier: Timeout waiting for session, marking as not authenticated');
-          state = AuthState(isLoading: false);
+          // Only mark unauthenticated if no cached user exists
+          final cached = OfflineCacheService.instance.getMap('cached_user');
+          if (cached == null) {
+            debugPrint('AuthNotifier: Timeout waiting for session, marking as not authenticated');
+            state = AuthState(isLoading: false);
+          }
         }
       });
+    }
+  }
+
+  void _loadCachedUserImmediately() {
+    try {
+      final cachedUserMap = OfflineCacheService.instance.getMap('cached_user');
+      if (cachedUserMap != null) {
+        final cachedEnrollmentMap = OfflineCacheService.instance.getMap('cached_enrollment');
+        final cachedSchoolMap = OfflineCacheService.instance.getMap('cached_school');
+
+        final user = UserModel.fromJson(cachedUserMap);
+        final enrollment = cachedEnrollmentMap != null
+            ? EnrollmentModel.fromJson(cachedEnrollmentMap)
+            : null;
+        final school = cachedSchoolMap != null
+            ? SchoolModel.fromJson(cachedSchoolMap)
+            : null;
+
+        state = AuthState(
+          isLoading: false,
+          isAuthenticated: true,
+          user: user,
+          enrollment: enrollment,
+          school: school,
+        );
+        debugPrint('AuthNotifier: Loaded cached user on startup: ${user.fullName}');
+      }
+    } catch (e) {
+      debugPrint('AuthNotifier: Error reading initial cached user: $e');
     }
   }
 
@@ -215,7 +257,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
       
       if (userResponse == null) {
-        debugPrint('AuthProvider: No user profile found for ID $userId - user may not exist in public.users');
+        debugPrint('AuthProvider: No user profile found for ID $userId (offline or RLS)');
+        final cachedUserMap = OfflineCacheService.instance.getMap('cached_user');
+        if (cachedUserMap != null) {
+          final cachedEnrollmentMap = OfflineCacheService.instance.getMap('cached_enrollment');
+          final cachedSchoolMap = OfflineCacheService.instance.getMap('cached_school');
+
+          state = state.copyWith(
+            isLoading: false,
+            isAuthenticated: true,
+            user: UserModel.fromJson(cachedUserMap),
+            enrollment: cachedEnrollmentMap != null
+                ? EnrollmentModel.fromJson(cachedEnrollmentMap)
+                : state.enrollment,
+            school: cachedSchoolMap != null
+                ? SchoolModel.fromJson(cachedSchoolMap)
+                : state.school,
+            errorMessage: null,
+            accessDenied: false,
+          );
+          ConnectivityService.instance.reportNetworkError('Server unreachable / offline');
+          debugPrint('AuthProvider: Used offline cache for user profile');
+          return;
+        }
+
         state = AuthState(
           isLoading: false,
           errorMessage: 'Profil utilisateur non trouvé. Veuillez contacter l\'administration.',
@@ -392,10 +457,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
         errorMessage: null,
         accessDenied: false,
       );
+
+      // Save to persistent offline cache
+      OfflineCacheService.instance.setJson('cached_user', user.toJson());
+      if (enrollment != null) {
+        OfflineCacheService.instance.setJson('cached_enrollment', enrollment.toJson());
+      }
+      if (school != null) {
+        OfflineCacheService.instance.setJson('cached_school', school.toJson());
+      }
+      ConnectivityService.instance.reportNetworkSuccess();
+
       debugPrint('AuthProvider: Authentication complete, isAuthenticated=true, hasEnrollment=${enrollment != null}, school=${school?.name}');
     } catch (e, stack) {
       debugPrint('AuthProvider: Error loading user data: $e');
       debugPrint('AuthProvider: Stack: $stack');
+
+      ConnectivityService.instance.reportNetworkError(e);
+
+      // Offline / Server down fallback
+      final cachedUserMap = OfflineCacheService.instance.getMap('cached_user');
+      if (cachedUserMap != null) {
+        final cachedEnrollmentMap = OfflineCacheService.instance.getMap('cached_enrollment');
+        final cachedSchoolMap = OfflineCacheService.instance.getMap('cached_school');
+
+        state = state.copyWith(
+          isLoading: false,
+          isAuthenticated: true,
+          user: UserModel.fromJson(cachedUserMap),
+          enrollment: cachedEnrollmentMap != null
+              ? EnrollmentModel.fromJson(cachedEnrollmentMap)
+              : state.enrollment,
+          school: cachedSchoolMap != null
+              ? SchoolModel.fromJson(cachedSchoolMap)
+              : state.school,
+          errorMessage: null,
+          accessDenied: false,
+        );
+        debugPrint('AuthProvider: Preserved session from offline cache after error');
+        return;
+      }
+
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: false,
@@ -432,6 +534,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> signOut() async {
     await _supabase.auth.signOut();
+    await OfflineCacheService.instance.clearAll();
     state = AuthState();
   }
 

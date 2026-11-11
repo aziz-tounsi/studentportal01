@@ -9,6 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../data/services/offline_cache_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/semester_navigator.dart';
@@ -39,12 +41,18 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
   final authState = ref.watch(authProvider);
   final semesters = await ref.watch(absencesSemestersProvider.future);
   
+  final enrollmentId = authState.enrollment?.id ?? 'default';
+  final cacheKey = 'absences_screen_${enrollmentId}_$semesterNumber';
+
   if (!authState.isAuthenticated || authState.enrollment == null) {
-    debugPrint('absencesProvider: Not authenticated or no enrollment');
+    debugPrint('absencesProvider: Not authenticated or no enrollment, checking cache');
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
+    }
     return [];
   }
   
-  final enrollmentId = authState.enrollment!.id;
   final schoolId = authState.user?.schoolId ?? authState.enrollment?.classInfo?.schoolId;
   
   final semester = semesters.firstWhere(
@@ -54,7 +62,11 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
   
   final semesterId = semester['id'] as String?;
   if (semesterId == null) {
-    debugPrint('absencesProvider: Semester $semesterNumber not found');
+    debugPrint('absencesProvider: Semester $semesterNumber not found, checking cache');
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
+    }
     return [];
   }
   
@@ -201,9 +213,22 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     
     summaries.sort((a, b) => b.absencePercent.compareTo(a.absencePercent));
     
+    if (summaries.isNotEmpty) {
+      OfflineCacheService.instance.setJson(
+        cacheKey,
+        summaries.map((s) => s.toJson()).toList(),
+      );
+    }
+    ConnectivityService.instance.reportNetworkSuccess();
     return summaries;
   } catch (e) {
     debugPrint('absencesProvider error: $e');
+    ConnectivityService.instance.reportNetworkError(e);
+
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
+    }
     return [];
   }
 });

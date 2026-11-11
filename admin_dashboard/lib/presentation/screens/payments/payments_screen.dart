@@ -860,7 +860,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                           .setStatusFilter(v ?? 'all'),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // NIVEAU
                     _filterLabel('Niveau'),
@@ -890,7 +890,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                     // FILIÈRE (conditional)
                     if (_selectedNiveauId != null &&
                         _niveauHasSections) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       _filterLabel('Filière'),
                       const SizedBox(height: 8),
                       _buildFilterDropdown<String>(
@@ -917,7 +917,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
 
                     // CLASSE (conditional)
                     if (_selectedNiveauId != null) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       _filterLabel('Classe'),
                       const SizedBox(height: 8),
                       _buildFilterDropdown<String>(
@@ -937,7 +937,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                       ),
                     ],
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // CATÉGORIE
                     _filterLabel('Catégorie'),
@@ -961,7 +961,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                           .setCategoryFilter(v),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // PÉRIODE
                     _filterLabel("Période d'échéance"),
@@ -975,19 +975,15 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 10),
+                                  horizontal: 14, vertical: 11),
                               decoration: BoxDecoration(
                                 color: AppColors.slate50,
                                 borderRadius: BorderRadius.circular(8),
                                 border:
-                                    Border.all(color: AppColors.slate200),
+                                    Border.all(color: AppColors.borderLight),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.calendar_today,
-                                      size: 14,
-                                      color: AppColors.textTertiary),
-                                  const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
                                       state.dateFromFilter != null
@@ -995,22 +991,27 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                                               .format(state.dateFromFilter!)
                                           : 'Du...',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         color: state.dateFromFilter != null
                                             ? AppColors.textPrimary
                                             : AppColors.textTertiary,
                                       ),
                                     ),
                                   ),
-                                  if (state.dateFromFilter != null)
+                                  if (state.dateFromFilter != null) ...[
                                     GestureDetector(
                                       onTap: () => ref
                                           .read(paymentsProvider.notifier)
                                           .setDateFromFilter(null),
-                                      child: Icon(Icons.close,
+                                      child: const Icon(Icons.close,
                                           size: 14,
                                           color: AppColors.textTertiary),
                                     ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  const Icon(Icons.calendar_today_outlined,
+                                      size: 16,
+                                      color: AppColors.textTertiary),
                                 ],
                               ),
                             ),
@@ -1024,19 +1025,15 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 10),
+                                  horizontal: 14, vertical: 11),
                               decoration: BoxDecoration(
                                 color: AppColors.slate50,
                                 borderRadius: BorderRadius.circular(8),
                                 border:
-                                    Border.all(color: AppColors.slate200),
+                                    Border.all(color: AppColors.borderLight),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.calendar_today,
-                                      size: 14,
-                                      color: AppColors.textTertiary),
-                                  const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
                                       state.dateToFilter != null
@@ -1044,22 +1041,27 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                                               .format(state.dateToFilter!)
                                           : 'Au...',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         color: state.dateToFilter != null
                                             ? AppColors.textPrimary
                                             : AppColors.textTertiary,
                                       ),
                                     ),
                                   ),
-                                  if (state.dateToFilter != null)
+                                  if (state.dateToFilter != null) ...[
                                     GestureDetector(
                                       onTap: () => ref
                                           .read(paymentsProvider.notifier)
                                           .setDateToFilter(null),
-                                      child: Icon(Icons.close,
+                                      child: const Icon(Icons.close,
                                           size: 14,
                                           color: AppColors.textTertiary),
                                     ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  const Icon(Icons.calendar_today_outlined,
+                                      size: 16,
+                                      color: AppColors.textTertiary),
                                 ],
                               ),
                             ),
@@ -1154,7 +1156,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       label.toUpperCase(),
       style: const TextStyle(
         fontSize: 11,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
         color: AppColors.textTertiary,
         letterSpacing: 1.0,
       ),
@@ -1167,33 +1169,37 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?> onChanged,
   }) {
+    final bool hasNull = items.any((i) => i.value == null);
+    final allItems = hasNull
+        ? items
+        : [
+            DropdownMenuItem<T>(
+              value: null,
+              child: Text(hint, style: const TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+            ),
+            ...items,
+          ];
+
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.slate50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.slate200),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
       ),
-      child: DropdownButtonFormField<T>(
-        value: value,
-        isExpanded: true,
-        borderRadius: BorderRadius.circular(12),
-        decoration: const InputDecoration(
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          border: InputBorder.none,
-          isDense: true,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: Text(hint, style: const TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+          isExpanded: true,
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          items: allItems,
+          onChanged: onChanged,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          borderRadius: BorderRadius.circular(8),
+          dropdownColor: Colors.white,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
         ),
-        hint: Text(hint, style: TextStyle(fontSize: 13, color: AppColors.slate400)),
-        items: [
-          DropdownMenuItem<T>(
-            value: null,
-            child: Text(hint, style: const TextStyle(fontSize: 13)),
-          ),
-          ...items,
-        ],
-        onChanged: (v) => onChanged(v),
-        style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
-        dropdownColor: Colors.white,
-        icon: Icon(Icons.keyboard_arrow_down, color: AppColors.slate400, size: 18),
       ),
     );
   }
@@ -8771,12 +8777,10 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
     final niveauName = niveau['name']?.toString() ?? 'Niveau';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB).withOpacity(0.6)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8784,27 +8788,35 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
           Row(
             children: [
               Container(
-                width: 6,
-                height: 6,
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
                   color: _brand,
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _brand.withOpacity(0.35),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   niveauName,
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
               ),
               if (!hasSections) ...[
                 SizedBox(
-                  width: 120,
+                  width: 130,
                   child: _buildAmountField(
                     initialValue: niveauAmount,
                     onChanged: (v) => _setAmount(niveauId, null, v),
@@ -8814,20 +8826,19 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
             ],
           ),
           if (hasSections) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             ...sections.map((section) {
               final sectionId = section['id']?.toString() ?? '';
               final amount = _getAmount(niveauId, sectionId);
               return Padding(
-                padding: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.only(left: 20, top: 6, bottom: 6),
                 child: Row(
                   children: [
-                    const SizedBox(width: 16),
                     Container(
-                      width: 4,
-                      height: 4,
+                      width: 5,
+                      height: 5,
                       decoration: BoxDecoration(
-                        color: AppColors.textTertiary,
+                        color: AppColors.textTertiary.withOpacity(0.7),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -8835,11 +8846,15 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
                     Expanded(
                       child: Text(
                         section['name']?.toString() ?? 'Section',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                     ),
                     SizedBox(
-                      width: 120,
+                      width: 130,
                       child: _buildAmountField(
                         initialValue: amount,
                         onChanged: (v) => _setAmount(niveauId, sectionId, v),
@@ -8866,28 +8881,32 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: false),
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF0F172A),
+      ),
       textAlign: TextAlign.end,
       decoration: InputDecoration(
         hintText: '0',
-        hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-        suffixText: 'TND',
-        suffixStyle: TextStyle(color: AppColors.textTertiary, fontSize: 10),
-        filled: true,
-        fillColor: Colors.white,
+        hintStyle: const TextStyle(
+          color: Color(0xFF94A3B8),
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+        suffixText: ' TND',
+        suffixStyle: const TextStyle(
+          color: Color(0xFF64748B),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+        filled: false,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.slate200),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.slate200),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _brand, width: 1.5),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: _brand, width: 2),
         ),
       ),
       onChanged: (v) {

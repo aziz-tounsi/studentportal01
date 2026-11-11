@@ -132,6 +132,45 @@ class SubjectAbsenceSummary {
     this.teacherName,
     this.teacherPhotoUrl,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subject_offering_id': subjectOfferingId,
+      'subject_name': subjectName,
+      'subject_code': subjectCode,
+      'total_hours': totalHours,
+      'weekly_ci_hours': weeklyCiHours,
+      'weekly_tp_hours': weeklyTpHours,
+      'weeks': weeks,
+      'total_absent_hours': totalAbsentHours,
+      'absence_percent': absencePercent,
+      'level': level.name,
+      'warning_message': warningMessage,
+      'teacher_name': teacherName,
+      'teacher_photo_url': teacherPhotoUrl,
+    };
+  }
+
+  factory SubjectAbsenceSummary.fromJson(Map<String, dynamic> json) {
+    return SubjectAbsenceSummary(
+      subjectOfferingId: json['subject_offering_id'] as String? ?? '',
+      subjectName: json['subject_name'] as String? ?? '',
+      subjectCode: json['subject_code'] as String?,
+      totalHours: (json['total_hours'] as num?)?.toDouble() ?? 0.0,
+      weeklyCiHours: (json['weekly_ci_hours'] as num?)?.toDouble() ?? 0.0,
+      weeklyTpHours: (json['weekly_tp_hours'] as num?)?.toDouble() ?? 0.0,
+      weeks: (json['weeks'] as num?)?.toInt() ?? 0,
+      totalAbsentHours: (json['total_absent_hours'] as num?)?.toDouble() ?? 0.0,
+      absencePercent: (json['absence_percent'] as num?)?.toDouble() ?? 0.0,
+      level: AbsenceLevel.values.firstWhere(
+        (e) => e.name == json['level'],
+        orElse: () => AbsenceLevel.normal,
+      ),
+      warningMessage: json['warning_message'] as String?,
+      teacherName: json['teacher_name'] as String?,
+      teacherPhotoUrl: json['teacher_photo_url'] as String?,
+    );
+  }
 }
 
 enum AbsenceLevel {

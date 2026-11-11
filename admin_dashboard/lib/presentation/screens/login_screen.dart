@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,6 +65,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (success && mounted) {
       context.go('/');
     }
+  }
+
+  String _getUserFriendlyErrorMessage(String? rawError, bool accessDenied) {
+    if (accessDenied) {
+      return 'Access restricted. You need administrator privileges to sign in.';
+    }
+    if (rawError == null || rawError.isEmpty) {
+      return 'Unable to sign in. Please verify your credentials and try again.';
+    }
+
+    final lower = rawError.toLowerCase();
+
+    if (lower.contains('invalid login credentials') ||
+        lower.contains('invalid_credentials') ||
+        lower.contains('invalid email or password') ||
+        lower.contains('invalid password') ||
+        lower.contains('user not found')) {
+      return 'Incorrect email or password. Please check your credentials and try again.';
+    }
+    if (lower.contains('email not confirmed') ||
+        lower.contains('email_not_confirmed')) {
+      return 'Your email address is not verified yet. Please check your inbox.';
+    }
+    if (lower.contains('rate limit') ||
+        lower.contains('too many requests') ||
+        lower.contains('over_email_send_rate_limit')) {
+      return 'Too many sign-in attempts. Please wait a moment before trying again.';
+    }
+    if (lower.contains('socket') ||
+        lower.contains('network') ||
+        lower.contains('connection') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('clientexception') ||
+        lower.contains('timeout')) {
+      return 'Unable to connect to the server. Please check your internet connection.';
+    }
+    if (lower.contains('jwt') ||
+        lower.contains('token') ||
+        lower.contains('session')) {
+      return 'Your session has expired. Please sign in again.';
+    }
+    if (lower.contains('server error') ||
+        lower.contains('500') ||
+        lower.contains('502') ||
+        lower.contains('503') ||
+        lower.contains('504')) {
+      return 'The server is temporarily unavailable. Please try again shortly.';
+    }
+
+    // Clean English fallback instead of technical database/stack errors
+    return 'Unable to sign in. Please check your credentials and try again.';
   }
 
   @override
@@ -444,19 +495,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 // Error message
                                 if (authState.errorMessage != null || authState.accessDenied)
                                   Container(
-                                    padding: const EdgeInsets.all(14),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                     margin: const EdgeInsets.only(bottom: 20),
                                     decoration: BoxDecoration(
                                       color: authState.accessDenied
                                           ? AppColors.warningSoft
                                           : AppColors.errorSoft,
                                       borderRadius: BorderRadius.circular(AppRadius.md),
-                                      border: Border.all(
-                                        color: (authState.accessDenied
-                                                ? AppColors.warning
-                                                : AppColors.error)
-                                            .withOpacity(0.2),
-                                      ),
                                     ),
                                     child: Row(
                                       children: [
@@ -464,38 +509,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                           width: 36,
                                           height: 36,
                                           decoration: BoxDecoration(
-                                            color: (authState.accessDenied
-                                                    ? AppColors.warning
-                                                    : AppColors.error)
-                                                .withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(AppRadius.xs),
-                                          ),
-                                          child: Icon(
-                                            authState.accessDenied
-                                                ? Icons.shield_outlined
-                                                : Icons.error_outline_rounded,
-                                            color: authState.accessDenied
-                                                ? AppColors.warning
-                                                : AppColors.error,
-                                            size: 20,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            authState.errorMessage ?? 'Accès refusé',
-                                            style: TextStyle(
-                                              color: authState.accessDenied
-                                                  ? AppColors.warning
-                                                  : AppColors.error,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                           color: (authState.accessDenied
+                                                   ? AppColors.warning
+                                                   : AppColors.error)
+                                               .withOpacity(0.12),
+                                           borderRadius: BorderRadius.circular(AppRadius.xs),
+                                         ),
+                                         child: Icon(
+                                           authState.accessDenied
+                                               ? Icons.shield_outlined
+                                               : Icons.error_outline_rounded,
+                                           color: authState.accessDenied
+                                               ? AppColors.warning
+                                               : AppColors.error,
+                                           size: 20,
+                                         ),
+                                       ),
+                                       const SizedBox(width: 12),
+                                       Expanded(
+                                         child: Text(
+                                           _getUserFriendlyErrorMessage(
+                                             authState.errorMessage,
+                                             authState.accessDenied,
+                                           ),
+                                           style: TextStyle(
+                                             color: authState.accessDenied
+                                                 ? AppColors.warning
+                                                 : AppColors.error,
+                                             fontWeight: FontWeight.w600,
+                                             fontSize: 13,
+                                             height: 1.35,
+                                           ),
+                                         ),
+                                       ),
+                                     ],
+                                   ),
+                                 ),
 
                                 // Login button
                                 _AuroraLoginButton(

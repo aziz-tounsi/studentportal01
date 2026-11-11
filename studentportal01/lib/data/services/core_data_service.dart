@@ -8,6 +8,8 @@
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/services/connectivity_service.dart';
+import 'offline_cache_service.dart';
 
 /// Student context containing all enrollment-related info
 class StudentContext {
@@ -70,25 +72,50 @@ class StudentContext {
     return StudentContext(
       userId: user?['id'] ?? json['user_id'] ?? '',
       schoolId: json['school_id'] ?? user?['school_id'] ?? '',
-      fullName: user?['full_name'],
-      email: user?['email'],
-      studentCode: user?['student_code'] ?? enrollment?['student_code'],
-      enrollmentId: enrollment?['id'],
-      classId: enrollment?['class_id'] ?? classInfo?['id'],
-      groupId: enrollment?['group_id'],
-      academicYearId: enrollment?['academic_year_id'] ?? academicYear?['id'],
-      className: classInfo?['name'],
-      niveauId: classInfo?['niveau_id'] ?? niveau?['id'],
-      niveauCode: niveau?['code'],
-      niveauName: niveau?['name'],
-      cycle: niveau?['cycle'],
-      hasSections: niveau?['has_sections'] ?? false,
-      sectionId: classInfo?['section_id'] ?? section?['id'],
-      sectionCode: section?['code'],
-      sectionName: section?['name'],
-      academicYearName: academicYear?['name'],
-      isCurrentYear: academicYear?['is_current'] ?? false,
+      fullName: user?['full_name'] ?? json['full_name'],
+      email: user?['email'] ?? json['email'],
+      studentCode: user?['student_code'] ?? enrollment?['student_code'] ?? json['student_code'],
+      enrollmentId: enrollment?['id'] ?? json['enrollment_id'],
+      classId: enrollment?['class_id'] ?? classInfo?['id'] ?? json['class_id'],
+      groupId: enrollment?['group_id'] ?? json['group_id'],
+      academicYearId: enrollment?['academic_year_id'] ?? academicYear?['id'] ?? json['academic_year_id'],
+      className: classInfo?['name'] ?? json['class_name'],
+      niveauId: classInfo?['niveau_id'] ?? niveau?['id'] ?? json['niveau_id'],
+      niveauCode: niveau?['code'] ?? json['niveau_code'],
+      niveauName: niveau?['name'] ?? json['niveau_name'],
+      cycle: niveau?['cycle'] ?? json['cycle'],
+      hasSections: niveau?['has_sections'] ?? json['has_sections'] ?? false,
+      sectionId: classInfo?['section_id'] ?? section?['id'] ?? json['section_id'],
+      sectionCode: section?['code'] ?? json['section_code'],
+      sectionName: section?['name'] ?? json['section_name'],
+      academicYearName: academicYear?['name'] ?? json['academic_year_name'],
+      isCurrentYear: academicYear?['is_current'] ?? json['is_current_year'] ?? false,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'user_id': userId,
+      'school_id': schoolId,
+      'full_name': fullName,
+      'email': email,
+      'student_code': studentCode,
+      'enrollment_id': enrollmentId,
+      'class_id': classId,
+      'group_id': groupId,
+      'academic_year_id': academicYearId,
+      'class_name': className,
+      'niveau_id': niveauId,
+      'niveau_code': niveauCode,
+      'niveau_name': niveauName,
+      'cycle': cycle,
+      'has_sections': hasSections,
+      'section_id': sectionId,
+      'section_code': sectionCode,
+      'section_name': sectionName,
+      'academic_year_name': academicYearName,
+      'is_current_year': isCurrentYear,
+    };
   }
 
   bool get hasEnrollment => enrollmentId != null;
@@ -171,6 +198,18 @@ class SemesterInfo {
       startDate: json['start_date'] != null ? DateTime.tryParse(json['start_date']) : null,
       endDate: json['end_date'] != null ? DateTime.tryParse(json['end_date']) : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'number': number,
+      'is_current': isCurrent,
+      'school_id': schoolId,
+      'start_date': startDate?.toIso8601String(),
+      'end_date': endDate?.toIso8601String(),
+    };
   }
 }
 
@@ -435,6 +474,21 @@ class PaymentPlanInfo {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'plan_id': planId,
+      'plan_type': planType,
+      'amount_total': amountTotal,
+      'currency': currency,
+      'description': description,
+      'category': category,
+      'academic_year': academicYear,
+      'payments': payments.map((e) => e.toJson()).toList(),
+      'total_paid': totalPaid,
+      'remaining': remaining,
+    };
+  }
+
   double get progressPercent => amountTotal > 0 ? (totalPaid / amountTotal) * 100 : 0;
 }
 
@@ -470,6 +524,19 @@ class PaymentInfo {
       reference: json['reference'],
       notes: json['notes'],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'amount': amount,
+      'due_date': dueDate?.toIso8601String(),
+      'paid_at': paidAt?.toIso8601String(),
+      'method': method,
+      'status': status,
+      'reference': reference,
+      'notes': notes,
+    };
   }
 
   bool get isPaid => status == 'paid';
@@ -517,16 +584,36 @@ class CoreDataService {
 
   /// Get student context (user, enrollment, class, niveau, section, academic_year)
   Future<StudentContext?> getStudentContext(String userId) async {
+    final cacheKey = 'student_context_$userId';
     try {
       final result = await _client.rpc('get_student_context', params: {
         'p_user_id': userId,
       });
-      if (result == null) return null;
-      return StudentContext.fromJson(result as Map<String, dynamic>);
+      if (result != null) {
+        final ctx = StudentContext.fromJson(result as Map<String, dynamic>);
+        OfflineCacheService.instance.setJson(cacheKey, ctx.toJson());
+        ConnectivityService.instance.reportNetworkSuccess();
+        return ctx;
+      }
     } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
       // Fallback to direct query if RPC not available
-      return _getStudentContextFallback(userId);
     }
+
+    final fallback = await _getStudentContextFallback(userId);
+    if (fallback != null) {
+      OfflineCacheService.instance.setJson(cacheKey, fallback.toJson());
+      ConnectivityService.instance.reportNetworkSuccess();
+      return fallback;
+    }
+
+    // Offline / Server down fallback from cache
+    final cached = OfflineCacheService.instance.getMap(cacheKey);
+    if (cached != null) {
+      return StudentContext.fromJson(cached);
+    }
+
+    return null;
   }
 
   Future<StudentContext?> _getStudentContextFallback(String userId) async {
@@ -669,6 +756,7 @@ class CoreDataService {
 
   /// Get semesters for academic year (dynamic, no hardcoded)
   Future<List<SemesterInfo>> getSemestersForAcademicYear(String academicYearId) async {
+    final cacheKey = 'semesters_$academicYearId';
     try {
       final response = await _client
           .from('semesters')
@@ -676,22 +764,46 @@ class CoreDataService {
           .eq('academic_year_id', academicYearId)
           .order('number');
       if ((response as List).isNotEmpty) {
-        return (response as List)
-            .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
+        final list = response
+            .map((e) => SemesterInfo.fromJson(e))
             .toList();
+        OfflineCacheService.instance.setJson(
+          cacheKey,
+          list.map((s) => s.toJson()).toList(),
+        );
+        ConnectivityService.instance.reportNetworkSuccess();
+        return list;
       }
-    } catch (_) {}
+    } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
+    }
 
     try {
       final result = await _client.rpc('get_semesters_for_academic_year', params: {
         'p_academic_year_id': academicYearId,
       });
       if (result != null) {
-        return (result as List)
+        final list = (result as List)
             .map((e) => SemesterInfo.fromJson(e as Map<String, dynamic>))
             .toList();
+        if (list.isNotEmpty) {
+          OfflineCacheService.instance.setJson(
+            cacheKey,
+            list.map((s) => s.toJson()).toList(),
+          );
+        }
+        ConnectivityService.instance.reportNetworkSuccess();
+        return list;
       }
-    } catch (_) {}
+    } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
+    }
+
+    // Offline / Server down fallback from cache
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((e) => SemesterInfo.fromJson(e)).toList();
+    }
 
     return [];
   }
@@ -856,16 +968,25 @@ class CoreDataService {
 
   /// Get payments for student
   Future<List<PaymentPlanInfo>> getPaymentsForStudent(String userId) async {
+    final cacheKey = 'payments_$userId';
     try {
       final result = await _client.rpc('get_payments_for_student', params: {
         'p_user_id': userId,
       });
       if (result is List && result.isNotEmpty) {
-        return result
+        final list = result
             .map((e) => PaymentPlanInfo.fromJson(e as Map<String, dynamic>))
             .toList();
+        OfflineCacheService.instance.setJson(
+          cacheKey,
+          list.map((e) => e.toJson()).toList(),
+        );
+        ConnectivityService.instance.reportNetworkSuccess();
+        return list;
       }
-    } catch (_) {}
+    } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
+    }
 
     // Fallback: direct table queries on payment_plans & payments via enrollments
     try {
@@ -884,7 +1005,7 @@ class CoreDataService {
             .select('*, payments(*)')
             .filter('enrollment_id', 'in', enrollmentIds);
 
-        return (plansResp as List).map((p) {
+        final list = (plansResp as List).map((p) {
           final paymentsRaw = (p['payments'] as List?) ?? [];
           final paymentsList = paymentsRaw
               .map((e) => PaymentInfo.fromJson(e as Map<String, dynamic>))
@@ -911,8 +1032,25 @@ class CoreDataService {
             remaining: (amountTotal - totalPaid).clamp(0.0, double.infinity),
           );
         }).toList();
+
+        if (list.isNotEmpty) {
+          OfflineCacheService.instance.setJson(
+            cacheKey,
+            list.map((e) => e.toJson()).toList(),
+          );
+          ConnectivityService.instance.reportNetworkSuccess();
+          return list;
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
+    }
+
+    // Offline / Server down fallback from cache
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((e) => PaymentPlanInfo.fromJson(e)).toList();
+    }
 
     return [];
   }

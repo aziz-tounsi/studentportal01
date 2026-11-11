@@ -11,7 +11,9 @@ import 'core/config/supabase_config.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/l10n/app_localizations.dart';
+import 'data/services/offline_cache_service.dart';
 import 'presentation/providers/locale_provider.dart';
+import 'presentation/widgets/offline_indicator_banner.dart';
 
 void main() {
   // runZonedGuarded must wrap EVERYTHING including ensureInitialized so that
@@ -25,6 +27,9 @@ void main() {
       FlutterError.onError = (details) {
         debugPrint('FlutterError caught: ${details.exceptionAsString()}');
       };
+
+      // Initialize persistent offline cache
+      await OfflineCacheService.instance.init();
 
       // Initialize Supabase
       await Supabase.initialize(
@@ -158,6 +163,22 @@ class StudentPortalApp extends ConsumerWidget {
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         routerConfig: router,
+        builder: (context, child) {
+          return Stack(
+            children: [
+              child ?? const SizedBox.shrink(),
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: OfflineIndicatorBanner(),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

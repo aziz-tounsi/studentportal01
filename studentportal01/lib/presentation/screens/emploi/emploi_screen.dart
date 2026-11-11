@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../data/models/timetable_model.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../data/services/offline_cache_service.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/bouncing_wrapper.dart';
@@ -121,11 +123,12 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
   final classId = contextAsync.classId!;
   final supabase = Supabase.instance.client;
 
-  try {
-    final isExamPeriodActive = await ref.watch(isExamPeriodProvider.future);
-    final selectedType = isExamPeriodActive ? 'exam' : 'regular';
-    final selectedSemesterNumber = ref.watch(emploiSemesterProvider);
+  final isExamPeriodActive = await ref.watch(isExamPeriodProvider.future);
+  final selectedType = isExamPeriodActive ? 'exam' : 'regular';
+  final selectedSemesterNumber = ref.watch(emploiSemesterProvider);
+  final cacheKey = 'timetable_screen_${classId}_${selectedType}_$selectedSemesterNumber';
 
+  try {
     // Direct, canonical and resilient query for timetable slots of this student's class
     var query = supabase
         .from('timetable_slots')
@@ -150,7 +153,13 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
         .order('start_time');
 
     final allSlotsList = slotsResp as List;
-    if (allSlotsList.isEmpty) return [];
+    if (allSlotsList.isEmpty) {
+      final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        return cached.map((s) => TimetableSlotModel.fromJson(s)).toList();
+      }
+      return [];
+    }
 
     // Filter strictly by selected semester number
     final activeSlots = allSlotsList.where((slot) {
@@ -160,7 +169,13 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
       return num == selectedSemesterNumber;
     }).toList();
 
-    if (activeSlots.isEmpty) return [];
+    if (activeSlots.isEmpty) {
+      final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        return cached.map((s) => TimetableSlotModel.fromJson(s)).toList();
+      }
+      return [];
+    }
 
     // Resolve teacher names/photos from teacher_assignments
     final Map<String, String> subjectClassTeacherMap = {};
@@ -185,7 +200,7 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
       }
     } catch (_) {}
 
-    return activeSlots.map((json) {
+    final list = activeSlots.map((json) {
       final offering = json['subject_offerings'] as Map<String, dynamic>?;
       final subject = offering?['subjects'] as Map<String, dynamic>?;
 
@@ -230,8 +245,23 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
         subjectCode: subjectCode,
       );
     }).toList();
+
+    if (list.isNotEmpty) {
+      OfflineCacheService.instance.setJson(
+        cacheKey,
+        list.map((s) => s.toJson()).toList(),
+      );
+    }
+    ConnectivityService.instance.reportNetworkSuccess();
+    return list;
   } catch (e) {
     debugPrint('timetableProvider error: $e');
+    ConnectivityService.instance.reportNetworkError(e);
+
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((s) => TimetableSlotModel.fromJson(s)).toList();
+    }
     return [];
   }
 });

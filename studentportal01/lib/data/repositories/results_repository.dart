@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/grade_model.dart';
+import '../services/offline_cache_service.dart';
+import '../../core/services/connectivity_service.dart';
 
 /// Repository for student results/grades
 class StudentResultsRepository {
@@ -10,7 +13,13 @@ class StudentResultsRepository {
   /// Get current student's enrollment info
   Future<Map<String, dynamic>?> getCurrentEnrollment() async {
     final userId = _client.auth.currentUser?.id;
-    if (userId == null) return null;
+    const cacheKey = 'cached_results_enrollment';
+
+    if (userId == null) {
+      final cached = OfflineCacheService.instance.getMap(cacheKey);
+      if (cached != null) return cached;
+      return null;
+    }
 
     try {
       final response = await _client
@@ -50,8 +59,13 @@ class StudentResultsRepository {
           .limit(1)
           .maybeSingle();
 
-      return response;
+      if (response != null) {
+        await OfflineCacheService.instance.setJson(cacheKey, response);
+        ConnectivityService.instance.reportNetworkSuccess();
+        return response;
+      }
     } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
       // Fallback with simpler query
       try {
         final response = await _client
@@ -62,21 +76,41 @@ class StudentResultsRepository {
             .order('created_at', ascending: false)
             .limit(1)
             .maybeSingle();
-        return response;
-      } catch (_) {
-        return null;
+        if (response != null) {
+          await OfflineCacheService.instance.setJson(cacheKey, response);
+          ConnectivityService.instance.reportNetworkSuccess();
+          return response;
+        }
+      } catch (e2) {
+        ConnectivityService.instance.reportNetworkError(e2);
       }
     }
+
+    // Offline / error fallback
+    final cached = OfflineCacheService.instance.getMap(cacheKey);
+    if (cached != null) return cached;
+    return null;
   }
 
   /// Get semesters for the current academic year
   Future<List<Map<String, dynamic>>> getSemesters(String academicYearId) async {
-    final response = await _client
-        .from('semesters')
-        .select()
-        .eq('academic_year_id', academicYearId)
-        .order('number');
-    return List<Map<String, dynamic>>.from(response);
+    final cacheKey = 'cached_semesters_$academicYearId';
+    try {
+      final response = await _client
+          .from('semesters')
+          .select()
+          .eq('academic_year_id', academicYearId)
+          .order('number');
+      final list = List<Map<String, dynamic>>.from(response);
+      await OfflineCacheService.instance.setJson(cacheKey, list);
+      ConnectivityService.instance.reportNetworkSuccess();
+      return list;
+    } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
+      final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+      if (cached != null) return cached;
+      return [];
+    }
   }
 
   /// Get student's grades for a semester
@@ -84,8 +118,10 @@ class StudentResultsRepository {
     required String enrollmentId,
     required String semesterId,
   }) async {
-    // Get all subject assignments for the student's grade level and section
-    final enrollment = await _client
+    final cacheKey = 'cached_grades_${enrollmentId}_$semesterId';
+    try {
+      // Get all subject assignments for the student's grade level and section
+      final enrollment = await _client
         .from('enrollments')
         .select('''
           class_id,
@@ -301,17 +337,37 @@ class StudentResultsRepository {
     }
 
     // If no offerings found, try using subject_assignments
-    if (summaries.isEmpty) {
-      return await _getGradesFromAssignments(
-        enrollmentId: enrollmentId,
-        gradeLevelId: gradeLevelId,
-        sectionId: sectionId,
-        semesterId: semesterId,
+    final result = summaries.isNotEmpty
+        ? summaries
+        : await _getGradesFromAssignments(
+            enrollmentId: enrollmentId,
+            gradeLevelId: gradeLevelId,
+            sectionId: sectionId,
+            semesterId: semesterId,
+          );
+
+    if (result.isNotEmpty) {
+      await OfflineCacheService.instance.setJson(
+        cacheKey,
+        result.map((s) => s.toJson()).toList(),
       );
     }
-
-    return summaries;
+    ConnectivityService.instance.reportNetworkSuccess();
+    return result;
+  } catch (e) {
+    debugPrint('getStudentGrades error: $e');
+    ConnectivityService.instance.reportNetworkError(e);
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null) {
+      try {
+        return cached.map((m) => SubjectGradesSummary.fromJson(m)).toList();
+      } catch (err) {
+        debugPrint('Failed to parse cached grades: $err');
+      }
+    }
+    return [];
   }
+}
 
   /// Fallback method using subject_assignments table
   Future<List<SubjectGradesSummary>> _getGradesFromAssignments({

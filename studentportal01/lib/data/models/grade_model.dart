@@ -83,6 +83,36 @@ class SubjectGradesSummary {
     this.teacherName,
     this.teacherPhotoUrl,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subject_offering_id': subjectOfferingId,
+      'subject_name': subjectName,
+      'subject_code': subjectCode,
+      'coefficient': coefficient,
+      'components': components.map((c) => c.toJson()).toList(),
+      'average': average,
+      'weights_display': weightsDisplay,
+      'teacher_name': teacherName,
+      'teacher_photo_url': teacherPhotoUrl,
+    };
+  }
+
+  factory SubjectGradesSummary.fromJson(Map<String, dynamic> json) {
+    return SubjectGradesSummary(
+      subjectOfferingId: json['subject_offering_id'] as String? ?? '',
+      subjectName: json['subject_name'] as String? ?? '',
+      subjectCode: json['subject_code'] as String?,
+      coefficient: (json['coefficient'] as num?)?.toDouble() ?? 1.0,
+      components: (json['components'] as List?)
+          ?.map((c) => ComponentGrade.fromJson(c as Map<String, dynamic>))
+          .toList() ?? [],
+      average: (json['average'] as num?)?.toDouble(),
+      weightsDisplay: json['weights_display'] as String? ?? '',
+      teacherName: json['teacher_name'] as String?,
+      teacherPhotoUrl: json['teacher_photo_url'] as String?,
+    );
+  }
 }
 
 class ComponentGrade {
@@ -99,6 +129,26 @@ class ComponentGrade {
     this.grade,
     required this.status,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'component_id': componentId,
+      'component_name': componentName,
+      'weight_percent': weightPercent,
+      'grade': grade,
+      'status': status,
+    };
+  }
+
+  factory ComponentGrade.fromJson(Map<String, dynamic> json) {
+    return ComponentGrade(
+      componentId: json['component_id'] as String? ?? '',
+      componentName: json['component_name'] as String? ?? '',
+      weightPercent: (json['weight_percent'] as num?)?.toDouble() ?? 0.0,
+      grade: (json['grade'] as num?)?.toDouble(),
+      status: json['status'] as String? ?? 'ND',
+    );
+  }
 
   String get displayGrade {
     if (status == 'ND') return 'ND';

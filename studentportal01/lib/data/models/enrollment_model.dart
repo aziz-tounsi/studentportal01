@@ -51,6 +51,9 @@ class EnrollmentModel {
       'group_id': groupId,
       'academic_year_id': academicYearId,
       'created_at': createdAt.toIso8601String(),
+      if (classInfo != null) 'classes': classInfo!.toJson(),
+      if (groupInfo != null) 'groups': groupInfo!.toJson(),
+      if (academicYear != null) 'academic_years': academicYear!.toJson(),
     };
   }
 }
@@ -127,7 +130,23 @@ class ClassModel {
       'section': section,
       'niveau_id': niveauId,
       'section_id': sectionId,
+      'niveau_name': niveauName,
+      'niveau_code': niveauCode,
+      'section_name': sectionName,
+      'section_code': sectionCode,
       'created_at': createdAt.toIso8601String(),
+      if (niveauId != null || niveauName != null || niveauCode != null)
+        'niveaux': {
+          'id': niveauId,
+          'name': niveauName,
+          'code': niveauCode,
+        },
+      if (sectionId != null || sectionName != null || sectionCode != null)
+        'sections': {
+          'id': sectionId,
+          'name': sectionName,
+          'code': sectionCode,
+        },
     };
   }
 }

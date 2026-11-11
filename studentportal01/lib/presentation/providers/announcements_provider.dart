@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/services/connectivity_service.dart';
+import '../../data/services/offline_cache_service.dart';
 import 'auth_provider.dart';
 
 /// Model for attachment
@@ -30,6 +32,16 @@ class AnnouncementAttachment {
       fileType: json['file_type'] as String?,
       displayName: json['display_name'] as String?,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'file_url': fileUrl,
+      'file_name': fileName,
+      'file_type': fileType,
+      'display_name': displayName,
+    };
   }
 }
 
@@ -73,12 +85,19 @@ class StudentAnnouncement {
     Map<String, dynamic> json, {
     List<AnnouncementAttachment> attachments = const [],
   }) {
+    List<AnnouncementAttachment> effectiveAttachments = attachments;
+    if (effectiveAttachments.isEmpty && json['attachments'] is List) {
+      effectiveAttachments = (json['attachments'] as List)
+          .map((a) => AnnouncementAttachment.fromJson(a as Map<String, dynamic>))
+          .toList();
+    }
+
     // Get first attachment URL if available
-    String? attachmentUrl;
-    String? attachmentName;
-    if (attachments.isNotEmpty) {
-      attachmentUrl = attachments.first.fileUrl;
-      attachmentName = attachments.first.fileName;
+    String? attachmentUrl = json['attachment_url'] as String?;
+    String? attachmentName = json['attachment_name'] as String?;
+    if (effectiveAttachments.isNotEmpty) {
+      attachmentUrl ??= effectiveAttachments.first.fileUrl;
+      attachmentName ??= effectiveAttachments.first.fileName;
     }
 
     return StudentAnnouncement(
@@ -91,7 +110,7 @@ class StudentAnnouncement {
       hasAttachment: json['has_attachment'] as bool? ?? false,
       attachmentUrl: attachmentUrl,
       attachmentName: attachmentName,
-      attachments: attachments,
+      attachments: effectiveAttachments,
       senderLabel: json['sender_label'] as String?,
       senderType: json['sender_type'] as String?,
       publishedAt: DateTime.parse(
@@ -100,6 +119,26 @@ class StudentAnnouncement {
       createdAt: DateTime.parse(json['created_at'] as String),
       payload: (json['payload'] as Map<String, dynamic>?) ?? const {},
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'body': body,
+      'announcement_type': announcementType,
+      'is_important': isImportant,
+      'is_pinned': isPinned,
+      'has_attachment': hasAttachment,
+      'attachment_url': attachmentUrl,
+      'attachment_name': attachmentName,
+      'attachments': attachments.map((a) => a.toJson()).toList(),
+      'sender_label': senderLabel,
+      'sender_type': senderType,
+      'published_at': publishedAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      'payload': payload,
+    };
   }
 }
 
@@ -189,8 +228,14 @@ final globalAnnouncementsProvider = FutureProvider<List<StudentAnnouncement>>((
     }
   }
   
+  final cacheKey = 'global_announcements_${schoolId ?? 'default'}';
   if (schoolId == null) {
-    debugPrint('globalAnnouncementsProvider: No school_id available');
+    debugPrint('globalAnnouncementsProvider: No school_id available, checking cache');
+    final cached = OfflineCacheService.instance.getListOfMaps('global_announcements_default') ??
+        OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null) {
+      return cached.map((e) => StudentAnnouncement.fromJson(e)).toList();
+    }
     return [];
   }
 
@@ -225,7 +270,7 @@ final globalAnnouncementsProvider = FutureProvider<List<StudentAnnouncement>>((
       }
     }
 
-    return announcements
+    final list = announcements
         .map(
           (json) => StudentAnnouncement.fromJson(
             json,
@@ -233,8 +278,21 @@ final globalAnnouncementsProvider = FutureProvider<List<StudentAnnouncement>>((
           ),
         )
         .toList();
+
+    OfflineCacheService.instance.setJson(cacheKey, list.map((a) => a.toJson()).toList());
+    OfflineCacheService.instance.setJson('global_announcements_default', list.map((a) => a.toJson()).toList());
+    ConnectivityService.instance.reportNetworkSuccess();
+    return list;
   } catch (e) {
     debugPrint('globalAnnouncementsProvider error: $e');
+    ConnectivityService.instance.reportNetworkError(e);
+
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey) ??
+        OfflineCacheService.instance.getListOfMaps('global_announcements_default');
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((e) => StudentAnnouncement.fromJson(e)).toList();
+    }
+
     return [];
   }
 });
@@ -295,8 +353,14 @@ final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((
     }
   }
   
+  final cacheKey = 'class_messages_${classId ?? 'default'}_$groupId';
   if (classId == null) {
-    debugPrint('classMessagesProvider: No class_id available');
+    debugPrint('classMessagesProvider: No class_id available, checking cache');
+    final cached = OfflineCacheService.instance.getListOfMaps('class_messages_default') ??
+        OfflineCacheService.instance.getListOfMaps(cacheKey);
+    if (cached != null) {
+      return cached.map((e) => StudentAnnouncement.fromJson(e)).toList();
+    }
     return [];
   }
 
@@ -339,7 +403,7 @@ final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((
       }
     }
 
-    return announcements
+    final list = announcements
         .map(
           (json) => StudentAnnouncement.fromJson(
             json,
@@ -347,8 +411,21 @@ final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((
           ),
         )
         .toList();
+
+    OfflineCacheService.instance.setJson(cacheKey, list.map((a) => a.toJson()).toList());
+    OfflineCacheService.instance.setJson('class_messages_default', list.map((a) => a.toJson()).toList());
+    ConnectivityService.instance.reportNetworkSuccess();
+    return list;
   } catch (e) {
     debugPrint('classMessagesProvider error: $e');
+    ConnectivityService.instance.reportNetworkError(e);
+
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey) ??
+        OfflineCacheService.instance.getListOfMaps('class_messages_default');
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((e) => StudentAnnouncement.fromJson(e)).toList();
+    }
+
     return [];
   }
 });

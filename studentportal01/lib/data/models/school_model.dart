@@ -39,4 +39,19 @@ class SchoolModel {
           : DateTime.now(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'logo_url': logoUrl,
+      'address': address,
+      'phone': phone,
+      'email': email,
+      'code': code,
+      'primary_color': primaryColor,
+      'secondary_color': secondaryColor,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
 }

@@ -11,6 +11,8 @@ import '../../providers/auth_provider.dart';
 import '../../../data/models/absence_model.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../data/services/offline_cache_service.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
@@ -39,12 +41,47 @@ class AbsenceDetailData {
     required this.records,
     required this.scheduledDays,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subject_name': subjectName,
+      'subject_code': subjectCode,
+      'professor_name': professorName,
+      'coefficient': coefficient,
+      'total_hours': totalHours,
+      'weekly_ci_hours': weeklyCiHours,
+      'weekly_tp_hours': weeklyTpHours,
+      'weeks': weeks,
+      'records': records.map((r) => r.toJson()).toList(),
+      'scheduled_days': scheduledDays,
+    };
+  }
+
+  factory AbsenceDetailData.fromJson(Map<String, dynamic> json) {
+    return AbsenceDetailData(
+      subjectName: json['subject_name'] as String? ?? '',
+      subjectCode: json['subject_code'] as String?,
+      professorName: json['professor_name'] as String?,
+      coefficient: (json['coefficient'] as num?)?.toDouble() ?? 1.0,
+      totalHours: (json['total_hours'] as num?)?.toDouble() ?? 0.0,
+      weeklyCiHours: (json['weekly_ci_hours'] as num?)?.toDouble() ?? 0.0,
+      weeklyTpHours: (json['weekly_tp_hours'] as num?)?.toDouble() ?? 0.0,
+      weeks: (json['weeks'] as num?)?.toInt() ?? 0,
+      records: (json['records'] as List?)
+          ?.map((r) => AbsenceRecordModel.fromJson(r as Map<String, dynamic>))
+          .toList() ?? [],
+      scheduledDays: (json['scheduled_days'] as List?)
+          ?.map((d) => d.toString())
+          .toList() ?? [],
+    );
+  }
 }
 
 final absenceDetailProvider = FutureProvider.family<AbsenceDetailData?, String>((ref, offeringId) async {
   final authState = ref.watch(authProvider);
   if (!authState.isAuthenticated || authState.enrollment == null) return null;
 
+  final cacheKey = 'cached_absence_detail_$offeringId';
   final supabase = Supabase.instance.client;
   final enrollmentId = authState.enrollment!.id;
 
@@ -63,7 +100,11 @@ final absenceDetailProvider = FutureProvider.family<AbsenceDetailData?, String>(
         .eq('id', offeringId)
         .maybeSingle();
 
-    if (offeringResponse == null) return null;
+    if (offeringResponse == null) {
+      final cached = OfflineCacheService.instance.getMap(cacheKey);
+      if (cached != null) return AbsenceDetailData.fromJson(cached);
+      return null;
+    }
 
     final subject = offeringResponse['subjects'] as Map<String, dynamic>?;
     final subjectName = subject?['name'] as String? ?? 'Matière inconnue';
@@ -116,7 +157,7 @@ final absenceDetailProvider = FutureProvider.family<AbsenceDetailData?, String>(
         .toSet()
         .toList();
 
-    return AbsenceDetailData(
+    final detailData = AbsenceDetailData(
       subjectName: subjectName,
       subjectCode: subjectCode,
       professorName: professorName,
@@ -128,8 +169,21 @@ final absenceDetailProvider = FutureProvider.family<AbsenceDetailData?, String>(
       records: records,
       scheduledDays: scheduledDays,
     );
+
+    await OfflineCacheService.instance.setJson(cacheKey, detailData.toJson());
+    ConnectivityService.instance.reportNetworkSuccess();
+    return detailData;
   } catch (e) {
     debugPrint('absenceDetailProvider error: $e');
+    ConnectivityService.instance.reportNetworkError(e);
+    final cached = OfflineCacheService.instance.getMap(cacheKey);
+    if (cached != null) {
+      try {
+        return AbsenceDetailData.fromJson(cached);
+      } catch (err) {
+        debugPrint('Failed to parse cached absence detail: $err');
+      }
+    }
     return null;
   }
 });
