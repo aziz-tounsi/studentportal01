@@ -22,18 +22,14 @@ subprojects {
 subprojects {
     val configureAndroid = {
         val androidExt = project.extensions.findByName("android")
-        if (androidExt is com.android.build.gradle.BaseExtension) {
-            androidExt.compileSdkVersion(36)
+        if (androidExt is com.android.build.gradle.LibraryExtension) {
+            androidExt.compileSdk = 36
         }
     }
     if (project.state.executed) {
         configureAndroid()
     } else {
         project.afterEvaluate { configureAndroid() }
-    }
-
-    project.tasks.matching { it.name.contains("AarMetadata") }.configureEach {
-        enabled = false
     }
 }
 
