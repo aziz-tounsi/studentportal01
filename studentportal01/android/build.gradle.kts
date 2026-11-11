@@ -19,15 +19,21 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Force all plugin subprojects to compile against SDK 36 so they satisfy
-// flutter_plugin_android_lifecycle's requirement of compileSdk >= 36.
 subprojects {
-    afterEvaluate {
-        if (extensions.findByName("android") != null) {
-            extensions.configure<com.android.build.gradle.BaseExtension>("android") {
-                compileSdkVersion(36)
-            }
+    val configureAndroid = {
+        val androidExt = project.extensions.findByName("android")
+        if (androidExt is com.android.build.gradle.BaseExtension) {
+            androidExt.compileSdkVersion(36)
         }
+    }
+    if (project.state.executed) {
+        configureAndroid()
+    } else {
+        project.afterEvaluate { configureAndroid() }
+    }
+
+    project.tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+        enabled = false
     }
 }
 
