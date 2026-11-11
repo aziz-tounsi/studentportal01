@@ -447,11 +447,11 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
         final iconSize = (28.0 * scale).clamp(22.0, 28.0);
         final titleSize = (28.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(19.0, 28.0);
         final subtitleSize = (14.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(11.5, 14.0);
-        final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+        final searchBtnSize = (50.0 * scale).clamp(44.0, 50.0);
         final isAr = l10n.locale.languageCode == 'ar';
 
         return SizedBox(
-          height: 72,
+          height: 76,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -534,20 +534,24 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           width: searchBtnSize,
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.search_rounded,
-                            color: Colors.grey[700],
-                            size: 22,
+                            color: Colors.grey[800],
+                            size: (26 * scale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -573,20 +577,24 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           width: searchBtnSize,
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.close_rounded,
-                            color: Colors.grey[700],
-                            size: (22 * scale).clamp(18.0, 22.0),
+                            color: Colors.grey[800],
+                            size: (26 * scale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -596,12 +604,16 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                         child: Container(
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.95),
+                            color: Colors.white.withValues(alpha: 0.98),
                             borderRadius: BorderRadius.circular(searchBtnSize / 2),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 18,
                                 offset: const Offset(0, 5),
                               ),
                             ],
@@ -611,28 +623,28 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                               const SizedBox(width: 16),
                               Icon(
                                 Icons.search_rounded,
-                                color: Colors.grey[400],
-                                size: 20,
+                                color: Colors.grey[600],
+                                size: 24,
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: TextField(
                                   controller: _searchController,
                                   focusNode: _searchFocusNode,
-                                  cursorColor: const Color(0xFFEC4899),
+                                  cursorColor: Colors.grey[800],
                                   style: ArabicTypography.bodyStyle(
                                     context,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[800],
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey[900],
                                   ),
                                   decoration: InputDecoration(
                                     hintText: l10n.search,
                                     hintStyle: ArabicTypography.bodyStyle(
                                       context,
-                                      color: Colors.grey[400],
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w400,
+                                      color: Colors.grey[500],
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                     filled: false,
                                     border: InputBorder.none,
@@ -640,7 +652,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                                     focusedBorder: InputBorder.none,
                                     isDense: true,
                                     contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 12,
+                                      vertical: 14,
                                     ),
                                   ),
                                 ),
@@ -650,12 +662,17 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                                   onTap: () {
                                     _searchController.clear();
                                   },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: Container(
+                                    margin: const EdgeInsetsDirectional.only(end: 8),
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[200],
+                                      shape: BoxShape.circle,
+                                    ),
                                     child: Icon(
-                                      Icons.cancel_rounded,
-                                      color: Colors.grey[400],
-                                      size: 18,
+                                      Icons.close_rounded,
+                                      color: Colors.grey[600],
+                                      size: 22,
                                     ),
                                   ),
                                 )

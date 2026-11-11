@@ -92,10 +92,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
 
         final iconBoxSize = (56 * context.responsiveScale).clamp(44.0, 56.0);
         final iconInnerSize = (28 * context.responsiveScale).clamp(22.0, 28.0);
-        final searchBtnSize = (44 * context.responsiveScale).clamp(38.0, 44.0);
+        final searchBtnSize = (50.0 * context.responsiveScale).clamp(44.0, 50.0);
 
         return SizedBox(
-          height: 72,
+          height: 76,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -180,20 +180,24 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           width: searchBtnSize,
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.search_rounded,
-                            color: Colors.grey[700],
-                            size: (22 * context.responsiveScale).clamp(18.0, 22.0),
+                            color: Colors.grey[800],
+                            size: (26 * context.responsiveScale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -221,20 +225,24 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           width: searchBtnSize,
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.close_rounded,
-                            color: Colors.grey[700],
-                            size: (22 * context.responsiveScale).clamp(18.0, 22.0),
+                            color: Colors.grey[800],
+                            size: (26 * context.responsiveScale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -244,45 +252,49 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         child: Container(
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.95),
+                            color: Colors.white.withValues(alpha: 0.98),
                             borderRadius: BorderRadius.circular(searchBtnSize / 2),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 20,
-                                offset: const Offset(0, 6),
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 18,
+                                offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Row(
                             children: [
-                              const SizedBox(width: 18),
+                              const SizedBox(width: 16),
                               Icon(
                                 Icons.search_rounded,
-                                color: Colors.grey[400],
-                                size: 20,
+                                color: Colors.grey[600],
+                                size: 24,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: TextField(
                                   controller: _searchController,
                                   focusNode: _searchFocusNode,
-                                  cursorColor: Colors.grey[600],
+                                  cursorColor: Colors.grey[800],
                                   onChanged: (value) =>
                                       setState(() => _searchQuery = value),
                                   style: ArabicTypography.bodyStyle(
                                     context,
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[800],
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey[900],
                                   ),
                                   decoration: InputDecoration(
                                     hintText: AppLocalizations.of(context).search,
                                     hintStyle: ArabicTypography.bodyStyle(
                                       context,
-                                      color: Colors.grey[400],
+                                      color: Colors.grey[500],
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w400,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                     filled: false,
                                     border: InputBorder.none,
@@ -311,7 +323,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                     child: Icon(
                                       Icons.close_rounded,
                                       color: Colors.grey[600],
-                                      size: 14,
+                                      size: 22,
                                     ),
                                   ),
                                 )

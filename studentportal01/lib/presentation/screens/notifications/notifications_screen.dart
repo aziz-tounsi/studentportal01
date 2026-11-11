@@ -93,8 +93,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         final fadeOut = 1.0 - slideValue;
         final fadeIn = slideValue;
 
+        final searchBtnSize = (50.0 * context.responsiveScale).clamp(44.0, 50.0);
+
         return SizedBox(
-          height: 72,
+          height: 76,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -176,23 +178,27 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                         delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
-                          width: context.scaleW(44).clamp(38.0, 48.0),
-                          height: context.scaleW(44).clamp(38.0, 48.0),
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.search_rounded,
-                            color: Colors.grey[700],
-                            size: context.scaleW(22).clamp(18.0, 24.0),
+                            color: Colors.grey[800],
+                            size: (26 * context.responsiveScale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -217,23 +223,27 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                         delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.close_rounded,
-                            color: Colors.grey[700],
-                            size: 22,
+                            color: Colors.grey[800],
+                            size: (26 * context.responsiveScale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -241,47 +251,51 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       // Search field - pill shaped
                       Expanded(
                         child: Container(
-                          height: 48,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.95),
-                            borderRadius: BorderRadius.circular(24),
+                            color: Colors.white.withValues(alpha: 0.98),
+                            borderRadius: BorderRadius.circular(searchBtnSize / 2),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 20,
-                                offset: const Offset(0, 6),
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 18,
+                                offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Row(
                             children: [
-                              const SizedBox(width: 18),
+                              const SizedBox(width: 16),
                               Icon(
                                 Icons.search_rounded,
-                                color: Colors.grey[400],
-                                size: 20,
+                                color: Colors.grey[600],
+                                size: 24,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: TextField(
                                   controller: _searchController,
                                   focusNode: _searchFocusNode,
-                                  cursorColor: Colors.grey[600],
+                                  cursorColor: Colors.grey[800],
                                   onChanged: (value) =>
                                       setState(() => _searchQuery = value),
                                   style: ArabicTypography.bodyStyle(
                                     context,
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[800],
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey[900],
                                   ),
                                   decoration: InputDecoration(
                                     hintText: AppLocalizations.of(context).search,
                                     hintStyle: ArabicTypography.bodyStyle(
                                       context,
-                                      color: Colors.grey[400],
+                                      color: Colors.grey[500],
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w400,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                     filled: false,
                                     border: InputBorder.none,
@@ -310,7 +324,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                                     child: Icon(
                                       Icons.close_rounded,
                                       color: Colors.grey[600],
-                                      size: 14,
+                                      size: 22,
                                     ),
                                   ),
                                 )
@@ -393,7 +407,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         Builder(
           builder: (context) {
             final scale = context.responsiveScale;
-            final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+            final searchBtnSize = (50.0 * scale).clamp(44.0, 50.0);
             return BouncingWrapper(
               shrinkScale: 0.86,
               hitPadding: const EdgeInsets.all(8),
@@ -402,20 +416,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 width: searchBtnSize,
                 height: searchBtnSize,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: Colors.white.withValues(alpha: 0.95),
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    width: 1.2,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 15,
+                      color: Colors.black.withValues(alpha: 0.10),
+                      blurRadius: 16,
                       offset: const Offset(0, 5),
                     ),
                   ],
                 ),
                 child: Icon(
                   Icons.search_rounded,
-                  color: Colors.grey[700],
-                  size: (22 * scale).clamp(18.0, 22.0),
+                  color: Colors.grey[800],
+                  size: (26 * scale).clamp(22.0, 26.0),
                 ),
               ),
             );
@@ -428,7 +446,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   // Search header with full-width search bar
   Widget _buildSearchHeader() {
     final scale = context.responsiveScale;
-    final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+    final searchBtnSize = (50.0 * scale).clamp(44.0, 50.0);
 
     return Row(
       children: [
@@ -441,20 +459,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             width: searchBtnSize,
             height: searchBtnSize,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.9),
+              color: Colors.white.withValues(alpha: 0.95),
               shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.black.withValues(alpha: 0.08),
+                width: 1.2,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 15,
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 16,
                   offset: const Offset(0, 5),
                 ),
               ],
             ),
             child: Icon(
               Icons.close_rounded,
-              color: Colors.grey[700],
-              size: (22 * scale).clamp(18.0, 22.0),
+              color: Colors.grey[800],
+              size: (26 * scale).clamp(22.0, 26.0),
             ),
           ),
         ),
@@ -464,12 +486,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           child: Container(
             height: searchBtnSize,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.95),
+              color: Colors.white.withValues(alpha: 0.98),
               borderRadius: BorderRadius.circular(searchBtnSize / 2),
+              border: Border.all(
+                color: Colors.black.withValues(alpha: 0.08),
+                width: 1.2,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 15,
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 18,
                   offset: const Offset(0, 5),
                 ),
               ],
@@ -479,29 +505,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 const SizedBox(width: 16),
                 Icon(
                   Icons.search_rounded,
-                  color: Colors.grey[400],
-                  size: 20,
+                  color: Colors.grey[600],
+                  size: 24,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
-                    cursorColor: Colors.grey[600],
+                    cursorColor: Colors.grey[800],
                     onChanged: (value) => setState(() => _searchQuery = value),
                     style: ArabicTypography.bodyStyle(
                       context,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[800],
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[900],
                     ),
                     decoration: InputDecoration(
                       hintText: AppLocalizations.of(context).search,
                       hintStyle: ArabicTypography.bodyStyle(
                         context,
-                        color: Colors.grey[400],
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
+                        color: Colors.grey[500],
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                       filled: false,
                       border: InputBorder.none,
@@ -522,8 +548,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       padding: const EdgeInsetsDirectional.only(end: 12),
                       child: Icon(
                         Icons.close_rounded,
-                        color: Colors.grey[400],
-                        size: 18,
+                        color: Colors.grey[600],
+                        size: 22,
                       ),
                     ),
                   ),

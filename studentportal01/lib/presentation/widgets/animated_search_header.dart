@@ -40,13 +40,13 @@ class AnimatedSearchHeader extends StatelessWidget {
         final iconSize = (28.0 * scale).clamp(22.0, 28.0);
         final titleSize = (28.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(19.0, 28.0);
         final subtitleSize = (14.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(11.5, 14.0);
-        final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+        final searchBtnSize = (50.0 * scale).clamp(44.0, 50.0);
         final slideValue = animationController.value;
         final fadeOut = 1.0 - slideValue;
         final fadeIn = slideValue;
 
         return SizedBox(
-          height: 72,
+          height: 76,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -148,20 +148,24 @@ class AnimatedSearchHeader extends StatelessWidget {
                           width: searchBtnSize,
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.search_rounded,
-                            color: Colors.grey[700],
-                            size: (22 * scale).clamp(18.0, 22.0),
+                            color: Colors.grey[800],
+                            size: (26 * scale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -188,20 +192,24 @@ class AnimatedSearchHeader extends StatelessWidget {
                           width: searchBtnSize,
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 16,
                                 offset: const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: Icon(
                             Icons.close_rounded,
-                            color: Colors.grey[700],
-                            size: (22 * scale).clamp(18.0, 22.0),
+                            color: Colors.grey[800],
+                            size: (26 * scale).clamp(22.0, 26.0),
                           ),
                         ),
                       ),
@@ -211,12 +219,16 @@ class AnimatedSearchHeader extends StatelessWidget {
                         child: Container(
                           height: searchBtnSize,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.95),
+                            color: Colors.white.withValues(alpha: 0.98),
                             borderRadius: BorderRadius.circular(searchBtnSize / 2),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 15,
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 18,
                                 offset: const Offset(0, 5),
                               ),
                             ],
@@ -226,10 +238,10 @@ class AnimatedSearchHeader extends StatelessWidget {
                               const SizedBox(width: 16),
                               Icon(
                                 Icons.search_rounded,
-                                color: Colors.grey[400],
-                                size: 20,
+                                color: Colors.grey[600],
+                                size: 24,
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Builder(
                                   builder: (context) {
@@ -237,43 +249,66 @@ class AnimatedSearchHeader extends StatelessWidget {
                                     return TextField(
                                       controller: searchController,
                                       focusNode: searchFocusNode,
-                                      cursorColor: Colors.grey[600],
+                                      cursorColor: Colors.grey[800],
                                       style: isAr
                                           ? GoogleFonts.tajawal(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey[800],
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.grey[900],
                                             )
-                                          : TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey[800],
+                                          : const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF212121),
                                             ),
                                       decoration: InputDecoration(
                                         hintText: AppLocalizations.of(context).search,
                                         hintStyle: isAr
                                             ? GoogleFonts.tajawal(
-                                                color: Colors.grey[400],
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w400,
+                                                color: Colors.grey[500],
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
                                               )
                                             : TextStyle(
-                                                color: Colors.grey[400],
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w400,
+                                                color: Colors.grey[500],
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                         filled: false,
                                         border: InputBorder.none,
                                         enabledBorder: InputBorder.none,
                                         focusedBorder: InputBorder.none,
                                         isDense: true,
-                                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
                                       ),
                                     );
                                   },
                                 ),
                               ),
-                              const SizedBox(width: 16),
+                              ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: searchController,
+                                builder: (context, value, _) {
+                                  if (value.text.isEmpty) {
+                                    return const SizedBox(width: 16);
+                                  }
+                                  return GestureDetector(
+                                    onTap: () => searchController.clear(),
+                                    child: Container(
+                                      margin: const EdgeInsetsDirectional.only(end: 8),
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        color: Colors.grey[600],
+                                        size: 22,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
