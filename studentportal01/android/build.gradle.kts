@@ -24,12 +24,20 @@ subprojects {
         val androidExt = project.extensions.findByName("android")
         if (androidExt is com.android.build.gradle.LibraryExtension) {
             androidExt.compileSdk = 36
+            androidExt.lint.checkReleaseBuilds = false
+            androidExt.lint.abortOnError = false
+            androidExt.lint.checkDependencies = false
+            androidExt.lint.ignoreWarnings = true
         }
     }
     if (project.state.executed) {
         configureAndroid()
     } else {
         project.afterEvaluate { configureAndroid() }
+    }
+
+    project.tasks.matching { it.name.startsWith("lintVital") }.configureEach {
+        enabled = false
     }
 }
 

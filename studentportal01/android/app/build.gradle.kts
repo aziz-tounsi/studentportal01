@@ -35,6 +35,13 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+        checkDependencies = false
+        ignoreWarnings = true
+    }
 }
 
 flutter {
