@@ -149,21 +149,45 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     final items = _getNavItems();
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final screenWidth = MediaQuery.of(context).size.width;
-    final navWidth = math.min(screenWidth * 0.78, 340.0);
-    const double gap = 6.0;
-    const double padding = 6.0;
-    const double circleSize = 72.0;
     final isRtl = Directionality.of(context) == TextDirection.rtl;
+
+    // Calculate maximum available width for the nav bar pill:
+    // On iPhone 16 Pro Max (440): 344.0
+    // On Infinix Smart 8 (360): 328.0 (comfortable breathing room)
+    // On small 320dp phones: 296.0
+    // On tablets / iPads (>600): 360.0
+    final double maxBarWidth = screenWidth >= 600
+        ? 360.0
+        : math.min(screenWidth - (screenWidth < 360 ? 20.0 : 32.0), 346.0);
+    final double navWidth = maxBarWidth.clamp(280.0, 360.0);
+
+    final int count = items.length;
+    final double padding = (navWidth * 0.016).clamp(4.0, 6.0);
+    final double gap = (navWidth * 0.016).clamp(4.0, 6.0);
+    final double availableInnerWidth = navWidth - (padding * 2);
+
+    final double maxCircleAllowed =
+        ((availableInnerWidth - (count - 1) * gap) / count).floorToDouble();
+    final double circleSize = maxCircleAllowed.clamp(48.0, 70.0);
+    final double totalItemsWidth = count * circleSize + (count - 1) * gap;
+    final double startX = (availableInnerWidth - totalItemsWidth) / 2;
+
+    final double iconSize = (circleSize * 0.46).clamp(23.0, 34.0);
+    final double badgeSize = (circleSize * 0.28).clamp(16.0, 20.0);
+    final double badgeFont = (circleSize * 0.15).clamp(9.0, 11.0);
+    final double barHeight = circleSize + padding * 2;
+    final double safeBottomOffset =
+        bottomPadding > 0 ? bottomPadding + 6.0 : 12.0;
 
     return Container(
       color: Colors.transparent,
-      height: 96 + bottomPadding,
+      height: barHeight + safeBottomOffset,
       alignment: Alignment.topCenter,
       child: Container(
         width: navWidth,
-        height: circleSize + padding * 2,
+        height: barHeight,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular((circleSize + padding * 2) / 2),
+          borderRadius: BorderRadius.circular(barHeight / 2),
           boxShadow: [
             BoxShadow(
               color: const Color(0xFF7A8698).withValues(alpha: 0.20),
@@ -173,91 +197,88 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular((circleSize + padding * 2) / 2),
+          borderRadius: BorderRadius.circular(barHeight / 2),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
-              padding: const EdgeInsets.all(padding),
+              padding: EdgeInsets.all(padding),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.55),
-                borderRadius:
-                    BorderRadius.circular((circleSize + padding * 2) / 2),
+                borderRadius: BorderRadius.circular(barHeight / 2),
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final availableWidth = constraints.maxWidth;
-                  final totalItemsWidth =
-                      items.length * circleSize + (items.length - 1) * gap;
-                  final startX = (availableWidth - totalItemsWidth) / 2;
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Animated bouncing pink circle with slow iOS elastic effect
+                  AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, _) {
+                      double getSlotX(int index) {
+                        final visualIndex =
+                            isRtl ? (count - 1 - index) : index;
+                        return startX + visualIndex * (circleSize + gap);
+                      }
 
-                  double getSlotX(int index) {
-                    final visualIndex =
-                        isRtl ? (items.length - 1 - index) : index;
-                    return startX + visualIndex * (circleSize + gap);
-                  }
+                      final fromX = getSlotX(_fromIndex);
+                      final targetX = getSlotX(_selectedIndex);
+                      final t = _animation.value;
+                      final currentX = lerpDouble(fromX, targetX, t)!;
+                      final progress = _animationController.value;
+                      final isSameTab = _fromIndex == _selectedIndex;
 
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Animated bouncing pink circle with slow iOS elastic effect
-                      AnimatedBuilder(
-                        animation: _animationController,
-                        builder: (context, _) {
-                          final fromX = getSlotX(_fromIndex);
-                          final targetX = getSlotX(_selectedIndex);
-                          final t = _animation.value;
-                          final currentX = lerpDouble(fromX, targetX, t)!;
-                          final progress = _animationController.value;
-                          final isSameTab = _fromIndex == _selectedIndex;
+                      // Slow, smooth elastic squish/bounce scale
+                      final bounceScale = isSameTab
+                          ? 1.0 + 0.14 * math.sin(progress * math.pi)
+                          : 1.0 + 0.08 * math.sin(progress * math.pi);
 
-                          // Slow, smooth elastic squish/bounce scale
-                          final bounceScale = isSameTab
-                              ? 1.0 + 0.16 * math.sin(progress * math.pi)
-                              : 1.0 + 0.10 * math.sin(progress * math.pi);
-
-                          return Positioned(
-                            left: currentX,
-                            top: 0,
-                            width: circleSize,
-                            height: circleSize,
-                            child: Transform.scale(
-                              scale: bounceScale,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: _pink,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: _pink.withValues(alpha: 0.40),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
+                      return Positioned(
+                        left: currentX,
+                        top: 0,
+                        width: circleSize,
+                        height: circleSize,
+                        child: Transform.scale(
+                          scale: bounceScale,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _pink,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _pink.withValues(alpha: 0.40),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 6),
                                 ),
-                              ),
+                              ],
                             ),
-                          );
-                        },
-                      ),
-                      // Row of nav items sitting on top of the sliding pink circle
-                      Positioned.fill(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: () {
-                            final list = <Widget>[];
-                            for (int i = 0; i < items.length; i++) {
-                              if (i > 0) {
-                                list.add(const SizedBox(width: gap));
-                              }
-                              list.add(_buildItem(i, items));
-                            }
-                            return list;
-                          }(),
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      );
+                    },
+                  ),
+                  // Row of nav items sitting on top of the sliding pink circle
+                  Positioned.fill(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: () {
+                        final list = <Widget>[];
+                        for (int i = 0; i < items.length; i++) {
+                          if (i > 0) {
+                            list.add(SizedBox(width: gap));
+                          }
+                          list.add(_buildItem(
+                            i,
+                            items,
+                            circleSize,
+                            iconSize,
+                            badgeSize,
+                            badgeFont,
+                          ));
+                        }
+                        return list;
+                      }(),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -266,7 +287,14 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     );
   }
 
-  Widget _buildItem(int index, List<_NavItem> items) {
+  Widget _buildItem(
+    int index,
+    List<_NavItem> items,
+    double itemSize,
+    double iconSize,
+    double badgeSize,
+    double badgeFont,
+  ) {
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       behavior: HitTestBehavior.opaque,
@@ -278,8 +306,8 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
               isSelected ? Colors.white : const Color(0xFF94A3B8);
 
           return Container(
-            width: 72,
-            height: 72,
+            width: itemSize,
+            height: itemSize,
             color: Colors.transparent,
             child: Stack(
               clipBehavior: Clip.none,
@@ -288,7 +316,7 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
                 Icon(
                   items[index].icon,
                   color: iconColor,
-                  size: 36,
+                  size: iconSize,
                 ),
                 if (items[index].badgeCount != null &&
                     items[index].badgeCount! > 0)
@@ -309,17 +337,17 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
                           ),
                         ],
                       ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
+                      constraints: BoxConstraints(
+                        minWidth: badgeSize,
+                        minHeight: badgeSize,
                       ),
                       child: Text(
                         items[index].badgeCount! > 9
                             ? '9+'
                             : '${items[index].badgeCount}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: badgeFont,
                           fontWeight: FontWeight.w700,
                         ),
                         textAlign: TextAlign.center,

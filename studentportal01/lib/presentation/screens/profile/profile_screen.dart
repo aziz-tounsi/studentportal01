@@ -19,6 +19,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/school_provider.dart';
 import '../../providers/student_context_provider.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/profile_skeleton.dart';
 import '../../widgets/bouncing_wrapper.dart';
@@ -246,11 +247,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             await ref.read(authProvider.notifier).refreshUserData();
           },
           color: _navPink,
-          backgroundColor: Colors.white,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            children: [
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: EdgeInsets.fromLTRB(context.horizontalPadding, 16, context.horizontalPadding, 24 + MediaQuery.of(context).padding.bottom),
+              children: [
               _buildHeader(l10n),
               const SizedBox(height: 20),
               // Hero Profile Card
@@ -420,7 +424,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   String _resolveLevel(
@@ -610,8 +616,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             }
           },
           child: Container(
-            width: 44,
-            height: 44,
+            width: context.scaleW(44).clamp(38.0, 48.0),
+            height: context.scaleW(44).clamp(38.0, 48.0),
             decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
@@ -628,34 +634,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 textDirection: TextDirection.ltr,
                 child: Icon(
                   isRtl ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_new_rounded,
-                  size: 18,
+                  size: context.scaleW(18).clamp(16.0, 20.0),
                   color: const Color(0xFF1F2937),
                 ),
               ),
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        SizedBox(width: context.scaleW(14).clamp(10.0, 16.0)),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                l10n.monProfil,
-                style: ArabicTypography.headerStyle(
-                  context,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF1F2937),
-                  letterSpacing: -0.6,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  l10n.monProfil,
+                  style: ArabicTypography.headerStyle(
+                    context,
+                    fontSize: context.sp(24),
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF1F2937),
+                    letterSpacing: -0.6,
+                  ),
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 l10n.profilSubtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: ArabicTypography.subtitleStyle(
                   context,
-                  fontSize: 13.5,
+                  fontSize: context.sp(13.5),
                   fontWeight: FontWeight.w600,
                   color: Colors.grey.shade600,
                 ),
@@ -718,7 +730,10 @@ class _ProfileHeroCard extends ConsumerWidget {
         .join();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppResponsive.cardPadding(context, base: 20.0),
+        vertical: 24,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(26),
@@ -889,7 +904,10 @@ class _UnifiedSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppResponsive.cardPadding(context, base: 20.0),
+        vertical: 22,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(26),

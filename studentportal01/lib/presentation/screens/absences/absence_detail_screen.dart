@@ -12,6 +12,7 @@ import '../../../data/models/absence_model.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../core/services/connectivity_service.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../data/services/offline_cache_service.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
@@ -283,36 +284,42 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         (d != null && d.totalHours > 0) ? totalAbsent / d.totalHours : 0.0;
 
     return SafeArea(
-      child: Column(
-        children: [
-          _buildHeader(context, d, overallPct, isLoading),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Stack(
-                    clipBehavior: Clip.none,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
+            children: [
+              _buildHeader(context, d, overallPct, isLoading),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(context.horizontalPadding, 0, context.horizontalPadding, 100),
+                  child: Column(
                     children: [
-                      _buildStatsPanel(d, isLoading),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: -22,
-                        child: _buildChipsRow(totalAbsent, ciHours, isLoading),
+                      const SizedBox(height: 20),
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          _buildStatsPanel(d, isLoading),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: -22,
+                            child: _buildChipsRow(totalAbsent, ciHours, isLoading),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 100),
+                      _buildTogglePills(),
+                      const SizedBox(height: 20),
+                      _buildTimelinePanel(d, absencesByDate, isLoading),
                     ],
                   ),
-                  const SizedBox(height: 100),
-                  _buildTogglePills(),
-                  const SizedBox(height: 20),
-                  _buildTimelinePanel(d, absencesByDate, isLoading),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -360,7 +367,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         Directionality.of(context) == TextDirection.rtl;
     final l10n = AppLocalizations.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 24, 0),
+      padding: EdgeInsets.fromLTRB(context.horizontalPadding, 8, context.horizontalPadding, 0),
       child: Row(
         children: [
           BouncingWrapper(
@@ -383,8 +390,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               }
             },
             child: Container(
-              width: 44,
-              height: 44,
+              width: context.scaleW(44).clamp(38.0, 48.0),
+              height: context.scaleW(44).clamp(38.0, 48.0),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.9),
                 shape: BoxShape.circle,
@@ -401,12 +408,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 child: Icon(
                   isAr ? Icons.arrow_forward_rounded : Icons.arrow_back_rounded,
                   color: Colors.grey[700],
-                  size: 22,
+                  size: context.scaleW(22).clamp(18.0, 24.0),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: context.scaleW(14).clamp(10.0, 16.0)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -425,25 +432,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     ),
                   )
                 else
-                  Text(
-                    _getShortcutOrName(d),
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      fontFamily: isAr ? GoogleFonts.cairo().fontFamily : null,
-                      color: _onSurface,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _getShortcutOrName(d),
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: context.sp(26),
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        fontFamily: isAr ? GoogleFonts.cairo().fontFamily : null,
+                        color: _onSurface,
+                      ),
                     ),
                   ),
                 const SizedBox(height: 2),
                 Text(
                   l10n.academicSubject,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: context.sp(10),
                     fontWeight: FontWeight.w600,
                     letterSpacing: 2,
                     color: _secondaryText.withValues(alpha: 0.7),

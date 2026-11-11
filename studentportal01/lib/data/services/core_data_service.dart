@@ -771,6 +771,10 @@ class CoreDataService {
           cacheKey,
           list.map((s) => s.toJson()).toList(),
         );
+        OfflineCacheService.instance.setJson(
+          'semesters_latest',
+          list.map((s) => s.toJson()).toList(),
+        );
         ConnectivityService.instance.reportNetworkSuccess();
         return list;
       }
@@ -791,6 +795,10 @@ class CoreDataService {
             cacheKey,
             list.map((s) => s.toJson()).toList(),
           );
+          OfflineCacheService.instance.setJson(
+            'semesters_latest',
+            list.map((s) => s.toJson()).toList(),
+          );
         }
         ConnectivityService.instance.reportNetworkSuccess();
         return list;
@@ -800,7 +808,8 @@ class CoreDataService {
     }
 
     // Offline / Server down fallback from cache
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+        ?? OfflineCacheService.instance.getListOfMaps('semesters_latest');
     if (cached != null && cached.isNotEmpty) {
       return cached.map((e) => SemesterInfo.fromJson(e)).toList();
     }
@@ -981,6 +990,10 @@ class CoreDataService {
           cacheKey,
           list.map((e) => e.toJson()).toList(),
         );
+        OfflineCacheService.instance.setJson(
+          'payments_latest',
+          list.map((e) => e.toJson()).toList(),
+        );
         ConnectivityService.instance.reportNetworkSuccess();
         return list;
       }
@@ -1038,6 +1051,10 @@ class CoreDataService {
             cacheKey,
             list.map((e) => e.toJson()).toList(),
           );
+          OfflineCacheService.instance.setJson(
+            'payments_latest',
+            list.map((e) => e.toJson()).toList(),
+          );
           ConnectivityService.instance.reportNetworkSuccess();
           return list;
         }
@@ -1047,7 +1064,8 @@ class CoreDataService {
     }
 
     // Offline / Server down fallback from cache
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+        ?? OfflineCacheService.instance.getListOfMaps('payments_latest');
     if (cached != null && cached.isNotEmpty) {
       return cached.map((e) => PaymentPlanInfo.fromJson(e)).toList();
     }

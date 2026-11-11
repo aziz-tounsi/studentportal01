@@ -7,9 +7,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../data/models/timetable_model.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../data/services/offline_cache_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/bouncing_wrapper.dart';
@@ -116,17 +118,38 @@ Color _getSubjectColor(String subjectCode) {
 }
 
 final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
+  final authState = ref.watch(authProvider);
   final contextAsync = await ref.watch(studentContextProvider.future);
 
-  if (contextAsync == null || contextAsync.classId == null) return [];
-
-  final classId = contextAsync.classId!;
-  final supabase = Supabase.instance.client;
+  final classId = contextAsync?.classId 
+      ?? authState.enrollment?.classId 
+      ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['class_id'] as String?);
 
   final isExamPeriodActive = await ref.watch(isExamPeriodProvider.future);
   final selectedType = isExamPeriodActive ? 'exam' : 'regular';
   final selectedSemesterNumber = ref.watch(emploiSemesterProvider);
-  final cacheKey = 'timetable_screen_${classId}_${selectedType}_$selectedSemesterNumber';
+  final cacheKey = classId != null 
+      ? 'timetable_screen_${classId}_${selectedType}_$selectedSemesterNumber'
+      : 'timetable_screen_${selectedType}_$selectedSemesterNumber';
+
+  List<TimetableSlotModel>? getCachedTimetable() {
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+        ?? (classId != null ? OfflineCacheService.instance.getListOfMaps('timetable_screen_${classId}_regular_$selectedSemesterNumber') : null)
+        ?? OfflineCacheService.instance.getListOfMaps('timetable_screen_latest_$selectedSemesterNumber')
+        ?? OfflineCacheService.instance.getListOfMaps('timetable_screen_latest');
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((s) => TimetableSlotModel.fromJson(s)).toList();
+    }
+    return null;
+  }
+
+  if (classId == null) {
+    final cachedList = getCachedTimetable();
+    if (cachedList != null) return cachedList;
+    return [];
+  }
+
+  final supabase = Supabase.instance.client;
 
   try {
     // Direct, canonical and resilient query for timetable slots of this student's class
@@ -251,6 +274,14 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
         cacheKey,
         list.map((s) => s.toJson()).toList(),
       );
+      OfflineCacheService.instance.setJson(
+        'timetable_screen_latest_$selectedSemesterNumber',
+        list.map((s) => s.toJson()).toList(),
+      );
+      OfflineCacheService.instance.setJson(
+        'timetable_screen_latest',
+        list.map((s) => s.toJson()).toList(),
+      );
     }
     ConnectivityService.instance.reportNetworkSuccess();
     return list;
@@ -258,10 +289,8 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
     debugPrint('timetableProvider error: $e');
     ConnectivityService.instance.reportNetworkError(e);
 
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
-    if (cached != null && cached.isNotEmpty) {
-      return cached.map((s) => TimetableSlotModel.fromJson(s)).toList();
-    }
+    final cachedList = getCachedTimetable();
+    if (cachedList != null) return cachedList;
     return [];
   }
 });
@@ -420,116 +449,144 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                     physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                     slivers: [
                       SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                            child: SizedBox(
-                              height: 72,
-                              child: Row(
-                              children: [
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: selectedType == 'exam'
-                                          ? const [Color(0xFFEA580C), Color(0xFFF97316)]
-                                          : const [Color(0xFF10B981), Color(0xFF059669)],
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: (selectedType == 'exam'
-                                                ? const Color(0xFFEA580C)
-                                                : const Color(0xFF10B981))
-                                            .withValues(alpha: 0.4),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 8),
+                        child: Builder(
+                          builder: (context) {
+                            final screenW = MediaQuery.sizeOf(context).width;
+                            final scale = (screenW / 440.0).clamp(0.72, 1.15);
+                            final iconBoxSize = (56.0 * scale).clamp(44.0, 56.0);
+                            final iconSize = (28.0 * scale).clamp(22.0, 28.0);
+                            final titleSize = (28.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(19.0, 28.0);
+                            final subtitleSize = (14.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(11.5, 14.0);
+                            final actionBtnSize = (48.0 * scale).clamp(40.0, 48.0);
+                            final isAr = Localizations.localeOf(context).languageCode == 'ar';
+
+                            return Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                AppResponsive.horizontalPadding(context),
+                                20,
+                                AppResponsive.horizontalPadding(context),
+                                16,
+                              ),
+                              child: SizedBox(
+                                height: 72,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: iconBoxSize,
+                                      height: iconBoxSize,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: selectedType == 'exam'
+                                              ? const [Color(0xFFEA580C), Color(0xFFF97316)]
+                                              : const [Color(0xFF10B981), Color(0xFF059669)],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: (selectedType == 'exam'
+                                                    ? const Color(0xFFEA580C)
+                                                    : const Color(0xFF10B981))
+                                                .withValues(alpha: 0.4),
+                                            blurRadius: 20 * scale,
+                                            offset: Offset(0, 8 * scale),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                  child: Icon(
-                                    selectedType == 'exam'
-                                        ? Icons.school_rounded
-                                        : Icons.calendar_month_rounded,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
+                                      child: Icon(
                                         selectedType == 'exam'
-                                            ? (Localizations.localeOf(context).languageCode == 'ar'
-                                                ? 'جدول الامتحانات'
-                                                : (Localizations.localeOf(context).languageCode == 'en'
-                                                    ? 'Exam Timetable'
-                                                    : 'Emploi d\'examen'))
-                                            : l10n.emploi,
-                                        style: ArabicTypography.headerStyle(
-                                          context,
-                                          fontSize: 28,
-                                          fontWeight: FontWeight.w900,
-                                          color: const Color(0xFF1F2937),
-                                          letterSpacing: -0.8,
+                                            ? Icons.school_rounded
+                                            : Icons.calendar_month_rounded,
+                                        color: Colors.white,
+                                        size: iconSize,
+                                      ),
+                                    ),
+                                    SizedBox(width: (16 * scale).clamp(10.0, 16.0)),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: isAr
+                                                ? Alignment.centerRight
+                                                : Alignment.centerLeft,
+                                            child: Text(
+                                              selectedType == 'exam'
+                                                  ? (isAr
+                                                      ? 'جدول الامتحانات'
+                                                      : (Localizations.localeOf(context).languageCode == 'en'
+                                                          ? 'Exam Timetable'
+                                                          : 'Emploi d\'examen'))
+                                                  : l10n.emploi,
+                                              style: ArabicTypography.headerStyle(
+                                                context,
+                                                fontSize: titleSize,
+                                                fontWeight: FontWeight.w900,
+                                                color: const Color(0xFF1F2937),
+                                                letterSpacing: -0.8,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            selectedType == 'exam'
+                                                ? l10n.examTimetableSubtitle
+                                                : l10n.emploiSubtitle,
+                                            style: ArabicTypography.subtitleStyle(
+                                              context,
+                                              fontSize: subtitleSize,
+                                              fontWeight: FontWeight.w600,
+                                              color: const Color(0xFF1F2937),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(width: (12 * scale).clamp(8.0, 12.0)),
+                                    BouncingWrapper(
+                                      shrinkScale: 0.86,
+                                      overshootScale: 1.10,
+                                      onTap: () => _setExpanded(true),
+                                      child: Container(
+                                        width: actionBtnSize,
+                                        height: actionBtnSize,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.08),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Icon(
+                                          Icons.fullscreen_rounded,
+                                          color: selectedType == 'exam'
+                                              ? const Color(0xFFEA580C)
+                                              : const Color(0xFF10B981),
+                                          size: (24 * scale).clamp(20.0, 24.0),
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        selectedType == 'exam'
-                                            ? l10n.examTimetableSubtitle
-                                            : l10n.emploiSubtitle,
-                                        style: ArabicTypography.subtitleStyle(
-                                          context,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: const Color(0xFF1F2937),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                BouncingWrapper(
-                                  shrinkScale: 0.86,
-                                  overshootScale: 1.10,
-                                  onTap: () => _setExpanded(true),
-                                  child: Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.08),
-                                          blurRadius: 16,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
                                     ),
-                                    child: Icon(
-                                      Icons.fullscreen_rounded,
-                                      color: selectedType == 'exam'
-                                          ? const Color(0xFFEA580C)
-                                          : const Color(0xFF10B981),
-                                      size: 24,
-                                    ),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppResponsive.horizontalPadding(context),
+                          ),
                           child: DynamicSemesterNav(
                             selectedSemesterNumber: selectedSemester,
                             accentColor: selectedType == 'exam'

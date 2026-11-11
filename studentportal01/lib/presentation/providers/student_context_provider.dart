@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/services/core_data_service.dart';
+import '../../data/services/offline_cache_service.dart';
+import 'auth_provider.dart';
 
 // ============================================================
 // CORE DATA SERVICE PROVIDER
@@ -22,11 +24,40 @@ final coreDataServiceProvider = Provider<CoreDataService>((ref) {
 // ============================================================
 
 final studentContextProvider = FutureProvider<StudentContext?>((ref) async {
-  final userId = Supabase.instance.client.auth.currentUser?.id;
+  final authState = ref.watch(authProvider);
+  final userId = Supabase.instance.client.auth.currentUser?.id 
+      ?? authState.user?.id 
+      ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
   if (userId == null) return null;
   
   final service = ref.watch(coreDataServiceProvider);
-  return service.getStudentContext(userId);
+  final ctx = await service.getStudentContext(userId);
+  if (ctx != null) return ctx;
+
+  // Synthesize from cached_user and cached_enrollment if direct context wasn't saved
+  final cachedUser = OfflineCacheService.instance.getMap('cached_user');
+  final cachedEnrollment = OfflineCacheService.instance.getMap('cached_enrollment');
+  if (cachedUser != null) {
+    final classMap = cachedEnrollment?['class'] as Map?;
+    final niveauMap = classMap?['niveaux'] as Map? ?? cachedEnrollment?['niveau'] as Map?;
+    return StudentContext(
+      userId: userId,
+      schoolId: cachedUser['school_id']?.toString() ?? '',
+      fullName: cachedUser['full_name']?.toString(),
+      email: cachedUser['email']?.toString(),
+      studentCode: cachedUser['student_code']?.toString() ?? cachedEnrollment?['student_code']?.toString(),
+      enrollmentId: cachedEnrollment?['id']?.toString(),
+      classId: cachedEnrollment?['class_id']?.toString() ?? classMap?['id']?.toString(),
+      groupId: cachedEnrollment?['group_id']?.toString(),
+      academicYearId: cachedEnrollment?['academic_year_id']?.toString(),
+      className: classMap?['name']?.toString(),
+      niveauId: classMap?['niveau_id']?.toString() ?? niveauMap?['id']?.toString(),
+      niveauCode: niveauMap?['code']?.toString(),
+      niveauName: niveauMap?['name']?.toString(),
+      cycle: niveauMap?['cycle']?.toString(),
+    );
+  }
+  return null;
 });
 
 // ============================================================
@@ -36,11 +67,12 @@ final studentContextProvider = FutureProvider<StudentContext?>((ref) async {
 
 final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
   final context = await ref.watch(studentContextProvider.future);
+  final authState = ref.watch(authProvider);
   final service = ref.watch(coreDataServiceProvider);
   final supabase = Supabase.instance.client;
 
-  final schoolId = context?.schoolId;
-  String? targetYearId = context?.academicYearId;
+  final schoolId = context?.schoolId ?? authState.user?.schoolId;
+  String? targetYearId = context?.academicYearId ?? authState.enrollment?.academicYearId;
 
   // 1. Fallback to active academic_year only if student has no enrolled academicYearId
   if (targetYearId == null || targetYearId.isEmpty) {
@@ -217,11 +249,15 @@ final resultsDataProvider = FutureProvider<SemesterResults>((ref) async {
 // ============================================================
 
 final paymentsDataProvider = FutureProvider<List<PaymentPlanInfo>>((ref) async {
+  final authState = ref.watch(authProvider);
   final context = await ref.watch(studentContextProvider.future);
-  if (context == null) return [];
+  final userId = context?.userId 
+      ?? authState.user?.id 
+      ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
+  if (userId == null) return [];
   
   final service = ref.watch(coreDataServiceProvider);
-  return service.getPaymentsForStudent(context.userId);
+  return service.getPaymentsForStudent(userId);
 });
 
 // ============================================================

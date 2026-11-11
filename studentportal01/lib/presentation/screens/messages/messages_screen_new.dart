@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/messages_screen_skeleton.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -89,6 +90,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
         final fadeOut = 1.0 - slideValue;
         final fadeIn = slideValue;
 
+        final iconBoxSize = (56 * context.responsiveScale).clamp(44.0, 56.0);
+        final iconInnerSize = (28 * context.responsiveScale).clamp(22.0, 28.0);
+        final searchBtnSize = (44 * context.responsiveScale).clamp(38.0, 44.0);
+
         return SizedBox(
           height: 72,
           child: Stack(
@@ -105,8 +110,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                       Transform.scale(
                         scale: 1.0 - (0.3 * slideValue),
                         child: Container(
-                          width: 56,
-                          height: 56,
+                          width: iconBoxSize,
+                          height: iconBoxSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
@@ -122,10 +127,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                               ),
                             ],
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.mail_rounded,
                             color: Colors.white,
-                            size: 28,
+                            size: iconInnerSize,
                           ),
                         ),
                       ),
@@ -136,22 +141,28 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              AppLocalizations.of(context).messages,
-                              style: ArabicTypography.headerStyle(
-                                context,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.grey[900],
-                                letterSpacing: -0.8,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Text(
+                                AppLocalizations.of(context).messages,
+                                style: ArabicTypography.headerStyle(
+                                  context,
+                                  fontSize: context.sp(28),
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.grey[900],
+                                  letterSpacing: -0.8,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               AppLocalizations.of(context).messagesSubtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: ArabicTypography.subtitleStyle(
                                 context,
-                                fontSize: 14,
+                                fontSize: context.sp(14),
                                 fontWeight: FontWeight.w500,
                                 color: Colors.grey[600],
                               ),
@@ -166,8 +177,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -182,7 +193,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           child: Icon(
                             Icons.search_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: (22 * context.responsiveScale).clamp(18.0, 22.0),
                           ),
                         ),
                       ),
@@ -207,8 +218,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -223,7 +234,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                           child: Icon(
                             Icons.close_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: (22 * context.responsiveScale).clamp(18.0, 22.0),
                           ),
                         ),
                       ),
@@ -557,7 +568,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
             // Header
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                padding: EdgeInsets.fromLTRB(context.horizontalPadding, 20, context.horizontalPadding, 24),
                 child: _buildAnimatedHeader(),
               ),
             ),
@@ -643,7 +654,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                 if (filtered.isEmpty) {
                   return SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding, vertical: 16),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
@@ -721,7 +732,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                 }
 
                 return SliverPadding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 124 + MediaQuery.of(context).padding.bottom),
+                  padding: EdgeInsets.fromLTRB(context.horizontalPadding, 0, context.horizontalPadding, 124 + MediaQuery.of(context).padding.bottom),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => _buildMessageCard(filtered[index]),

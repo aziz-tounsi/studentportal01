@@ -109,7 +109,7 @@ class DocumentsCardsSkeleton extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(32),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.6),
           width: 1.5,

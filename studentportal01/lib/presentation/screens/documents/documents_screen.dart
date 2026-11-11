@@ -4,10 +4,12 @@ import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../core/router/app_router.dart';
 import '../../../data/models/document_model.dart';
 import '../../widgets/animated_search_header.dart';
 import '../../widgets/bouncing_wrapper.dart';
+import '../../widgets/bouncy_dropdown_selector.dart';
 import '../../widgets/detail_modal_sheet.dart';
 import '../../widgets/documents_skeleton.dart';
 import '../../widgets/semester_navigator.dart';
@@ -240,7 +242,6 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     with TickerProviderStateMixin {
   late AnimationController _searchAnimController;
   String? _selectedCategory;
-  bool _isFilterDropdownOpen = false;
   
   // Search state
   bool _isSearching = false;
@@ -335,7 +336,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
             children: [
               _buildHeader(l10n),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
                 child: DynamicSemesterNav(
                   selectedSemesterNumber: selectedSemester,
                   accentColor: const Color(0xFF6B5CE7),
@@ -365,7 +366,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
 
   Widget _buildHeader(AppLocalizations l10n) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      padding: EdgeInsets.fromLTRB(context.horizontalPadding, 12, context.horizontalPadding, 8),
       child: AnimatedSearchHeader(
         animationController: _searchAnimController,
         searchController: _searchController,
@@ -436,7 +437,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
         children: [
           // "Trier par" label and dropdown button aligned to max right - fixed at top
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
             child: _buildSortAndFilterBar(availableCategories, l10n),
           ),
           const SizedBox(height: 10),
@@ -456,7 +457,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                       child: _buildEmptyFilterState(l10n),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 140),
+                      padding: EdgeInsets.fromLTRB(context.horizontalPadding, 4, context.horizontalPadding, 140),
                       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       itemCount: filteredDocs.length,
                       itemBuilder: (context, index) => _DocumentCard(document: filteredDocs[index]),
@@ -477,6 +478,17 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
       ...availableCategories.map((cat) => MapEntry(cat, DocumentTypeHelper.getLabel(cat, l10n))),
     ];
 
+    final items = sortOptions.map((entry) {
+      final catKey = entry.key;
+      final isAll = catKey == allCategoriesKey;
+      return BouncyDropdownItem<String>(
+        value: catKey,
+        label: entry.value,
+        icon: isAll ? Icons.dashboard_rounded : getCategoryIcon(catKey),
+        color: isAll ? const Color(0xFF6B5CE7) : getCategoryColor(catKey),
+      );
+    }).toList();
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       child: Row(
@@ -493,130 +505,75 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
           ),
           const Spacer(), // Pushes the pill to the maximum right
 
-          // Dropdown button styled exactly like Suggestion Type list
-          Theme(
-            data: Theme.of(context).copyWith(
-              popupMenuTheme: PopupMenuThemeData(
-                color: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                elevation: 8,
-              ),
-            ),
-            child: PopupMenuButton<String>(
-              color: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              offset: const Offset(0, 48),
-              onOpened: () => setState(() => _isFilterDropdownOpen = true),
-              onCanceled: () => setState(() => _isFilterDropdownOpen = false),
-              onSelected: (String categoryKey) {
-                setState(() {
-                  _selectedCategory = (categoryKey == allCategoriesKey) ? null : categoryKey;
-                  _isFilterDropdownOpen = false;
-                });
-              },
-              itemBuilder: (BuildContext context) => sortOptions.map((entry) {
-                final catKey = entry.key;
-                final isAll = catKey == allCategoriesKey;
-                final typeColor = isAll
-                    ? const Color(0xFF6B5CE7)
-                    : getCategoryColor(catKey);
-                final typeIcon = isAll
-                    ? Icons.dashboard_rounded
-                    : getCategoryIcon(catKey);
-                final isSelected = (_selectedCategory == null && isAll) || _selectedCategory == catKey;
-
-                return PopupMenuItem<String>(
-                  value: catKey,
+          // Bouncy dropdown selector matching suggestion type exactly
+          BouncyDropdownSelector<String>(
+            items: items,
+            selectedValue: _selectedCategory ?? allCategoriesKey,
+            onSelected: (String categoryKey) {
+              setState(() {
+                _selectedCategory = (categoryKey == allCategoriesKey) ? null : categoryKey;
+              });
+            },
+            menuWidth: 260.0,
+            menuAlignment: Alignment.bottomRight,
+            borderRadius: 22.0,
+            customTrigger: (context, isOpen, toggle, selectedItem) {
+              return GestureDetector(
+                onTap: toggle,
+                child: AnimatedScale(
+                  scale: isOpen ? 0.95 : 1.0,
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutBack,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6B5CE7).withValues(alpha: 0.08),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: typeColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(typeIcon, color: typeColor, size: 18),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            entry.value,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                              color: isSelected ? typeColor : Colors.grey[800],
-                            ),
+                        Text(
+                          currentLabel,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _selectedCategory != null
+                                ? const Color(0xFF6B5CE7)
+                                : const Color(0xFF1F2937),
                           ),
                         ),
-                        if (isSelected)
-                          Icon(Icons.check_circle, color: typeColor, size: 20),
+                        const SizedBox(width: 6),
+                        AnimatedRotation(
+                          turns: isOpen ? 0.5 : 0.0,
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOut,
+                          child: Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 18,
+                            color: _selectedCategory != null
+                                ? const Color(0xFF6B5CE7)
+                                : Colors.grey[500],
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                );
-              }).toList(),
-              child: AnimatedScale(
-                scale: _isFilterDropdownOpen ? 0.95 : 1.0,
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutBack,
-                child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    width: 1.2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6B5CE7).withValues(alpha: 0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      currentLabel,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _selectedCategory != null
-                            ? const Color(0xFF6B5CE7)
-                            : const Color(0xFF1F2937),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    AnimatedRotation(
-                      turns: _isFilterDropdownOpen ? 0.5 : 0.0,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 18,
-                        color: _selectedCategory != null
-                            ? const Color(0xFF6B5CE7)
-                            : Colors.grey[500],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+              );
+            },
           ),
-        ),
         ],
       ),
     );
@@ -835,6 +792,9 @@ class _DocumentCard extends StatelessWidget {
     final categoryColor = _DocumentsScreenState.getCategoryColor(document.category);
     final categoryIcon = _DocumentsScreenState.getCategoryIcon(document.category);
 
+    final iconBoxSize = (52 * context.responsiveScale).clamp(42.0, 52.0);
+    final iconInnerSize = (26 * context.responsiveScale).clamp(20.0, 26.0);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: BouncingWrapper(
@@ -843,10 +803,10 @@ class _DocumentCard extends StatelessWidget {
         delayNavigation: false,
         onTap: () => _showDocumentDetails(context, document),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 16.0)),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(32),
             border: Border.all(
               color: Colors.white.withValues(alpha: 0.6),
               width: 1.5,
@@ -863,8 +823,8 @@ class _DocumentCard extends StatelessWidget {
               children: [
                 // Category icon with soft gradient matching document type
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: iconBoxSize,
+                  height: iconBoxSize,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
@@ -883,7 +843,7 @@ class _DocumentCard extends StatelessWidget {
                   child: Icon(
                     categoryIcon,
                     color: Colors.white,
-                    size: 26,
+                    size: iconInnerSize,
                   ),
                 ),
                 const SizedBox(width: 14),

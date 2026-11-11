@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/nav_bar_provider.dart';
@@ -334,104 +335,114 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         child: SafeArea(
           bottom: false,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-            slivers: [
-              // Custom Header with Circular Back Button
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                  child: Builder(
-                    builder: (ctx) {
-                      final isRtl = Directionality.of(ctx) == TextDirection.rtl;
-                      return Row(
-                        children: [
-                          BouncingWrapper(
-                            shrinkScale: 0.86,
-                            overshootScale: 1.10,
-                            delayNavigation: false,
-                            hitPadding: const EdgeInsets.symmetric(vertical: 8),
-                            onTap: () {
-                              final swipeBack = IosEdgeSwipeBack.of(context);
-                              if (swipeBack != null) {
-                                swipeBack.animateBack();
-                              } else {
-                                final fromAIChat = ref.read(navigatedFromAIChatProvider);
-                                if (fromAIChat) {
-                                  ref.read(navigatedFromAIChatProvider.notifier).state = false;
-                                  context.go('/ai-chat');
-                                } else {
-                                  ref.read(sideDrawerOpenProvider.notifier).state = true;
-                                                                    context.go('/');
-                                }
-                              }
-                            },
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.06),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 3),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                slivers: [
+                  // Custom Header with Circular Back Button
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(context.horizontalPadding, 16, context.horizontalPadding, 16),
+                      child: Builder(
+                        builder: (ctx) {
+                          final isRtl = Directionality.of(ctx) == TextDirection.rtl;
+                          return Row(
+                            children: [
+                              BouncingWrapper(
+                                shrinkScale: 0.86,
+                                overshootScale: 1.10,
+                                delayNavigation: false,
+                                hitPadding: const EdgeInsets.symmetric(vertical: 8),
+                                onTap: () {
+                                  final swipeBack = IosEdgeSwipeBack.of(context);
+                                  if (swipeBack != null) {
+                                    swipeBack.animateBack();
+                                  } else {
+                                    final fromAIChat = ref.read(navigatedFromAIChatProvider);
+                                    if (fromAIChat) {
+                                      ref.read(navigatedFromAIChatProvider.notifier).state = false;
+                                      context.go('/ai-chat');
+                                    } else {
+                                      ref.read(sideDrawerOpenProvider.notifier).state = true;
+                                      context.go('/');
+                                    }
+                                  }
+                                },
+                                child: Container(
+                                  width: context.scaleW(44).clamp(38.0, 48.0),
+                                  height: context.scaleW(44).clamp(38.0, 48.0),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.06),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              child: Center(
-                                child: Directionality(
-                                  textDirection: TextDirection.ltr,
-                                  child: Icon(
-                                    isRtl ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_new_rounded,
-                                    size: 18,
-                                    color: const Color(0xFF1F2937),
+                                  child: Center(
+                                    child: Directionality(
+                                      textDirection: TextDirection.ltr,
+                                      child: Icon(
+                                        isRtl ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_new_rounded,
+                                        size: context.scaleW(18).clamp(16.0, 20.0),
+                                        color: const Color(0xFF1F2937),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                  Text(
-                                    l10n.settings,
-                                    style: isRtl
-                                        ? ArabicTypography.screenHeader(color: const Color(0xFF1F2937))
-                                        : const TextStyle(
-                                            fontSize: 26,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: -0.6,
-                                            color: Color(0xFF1F2937),
-                                          ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    l10n.settingsSubtitle,
-                                    style: isRtl
-                                        ? ArabicTypography.subtitle(color: Colors.grey.shade600)
-                                        : TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                  ),
-                                ],
+                              SizedBox(width: context.scaleW(14).clamp(10.0, 16.0)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: AlignmentDirectional.centerStart,
+                                      child: Text(
+                                        l10n.settings,
+                                        style: isRtl
+                                            ? ArabicTypography.screenHeader(fontSize: context.sp(26), color: const Color(0xFF1F2937))
+                                            : TextStyle(
+                                                fontSize: context.sp(26),
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: -0.6,
+                                                color: const Color(0xFF1F2937),
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      l10n.settingsSubtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: isRtl
+                                          ? ArabicTypography.subtitle(fontSize: context.sp(13.5), color: Colors.grey.shade600)
+                                          : TextStyle(
+                                              fontSize: context.sp(13.5),
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                    },
+                            ],
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
-              ),
 
-              // Settings Sections List
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  // Settings Sections List
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(context.horizontalPadding, 0, context.horizontalPadding, 124 + MediaQuery.of(context).padding.bottom),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                   // Section 1: Langue
@@ -613,8 +624,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
-        ),
       ),
+    ),
+  ),
+),
     );
   }
 }
@@ -631,7 +644,10 @@ class _SettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppResponsive.cardPadding(context, base: 20.0),
+        vertical: 22,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(26),

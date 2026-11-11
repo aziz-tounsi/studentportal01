@@ -8,7 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../data/services/core_data_service.dart';
+import '../../../data/services/offline_cache_service.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/mon_solde_skeleton.dart';
 import '../../widgets/bouncing_wrapper.dart';
@@ -125,31 +127,26 @@ final monSoldeSemestersProvider = FutureProvider<List<SemesterInfo>>((ref) async
       academicYearId = yearResp?['id'] as String?;
     } catch (_) {}
   }
-  if (academicYearId == null) return [];
 
-  try {
-    final service = ref.read(coreDataServiceProvider);
-    return service.getSemestersForAcademicYear(academicYearId);
-  } catch (_) {
-    // Direct fallback query
+  if (academicYearId != null) {
     try {
-      final resp = await supabase
-          .from('semesters')
-          .select('id, name, number, start_date, end_date, is_current')
-          .eq('academic_year_id', academicYearId)
-          .order('number');
-      return (resp as List).map((e) => SemesterInfo(
-        id: e['id'] ?? '',
-        name: e['name'] ?? '',
-        number: e['number'] ?? 0,
-        isCurrent: e['is_current'] ?? false,
-        startDate: e['start_date'] != null ? DateTime.tryParse(e['start_date'].toString()) : null,
-        endDate: e['end_date'] != null ? DateTime.tryParse(e['end_date'].toString()) : null,
-      )).toList();
-    } catch (_) {
-      return [];
-    }
+      final service = ref.read(coreDataServiceProvider);
+      final list = await service.getSemestersForAcademicYear(academicYearId);
+      if (list.isNotEmpty) return list;
+    } catch (_) {}
   }
+
+  // Fallback to shared dynamic semestersProvider
+  try {
+    final list = await ref.watch(semestersProvider.future);
+    if (list.isNotEmpty) return list;
+  } catch (_) {}
+
+  return [
+    SemesterInfo(id: '1', name: 'Semestre 1', number: 1, isCurrent: true),
+    SemesterInfo(id: '2', name: 'Semestre 2', number: 2, isCurrent: false),
+    SemesterInfo(id: '3', name: 'Semestre 3', number: 3, isCurrent: false),
+  ];
 });
 
 // Academic year date range provider
@@ -198,9 +195,16 @@ final academicYearDatesProvider =
 final pricingFallbackProvider = FutureProvider<Map<String, double>>((
   ref,
 ) async {
+  const cacheKey = 'cached_payment_pricing';
   try {
     final context = await ref.watch(studentContextProvider.future);
-    if (context == null) return {};
+    if (context == null) {
+      final cached = OfflineCacheService.instance.getMap(cacheKey);
+      if (cached != null) {
+        return cached.map((k, v) => MapEntry(k, (v as num).toDouble()));
+      }
+      return {};
+    }
     final supabase = Supabase.instance.client;
 
     final categories = [
@@ -243,18 +247,25 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
       if (context.niveauId != null && context.niveauId!.isNotEmpty) {
         query = query.eq('niveau_id', context.niveauId!);
       }
-        final pricingResp = await query;
-        for (final row in pricingResp as List) {
-          final cat = row['category']?.toString();
-          final amount = (row['amount'] as num?)?.toDouble();
-          if (cat != null && amount != null && amount > 0) {
-            pricing.putIfAbsent(cat, () => amount);
-          }
+      final pricingResp = await query;
+      for (final row in pricingResp as List) {
+        final cat = row['category']?.toString();
+        final amount = (row['amount'] as num?)?.toDouble();
+        if (cat != null && amount != null && amount > 0) {
+          pricing.putIfAbsent(cat, () => amount);
         }
-      } catch (_) {}
+      }
+    } catch (_) {}
 
+    if (pricing.isNotEmpty) {
+      OfflineCacheService.instance.setJson(cacheKey, pricing);
+    }
     return pricing;
   } catch (e) {
+    final cached = OfflineCacheService.instance.getMap(cacheKey);
+    if (cached != null) {
+      return cached.map((k, v) => MapEntry(k, (v as num).toDouble()));
+    }
     return {};
   }
 });
@@ -351,7 +362,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
               // Header
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                  padding: EdgeInsets.fromLTRB(context.horizontalPadding, 20, context.horizontalPadding, 16),
                   child: _buildHeader(l10n),
                 ),
               ),
@@ -422,11 +433,14 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
   }
 
   Widget _buildHeader(AppLocalizations l10n) {
+    final iconBoxSize = (56 * context.responsiveScale).clamp(44.0, 56.0);
+    final iconInnerSize = (28 * context.responsiveScale).clamp(22.0, 28.0);
+
     return Row(
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: iconBoxSize,
+          height: iconBoxSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: const LinearGradient(
@@ -442,10 +456,10 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.payment_rounded,
             color: Colors.white,
-            size: 28,
+            size: iconInnerSize,
           ),
         ),
         const SizedBox(width: 16),
@@ -453,22 +467,28 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                l10n.monSolde,
-                style: ArabicTypography.headerStyle(
-                  context,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF1F2937),
-                  letterSpacing: -0.8,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  l10n.monSolde,
+                  style: ArabicTypography.headerStyle(
+                    context,
+                    fontSize: context.sp(28),
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF1F2937),
+                    letterSpacing: -0.8,
+                  ),
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 l10n.soldeSubtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: ArabicTypography.subtitleStyle(
                   context,
-                  fontSize: 14,
+                  fontSize: context.sp(14),
                   fontWeight: FontWeight.w500,
                   color: const Color(0xFF1F2937),
                 ),
@@ -570,7 +590,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return SliverPadding(
-      padding: EdgeInsets.fromLTRB(24, 0, 24, 136 + bottomInset),
+      padding: EdgeInsets.fromLTRB(context.horizontalPadding, 0, context.horizontalPadding, 136 + bottomInset),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
           // Main Balance Card
@@ -960,7 +980,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 24.0)),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
@@ -988,30 +1008,34 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _formatCurrency(remaining),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    height: 1,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4, left: 6, right: 6),
-                  child: Text(
-                    l10n.translate('currency_tnd'),
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _formatCurrency(remaining),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      height: 1,
                     ),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4, left: 6, right: 6),
+                    child: Text(
+                      l10n.translate('currency_tnd'),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
             ClipRRect(

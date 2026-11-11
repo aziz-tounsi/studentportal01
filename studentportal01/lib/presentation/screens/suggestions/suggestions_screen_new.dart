@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../providers/nav_bar_provider.dart';
@@ -148,7 +149,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                 // Header with animated search
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                    padding: EdgeInsets.fromLTRB(
+                      AppResponsive.horizontalPadding(context),
+                      20,
+                      AppResponsive.horizontalPadding(context),
+                      20,
+                    ),
                     child: _buildAnimatedHeader(l10n),
                   ),
                 ),
@@ -196,7 +202,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                     }).toList();
 
                     return SliverPadding(
-                      padding: EdgeInsets.fromLTRB(24, 0, 24, 124 + MediaQuery.of(context).padding.bottom),
+                      padding: EdgeInsets.fromLTRB(
+                        AppResponsive.horizontalPadding(context),
+                        0,
+                        AppResponsive.horizontalPadding(context),
+                        124 + MediaQuery.of(context).padding.bottom,
+                      ),
                       sliver: SliverList(
                         delegate: SliverChildListDelegate([
                           if (filtered.isNotEmpty) ...[
@@ -1625,6 +1636,14 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
         final slideValue = _searchAnimationController.value;
         final fadeOut = 1.0 - slideValue;
         final fadeIn = slideValue;
+        final screenW = MediaQuery.sizeOf(context).width;
+        final scale = (screenW / 440.0).clamp(0.72, 1.15);
+        final iconBoxSize = (56.0 * scale).clamp(44.0, 56.0);
+        final iconSize = (28.0 * scale).clamp(22.0, 28.0);
+        final titleSize = (28.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(19.0, 28.0);
+        final subtitleSize = (14.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(11.5, 14.0);
+        final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+        final isAr = l10n.locale.languageCode == 'ar';
 
         return SizedBox(
           height: 72,
@@ -1641,8 +1660,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                       Transform.scale(
                         scale: 1.0 - (0.3 * slideValue),
                         child: Container(
-                          width: 56,
-                          height: 56,
+                          width: iconBoxSize,
+                          height: iconBoxSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
@@ -1653,32 +1672,38 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                             boxShadow: [
                               BoxShadow(
                                 color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
+                                blurRadius: 20 * scale,
+                                offset: Offset(0, 8 * scale),
                               ),
                             ],
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.lightbulb_rounded,
                             color: Colors.white,
-                            size: 28,
+                            size: iconSize,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: (16 * scale).clamp(10.0, 16.0)),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              l10n.suggestions,
-                              style: ArabicTypography.headerStyle(
-                                context,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF1F2937),
-                                letterSpacing: -0.8,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: isAr
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Text(
+                                l10n.suggestions,
+                                style: ArabicTypography.headerStyle(
+                                  context,
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1F2937),
+                                  letterSpacing: -0.8,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -1686,10 +1711,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                               l10n.shareIdeas,
                               style: ArabicTypography.subtitleStyle(
                                 context,
-                                fontSize: 14,
+                                fontSize: subtitleSize,
                                 fontWeight: FontWeight.w500,
                                 color: const Color(0xFF1F2937),
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -1699,8 +1726,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                         hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,

@@ -55,9 +55,9 @@ class AppLocalizations {
       'server_error': 'Server connection error. Please try again later.',
       'network_error': 'Please check your internet connection.',
       'offline_mode': 'Offline Mode',
-      'offline_short': 'Offline • Showing cached data',
-      'server_down_short': 'Server down • Showing cached data',
-      'online_restored': 'Connection restored',
+      'offline_short': 'Offline',
+      'server_down_short': 'Offline',
+      'online_restored': 'Online',
 
       // Home Menu Items
       'note_info': 'Info Notes',
@@ -657,9 +657,9 @@ class AppLocalizations {
       'server_error': 'Erreur de connexion au serveur. Veuillez réessayer plus tard.',
       'network_error': 'Veuillez vérifier votre connexion Internet.',
       'offline_mode': 'Mode hors ligne',
-      'offline_short': 'Hors ligne • Données en cache',
-      'server_down_short': 'Serveur indisponible • Données en cache',
-      'online_restored': 'Connexion rétablie',
+      'offline_short': 'Hors ligne',
+      'server_down_short': 'Hors ligne',
+      'online_restored': 'En ligne',
 
       // Home Menu Items
       'note_info': 'Notifications',
@@ -1260,9 +1260,9 @@ class AppLocalizations {
       'server_error': 'خطأ في الاتصال بالخادم. يرجى المحاولة لاحقاً.',
       'network_error': 'يرجى التحقق من الاتصال بالإنترنت.',
       'offline_mode': 'وضع غير متصل',
-      'offline_short': 'غير متصل • عرض البيانات المحفوظة',
-      'server_down_short': 'الخادم غير متاح • عرض البيانات المحفوظة',
-      'online_restored': 'تم استعادة الاتصال',
+      'offline_short': 'غير متصل',
+      'server_down_short': 'غير متصل',
+      'online_restored': 'متصل',
 
       // Home Menu Items
       'note_info': 'ملاحظات',

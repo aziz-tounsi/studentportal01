@@ -895,88 +895,93 @@ I have **complete** access to your academic data — grades, timetable, absences
                 child: SafeArea(
                   top: false,
                   bottom: false,
-                  child: Column(
-                    children: [
-                      // Top Bar with safe spacing
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: topPadding + 8,
-                          left: 16,
-                          right: 16,
-                          bottom: 6,
-                        ),
-                        child: _buildTopBar(),
-                      ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: Column(
+                        children: [
+                          // Top Bar with safe spacing
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: topPadding + 8,
+                              left: 16,
+                              right: 16,
+                              bottom: 6,
+                            ),
+                            child: _buildTopBar(),
+                          ),
 
-                      // Messages List - reverse: true anchors newest messages right above input bar
-                      // Wrapped in LTR Directionality so Arabic chat is never mirrored (keeps same layout as Latin)
-                      Expanded(
-                        child: ClipRect(
-                          child: Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: ScrollConfiguration(
-                              behavior: const ScrollBehavior().copyWith(
-                                overscroll: false,
-                                physics: const BouncingScrollPhysics(
-                                  parent: AlwaysScrollableScrollPhysics(),
-                                ),
-                              ),
-                              child: GestureDetector(
-                                onTap: () => FocusScope.of(context).unfocus(),
-                                behavior: HitTestBehavior.translucent,
-                                child: ListView.builder(
-                                  controller: _scrollController,
-                                  reverse: true,
-                                  physics: const BouncingScrollPhysics(
-                                    parent: AlwaysScrollableScrollPhysics(),
+                          // Messages List - reverse: true anchors newest messages right above input bar
+                          // Wrapped in LTR Directionality so Arabic chat is never mirrored (keeps same layout as Latin)
+                          Expanded(
+                            child: ClipRect(
+                              child: Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: ScrollConfiguration(
+                                  behavior: const ScrollBehavior().copyWith(
+                                    overscroll: false,
+                                    physics: const BouncingScrollPhysics(
+                                      parent: AlwaysScrollableScrollPhysics(),
+                                    ),
                                   ),
-                                  keyboardDismissBehavior:
-                                      ScrollViewKeyboardDismissBehavior.onDrag,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
+                                  child: GestureDetector(
+                                    onTap: () => FocusScope.of(context).unfocus(),
+                                    behavior: HitTestBehavior.translucent,
+                                    child: ListView.builder(
+                                      controller: _scrollController,
+                                      reverse: true,
+                                      physics: const BouncingScrollPhysics(
+                                        parent: AlwaysScrollableScrollPhysics(),
+                                      ),
+                                      keyboardDismissBehavior:
+                                          ScrollViewKeyboardDismissBehavior.onDrag,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      itemCount: listItems.length,
+                                      itemBuilder: (context, index) => listItems[index],
+                                    ),
                                   ),
-                                  itemCount: listItems.length,
-                                  itemBuilder: (context, index) => listItems[index],
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
 
-                      // Attachment preview
-                      if (_pendingFileName != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          child: _buildAttachmentPreview(),
-                        ),
-
-                      // Bottom Input Bar - direct child of Column with keyboard clearance
-                      Builder(
-                        builder: (context) {
-                          final bottomInset = MediaQuery.of(context).padding.bottom;
-                          final viewInsetsBottom =
-                              MediaQuery.of(context).viewInsets.bottom;
-                          final isKeyboardOpen = viewInsetsBottom > 50;
-                          final bottomPadding = isKeyboardOpen
-                              ? (viewInsetsBottom + 14.0)
-                              : (bottomInset > 0 ? bottomInset + 4.0 : 12.0);
-
-                          return Padding(
-                            padding: EdgeInsets.fromLTRB(16, 2, 16, bottomPadding),
-                            child: Center(
-                              child: Container(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 600),
-                                child: _buildInputBar(isRtl),
-                              ),
+                          // Attachment preview
+                          if (_pendingFileName != null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 4),
+                              child: _buildAttachmentPreview(),
                             ),
-                          );
-                        },
+
+                          // Bottom Input Bar - direct child of Column with keyboard clearance
+                          Builder(
+                            builder: (context) {
+                              final bottomInset = MediaQuery.of(context).padding.bottom;
+                              final viewInsetsBottom =
+                                  MediaQuery.of(context).viewInsets.bottom;
+                              final isKeyboardOpen = viewInsetsBottom > 50;
+                              final bottomPadding = isKeyboardOpen
+                                  ? (viewInsetsBottom + 14.0)
+                                  : (bottomInset > 0 ? bottomInset + 4.0 : 12.0);
+
+                              return Padding(
+                                padding: EdgeInsets.fromLTRB(16, 2, 16, bottomPadding),
+                                child: Center(
+                                  child: Container(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 600),
+                                    child: _buildInputBar(isRtl),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),

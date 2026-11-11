@@ -117,8 +117,22 @@ class StudentResultsRepository {
   Future<List<SubjectGradesSummary>> getStudentGrades({
     required String enrollmentId,
     required String semesterId,
+    int? semesterNumber,
   }) async {
     final cacheKey = 'cached_grades_${enrollmentId}_$semesterId';
+
+    List<SubjectGradesSummary>? getCachedGrades() {
+      final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+          ?? (semesterNumber != null ? OfflineCacheService.instance.getListOfMaps('cached_grades_sem_$semesterNumber') : null)
+          ?? OfflineCacheService.instance.getListOfMaps('cached_grades_latest');
+      if (cached != null && cached.isNotEmpty) {
+        try {
+          return cached.map((m) => SubjectGradesSummary.fromJson(m)).toList();
+        } catch (_) {}
+      }
+      return null;
+    }
+
     try {
       // Get all subject assignments for the student's grade level and section
       final enrollment = await _client
@@ -351,20 +365,24 @@ class StudentResultsRepository {
         cacheKey,
         result.map((s) => s.toJson()).toList(),
       );
+      if (semesterNumber != null) {
+        await OfflineCacheService.instance.setJson(
+          'cached_grades_sem_$semesterNumber',
+          result.map((s) => s.toJson()).toList(),
+        );
+      }
+      await OfflineCacheService.instance.setJson(
+        'cached_grades_latest',
+        result.map((s) => s.toJson()).toList(),
+      );
     }
     ConnectivityService.instance.reportNetworkSuccess();
     return result;
   } catch (e) {
     debugPrint('getStudentGrades error: $e');
     ConnectivityService.instance.reportNetworkError(e);
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
-    if (cached != null) {
-      try {
-        return cached.map((m) => SubjectGradesSummary.fromJson(m)).toList();
-      } catch (err) {
-        debugPrint('Failed to parse cached grades: $err');
-      }
-    }
+    final cachedList = getCachedGrades();
+    if (cachedList != null) return cachedList;
     return [];
   }
 }

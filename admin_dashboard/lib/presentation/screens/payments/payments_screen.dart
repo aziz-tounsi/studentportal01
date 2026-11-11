@@ -503,13 +503,13 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       icon: Icon(icon, size: 20),
       tooltip: tooltip,
       onPressed: onPressed,
-      color: isActive ? const Color(0xFF10B981) : const Color(0xFF64748B),
+      color: isActive ? const Color(0xFF0F172A) : const Color(0xFF64748B),
       style: IconButton.styleFrom(
-        backgroundColor: isActive ? const Color(0xFF10B981).withOpacity(0.1) : Colors.transparent,
+        backgroundColor: isActive ? const Color(0xFFF1F5F9) : Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
           side: BorderSide(
-            color: isActive ? const Color(0xFF10B981).withOpacity(0.2) : Colors.transparent,
+            color: isActive ? const Color(0xFFCBD5E1) : Colors.transparent,
           ),
         ),
       ),
@@ -1889,25 +1889,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               10),
-                                                      boxShadow: isSel
-                                                          ? [
-                                                              BoxShadow(
-                                                                color: brand
-                                                                    .withOpacity(
-                                                                        0.08),
-                                                                blurRadius: 6,
-                                                                offset:
-                                                                    const Offset(
-                                                                        0, 2),
-                                                              ),
-                                                            ]
-                                                          : null,
+                                                      boxShadow: null,
                                                       border: Border.all(
                                                         color: isSel
-                                                            ? brand.withOpacity(
-                                                                0.22)
-                                                            : Colors
-                                                                .transparent,
+                                                            ? brand.withOpacity(0.3)
+                                                            : Colors.transparent,
                                                       ),
                                                     ),
                                                     child: Row(

@@ -274,7 +274,17 @@ class _SemesterTab extends StatelessWidget {
                         ]
                       : null,
                 ),
-          child: Text(label),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -342,16 +352,28 @@ class SemesterTabBar extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester),
-                  style: Localizations.localeOf(context).languageCode == 'ar'
-                      ? TextStyle(fontFamily: GoogleFonts.cairo().fontFamily, fontSize: 12.5, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600, color: isSelected ? selectedTextColor : Colors.grey[700],
-                        )
-                      : TextStyle(
-                          fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                          color: isSelected ? selectedTextColor : Colors.grey[700],
-                        ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Localizations.localeOf(context).languageCode == 'ar'
+                          ? TextStyle(
+                              fontFamily: GoogleFonts.cairo().fontFamily,
+                              fontSize: 12.5,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                              color: isSelected ? selectedTextColor : Colors.grey[700],
+                            )
+                          : TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              color: isSelected ? selectedTextColor : Colors.grey[700],
+                            ),
+                    ),
+                  ),
                 ),
               ),
             ),

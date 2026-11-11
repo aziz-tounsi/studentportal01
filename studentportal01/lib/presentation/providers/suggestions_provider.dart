@@ -1,6 +1,8 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../data/services/offline_cache_service.dart';
+import '../../core/services/connectivity_service.dart';
 import 'auth_provider.dart';
 
 /// Model for suggestion attachment
@@ -31,6 +33,7 @@ class SuggestionAttachment {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'file_url': fileUrl,
       'file_name': fileName,
       'file_type': fileType,
@@ -57,6 +60,14 @@ class SuggestionReply {
       replyText: json['reply_text']?.toString() ?? json['body']?.toString() ?? json['message']?.toString() ?? '',
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'reply_text': replyText,
+      'created_at': createdAt.toIso8601String(),
+    };
   }
 }
 
@@ -107,85 +118,141 @@ class Suggestion {
       replies: replies,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'body': body,
+      'suggestion_type': suggestionType,
+      'status': status,
+      'is_read': isRead,
+      'has_attachment': hasAttachment,
+      'created_at': createdAt.toIso8601String(),
+      'read_at': readAt?.toIso8601String(),
+      'attachments': attachments.map((a) => a.toJson()).toList(),
+      'replies': replies.map((r) => r.toJson()).toList(),
+    };
+  }
+
+  factory Suggestion.fromCachedJson(Map<String, dynamic> json) {
+    final atts = (json['attachments'] as List?)
+        ?.map((a) => SuggestionAttachment.fromJson(Map<String, dynamic>.from(a as Map)))
+        .toList() ?? [];
+    final reps = (json['replies'] as List?)
+        ?.map((r) => SuggestionReply.fromJson(Map<String, dynamic>.from(r as Map)))
+        .toList() ?? [];
+    return Suggestion.fromJson(json, attachments: atts, replies: reps);
+  }
 }
 
 /// Loading state for suggestions refresh
 final suggestionsRefreshingProvider = StateProvider<bool>((ref) => false);
 
-/// Provider for user's suggestions
+/// Provider for user's suggestions with resilient offline cache
 final suggestionsProvider = FutureProvider.autoDispose<List<Suggestion>>((ref) async {
   final supabase = Supabase.instance.client;
   final authState = ref.watch(authProvider);
 
-  if (!authState.isAuthenticated) {
-    return [];
-  }
+  final userId = authState.user?.id 
+      ?? supabase.auth.currentUser?.id 
+      ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
 
-  final userId = authState.user?.id;
   if (userId == null) {
     return [];
   }
 
-  // Fetch suggestions
-  final response = await supabase
-      .from('suggestions')
-      .select()
-      .eq('student_id', userId)
-      .order('created_at', ascending: false);
+  final cacheKey = 'suggestions_$userId';
 
-  final suggestions = response as List;
-  final suggestionIds = suggestions.map((s) => s['id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
+  try {
+    // Fetch suggestions
+    final response = await supabase
+        .from('suggestions')
+        .select()
+        .eq('student_id', userId)
+        .order('created_at', ascending: false);
 
-  if (suggestionIds.isEmpty) {
+    final suggestions = response as List;
+    final suggestionIds = suggestions.map((s) => s['id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
+
+    if (suggestionIds.isEmpty) {
+      await OfflineCacheService.instance.setJson(cacheKey, []);
+      ConnectivityService.instance.reportNetworkSuccess();
+      return [];
+    }
+
+    // Fetch attachments
+    final attachmentsResponse = await supabase
+        .from('suggestion_attachments')
+        .select()
+        .inFilter('suggestion_id', suggestionIds);
+
+    final Map<String, List<SuggestionAttachment>> attachmentsMap = {};
+    for (final att in (attachmentsResponse as List)) {
+      final suggestionId = att['suggestion_id']?.toString() ?? '';
+      if (suggestionId.isEmpty) continue;
+      final attachment = SuggestionAttachment.fromJson(att);
+      attachmentsMap.putIfAbsent(suggestionId, () => []).add(attachment);
+    }
+
+    // Fetch replies
+    final repliesResponse = await supabase
+        .from('suggestion_replies')
+        .select()
+        .inFilter('suggestion_id', suggestionIds)
+        .order('created_at', ascending: true);
+
+    final Map<String, List<SuggestionReply>> repliesMap = {};
+    for (final reply in (repliesResponse as List)) {
+      final suggestionId = reply['suggestion_id']?.toString() ?? '';
+      if (suggestionId.isEmpty) continue;
+      final replyObj = SuggestionReply.fromJson(reply);
+      repliesMap.putIfAbsent(suggestionId, () => []).add(replyObj);
+    }
+
+    final results = suggestions
+        .where((json) {
+          final type = json['suggestion_type']?.toString().toLowerCase() ?? '';
+          final title = (json['title'] ?? json['subject'] ?? '').toString();
+          final body = (json['body'] ?? json['content'] ?? json['message'] ?? '').toString();
+          if (type == 'bug_report' || type == 'bug') return false;
+          if (title.contains('[BUG REPORT') || body.contains('[BUG REPORT')) return false;
+          return true;
+        })
+        .map(
+          (json) => Suggestion.fromJson(
+            json,
+            attachments: attachmentsMap[json['id']] ?? [],
+            replies: repliesMap[json['id']] ?? [],
+          ),
+        )
+        .toList();
+
+    // Persist to offline cache
+    await OfflineCacheService.instance.setJson(
+      cacheKey,
+      results.map((s) => s.toJson()).toList(),
+    );
+    await OfflineCacheService.instance.setJson(
+      'suggestions_latest',
+      results.map((s) => s.toJson()).toList(),
+    );
+    ConnectivityService.instance.reportNetworkSuccess();
+    return results;
+  } catch (e) {
+    debugPrint('suggestionsProvider error (offline?): $e');
+    ConnectivityService.instance.reportNetworkError(e);
+
+    // Offline fallback from cache
+    final cached = OfflineCacheService.instance.getList(cacheKey) 
+        ?? OfflineCacheService.instance.getList('suggestions_latest');
+    if (cached != null && cached.isNotEmpty) {
+      return cached
+          .map((item) => Suggestion.fromCachedJson(Map<String, dynamic>.from(item as Map)))
+          .toList();
+    }
     return [];
   }
-
-  // Fetch attachments
-  final attachmentsResponse = await supabase
-      .from('suggestion_attachments')
-      .select()
-      .inFilter('suggestion_id', suggestionIds);
-
-  final Map<String, List<SuggestionAttachment>> attachmentsMap = {};
-  for (final att in attachmentsResponse as List) {
-    final suggestionId = att['suggestion_id']?.toString() ?? '';
-    if (suggestionId.isEmpty) continue;
-    final attachment = SuggestionAttachment.fromJson(att);
-    attachmentsMap.putIfAbsent(suggestionId, () => []).add(attachment);
-  }
-
-  // Fetch replies
-  final repliesResponse = await supabase
-      .from('suggestion_replies')
-      .select()
-      .inFilter('suggestion_id', suggestionIds)
-      .order('created_at', ascending: true);
-
-  final Map<String, List<SuggestionReply>> repliesMap = {};
-  for (final reply in repliesResponse as List) {
-    final suggestionId = reply['suggestion_id']?.toString() ?? '';
-    if (suggestionId.isEmpty) continue;
-    final replyObj = SuggestionReply.fromJson(reply);
-    repliesMap.putIfAbsent(suggestionId, () => []).add(replyObj);
-  }
-
-  return suggestions
-      .where((json) {
-        final type = json['suggestion_type']?.toString().toLowerCase() ?? '';
-        final title = (json['title'] ?? json['subject'] ?? '').toString();
-        final body = (json['body'] ?? json['content'] ?? json['message'] ?? '').toString();
-        if (type == 'bug_report' || type == 'bug') return false;
-        if (title.contains('[BUG REPORT') || body.contains('[BUG REPORT')) return false;
-        return true;
-      })
-      .map(
-        (json) => Suggestion.fromJson(
-          json,
-          attachments: attachmentsMap[json['id']] ?? [],
-          replies: repliesMap[json['id']] ?? [],
-        ),
-      )
-      .toList();
 });
 
 /// Provider for creating a suggestion

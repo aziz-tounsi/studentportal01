@@ -27,19 +27,25 @@ class BouncyDropdownSelector<T> extends StatefulWidget {
   final BoxBorder? border;
   final List<BoxShadow>? boxShadow;
   final EdgeInsetsGeometry padding;
+  final double? menuWidth;
+  final Alignment menuAlignment;
+  final Widget Function(BuildContext context, bool isOpen, VoidCallback toggle, BouncyDropdownItem<T>? selectedItem)? customTrigger;
 
   const BouncyDropdownSelector({
     super.key,
     required this.items,
     required this.selectedValue,
     required this.onSelected,
-    required this.categoryTitle,
+    this.categoryTitle = '',
     this.itemHeight = 52.0,
     this.maxHeight = 312.0,
     this.borderRadius = 22.0,
     this.border,
     this.boxShadow,
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    this.menuWidth,
+    this.menuAlignment = Alignment.bottomLeft,
+    this.customTrigger,
   });
 
   static final List<VoidCallback> _activeClosers = [];
@@ -134,9 +140,15 @@ class _BouncyDropdownSelectorState<T> extends State<BouncyDropdownSelector<T>>
             CompositedTransformFollower(
               link: _link,
               showWhenUnlinked: false,
+              targetAnchor: widget.menuAlignment == Alignment.bottomRight
+                  ? Alignment.bottomRight
+                  : Alignment.bottomLeft,
+              followerAnchor: widget.menuAlignment == Alignment.bottomRight
+                  ? Alignment.topRight
+                  : Alignment.topLeft,
               offset: Offset(0, size.height + 6),
               child: SizedBox(
-                width: size.width,
+                width: widget.menuWidth ?? (size.width < 220 ? 240.0 : size.width),
                 child: AnimatedBuilder(
                   animation: _c,
                   builder: (context, _) {
@@ -302,6 +314,13 @@ class _BouncyDropdownSelectorState<T> extends State<BouncyDropdownSelector<T>>
     final selectedColor = selectedItem?.color ?? const Color(0xFFFF2D78);
     final selectedIcon = selectedItem?.icon ?? Icons.category_rounded;
     final selectedLabel = selectedItem?.label ?? '';
+
+    if (widget.customTrigger != null) {
+      return CompositedTransformTarget(
+        link: _link,
+        child: widget.customTrigger!(context, _isOpen, _toggle, selectedItem),
+      );
+    }
 
     return CompositedTransformTarget(
       link: _link,

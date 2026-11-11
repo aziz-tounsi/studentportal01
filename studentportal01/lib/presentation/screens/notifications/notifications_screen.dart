@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:url_launcher/url_launcher.dart';
@@ -108,8 +109,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       Transform.scale(
                         scale: 1.0 - (0.3 * slideValue),
                         child: Container(
-                          width: 56,
-                          height: 56,
+                          width: context.scaleW(56).clamp(44.0, 60.0),
+                          height: context.scaleW(56).clamp(44.0, 60.0),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
@@ -125,36 +126,42 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                               ),
                             ],
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.notifications_rounded,
                             color: Colors.white,
-                            size: 28,
+                            size: context.scaleW(28).clamp(22.0, 30.0),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: context.scaleW(14).clamp(10.0, 16.0)),
                       // Title
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              AppLocalizations.of(context).notifications,
-                              style: ArabicTypography.headerStyle(
-                                context,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.grey[900],
-                                letterSpacing: -0.8,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Text(
+                                AppLocalizations.of(context).notifications,
+                                style: ArabicTypography.headerStyle(
+                                  context,
+                                  fontSize: context.sp(28),
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.grey[900],
+                                  letterSpacing: -0.8,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               AppLocalizations.of(context).notificationsSubtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: ArabicTypography.subtitleStyle(
                                 context,
-                                fontSize: 14,
+                                fontSize: context.sp(14),
                                 fontWeight: FontWeight.w500,
                                 color: Colors.grey[600],
                               ),
@@ -169,8 +176,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                         delayNavigation: false,
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: context.scaleW(44).clamp(38.0, 48.0),
+                          height: context.scaleW(44).clamp(38.0, 48.0),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -185,7 +192,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                           child: Icon(
                             Icons.search_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: context.scaleW(22).clamp(18.0, 24.0),
                           ),
                         ),
                       ),
@@ -562,7 +569,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
               // Header
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                  padding: EdgeInsets.fromLTRB(context.horizontalPadding, 20, context.horizontalPadding, 24),
                   child: _buildAnimatedHeader(),
                 ),
               ),
@@ -648,7 +655,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 if (filtered.isEmpty) {
                   return SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding, vertical: 16),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
@@ -726,7 +733,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 }
 
                 return SliverPadding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 124 + MediaQuery.of(context).padding.bottom),
+                  padding: EdgeInsets.fromLTRB(context.horizontalPadding, 0, context.horizontalPadding, 124 + MediaQuery.of(context).padding.bottom),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) =>
@@ -792,7 +799,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 20.0)),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(28),

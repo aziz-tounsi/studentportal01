@@ -6,6 +6,7 @@ import '../../providers/nav_bar_provider.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../data/models/grade_model.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/resultats_skeleton.dart';
@@ -139,7 +140,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
               // Header with animated search
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                  padding: EdgeInsets.fromLTRB(context.horizontalPadding, 20, context.horizontalPadding, 16),
                   child: _buildAnimatedHeader(l10n),
                 ),
               ),
@@ -147,7 +148,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
               // Dynamic Semester Navigator (fetches from DB)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
                   child: DynamicSemesterNav(
                     selectedSemesterNumber: selectedSemester,
                     onChanged: (v) =>
@@ -200,6 +201,10 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
         final fadeOut = 1.0 - slideValue;
         final fadeIn = slideValue;
 
+        final iconBoxSize = (56 * context.responsiveScale).clamp(44.0, 56.0);
+        final iconInnerSize = (28 * context.responsiveScale).clamp(22.0, 28.0);
+        final searchBtnSize = (44 * context.responsiveScale).clamp(38.0, 44.0);
+
         return SizedBox(
           height: 72,
           child: Stack(
@@ -215,8 +220,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                       Transform.scale(
                         scale: 1.0 - (0.3 * slideValue),
                         child: Container(
-                          width: 56,
-                          height: 56,
+                          width: iconBoxSize,
+                          height: iconBoxSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
@@ -232,10 +237,10 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                               ),
                             ],
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.bar_chart_rounded,
                             color: Colors.white,
-                            size: 28,
+                            size: iconInnerSize,
                           ),
                         ),
                       ),
@@ -245,22 +250,28 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              l10n.resultats,
-                              style: ArabicTypography.headerStyle(
-                                context,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF1F2937),
-                                letterSpacing: -0.8,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Text(
+                                l10n.resultats,
+                                style: ArabicTypography.headerStyle(
+                                  context,
+                                  fontSize: context.sp(28),
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1F2937),
+                                  letterSpacing: -0.8,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               l10n.resultsSubtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: ArabicTypography.subtitleStyle(
                                 context,
-                                fontSize: 14,
+                                fontSize: context.sp(14),
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF1F2937),
                               ),
@@ -273,8 +284,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                         hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -289,7 +300,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           child: Icon(
                             Icons.search_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: (22 * context.responsiveScale).clamp(18.0, 22.0),
                           ),
                         ),
                       ),
@@ -312,8 +323,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                         hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -328,7 +339,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                           child: Icon(
                             Icons.close_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: (22 * context.responsiveScale).clamp(18.0, 22.0),
                           ),
                         ),
                       ),
@@ -447,7 +458,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 140),
+      padding: EdgeInsets.fromLTRB(context.horizontalPadding, 0, context.horizontalPadding, 140),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
           // Semester Average Card (only if all completed)
@@ -510,7 +521,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     return Align(
       alignment: const Alignment(0, -0.45),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding, vertical: 16),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
@@ -597,10 +608,14 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     final totalCount = grades.length;
     final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
 
+    final rightBoxSize = (96 * context.responsiveScale).clamp(64.0, 96.0);
+    final rightInnerCircle = (64 * context.responsiveScale).clamp(44.0, 64.0);
+    final rightIconSize = (36 * context.responsiveScale).clamp(24.0, 36.0);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(32),
       child: Container(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 28.0)),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
@@ -637,29 +652,33 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                '$completedCount',
-                                style: const TextStyle(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  height: 1,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Text(
+                                  '$completedCount',
+                                  style: const TextStyle(
+                                    fontSize: 48,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    height: 1,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '/ $totalCount',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white.withValues(alpha: 0.6),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '/ $totalCount',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Row(
@@ -670,12 +689,16 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                                 color: Colors.white.withValues(alpha: 0.8),
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                l10n.translate('matieres_completes'),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontStyle: FontStyle.italic,
-                                  color: Colors.white.withValues(alpha: 0.9),
+                              Expanded(
+                                child: Text(
+                                  l10n.translate('matieres_completes'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                  ),
                                 ),
                               ),
                             ],
@@ -683,10 +706,11 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                         ],
                       ),
                     ),
+                    const SizedBox(width: 12),
                     // Right circle icon
                     Container(
-                      width: 96,
-                      height: 96,
+                      width: rightBoxSize,
+                      height: rightBoxSize,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
@@ -696,16 +720,16 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                       ),
                       child: Center(
                         child: Container(
-                          width: 64,
-                          height: 64,
+                          width: rightInnerCircle,
+                          height: rightInnerCircle,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             color: Colors.white,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.task_alt_rounded,
-                            color: Color(0xFF3B82F6),
-                            size: 36,
+                            color: const Color(0xFF3B82F6),
+                            size: rightIconSize,
                           ),
                         ),
                       ),
@@ -760,7 +784,7 @@ class _GlassySemesterCard extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: Container(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 24.0)),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -933,6 +957,8 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
         : const Color(0xFFEF4444);
     final gradeBgColor = gradeColor.withValues(alpha: 0.1);
 
+    final badgeSize = (64 * context.responsiveScale).clamp(52.0, 64.0);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(32),
       child: BackdropFilter(
@@ -964,13 +990,13 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                 },
                 borderRadius: BorderRadius.circular(32),
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 20.0)),
                   child: Row(
                     children: [
                       // Average badge
                       Container(
-                        width: 64,
-                        height: 64,
+                        width: badgeSize,
+                        height: badgeSize,
                         decoration: BoxDecoration(
                           color: gradeBgColor,
                           shape: BoxShape.circle,
@@ -1136,8 +1162,9 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
 
   Widget _buildExpandedContent(Color gradeColor) {
     final l10n = AppLocalizations.of(context);
+    final cardPad = AppResponsive.cardPadding(context, base: 20.0);
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      padding: EdgeInsets.fromLTRB(cardPad, 0, cardPad, cardPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

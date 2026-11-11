@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 
 const _brand = Color(0xFF7C3AED);
@@ -252,12 +251,16 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: s.isCurrent ? _brand.withOpacity(0.2) : AppColors.border.withOpacity(0.5),
+          color: AppColors.border.withOpacity(0.5),
           width: 1,
         ),
-        boxShadow: s.isCurrent
-            ? [BoxShadow(color: _brand.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 6))]
-            : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),

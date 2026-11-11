@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/bouncing_wrapper.dart';
@@ -407,7 +408,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     controller: _scrollController,
                     keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding, vertical: 20),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
                         minHeight: constraints.maxHeight - 40 > 0
@@ -415,25 +416,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             : 0,
                       ),
                       child: Center(
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Title
-                              Text(
-                                l10n.translate('welcome_portal'),
-                                style: ArabicTypography.headerStyle(
-                                  context,
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF1A1A1A),
-                                  letterSpacing: -0.02,
-                                  height: 42 / 34,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 440),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Title
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    l10n.translate('welcome_portal'),
+                                    style: ArabicTypography.headerStyle(
+                                      context,
+                                      fontSize: context.sp(30),
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1A1A1A),
+                                      letterSpacing: -0.02,
+                                      height: 42 / 34,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
                                 ),
-                                textAlign: TextAlign.center,
-                              ),
                               const SizedBox(height: 36),
                               // Email label + field
                               KeyedSubtree(
@@ -780,6 +786,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
+                    ),
                     ),
                   ),
                 );

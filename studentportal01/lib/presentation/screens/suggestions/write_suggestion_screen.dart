@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../core/router/app_router.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/ios_loader.dart';
@@ -310,7 +311,12 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
             children: [
               // Custom Header
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                padding: EdgeInsets.fromLTRB(
+                  AppResponsive.horizontalPadding(context),
+                  14,
+                  AppResponsive.horizontalPadding(context),
+                  14,
+                ),
                 child: Row(
                   children: [
                     BouncingWrapper(
@@ -360,7 +366,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                             l10n.newSuggestion,
                             style: ArabicTypography.headerStyle(
                               context,
-                              fontSize: 24,
+                              fontSize: AppResponsive.sp(context, 24),
                               fontWeight: FontWeight.w900,
                               color: Colors.grey[900],
                               letterSpacing: -0.5,
@@ -370,7 +376,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                             l10n.shareIdeas,
                             style: ArabicTypography.subtitleStyle(
                               context,
-                              fontSize: 13,
+                              fontSize: AppResponsive.sp(context, 13),
                               fontWeight: FontWeight.w500,
                               color: Colors.grey[600],
                             ),
@@ -383,33 +389,43 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
               ),
               // Content
               Expanded(
-                child: SingleChildScrollView(
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                      child: Container(
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 30,
-                              offset: const Offset(0, 10),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: EdgeInsets.fromLTRB(
+                        AppResponsive.horizontalPadding(context),
+                        8,
+                        AppResponsive.horizontalPadding(context),
+                        100,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                          child: Container(
+                            padding: EdgeInsets.all(
+                              AppResponsive.cardPadding(context, base: 26.0),
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 30,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                             // Suggestion Type Selection - Modern Glassy Radio Grid
                             Text(
                               l10n.suggestionTypeLabel,
@@ -726,11 +742,13 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                   ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
-        ),
+        ],
       ),
-    );
+    ),
+  ),
+),
+);
   }
 }

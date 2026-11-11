@@ -164,19 +164,27 @@ class StudentPortalApp extends ConsumerWidget {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         routerConfig: router,
         builder: (context, child) {
-          return Stack(
-            children: [
-              child ?? const SizedBox.shrink(),
-              const Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  bottom: false,
-                  child: OfflineIndicatorBanner(),
+          final mediaQuery = MediaQuery.of(context);
+          final clampedTextScaler = mediaQuery.textScaler.clamp(
+            minScaleFactor: 0.85,
+            maxScaleFactor: 1.10,
+          );
+          return MediaQuery(
+            data: mediaQuery.copyWith(textScaler: clampedTextScaler),
+            child: Stack(
+              children: [
+                child ?? const SizedBox.shrink(),
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: OfflineIndicatorBanner(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),

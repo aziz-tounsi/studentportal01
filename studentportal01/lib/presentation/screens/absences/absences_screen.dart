@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../data/services/offline_cache_service.dart';
 import '../../providers/auth_provider.dart';
@@ -39,21 +40,38 @@ final absencesSemestersProvider = FutureProvider<List<Map<String, dynamic>>>((re
 // Real absences provider - fetches from database
 final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>((ref, semesterNumber) async {
   final authState = ref.watch(authProvider);
+  final studentCtx = await ref.watch(ctx.studentContextProvider.future);
   final semesters = await ref.watch(absencesSemestersProvider.future);
   
-  final enrollmentId = authState.enrollment?.id ?? 'default';
+  final enrollmentId = authState.enrollment?.id 
+      ?? studentCtx?.enrollmentId 
+      ?? 'default';
+  final userId = authState.user?.id 
+      ?? studentCtx?.userId
+      ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
   final cacheKey = 'absences_screen_${enrollmentId}_$semesterNumber';
 
-  if (!authState.isAuthenticated || authState.enrollment == null) {
-    debugPrint('absencesProvider: Not authenticated or no enrollment, checking cache');
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
+  List<SubjectAbsenceSummary>? getCachedAbsences() {
+    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+        ?? (userId != null ? OfflineCacheService.instance.getListOfMaps('absences_screen_${userId}_$semesterNumber') : null)
+        ?? OfflineCacheService.instance.getListOfMaps('absences_screen_latest_$semesterNumber')
+        ?? OfflineCacheService.instance.getListOfMaps('absences_screen_latest');
     if (cached != null && cached.isNotEmpty) {
       return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
     }
+    return null;
+  }
+
+  if (!authState.isAuthenticated && studentCtx == null) {
+    debugPrint('absencesProvider: Not authenticated, checking cache');
+    final cachedList = getCachedAbsences();
+    if (cachedList != null) return cachedList;
     return [];
   }
   
-  final schoolId = authState.user?.schoolId ?? authState.enrollment?.classInfo?.schoolId;
+  final schoolId = authState.user?.schoolId 
+      ?? studentCtx?.schoolId 
+      ?? authState.enrollment?.classInfo?.schoolId;
   
   final semester = semesters.firstWhere(
     (s) => s['number'] == semesterNumber,
@@ -63,10 +81,8 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
   final semesterId = semester['id'] as String?;
   if (semesterId == null) {
     debugPrint('absencesProvider: Semester $semesterNumber not found, checking cache');
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
-    if (cached != null && cached.isNotEmpty) {
-      return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
-    }
+    final cachedList = getCachedAbsences();
+    if (cachedList != null) return cachedList;
     return [];
   }
   
@@ -218,6 +234,16 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
         cacheKey,
         summaries.map((s) => s.toJson()).toList(),
       );
+      if (userId != null) {
+        OfflineCacheService.instance.setJson(
+          'absences_screen_${userId}_$semesterNumber',
+          summaries.map((s) => s.toJson()).toList(),
+        );
+      }
+      OfflineCacheService.instance.setJson(
+        'absences_screen_latest_$semesterNumber',
+        summaries.map((s) => s.toJson()).toList(),
+      );
     }
     ConnectivityService.instance.reportNetworkSuccess();
     return summaries;
@@ -225,10 +251,8 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     debugPrint('absencesProvider error: $e');
     ConnectivityService.instance.reportNetworkError(e);
 
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey);
-    if (cached != null && cached.isNotEmpty) {
-      return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
-    }
+    final cachedList = getCachedAbsences();
+    if (cachedList != null) return cachedList;
     return [];
   }
 });
@@ -353,14 +377,21 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                    padding: EdgeInsets.fromLTRB(
+                      AppResponsive.horizontalPadding(context),
+                      20,
+                      AppResponsive.horizontalPadding(context),
+                      16,
+                    ),
                     child: _buildAnimatedHeader(l10n),
                   ),
                 ),
 
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppResponsive.horizontalPadding(context),
+                    ),
                     child: DynamicSemesterNav(
                       selectedSemesterNumber: selectedTrimester,
                       onChanged: (v) => ref.read(absencesTrimesterProvider.notifier).state = v,
@@ -407,6 +438,14 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
         final slideValue = _searchAnimationController.value;
         final fadeOut = 1.0 - slideValue;
         final fadeIn = slideValue;
+        final screenW = MediaQuery.sizeOf(context).width;
+        final scale = (screenW / 440.0).clamp(0.72, 1.15);
+        final iconBoxSize = (56.0 * scale).clamp(44.0, 56.0);
+        final iconSize = (28.0 * scale).clamp(22.0, 28.0);
+        final titleSize = (28.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(19.0, 28.0);
+        final subtitleSize = (14.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(11.5, 14.0);
+        final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+        final isAr = l10n.locale.languageCode == 'ar';
 
         return SizedBox(
           height: 72,
@@ -423,8 +462,8 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                       Transform.scale(
                         scale: 1.0 - (0.3 * slideValue),
                         child: Container(
-                          width: 56,
-                          height: 56,
+                          width: iconBoxSize,
+                          height: iconBoxSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
@@ -435,32 +474,38 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                             boxShadow: [
                               BoxShadow(
                                 color: const Color(0xFFEC4899).withValues(alpha: 0.4),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
+                                blurRadius: 20 * scale,
+                                offset: Offset(0, 8 * scale),
                               ),
                             ],
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.event_busy_rounded,
                             color: Colors.white,
-                            size: 28,
+                            size: iconSize,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: (16 * scale).clamp(10.0, 16.0)),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              l10n.absences,
-                              style: ArabicTypography.headerStyle(
-                                context,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF1F2937),
-                                letterSpacing: -0.8,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: isAr
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Text(
+                                l10n.absences,
+                                style: ArabicTypography.headerStyle(
+                                  context,
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1F2937),
+                                  letterSpacing: -0.8,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -468,10 +513,12 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                               l10n.absencesSubtitle,
                               style: ArabicTypography.subtitleStyle(
                                 context,
-                                fontSize: 14,
+                                fontSize: subtitleSize,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF1F2937),
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -481,8 +528,8 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                         hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -642,7 +689,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppResponsive.horizontalPadding(context),
+        ),
         child: Column(
           children: [
             _buildSummaryCard(totalAbsent, totalHours, overallPercent, criticalCount),

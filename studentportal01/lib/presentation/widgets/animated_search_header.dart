@@ -34,6 +34,13 @@ class AnimatedSearchHeader extends StatelessWidget {
     return AnimatedBuilder(
       animation: animationController,
       builder: (context, child) {
+        final screenW = MediaQuery.sizeOf(context).width;
+        final scale = (screenW / 440.0).clamp(0.72, 1.15);
+        final iconBoxSize = (56.0 * scale).clamp(44.0, 56.0);
+        final iconSize = (28.0 * scale).clamp(22.0, 28.0);
+        final titleSize = (28.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(19.0, 28.0);
+        final subtitleSize = (14.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(11.5, 14.0);
+        final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
         final slideValue = animationController.value;
         final fadeOut = 1.0 - slideValue;
         final fadeIn = slideValue;
@@ -54,8 +61,8 @@ class AnimatedSearchHeader extends StatelessWidget {
                       Transform.scale(
                         scale: 1.0 - (0.3 * slideValue),
                         child: Container(
-                          width: 56,
-                          height: 56,
+                          width: iconBoxSize,
+                          height: iconBoxSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
@@ -66,19 +73,19 @@ class AnimatedSearchHeader extends StatelessWidget {
                             boxShadow: [
                               BoxShadow(
                                 color: gradientColors.first.withValues(alpha: 0.4),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
+                                blurRadius: 20 * scale,
+                                offset: Offset(0, 8 * scale),
                               ),
                             ],
                           ),
                           child: Icon(
                             icon,
                             color: Colors.white,
-                            size: 28,
+                            size: iconSize,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: (16 * scale).clamp(10.0, 16.0)),
                       // Title
                       Expanded(
                         child: Builder(
@@ -88,36 +95,44 @@ class AnimatedSearchHeader extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  title,
-                                  style: isAr
-                                      ? GoogleFonts.cairo(
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w900,
-                                          color: Colors.grey[900],
-                                          letterSpacing: -0.5,
-                                        )
-                                      : TextStyle(
-                                          fontSize: 28,
-                                          fontWeight: FontWeight.w900,
-                                          color: Colors.grey[900],
-                                          letterSpacing: -0.8,
-                                        ),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: isAr
+                                      ? Alignment.centerRight
+                                      : Alignment.centerLeft,
+                                  child: Text(
+                                    title,
+                                    style: isAr
+                                        ? GoogleFonts.cairo(
+                                            fontSize: titleSize,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.grey[900],
+                                            letterSpacing: -0.5,
+                                          )
+                                        : TextStyle(
+                                            fontSize: titleSize,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.grey[900],
+                                            letterSpacing: -0.8,
+                                          ),
+                                  ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   subtitle,
                                   style: isAr
                                       ? GoogleFonts.cairo(
-                                          fontSize: 13.5,
+                                          fontSize: subtitleSize,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.grey[600],
                                         )
                                       : TextStyle(
-                                          fontSize: 14,
+                                          fontSize: subtitleSize,
                                           fontWeight: FontWeight.w500,
                                           color: Colors.grey[600],
                                         ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             );
@@ -130,8 +145,8 @@ class AnimatedSearchHeader extends StatelessWidget {
                         hitPadding: const EdgeInsets.all(8),
                         onTap: onToggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -146,7 +161,7 @@ class AnimatedSearchHeader extends StatelessWidget {
                           child: Icon(
                             Icons.search_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: (22 * scale).clamp(18.0, 22.0),
                           ),
                         ),
                       ),

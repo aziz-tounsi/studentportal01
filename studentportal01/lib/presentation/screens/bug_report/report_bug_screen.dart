@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
+import '../../../core/theme/responsive.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
@@ -301,99 +302,109 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
             onTap: () => FocusScope.of(context).unfocus(),
             child: SafeArea(
               bottom: false,
-              child: SingleChildScrollView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-              padding: EdgeInsets.fromLTRB(
-                20,
-                16,
-                20,
-                math.max(MediaQuery.of(context).padding.bottom, 24.0) + 20.0,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header (aligned with page cards at x = 20)
-                  Row(
-                    children: [
-                      BouncingWrapper(
-                        shrinkScale: 0.86,
-                        overshootScale: 1.10,
-                        delayNavigation: false,
-                        hitPadding: const EdgeInsets.symmetric(vertical: 8),
-                        onTap: () {
-                          final swipeBack = IosEdgeSwipeBack.of(context);
-                          if (swipeBack != null) {
-                            swipeBack.animateBack();
-                          } else {
-                            context.go('/about');
-                          }
-                        },
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.06),
-                                blurRadius: 12,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Icon(
-                                isRtl ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_new_rounded,
-                                size: 18,
-                                color: const Color(0xFF1F2937),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    padding: EdgeInsets.fromLTRB(
+                      context.horizontalPadding,
+                      16,
+                      context.horizontalPadding,
+                      math.max(MediaQuery.of(context).padding.bottom, 24.0) + 20.0,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header (aligned with page cards at x = 20)
+                        Row(
                           children: [
-                            Text(
-                              l10n.reportABug,
-                              style: ArabicTypography.headerStyle(
-                                context,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.5,
-                                color: const Color(0xFF1F2937),
+                            BouncingWrapper(
+                              shrinkScale: 0.86,
+                              overshootScale: 1.10,
+                              delayNavigation: false,
+                              hitPadding: const EdgeInsets.symmetric(vertical: 8),
+                              onTap: () {
+                                final swipeBack = IosEdgeSwipeBack.of(context);
+                                if (swipeBack != null) {
+                                  swipeBack.animateBack();
+                                } else {
+                                  context.go('/about');
+                                }
+                              },
+                              child: Container(
+                                width: context.scaleW(44).clamp(38.0, 48.0),
+                                height: context.scaleW(44).clamp(38.0, 48.0),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.06),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: Icon(
+                                      isRtl ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_new_rounded,
+                                      size: context.scaleW(18).clamp(16.0, 20.0),
+                                      color: const Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              l10n.reportBugSubtitle,
-                              style: ArabicTypography.subtitleStyle(
-                                context,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[600],
+                            SizedBox(width: context.scaleW(14).clamp(10.0, 16.0)),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: AlignmentDirectional.centerStart,
+                                    child: Text(
+                                      l10n.reportABug,
+                                      style: ArabicTypography.headerStyle(
+                                        context,
+                                        fontSize: context.sp(24),
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.5,
+                                        color: const Color(0xFF1F2937),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    l10n.reportBugSubtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: ArabicTypography.subtitleStyle(
+                                      context,
+                                      fontSize: context.sp(13),
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                  // Form Content enclosed inside rounded frosted-glass card
-                  ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                        child: Container(
-                          padding: const EdgeInsets.all(28),
+                        // Form Content enclosed inside rounded frosted-glass card
+                        ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                              child: Container(
+                                padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 26.0)),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.85),
                             borderRadius: BorderRadius.circular(28),
@@ -726,11 +737,13 @@ class _ReportBugScreenState extends ConsumerState<ReportBugScreen> {
                         ),
                       ),
                     ),
-                ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );

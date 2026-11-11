@@ -7,6 +7,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/grade_model.dart';
 import '../../../data/repositories/results_repository.dart';
+import '../../../data/services/offline_cache_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/ios_loader.dart';
 
@@ -42,14 +44,16 @@ final resultatsRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Grades provider - fetches real data
 final gradesProvider = FutureProvider.family<List<SubjectGradesSummary>, int>((ref, semesterNumber) async {
+  final authState = ref.watch(authProvider);
   final studentCtx = await ref.watch(ctx.studentContextProvider.future);
   final enrollment = await ref.watch(currentEnrollmentProvider.future);
   final semesters = await ref.watch(semestersProvider.future);
   
-  final enrollmentId = studentCtx?.enrollmentId ?? enrollment?['id'] as String?;
-  if (enrollmentId == null || semesters.isEmpty) {
-    return <SubjectGradesSummary>[];
-  }
+  final enrollmentId = studentCtx?.enrollmentId 
+      ?? enrollment?['id'] as String? 
+      ?? authState.enrollment?.id 
+      ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['id'] as String?)
+      ?? 'default';
   
   // Find the semester by number
   final semester = semesters.firstWhere(
@@ -57,17 +61,14 @@ final gradesProvider = FutureProvider.family<List<SubjectGradesSummary>, int>((r
     orElse: () => <String, dynamic>{},
   );
   
-  if (semester.isEmpty || semester['id'] == null) {
-    return <SubjectGradesSummary>[];
-  }
+  final semesterId = (semester['id'] as String?) ?? '$semesterNumber';
   
   final repo = ref.watch(resultsRepositoryProvider);
-  final grades = await repo.getStudentGrades(
+  return repo.getStudentGrades(
     enrollmentId: enrollmentId,
-    semesterId: semester['id'],
+    semesterId: semesterId,
+    semesterNumber: semesterNumber,
   );
-  
-  return grades;
 });
 
 // ignore: unused_element
