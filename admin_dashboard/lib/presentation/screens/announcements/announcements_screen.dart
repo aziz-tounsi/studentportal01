@@ -963,94 +963,106 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
               ),
             ],
           ),
-          const Spacer(),
-          // ── Toolbar: pinned far right ──
-          SizedBox(
-            width: 320,
-            height: 40,
-            child: TextField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-              style: const TextStyle(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Rechercher...',
-                hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textTertiary),
-                suffixIcon: _searchQuery.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.slate50,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Text('⌘K', style: TextStyle(fontSize: 10, color: AppColors.textTertiary, fontFamily: 'monospace')),
-                        ),
-                      )
-                    : IconButton(
-                        icon: const Icon(Icons.clear, size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                            _currentPage = 0;
-                          });
-                        },
-                      ),
-                filled: true,
-                fillColor: AppColors.slate50,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: const Color(0xFF655DD5).withOpacity(0.4), width: 1.5),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          _buildHeaderIconButton(
-            icon: Icons.filter_list_rounded,
-            tooltip: 'Filtres',
-            isActive: _filterType != null || _filterDateFrom != null || _filterDateTo != null || _showFilters,
-            onPressed: () => setState(() => _showFilters = !_showFilters),
-          ),
-          const SizedBox(width: 8),
-          _buildHeaderIconButton(
-            icon: Icons.file_download_outlined,
-            tooltip: 'Télécharger CSV',
-            onPressed: _downloadCSV,
-          ),
-          const SizedBox(width: 8),
-          _buildHeaderIconButton(
-            icon: Icons.print_outlined,
-            tooltip: 'Imprimer',
-            onPressed: _printPage,
-          ),
           const SizedBox(width: 16),
-          SizedBox(
-            height: 40,
-            child: ElevatedButton.icon(
-              onPressed: () => _showComposerDialog(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Ajouter', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6D4CF6),
-                foregroundColor: Colors.white,
-                elevation: 2,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
-              ),
+          // ── Toolbar: pinned far right & responsive ──
+          Flexible(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320, minWidth: 120),
+                    child: SizedBox(
+                      height: 40,
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: _onSearchChanged,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Rechercher...',
+                          hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                          prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textTertiary),
+                          suffixIcon: _searchQuery.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.slate50,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppColors.border),
+                                    ),
+                                    child: Text('⌘K', style: TextStyle(fontSize: 10, color: AppColors.textTertiary, fontFamily: 'monospace')),
+                                  ),
+                                )
+                              : IconButton(
+                                  icon: const Icon(Icons.clear, size: 16),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                      _currentPage = 0;
+                                    });
+                                  },
+                                ),
+                          filled: true,
+                          fillColor: AppColors.slate50,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: AppColors.border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: AppColors.border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: const Color(0xFF655DD5).withOpacity(0.4), width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildHeaderIconButton(
+                  icon: Icons.filter_list_rounded,
+                  tooltip: 'Filtres',
+                  isActive: _filterType != null || _filterDateFrom != null || _filterDateTo != null || _showFilters,
+                  onPressed: () => setState(() => _showFilters = !_showFilters),
+                ),
+                const SizedBox(width: 8),
+                _buildHeaderIconButton(
+                  icon: Icons.file_download_outlined,
+                  tooltip: 'Télécharger CSV',
+                  onPressed: _downloadCSV,
+                ),
+                const SizedBox(width: 8),
+                _buildHeaderIconButton(
+                  icon: Icons.print_outlined,
+                  tooltip: 'Imprimer',
+                  onPressed: _printPage,
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showComposerDialog(context),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Ajouter', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6D4CF6),
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -2124,6 +2136,8 @@ class _AnnouncementComposerDialog extends ConsumerStatefulWidget {
 class _AnnouncementComposerDialogState
     extends ConsumerState<_AnnouncementComposerDialog> {
   final _formKey = GlobalKey<FormState>();
+  final ScrollController _dialogScrollCtrl = ScrollController();
+  late final Listenable _previewListenable;
   late TextEditingController _titleCtrl;
   late TextEditingController _contentCtrl;
   late TextEditingController _senderLabelCtrl;
@@ -2343,10 +2357,58 @@ class _AnnouncementComposerDialogState
       text: payload['discipline_subject'] ?? '',
     );
 
-    // Add listeners for real-time preview updates
-    _titleCtrl.addListener(_onTextChanged);
-    _contentCtrl.addListener(_onTextChanged);
-    _senderLabelCtrl.addListener(_onTextChanged);
+    // Real-time preview listenable - only rebuilds the preview card, keeping the form stable
+    _previewListenable = Listenable.merge([
+      _titleCtrl,
+      _contentCtrl,
+      _senderLabelCtrl,
+      _teacherNameCtrl,
+      _startDateCtrl,
+      _startTimeCtrl,
+      _endDateCtrl,
+      _endTimeCtrl,
+      _replacementNoteCtrl,
+      _subjectCtrl,
+      _oldRoomCtrl,
+      _newRoomCtrl,
+      _examDateCtrl,
+      _examTimeCtrl,
+      _changeDateCtrl,
+      _changeTimeCtrl,
+      _instructionsCtrl,
+      _reasonCtrl,
+      _closedFromCtrl,
+      _closedToCtrl,
+      _reopenDateCtrl,
+      _dueDateCtrl,
+      _actionRequiredCtrl,
+      _destinationCtrl,
+      _departureDateCtrl,
+      _departureTimeCtrl,
+      _returnDateCtrl,
+      _returnTimeCtrl,
+      _meetingPointCtrl,
+      _tripCostCtrl,
+      _tripNotesCtrl,
+      _eventNameCtrl,
+      _eventDateCtrl,
+      _eventTimeCtrl,
+      _eventLocationCtrl,
+      _dressCodeCtrl,
+      _eventNotesCtrl,
+      _paymentTypeCtrl,
+      _paymentAmountCtrl,
+      _paymentDueDateCtrl,
+      _paymentMethodCtrl,
+      _paymentNotesCtrl,
+      _sanctionReasonCtrl,
+      _sanctionDateCtrl,
+      _sanctionDurationCtrl,
+      _sanctionNotesCtrl,
+      _meetingDateCtrl,
+      _meetingTimeCtrl,
+      _disciplineSubjectCtrl,
+    ]);
 
     if (a != null) {
       _scope = a.scope;
@@ -2984,7 +3046,7 @@ class _AnnouncementComposerDialogState
           keyboardType: keyboardType,
           decoration: _styledInputDecoration(hint: hint, prefixIcon: prefixIcon),
           validator: validator,
-          onChanged: onChanged != null ? (_) => onChanged() : (_) => setState(() {}),
+          onChanged: onChanged != null ? (_) => onChanged() : null,
         ),
       ],
     );
@@ -3388,9 +3450,7 @@ class _AnnouncementComposerDialogState
 
   @override
   void dispose() {
-    _titleCtrl.removeListener(_onTextChanged);
-    _contentCtrl.removeListener(_onTextChanged);
-    _senderLabelCtrl.removeListener(_onTextChanged);
+    _dialogScrollCtrl.dispose();
     _titleCtrl.dispose();
     _contentCtrl.dispose();
     _senderLabelCtrl.dispose();
@@ -3474,6 +3534,7 @@ class _AnnouncementComposerDialogState
               _buildHeader(isEditing),
               Flexible(
                 child: SingleChildScrollView(
+                  controller: _dialogScrollCtrl,
                   padding: const EdgeInsets.all(32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -6200,20 +6261,23 @@ class _AnnouncementComposerDialogState
   }
 
   Widget _buildPreview() {
-    final typeInfo = _getPreviewTypeInfo(_announcementType);
-    // For typed announcements, show type label as title and generate content preview
-    final previewTitle = _announcementType == 'general'
-        ? (_titleCtrl.text.isEmpty ? 'Titre de l\'annonce...' : _titleCtrl.text)
-        : typeInfo.label;
-    final previewContent = _announcementType == 'general'
-        ? (_contentCtrl.text.isEmpty
-              ? 'Le contenu de votre annonce apparaîtra ici...'
-              : _contentCtrl.text)
-        : (_generateContent().isEmpty
-              ? 'Remplissez les champs ci-dessus...'
-              : _generateContent());
+    return ListenableBuilder(
+      listenable: _previewListenable,
+      builder: (context, _) {
+        final typeInfo = _getPreviewTypeInfo(_announcementType);
+        // For typed announcements, show type label as title and generate content preview
+        final previewTitle = _announcementType == 'general'
+            ? (_titleCtrl.text.isEmpty ? 'Titre de l\'annonce...' : _titleCtrl.text)
+            : typeInfo.label;
+        final previewContent = _announcementType == 'general'
+            ? (_contentCtrl.text.isEmpty
+                  ? 'Le contenu de votre annonce apparaîtra ici...'
+                  : _contentCtrl.text)
+            : (_generateContent().isEmpty
+                  ? 'Remplissez les champs ci-dessus...'
+                  : _generateContent());
 
-    return Column(
+        return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
@@ -6427,8 +6491,8 @@ class _AnnouncementComposerDialogState
               ],
             ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -6539,8 +6603,29 @@ class _AnnouncementComposerDialogState
         return _TypeInfo('Rappel', Icons.alarm, AppColors.primary);
       case 'exam':
         return _TypeInfo('Examen', Icons.assignment, AppColors.error);
+      case 'retenue':
+        return _TypeInfo('Retenue', Icons.access_time, const Color(0xFFDC2626));
+      case 'trip':
+        return _TypeInfo('Sortie', Icons.directions_bus, AppColors.success);
+      case 'party':
+        return _TypeInfo('Événement', Icons.celebration, AppColors.chart4);
+      case 'payment':
+        return _TypeInfo('Paiement', Icons.payment, AppColors.chart5);
       case 'closure':
         return _TypeInfo('Fermeture', Icons.lock, AppColors.slate300);
+      case 'avertissement':
+        return _TypeInfo('Avertissement', Icons.warning_amber, AppColors.warning);
+      case 'exclusion_classe':
+        return _TypeInfo('Exclusion classe', Icons.no_meeting_room, AppColors.accent);
+      case 'exclusion_etablissement':
+        return _TypeInfo('Exclusion étab.', Icons.block, AppColors.error);
+      case 'convocation_parents':
+        return _TypeInfo('Convocation', Icons.family_restroom, AppColors.chart5);
+      case 'conseil_discipline':
+        return _TypeInfo('Conseil disc.', Icons.gavel, AppColors.secondary);
+      case 'exclusion_definitive':
+        return _TypeInfo('Exclusion déf.', Icons.cancel, AppColors.textPrimary);
+      case 'general':
       default:
         return _TypeInfo('Général', Icons.campaign, AppColors.chart6);
     }
