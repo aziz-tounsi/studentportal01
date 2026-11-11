@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 
 // User detail provider
@@ -169,7 +170,12 @@ class UserDetailScreen extends ConsumerWidget {
                         children: [
                           const Icon(Icons.error, size: 48, color: AppColors.error),
                           const SizedBox(height: 16),
-                          Text('Erreur: $e'),
+                          Text(
+                            UserFriendlyError.format(
+                              e,
+                              fallback: 'Unable to load user details right now. Please try again.',
+                            ),
+                          ),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () => ref.invalidate(userDetailProvider(userId)),

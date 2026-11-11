@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/utils/error_messages.dart';
 import '../../data/services/user_management_service.dart';
 
 final platformConsoleProvider =
@@ -187,7 +188,10 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Erreur lors du chargement des données de plateforme: $e',
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to load platform data right now. Please try again.',
+        ),
       );
     }
   }
@@ -248,13 +252,18 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
       );
 
       if (createResult['success'] != true) {
-        throw Exception(createResult['error'] ?? 'Échec de création du directeur');
+        throw Exception(createResult['error'] ?? 'Unable to create the director account.');
       }
 
       await loadAll();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Échec de la création de l\'établissement: $e');
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to create the school right now. Please try again.',
+        ),
+      );
       return false;
     }
   }
@@ -265,7 +274,12 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
       await loadAll();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Erreur lors du changement de statut: $e');
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to update the school status right now. Please try again.',
+        ),
+      );
       return false;
     }
   }
@@ -284,7 +298,12 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
       }
       return false;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Erreur validation paiement: $e');
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to verify this payment right now. Please try again.',
+        ),
+      );
       return false;
     }
   }
@@ -299,7 +318,12 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
       await loadAll();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Erreur kill-switch IA: $e');
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to update AI access settings right now. Please try again.',
+        ),
+      );
       return false;
     }
   }
@@ -315,7 +339,12 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
       await loadAll();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Erreur mise à jour modèles IA: $e');
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to update AI model settings right now. Please try again.',
+        ),
+      );
       return false;
     }
   }
@@ -344,7 +373,12 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
       await loadAll();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Erreur émission facture: $e');
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to issue this invoice right now. Please try again.',
+        ),
+      );
       return false;
     }
   }

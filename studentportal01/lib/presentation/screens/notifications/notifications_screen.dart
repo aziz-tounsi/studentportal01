@@ -390,28 +390,36 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           ),
         ),
         // Search button
-        GestureDetector(
-          onTap: _toggleSearch,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+        Builder(
+          builder: (context) {
+            final scale = context.responsiveScale;
+            final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+            return BouncingWrapper(
+              shrinkScale: 0.86,
+              hitPadding: const EdgeInsets.all(8),
+              onTap: _toggleSearch,
+              child: Container(
+                width: searchBtnSize,
+                height: searchBtnSize,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(
-              Icons.search_rounded,
-              color: Colors.grey[700],
-              size: 24,
-            ),
-          ),
+                child: Icon(
+                  Icons.search_rounded,
+                  color: Colors.grey[700],
+                  size: (22 * scale).clamp(18.0, 22.0),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -419,70 +427,88 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
   // Search header with full-width search bar
   Widget _buildSearchHeader() {
+    final scale = context.responsiveScale;
+    final searchBtnSize = (44.0 * scale).clamp(38.0, 44.0);
+
     return Row(
       children: [
-        // Back button
-        GestureDetector(
+        // Cancel button
+        BouncingWrapper(
+          shrinkScale: 0.86,
+          hitPadding: const EdgeInsets.all(8),
           onTap: _toggleSearch,
           child: Container(
-            width: 48,
-            height: 48,
+            width: searchBtnSize,
+            height: searchBtnSize,
             decoration: BoxDecoration(
-              color: _accentColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
+              color: Colors.white.withValues(alpha: 0.9),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
             child: Icon(
-              Directionality.of(context) == TextDirection.rtl
-                  ? Icons.arrow_forward_rounded
-                  : Icons.arrow_back_rounded,
-              color: _accentColor,
-              size: 24,
+              Icons.close_rounded,
+              color: Colors.grey[700],
+              size: (22 * scale).clamp(18.0, 22.0),
             ),
           ),
         ),
         const SizedBox(width: 12),
-        // Search field
+        // Search field - pill shaped
         Expanded(
           child: Container(
-            height: 48,
+            height: searchBtnSize,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _accentColor, width: 1.5),
+              color: Colors.white.withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(searchBtnSize / 2),
               boxShadow: [
                 BoxShadow(
-                  color: _accentColor.withValues(alpha: 0.15),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
             child: Row(
               children: [
                 const SizedBox(width: 16),
-                Icon(Icons.search_rounded, color: _accentColor, size: 22),
-                const SizedBox(width: 12),
+                Icon(
+                  Icons.search_rounded,
+                  color: Colors.grey[400],
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
                     cursorColor: Colors.grey[600],
                     onChanged: (value) => setState(() => _searchQuery = value),
-                    style: TextStyle(
+                    style: ArabicTypography.bodyStyle(
+                      context,
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: Colors.grey[800],
                     ),
                     decoration: InputDecoration(
                       hintText: AppLocalizations.of(context).search,
-                      hintStyle: TextStyle(
+                      hintStyle: ArabicTypography.bodyStyle(
+                        context,
                         color: Colors.grey[400],
                         fontSize: 15,
+                        fontWeight: FontWeight.w400,
                       ),
                       filled: false,
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
                 ),
@@ -495,9 +521,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                     child: Padding(
                       padding: const EdgeInsetsDirectional.only(end: 12),
                       child: Icon(
-                        Icons.cancel_rounded,
+                        Icons.close_rounded,
                         color: Colors.grey[400],
-                        size: 20,
+                        size: 18,
                       ),
                     ),
                   ),
@@ -844,7 +870,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                         child: Icon(icon, color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 12),
-                      // Type label and Title
+                      // Type label, Title, and Key info subtitle
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -857,48 +883,42 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                                 color: color,
                               ),
                             ),
-                            if (announcement.announcementType == 'general')
-                              const SizedBox(height: 4),
-                            Text(
-                              localizedTitle,
-                              style: TextStyle(
-                                fontSize: announcement.announcementType == 'general' ? 12 : 16,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF1F2937),
-                                letterSpacing: -0.3,
-                                height: 1.0,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            // Key info subtitle - only show if not empty
-                            if (isPinned || keyInfo.isNotEmpty)
-                              Transform.translate(
-                                offset: const Offset(0, -10),
-                                child: Row(
-                                  children: [
-                                    if (keyInfo.isNotEmpty)
-                                      Expanded(
-                                        child: Text(
-                                          keyInfo,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF6B7280),
-                                            height: 1.0,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    if (isPinned)
-                                      _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
-                                  ],
+                            if (localizedTitle.isNotEmpty &&
+                                localizedTitle.toLowerCase() != typeLabel.toLowerCase()) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                localizedTitle,
+                                style: TextStyle(
+                                  fontSize: announcement.announcementType == 'general' ? 12 : 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1F2937),
+                                  letterSpacing: -0.3,
                                 ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
+                            ],
+                            if (keyInfo.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                keyInfo,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6B7280),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ],
                         ),
                       ),
+                      // Pinned badge at top trailing position
+                      if (isPinned) ...[
+                        const SizedBox(width: 8),
+                        _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
+                      ],
                     ],
                   ),
                   // Badges row
@@ -1024,32 +1044,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Footer with sender and time
+                  // Footer with time
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Sender info
-                      if (announcement.senderLabel != null) ...[
-                        Icon(
-                          Icons.person_outline,
-                          size: 12,
-                          color: Colors.grey[500],
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            l10n.localizeSenderLabel(announcement.senderLabel),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      const Spacer(),
                       // Timestamp
                       Icon(
                         Icons.access_time,
@@ -1533,61 +1531,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                               letterSpacing: -0.5,
                             ),
                           ),
-                          // Sender info in styled container
-                          if (announcement.senderLabel != null) ...[
-                            const SizedBox(height: 24),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      Icons.person_outline,
-                                      size: 20,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          l10n.sentByLabel,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[500],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          l10n.localizeSenderLabel(
-                                            announcement.senderLabel,
-                                          ),
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF1F2937),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 24),
                         ],
                       ),
     );
@@ -1803,12 +1747,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   }
 
   String _formatTime(DateTime time) {
+    final localTime = time.toLocal();
     final now = DateTime.now();
-    final difference = now.difference(time);
+    final difference = now.difference(localTime);
     String lang = 'fr';
     try {
       lang = Localizations.localeOf(context).languageCode;
     } catch (_) {}
+
+    // If sent just now, or with clock skew / future timestamp, show instant indicator
+    if (difference.isNegative || difference.inSeconds < 60) {
+      if (lang == 'ar') return 'الآن';
+      if (lang == 'en') return 'Just now';
+      return "À l'instant";
+    }
 
     if (lang == 'ar') {
       if (difference.inMinutes < 60) {
@@ -1818,7 +1770,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       } else if (difference.inDays < 7) {
         return 'منذ ${difference.inDays} يوم';
       } else {
-        return ArabicTypography.toLatinDigits(DateFormat('d MMM', 'ar').format(time));
+        return ArabicTypography.toLatinDigits(DateFormat('d MMM', 'ar').format(localTime));
       }
     } else if (lang == 'en') {
       if (difference.inMinutes < 60) {
@@ -1828,7 +1780,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       } else if (difference.inDays < 7) {
         return '${difference.inDays}d ago';
       } else {
-        return DateFormat('d MMM', 'en').format(time);
+        return DateFormat('d MMM', 'en').format(localTime);
       }
     }
 
@@ -1839,7 +1791,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     } else if (difference.inDays < 7) {
       return 'Il y a ${difference.inDays}j';
     } else {
-      return DateFormat('d MMM', 'fr_FR').format(time);
+      return DateFormat('d MMM', 'fr_FR').format(localTime);
     }
   }
 }

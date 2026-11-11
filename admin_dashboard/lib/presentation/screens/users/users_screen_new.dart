@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
 import '../../providers/curriculum_provider.dart';
@@ -144,7 +145,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                                   child: const Icon(Icons.error_outline_rounded, size: 28, color: AppColors.error),
                                 ),
                                 const SizedBox(height: 16),
-                                Text('Erreur: $e', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                Text(
+                                  UserFriendlyError.format(
+                                    e,
+                                    fallback: 'Unable to load users right now. Please try again.',
+                                  ),
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
                                 const SizedBox(height: 20),
                                 Container(
                                   decoration: BoxDecoration(
@@ -2339,7 +2346,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors de l\'import: $e'),
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to import users from this file. Please check the file format and try again.',
+              ),
+            ),
             backgroundColor: AppColors.error,
           ),
         );
@@ -2381,7 +2393,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
         }
       } catch (e) {
         failed++;
-        errors.add('${user['email']}: $e');
+        errors.add(
+          '${user['email']}: ${UserFriendlyError.format(e, fallback: 'Unable to create this account.')}',
+        );
       }
     }
 

@@ -438,6 +438,9 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                   onRefresh: () async {
                     ref.read(emploiRefreshingProvider.notifier).state = true;
                     try {
+                      ref.invalidate(studentContextProvider);
+                      ref.invalidate(semestersProvider);
+                      ref.invalidate(isExamPeriodProvider);
                       // ignore: unused_result
                       await ref.refresh(timetableProvider.future);
                     } finally {

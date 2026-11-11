@@ -109,34 +109,8 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
   }).toList();
 });
 
-// Semesters provider for Mon Solde - uses real semester records with start/end dates
+// Semesters provider for Mon Solde - delegates to canonical dynamic semestersProvider
 final monSoldeSemestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
-  final context = await ref.watch(studentContextProvider.future);
-  final supabase = Supabase.instance.client;
-
-  // Get academic year ID - try context first, then fallback to current year
-  String? academicYearId = context?.academicYearId;
-  if (academicYearId == null || academicYearId.isEmpty) {
-    try {
-      final yearResp = await supabase
-          .from('academic_years')
-          .select('id')
-          .eq('is_current', true)
-          .order('start_date', ascending: false)
-          .maybeSingle();
-      academicYearId = yearResp?['id'] as String?;
-    } catch (_) {}
-  }
-
-  if (academicYearId != null) {
-    try {
-      final service = ref.read(coreDataServiceProvider);
-      final list = await service.getSemestersForAcademicYear(academicYearId);
-      if (list.isNotEmpty) return list;
-    } catch (_) {}
-  }
-
-  // Fallback to shared dynamic semestersProvider
   try {
     final list = await ref.watch(semestersProvider.future);
     if (list.isNotEmpty) return list;
@@ -348,6 +322,9 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             onRefresh: () async {
               ref.read(soldeRefreshingProvider.notifier).state = true;
               try {
+                ref.invalidate(studentContextProvider);
+                ref.invalidate(semestersProvider);
+                ref.invalidate(monSoldeSemestersProvider);
                 // ignore: unused_result
                 await ref.refresh(paymentsDataProvider.future);
               } finally {

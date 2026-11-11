@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 
@@ -303,7 +304,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to update the photo right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
@@ -332,7 +341,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to update the photo right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -356,7 +373,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   children: [
                     const Icon(Icons.error, size: 48, color: AppColors.error),
                     const SizedBox(height: 16),
-                    Text('Erreur: $e'),
+                    Text(
+                      UserFriendlyError.format(
+                        e,
+                        fallback: 'Unable to load this student profile right now. Please try again.',
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => ref.invalidate(

@@ -151,25 +151,28 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     final screenWidth = MediaQuery.of(context).size.width;
     final isRtl = Directionality.of(context) == TextDirection.rtl;
 
-    // Calculate maximum available width for the nav bar pill:
-    // On iPhone 16 Pro Max (440): 344.0
-    // On Infinix Smart 8 (360): 328.0 (comfortable breathing room)
-    // On small 320dp phones: 296.0
-    // On tablets / iPads (>600): 360.0
+    // Compute button sizes and gaps first from max available container width,
+    // so the 4 buttons keep their exact sizes and centered screen positions.
     final double maxBarWidth = screenWidth >= 600
         ? 360.0
         : math.min(screenWidth - (screenWidth < 360 ? 20.0 : 32.0), 346.0);
-    final double navWidth = maxBarWidth.clamp(280.0, 360.0);
-
     final int count = items.length;
-    final double padding = (navWidth * 0.016).clamp(4.0, 6.0);
-    final double gap = (navWidth * 0.016).clamp(4.0, 6.0);
-    final double availableInnerWidth = navWidth - (padding * 2);
+    final double padding = (maxBarWidth * 0.016).clamp(4.0, 6.0);
+    final double gap = (maxBarWidth * 0.016).clamp(4.0, 6.0);
+    final double maxInnerWidth = maxBarWidth - (padding * 2);
 
     final double maxCircleAllowed =
-        ((availableInnerWidth - (count - 1) * gap) / count).floorToDouble();
+        ((maxInnerWidth - (count - 1) * gap) / count).floorToDouble();
     final double circleSize = maxCircleAllowed.clamp(48.0, 70.0);
     final double totalItemsWidth = count * circleSize + (count - 1) * gap;
+
+    // Trim excess horizontal pill wings on left/right while keeping a clean margin.
+    final double extraHorizontalSide = maxBarWidth >= 320 ? 5.0 : 2.0;
+    final double navWidth = math.min(
+      maxBarWidth,
+      totalItemsWidth + (padding * 2) + (extraHorizontalSide * 2),
+    );
+    final double availableInnerWidth = navWidth - (padding * 2);
     final double startX = (availableInnerWidth - totalItemsWidth) / 2;
 
     final double iconSize = (circleSize * 0.46).clamp(23.0, 34.0);

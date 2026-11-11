@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 
 class UserFormScreen extends ConsumerStatefulWidget {
   final String? userId;
@@ -56,7 +57,14 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading user: $e')),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to load user details right now. Please try again.',
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -116,7 +124,14 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save user changes right now. Please try again.',
+              ),
+            ),
+          ),
         );
       }
     } finally {

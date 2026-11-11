@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
@@ -812,7 +813,17 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur photo: $e'), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to update the photo right now. Please try again.',
+              ),
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         );
       }
     }
@@ -1417,7 +1428,17 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                                           setDialogState(() => saving = false);
                                           if (ctx.mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                              SnackBar(
+                                                content: Text(
+                                                  UserFriendlyError.format(
+                                                    e,
+                                                    fallback: 'Unable to save teacher details right now. Please try again.',
+                                                  ),
+                                                ),
+                                                backgroundColor: Colors.red,
+                                                behavior: SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              ),
                                             );
                                           }
                                         }

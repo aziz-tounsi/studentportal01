@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -64,7 +65,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.error),
                       ),
                       const SizedBox(height: 6),
-                      Text('$e', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text(
+                        UserFriendlyError.format(
+                          e,
+                          fallback: 'Unable to load dashboard data right now. Please try again.',
+                        ),
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      ),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
                         onPressed: () => ref.read(dashboardProvider.notifier).refresh(),

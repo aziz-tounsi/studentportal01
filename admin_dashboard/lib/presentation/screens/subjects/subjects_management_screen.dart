@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/utils/error_messages.dart';
 import '../../providers/subjects_management_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
@@ -997,7 +998,10 @@ class _SubjectsManagementScreenState
           ),
           const SizedBox(height: 16),
           Text(
-            'Erreur: $error',
+            UserFriendlyError.format(
+              error,
+              fallback: 'Unable to load subjects right now. Please try again.',
+            ),
             style: TextStyle(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),
@@ -4913,7 +4917,7 @@ class _SubjectsManagementScreenState
                                             : 'Matière modifiée',
                                       );
                                     } catch (e) {
-                                      _showError('Erreur: $e');
+                                      _showError(UserFriendlyError.format(e));
                                     }
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -5823,7 +5827,7 @@ class _SubjectsManagementScreenState
                                       if (ctx.mounted) Navigator.pop(ctx);
                                       _showSuccess(assignment == null ? 'Affectation ajoutée' : 'Affectation modifiée');
                                     } catch (e) {
-                                      _showError('Erreur: $e');
+                                      _showError(UserFriendlyError.format(e));
                                     }
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -5874,7 +5878,7 @@ class _SubjectsManagementScreenState
                 if (ctx.mounted) Navigator.pop(ctx);
                 _showSuccess('Matière supprimée');
               } catch (e) {
-                _showError('Erreur: $e');
+                _showError(UserFriendlyError.format(e));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
@@ -5910,7 +5914,7 @@ class _SubjectsManagementScreenState
                 if (ctx.mounted) Navigator.pop(ctx);
                 _showSuccess('Affectation supprimée');
               } catch (e) {
-                _showError('Erreur: $e');
+                _showError(UserFriendlyError.format(e));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
@@ -5950,7 +5954,7 @@ class _SubjectsManagementScreenState
                   '${_selectedAssignmentIds.length} affectation(s) supprimée(s)',
                 );
               } catch (e) {
-                _showError('Erreur: $e');
+                _showError(UserFriendlyError.format(e));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
@@ -6159,7 +6163,7 @@ class _SubjectsManagementScreenState
                   _clearSelection();
                   _showSuccess('Affectations modifiées avec succès');
                 } catch (e) {
-                  _showError('Erreur: $e');
+                  _showError(UserFriendlyError.format(e));
                 }
               },
               child: const Text('Appliquer'),
@@ -6724,7 +6728,7 @@ class _SubjectsManagementScreenState
                                     : 'Professeur affecté avec succès',
                               );
                             } catch (e) {
-                              _showError('Erreur: $e');
+                              _showError(UserFriendlyError.format(e));
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -6902,7 +6906,7 @@ class _SubjectsManagementScreenState
                                     });
                                   } catch (e) {
                                     setDialogState(() => isCreating = false);
-                                    _showError('Erreur: $e');
+                                    _showError(UserFriendlyError.format(e));
                                   }
                                 },
                           style: ElevatedButton.styleFrom(

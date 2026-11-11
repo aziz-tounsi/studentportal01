@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:data_table_2/data_table_2.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/utils/error_messages.dart';
 import '../../../data/models/school_models.dart';
 import '../../providers/groups_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -25,7 +26,14 @@ class GroupsScreen extends ConsumerWidget {
                 _buildTopBar(context, ref),
                 Expanded(child: groupsAsync.when(
                   loading: () => const Center(child: IosLoader()),
-                  error: (e, _) => Center(child: Text('Erreur: $e')),
+                  error: (e, _) => Center(
+                    child: Text(
+                      UserFriendlyError.format(
+                        e,
+                        fallback: 'Unable to load groups right now. Please try again.',
+                      ),
+                    ),
+                  ),
                   data: (state) => _buildContent(context, ref, state),
                 )),
               ],

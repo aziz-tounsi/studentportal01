@@ -7,6 +7,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/services/connectivity_service.dart';
 import '../../data/services/core_data_service.dart';
 import '../../data/services/offline_cache_service.dart';
 import 'auth_provider.dart';
@@ -65,91 +66,185 @@ final studentContextProvider = FutureProvider<StudentContext?>((ref) async {
 // ============================================================
 
 
-final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
-  final context = await ref.watch(studentContextProvider.future);
-  final authState = ref.watch(authProvider);
-  final service = ref.watch(coreDataServiceProvider);
-  final supabase = Supabase.instance.client;
-
-  final schoolId = context?.schoolId ?? authState.user?.schoolId;
-  String? targetYearId = context?.academicYearId ?? authState.enrollment?.academicYearId;
-
-  // 1. Fallback to active academic_year only if student has no enrolled academicYearId
-  if (targetYearId == null || targetYearId.isEmpty) {
-    try {
-      var query = supabase
-          .from('academic_years')
-          .select('id')
-          .eq('is_current', true);
-      if (schoolId != null && schoolId.isNotEmpty) {
-        query = query.eq('school_id', schoolId);
-      }
-      final activeYearResp = await query.order('start_date', ascending: false).limit(1).maybeSingle();
-      if (activeYearResp != null) {
-        targetYearId = activeYearResp['id'] as String?;
-      }
-    } catch (_) {}
+/// Deduplicate semesters by period number (preferring the active one) and sort ascending.
+/// Never injects synthetic periods or periods from other years.
+List<SemesterInfo> normalizeSemesterList(List<SemesterInfo> raw) {
+  final byNumber = <int, SemesterInfo>{};
+  for (final s in raw) {
+    final existing = byNumber[s.number];
+    if (existing == null || (!existing.isCurrent && s.isCurrent)) {
+      byNumber[s.number] = s;
+    }
   }
+  final result = byNumber.values.toList()
+    ..sort((a, b) => a.number.compareTo(b.number));
+  return result;
+}
 
-  // 2. Fetch semesters for the target academic year
-  List<SemesterInfo> semesters = [];
-  if (targetYearId != null && targetYearId.isNotEmpty) {
-    semesters = await service.getSemestersForAcademicYear(targetYearId);
-  }
+/// Resolve the active semester number matching admin_dashboard semantics:
+/// 1) explicit isCurrent flag, 2) date range containing today, 3) first available period.
+int resolveCurrentSemesterNumber(
+  List<SemesterInfo> semesters, {
+  DateTime? now,
+}) {
+  if (semesters.isEmpty) return 1;
+  final sorted = normalizeSemesterList(semesters);
+  final flagged = sorted.where((s) => s.isCurrent).firstOrNull;
+  if (flagged != null) return flagged.number;
 
-  // 3. Ensure all standard semesters (1, 2, 3) are present.
-  // If any semester numbers (like 1) are missing from the enrolled year, augment from active academic year or school semesters.
-  final existingNumbers = semesters.map((s) => s.number).toSet();
-  if (semesters.isEmpty || !existingNumbers.contains(1) || existingNumbers.length < 3) {
-    try {
-      var activeYearQuery = supabase
-          .from('academic_years')
-          .select('id')
-          .eq('is_current', true);
-      if (schoolId != null && schoolId.isNotEmpty) {
-        activeYearQuery = activeYearQuery.eq('school_id', schoolId);
-      }
-      final activeYear = await activeYearQuery.order('start_date', ascending: false).limit(1).maybeSingle();
-      if (activeYear != null) {
-        final activeSemesters = await service.getSemestersForAcademicYear(activeYear['id'] as String);
-        for (final s in activeSemesters) {
-          if (!existingNumbers.contains(s.number)) {
-            semesters.add(s);
-            existingNumbers.add(s.number);
-          }
-        }
-      }
-    } catch (_) {}
+  final refNow = now ?? DateTime.now();
+  final today = DateTime(refNow.year, refNow.month, refNow.day);
+  final byDate = sorted.where((s) {
+    if (s.startDate == null || s.endDate == null) return false;
+    final start = DateTime(s.startDate!.year, s.startDate!.month, s.startDate!.day);
+    final end = DateTime(s.endDate!.year, s.endDate!.month, s.endDate!.day);
+    return !today.isBefore(start) && !today.isAfter(end);
+  }).firstOrNull;
+  if (byDate != null) return byDate.number;
 
-    // Fallback: Query all semesters for schoolId
-    if (!existingNumbers.contains(1) || semesters.isEmpty) {
-      try {
-        var semQuery = supabase
-            .from('semesters')
-            .select('id, name, number, is_current, start_date, end_date');
-        if (schoolId != null && schoolId.isNotEmpty) {
-          semQuery = semQuery.eq('school_id', schoolId);
-        }
-        final semestersResp = await semQuery.order('number');
-        if ((semestersResp as List).isNotEmpty) {
-          for (final row in semestersResp) {
-            final s = SemesterInfo.fromJson(row);
-            if (!existingNumbers.contains(s.number)) {
-              semesters.add(s);
-              existingNumbers.add(s.number);
-            }
-          }
-        }
-      } catch (_) {}
+  return sorted.first.number;
+}
+
+/// Prefer the school's active (`is_current = true`) academic year over a potentially
+/// stale enrollment academic year so admin period changes always appear in the app.
+List<String> prioritizeAcademicYearIds({
+  String? activeCurrentYearId,
+  String? enrolledYearId,
+}) {
+  final ordered = <String>[];
+  void addIfValid(String? id) {
+    final trimmed = id?.trim();
+    if (trimmed != null && trimmed.isNotEmpty && !ordered.contains(trimmed)) {
+      ordered.add(trimmed);
     }
   }
 
-  if (semesters.isNotEmpty) {
-    semesters.sort((a, b) => a.number.compareTo(b.number));
-    return semesters;
+  addIfValid(activeCurrentYearId);
+  addIfValid(enrolledYearId);
+  return ordered;
+}
+
+final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
+  final context = await ref.watch(studentContextProvider.future);
+  final authState = ref.watch(authProvider);
+  final supabase = Supabase.instance.client;
+
+  final schoolId = context?.schoolId ?? authState.user?.schoolId;
+  final enrolledYearId =
+      context?.academicYearId ?? authState.enrollment?.academicYearId;
+
+  // Listen for live period/year edits in Supabase if Realtime is enabled on the project.
+  RealtimeChannel? channel;
+  try {
+    final filter = (schoolId != null && schoolId.isNotEmpty)
+        ? PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'school_id',
+            value: schoolId,
+          )
+        : null;
+    channel = supabase
+        .channel('student_semesters_${schoolId ?? 'global'}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'semesters',
+          filter: filter,
+          callback: (_) => ref.invalidateSelf(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'academic_years',
+          filter: filter,
+          callback: (_) => ref.invalidateSelf(),
+        )
+        .subscribe();
+    ref.onDispose(() {
+      if (channel != null) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (_) {}
+      }
+    });
+  } catch (_) {}
+
+  // 1. Always resolve the school's active (`is_current = true`) academic year FIRST,
+  // because admin_dashboard Period Management always operates on the active school year.
+  String? activeYearId;
+  var hadNetworkError = false;
+  try {
+    var query = supabase
+        .from('academic_years')
+        .select('id')
+        .eq('is_current', true);
+    if (schoolId != null && schoolId.isNotEmpty) {
+      query = query.eq('school_id', schoolId);
+    }
+    final activeYearResp = await query
+        .order('start_date', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    activeYearId = activeYearResp?['id'] as String?;
+  } catch (e) {
+    hadNetworkError = true;
+    ConnectivityService.instance.reportNetworkError(e);
   }
 
-  // 4. Default fallback
+  final candidateYearIds = prioritizeAcademicYearIds(
+    activeCurrentYearId: activeYearId,
+    enrolledYearId: enrolledYearId,
+  );
+
+  // 2. Fetch semesters strictly for the resolved academic year (never merge across years).
+  for (final yearId in candidateYearIds) {
+    try {
+      final response = await supabase
+          .from('semesters')
+          .select(
+            'id, school_id, academic_year_id, name, number, start_date, end_date, is_current',
+          )
+          .eq('academic_year_id', yearId)
+          .order('number');
+      final rows = List<Map<String, dynamic>>.from(response as List);
+      final parsed = normalizeSemesterList(
+        rows.map((e) => SemesterInfo.fromJson(e)).toList(),
+      );
+      if (parsed.isNotEmpty) {
+        final cachePayload = parsed.map((s) => s.toJson()).toList();
+        if (schoolId != null && schoolId.isNotEmpty) {
+          OfflineCacheService.instance
+              .setJson('semesters_school_$schoolId', cachePayload);
+        }
+        OfflineCacheService.instance.setJson('semesters_$yearId', cachePayload);
+        OfflineCacheService.instance.setJson('semesters_latest', cachePayload);
+        ConnectivityService.instance.reportNetworkSuccess();
+        return parsed;
+      }
+    } catch (e) {
+      hadNetworkError = true;
+      ConnectivityService.instance.reportNetworkError(e);
+    }
+  }
+
+  // 3. Offline/network-failure fallback: restore last known semesters from persistent cache.
+  if (hadNetworkError) {
+    final cacheKeys = <String>[
+      if (schoolId != null && schoolId.isNotEmpty) 'semesters_school_$schoolId',
+      for (final yearId in candidateYearIds) 'semesters_$yearId',
+      'semesters_latest',
+    ];
+    for (final key in cacheKeys) {
+      final cached = OfflineCacheService.instance.getListOfMaps(key);
+      if (cached != null && cached.isNotEmpty) {
+        return normalizeSemesterList(
+          cached.map((e) => SemesterInfo.fromJson(e)).toList(),
+        );
+      }
+    }
+  }
+
+  // 4. Last resort fallback when the school has zero periods configured anywhere yet.
   return [
     SemesterInfo(id: '1', name: 'Semestre 1', number: 1, isCurrent: true),
     SemesterInfo(id: '2', name: 'Semestre 2', number: 2, isCurrent: false),

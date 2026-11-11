@@ -849,6 +849,30 @@ CREATE POLICY "audit_logs_no_delete" ON public.audit_logs
     FOR DELETE TO authenticated
     USING (false);
 
+-- ==================== 8.14 DOCUMENTS ====================
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "documents_select_tenant" ON public.documents;
+DROP POLICY IF EXISTS "documents_manage_tenant" ON public.documents;
+
+CREATE POLICY "documents_select_tenant" ON public.documents
+    FOR SELECT TO authenticated
+    USING (
+        school_id = public.get_user_school_id()
+        OR public.is_super_admin()
+    );
+
+CREATE POLICY "documents_manage_tenant" ON public.documents
+    FOR ALL TO authenticated
+    USING (
+        (public.is_school_admin() AND school_id = public.get_user_school_id())
+        OR public.is_super_admin()
+    )
+    WITH CHECK (
+        (public.is_school_admin() AND school_id = public.get_user_school_id())
+        OR public.is_super_admin()
+    );
+
 -- ============================================================================
 -- END OF MIGRATION 040
 -- ============================================================================

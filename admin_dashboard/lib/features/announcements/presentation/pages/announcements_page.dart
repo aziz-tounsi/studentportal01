@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/error_messages.dart';
 import '../../../../presentation/widgets/ios_loader.dart';
 import '../../../../models/announcement_model.dart';
 import '../../../../repositories/announcement_repository.dart';
@@ -58,7 +59,10 @@ class _AnnouncementsPageState extends State<AnnouncementsPage>
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = UserFriendlyError.format(
+          e,
+          fallback: 'Unable to load announcements right now. Please try again.',
+        );
         _isLoading = false;
       });
     }
@@ -118,7 +122,14 @@ class _AnnouncementsPageState extends State<AnnouncementsPage>
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur: $e')),
+            SnackBar(
+              content: Text(
+                UserFriendlyError.format(
+                  e,
+                  fallback: 'Unable to delete this announcement right now. Please try again.',
+                ),
+              ),
+            ),
           );
         }
       }
@@ -136,7 +147,14 @@ class _AnnouncementsPageState extends State<AnnouncementsPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to update pin status right now. Please try again.',
+              ),
+            ),
+          ),
         );
       }
     }
@@ -169,7 +187,7 @@ class _AnnouncementsPageState extends State<AnnouncementsPage>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Erreur: $_error'),
+                      Text(_error ?? 'Unable to load announcements right now. Please try again.'),
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: _loadAnnouncements,

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../data/services/user_management_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -231,7 +232,13 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                               children: [
                                 const Icon(Icons.error_outline_rounded, size: 36, color: AppColors.error),
                                 const SizedBox(height: 12),
-                                Text('Erreur: $e', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                Text(
+                                  UserFriendlyError.format(
+                                    e,
+                                    fallback: 'Unable to load professors right now. Please try again.',
+                                  ),
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
                                 const SizedBox(height: 16),
                                 ElevatedButton.icon(
                                   onPressed: () => ref.invalidate(professorsProvider),
@@ -751,7 +758,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.invalidate(professorsProvider);
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
                     } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error));
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
                     }
                   },
                   icon: const Icon(Icons.archive_outlined, size: 16),
@@ -807,7 +814,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.invalidate(professorsProvider);
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
                     } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error));
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
                     }
                   },
                   icon: const Icon(Icons.unarchive_outlined, size: 16),
@@ -1057,7 +1064,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       }
                     } catch (e) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
                       }
                     }
                   },
@@ -1127,7 +1134,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       }
                     } catch (e) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
                       }
                     }
                   },
@@ -1826,7 +1833,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                               debugPrint('Create professor error: $e');
                               if (ctx.mounted) {
                                 ScaffoldMessenger.of(ctx).showSnackBar(
-                                  SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+                                  SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
                                 );
                               }
                             }

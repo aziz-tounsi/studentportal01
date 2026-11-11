@@ -16,6 +16,7 @@ import '../../providers/building_provider.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 
 // ===================== MODELS =====================
@@ -1180,7 +1181,15 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         Expanded(
           child: classesAsync.when(
             loading: () => const Center(child: IosLoader()),
-            error: (e, _) => Center(child: Text('Erreur: $e', style: TextStyle(color: AppColors.slate500))),
+            error: (e, _) => Center(
+              child: Text(
+                UserFriendlyError.format(
+                  e,
+                  fallback: 'Unable to load classes right now. Please try again.',
+                ),
+                style: TextStyle(color: AppColors.slate500),
+              ),
+            ),
             data: (classes) {
               if (classes.isEmpty) {
                 return Center(
@@ -1845,11 +1854,17 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                   Icon(Icons.error_outline, color: AppColors.error, size: 48),
                   SizedBox(height: 16),
                   Text(
-                    'Erreur lors du chargement des matières',
+                    'Unable to load subjects',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   SizedBox(height: 8),
-                  Text('$e', style: TextStyle(color: AppColors.slate300)),
+                  Text(
+                    UserFriendlyError.format(
+                      e,
+                      fallback: 'Unable to load subjects right now. Please try again.',
+                    ),
+                    style: TextStyle(color: AppColors.slate300),
+                  ),
                 ],
               ),
             ),
@@ -2385,7 +2400,14 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
             Expanded(
               child: allSlotsAsync.when(
                 loading: () => const Center(child: IosLoader()),
-                error: (e, _) => Center(child: Text('Erreur: $e')),
+                error: (e, _) => Center(
+                  child: Text(
+                    UserFriendlyError.format(
+                      e,
+                      fallback: 'Unable to load the timetable right now. Please try again.',
+                    ),
+                  ),
+                ),
                 data: (allSlots) {
                   final filteredSlots = slotsAsync.hasValue
                       ? slotsAsync.value!
@@ -3423,7 +3445,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                         items: const [],
                                         onChanged: null,
                                       ),
-                                      error: (e, _) => Text('Erreur: $e', style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                                      error: (e, _) => Text(UserFriendlyError.format(e, fallback: 'Unable to load rooms right now.'), style: const TextStyle(color: AppColors.error, fontSize: 12)),
                                       data: (buildingState) {
                                         // Auto pre-select when data arrives
                                         if (selectedBuilding == null && slot.room != null) {
@@ -3889,7 +3911,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -3913,7 +3935,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -4279,7 +4301,9 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
           totalDeleted++;
         }
       } catch (e) {
-        errors.add('${classInfo.name}: $e');
+        errors.add(
+          '${classInfo.name}: ${UserFriendlyError.format(e, fallback: 'Unable to delete this timetable.')}',
+        );
       }
     }
 
@@ -4296,7 +4320,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreurs: ${errors.join(", ")}'),
+            content: Text('Unable to update: ${errors.join(", ")}'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -4676,7 +4700,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                     items: const [],
                                     onChanged: null,
                                   ),
-                                  error: (e, _) => Text('Erreur: $e', style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                                  error: (e, _) => Text(UserFriendlyError.format(e, fallback: 'Unable to load rooms right now.'), style: const TextStyle(color: AppColors.error, fontSize: 12)),
                                   data: (buildingState) {
                                     final buildings = buildingState.buildings;
                                     return DropdownButtonFormField<BuildingModel>(
@@ -5004,7 +5028,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -5473,7 +5497,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -5785,7 +5809,10 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                           }
                                         } catch (e) {
                                           setDialogState(() {
-                                            parseError = 'Erreur lecture fichier: $e';
+                                            parseError = UserFriendlyError.format(
+                                              e,
+                                              fallback: 'Unable to read the selected file. Please verify the file and try again.',
+                                            );
                                           });
                                         }
                                       },
@@ -5883,7 +5910,15 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                         setDialogState(() => isUploading = false);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+                                            SnackBar(
+                                              content: Text(
+                                                UserFriendlyError.format(
+                                                  e,
+                                                  fallback: 'Unable to import timetable entries right now. Please try again.',
+                                                ),
+                                              ),
+                                              backgroundColor: Colors.red,
+                                            ),
                                           );
                                         }
                                       }
@@ -6184,7 +6219,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }

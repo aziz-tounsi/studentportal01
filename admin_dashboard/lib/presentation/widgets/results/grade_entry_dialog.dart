@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../presentation/widgets/ios_loader.dart';
 import '../../../data/models/student_result_model.dart';
 import '../../../data/models/grading_config_model.dart';
@@ -431,7 +432,15 @@ class _GradeEntryDialogState extends State<GradeEntryDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save grades right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {

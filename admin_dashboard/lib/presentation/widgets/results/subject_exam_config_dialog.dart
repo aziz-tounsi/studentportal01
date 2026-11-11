@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../presentation/widgets/ios_loader.dart';
 
 /// Dialog for configuring exam types and percentages for a specific subject offering
@@ -141,7 +142,10 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _error = e.toString();
+        _error = UserFriendlyError.format(
+          e,
+          fallback: 'Unable to load exam configuration right now. Please try again.',
+        );
       });
     }
   }
@@ -395,7 +399,12 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save exam configuration right now. Please try again.',
+              ),
+            ),
             backgroundColor: AppColors.error,
             duration: const Duration(seconds: 8),
           ),
@@ -496,7 +505,7 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
                   : _error != null
                   ? Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text('Erreur: $_error', style: const TextStyle(color: AppColors.error)),
+                      child: Text(_error!, style: const TextStyle(color: AppColors.error)),
                     )
                   : _buildContent(),
             ),

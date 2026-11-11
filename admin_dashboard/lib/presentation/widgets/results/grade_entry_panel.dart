@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../presentation/widgets/ios_loader.dart';
 
 /// A panel for entering grades by subject and exam type
@@ -121,7 +122,15 @@ class _GradeEntryPanelState extends State<GradeEntryPanel> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save grades right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {

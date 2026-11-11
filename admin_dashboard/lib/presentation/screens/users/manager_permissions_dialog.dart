@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 
 /// Permission categories and their permissions
@@ -146,7 +147,15 @@ class _ManagerPermissionsDialogState extends ConsumerState<ManagerPermissionsDia
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save permissions right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {

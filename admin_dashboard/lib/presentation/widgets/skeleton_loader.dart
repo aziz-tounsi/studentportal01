@@ -2910,50 +2910,61 @@ class DocumentsSkeletonLoader extends StatelessWidget {
       child: ShimmerLoading(
         child: Column(
           children: [
-            // Subtabs skeleton
+            // 6 Category Tabs skeleton (Tous, Académiques, Administratif, Cours, Examens, Autre)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.only(left: 24, top: 12, bottom: 12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
+              ),
+              child: const Row(
+                children: [
+                  SkeletonBox(width: 72, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 112, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 112, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 76, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 92, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 74, height: 26, borderRadius: 6),
+                ],
+              ),
+            ),
+
+            // Semester segmented pills bar skeleton (exact Users page pills bar shape)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
               ),
               child: Row(
-                children: const [
-                  SkeletonBox(width: 80, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 110, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 120, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 90, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 90, height: 32, borderRadius: 8),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Row(
+                      children: [
+                        SkeletonBox(width: 68, height: 28, borderRadius: 20, color: Colors.white),
+                        SizedBox(width: 6),
+                        SkeletonBox(width: 96, height: 28, borderRadius: 20),
+                        SizedBox(width: 6),
+                        SkeletonBox(width: 96, height: 28, borderRadius: 20),
+                        SizedBox(width: 6),
+                        SkeletonBox(width: 96, height: 28, borderRadius: 20),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // Controls & Category filter row skeleton
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              color: Colors.white,
-              child: Row(
-                children: const [
-                  SkeletonBox(width: 60, height: 28, borderRadius: 14),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 60, height: 28, borderRadius: 14),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 60, height: 28, borderRadius: 14),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 60, height: 28, borderRadius: 14),
-                  Spacer(),
-                  SkeletonBox(width: 100, height: 16),
-                  SizedBox(width: 12),
-                  SkeletonBox(width: 32, height: 32, borderRadius: 8),
-                ],
-              ),
-            ),
-
-            const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
             // Table skeleton
             Expanded(
@@ -2973,22 +2984,20 @@ class DocumentsSkeletonLoader extends StatelessWidget {
                         Container(
                           height: 44,
                           color: const Color(0xFFF9FAFB),
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          padding: const EdgeInsets.fromLTRB(14, 0, 20, 0),
                           child: const Row(
                             children: [
-                              SkeletonBox(width: 18, height: 18, borderRadius: 4),
-                              SizedBox(width: 20),
-                              SkeletonBox(width: 140, height: 14),
+                              SkeletonBox(width: 16, height: 16, borderRadius: 3),
+                              SizedBox(width: 14),
+                              SkeletonBox(width: 140, height: 12),
                               Spacer(),
-                              SkeletonBox(width: 70, height: 14),
+                              SkeletonBox(width: 70, height: 12),
                               SizedBox(width: 32),
-                              SkeletonBox(width: 90, height: 14),
+                              SkeletonBox(width: 90, height: 12),
                               SizedBox(width: 32),
-                              SkeletonBox(width: 80, height: 14),
+                              SkeletonBox(width: 80, height: 12),
                               SizedBox(width: 32),
-                              SkeletonBox(width: 70, height: 14),
-                              SizedBox(width: 32),
-                              SkeletonBox(width: 30, height: 14),
+                              SkeletonBox(width: 30, height: 12),
                             ],
                           ),
                         ),
@@ -3004,13 +3013,13 @@ class DocumentsSkeletonLoader extends StatelessWidget {
                             itemBuilder: (context, index) {
                               return Container(
                                 height: 60,
-                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                padding: const EdgeInsets.fromLTRB(14, 0, 20, 0),
                                 child: const Row(
                                   children: [
-                                    SkeletonBox(width: 18, height: 18, borderRadius: 4),
-                                    SizedBox(width: 20),
-                                    SkeletonBox(width: 36, height: 36, borderRadius: 8),
+                                    SkeletonBox(width: 16, height: 16, borderRadius: 3),
                                     SizedBox(width: 14),
+                                    SkeletonBox(width: 36, height: 36, borderRadius: 8),
+                                    SizedBox(width: 12),
                                     Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3021,11 +3030,9 @@ class DocumentsSkeletonLoader extends StatelessWidget {
                                       ],
                                     ),
                                     Spacer(),
-                                    SkeletonBox(width: 48, height: 22, borderRadius: 6),
+                                    SkeletonBox(width: 68, height: 22, borderRadius: 6),
                                     SizedBox(width: 32),
-                                    SkeletonBox(width: 74, height: 22, borderRadius: 6),
-                                    SizedBox(width: 32),
-                                    SkeletonBox(width: 60, height: 13),
+                                    SkeletonBox(width: 84, height: 22, borderRadius: 6),
                                     SizedBox(width: 32),
                                     SkeletonBox(width: 80, height: 13),
                                     SizedBox(width: 32),
@@ -3037,20 +3044,18 @@ class DocumentsSkeletonLoader extends StatelessWidget {
                           ),
                         ),
 
-                        // Pagination footer skeleton
+                        // Pagination footer skeleton (Users page style)
                         Container(
-                          height: 52,
+                          height: 50,
                           color: const Color(0xFFFAFAFB),
                           padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: const Row(
                             children: [
-                                  SkeletonBox(width: 120, height: 13),
+                              SkeletonBox(width: 115, height: 24, borderRadius: 8),
                               Spacer(),
-                              SkeletonBox(width: 90, height: 13),
-                              SizedBox(width: 16),
-                              SkeletonBox(width: 28, height: 28, borderRadius: 6),
-                              SizedBox(width: 8),
-                              SkeletonBox(width: 28, height: 28, borderRadius: 6),
+                              SkeletonBox(width: 80, height: 12),
+                              SizedBox(width: 12),
+                              SkeletonBox(width: 58, height: 28, borderRadius: 6),
                             ],
                           ),
                         ),

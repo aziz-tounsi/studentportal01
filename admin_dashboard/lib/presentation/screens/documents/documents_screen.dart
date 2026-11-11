@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../data/models/class_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/classes_provider.dart';
@@ -35,11 +36,11 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   String _searchQuery = '';
   Timer? _debounce;
 
-  // Selected subtab index (0: Tous, 1: Académiques, 2: Administratifs, 3+: Semestres)
+  // Selected category tab index (0: Tous, 1: Académiques, 2: Administratif, 3: Cours, 4: Examens, 5: Autre)
   int _selectedTabIndex = 0;
 
-  // Selected quick category pill ('all', 'administrative', 'courses', 'exams', 'other')
-  String _selectedCategoryPill = 'all';
+  // Selected semester pill (null = Tous, int = semester number from DB)
+  int? _selectedSemesterPill;
 
   // Selection state for multi-action
   final Set<String> _selectedIds = {};
@@ -109,6 +110,24 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     });
   }
 
+  bool _matchesCategoryTab(Document d) {
+    final dbCat = AcademicDocumentType.toDbCategory(d.category);
+    switch (_selectedTabIndex) {
+      case 1: // Académiques (everything except administrative)
+        return dbCat != 'administrative';
+      case 2: // Administratif
+        return dbCat == 'administrative';
+      case 3: // Cours
+        return dbCat == 'courses';
+      case 4: // Examens
+        return dbCat == 'exams';
+      case 5: // Autre
+        return dbCat == 'other';
+      default: // Tous (0)
+        return true;
+    }
+  }
+
   List<Document> _applyFiltering(
     List<Document> docs,
     List<SemesterModel> semesters,
@@ -133,36 +152,22 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         }
       }
 
-      // 2. Subpage Tab filter
-      // 0: Tous
-      // 1: Académiques (courses, exams)
-      // 2: Administratifs (administrative)
-      // 3+: Dynamically maps to semester number
-      if (_selectedTabIndex == 1) {
-        if (d.category == 'administrative') return false;
-      } else if (_selectedTabIndex == 2) {
-        if (d.category != 'administrative') return false;
-      } else if (_selectedTabIndex >= 3) {
-        final semIndex = _selectedTabIndex - 3;
-        if (semIndex < semesters.length) {
-          final targetSem = semesters[semIndex];
-          if (d.semester != targetSem.number) return false;
-        }
-      }
+      // 2. Category Tab filter
+      if (!_matchesCategoryTab(d)) return false;
 
-      // 3. Category quick pill
-      if (_selectedCategoryPill != 'all') {
-        if (d.category != _selectedCategoryPill) return false;
+      // 3. Semester Pill filter
+      if (_selectedSemesterPill != null && d.semester != _selectedSemesterPill) {
+        return false;
       }
 
       // 4. Advanced filters
       if (_filterType != null && d.category != _filterType) return false;
       if (_filterCategory != null) {
-        if (_filterCategory == 'administrative' &&
-            d.category != 'administrative') {
+        final dbCat = AcademicDocumentType.toDbCategory(d.category);
+        if (_filterCategory == 'administrative' && dbCat != 'administrative') {
           return false;
         }
-        if (_filterCategory == 'academic' && d.category == 'administrative') {
+        if (_filterCategory == 'academic' && dbCat == 'administrative') {
           return false;
         }
       }
@@ -255,6 +260,16 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     );
   }
 
+  UserModel? _findStudent(String? studentId) {
+    if (studentId == null || studentId.isEmpty) return null;
+    final users = ref.watch(usersProvider).value?.users;
+    if (users == null) return null;
+    for (final u in users) {
+      if (u.id == studentId) return u;
+    }
+    return null;
+  }
+
   void _openFile(String url) {
     if (url.isEmpty) return;
     try {
@@ -262,7 +277,12 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Impossible d\'ouvrir le lien : $e'),
+          content: Text(
+            UserFriendlyError.format(
+              e,
+              fallback: 'Unable to open this file right now. Please try again.',
+            ),
+          ),
           backgroundColor: AppColors.error,
         ),
       );
@@ -303,35 +323,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Voulez-vous vraiment supprimer "${d.title}" ?'),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.slate50,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: AppColors.textTertiary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'ID: ${d.id}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textTertiary,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              Text('Voulez-vous vraiment supprimer "${d.title}" ? Cette action est irréversible.'),
             ],
           ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -362,14 +354,31 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       Navigator.pop(ctx);
-                      await ref.read(documentsProvider.notifier).delete(d.id);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Document supprimé avec succès'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
+                      try {
+                        await ref.read(documentsProvider.notifier).delete(d.id);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Document supprimé avec succès'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback:
+                                      'Unable to delete this document right now. Please try again.',
+                                ),
+                              ),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
                       }
                     },
                     icon: const Icon(Icons.delete_outline, size: 16),
@@ -427,42 +436,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Voulez-vous supprimer les ${_selectedIds.length} documents sélectionnés ? Cette action est irréversible.',
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.slate50,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: AppColors.textTertiary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Total sélectionné: ${_selectedIds.length} éléments',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textTertiary,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          content: Text(
+            'Voulez-vous supprimer les ${_selectedIds.length} documents sélectionnés ? Cette action est irréversible.',
           ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           actions: [
@@ -493,19 +468,36 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                     onPressed: () async {
                       Navigator.pop(ctx);
                       final count = _selectedIds.length;
-                      await ref
-                          .read(documentsProvider.notifier)
-                          .bulkDelete(_selectedIds.toList());
-                      setState(() => _selectedIds.clear());
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '$count documents supprimés avec succès',
+                      try {
+                        await ref
+                            .read(documentsProvider.notifier)
+                            .bulkDelete(_selectedIds.toList());
+                        setState(() => _selectedIds.clear());
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '$count documents supprimés avec succès',
+                              ),
+                              backgroundColor: AppColors.success,
                             ),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback:
+                                      'Unable to delete the selected documents right now. Please try again.',
+                                ),
+                              ),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
                       }
                     },
                     icon: const Icon(Icons.delete_outline, size: 16),
@@ -532,6 +524,169 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     );
   }
 
+  void _bulkChangeSemester(
+    List<Document> selectedDocs,
+    List<SemesterModel> semesters,
+  ) {
+    if (selectedDocs.isEmpty || semesters.isEmpty) return;
+    int targetSemester = semesters.first.number;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            title: const Text(
+              'Changer le semestre',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Appliquer un nouveau semestre aux ${selectedDocs.length} document${selectedDocs.length > 1 ? 's' : ''} sélectionné${selectedDocs.length > 1 ? 's' : ''} :',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.slate50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: targetSemester,
+                      isExpanded: true,
+                      borderRadius: BorderRadius.circular(10),
+                      dropdownColor: Colors.white,
+                      items: semesters
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s.number,
+                              child: Text(
+                                s.name,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setModalState(() => targetSemester = v);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    height: 40,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Annuler',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    height: 40,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        try {
+                          final notifier = ref.read(documentsProvider.notifier);
+                          for (final d in selectedDocs) {
+                            await notifier.updateDocument(
+                              id: d.id,
+                              title: d.title,
+                              description: d.cleanDescription,
+                              fileUrl: d.fileUrl,
+                              fileName: d.fileName,
+                              fileSize: d.fileSize,
+                              mimeType: d.mimeType,
+                              classId: d.classId,
+                              category: d.category,
+                              semester: targetSemester,
+                              studentId: d.studentId,
+                              studentName: d.studentName,
+                              studentCode: d.studentCode,
+                            );
+                          }
+                          if (mounted) {
+                            setState(() => _selectedIds.clear());
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '${selectedDocs.length} document${selectedDocs.length > 1 ? 's mis' : ' mis'} à jour',
+                                ),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  UserFriendlyError.format(
+                                    e,
+                                    fallback:
+                                        'Unable to update the selected documents right now. Please try again.',
+                                  ),
+                                ),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6D4CF6),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Appliquer',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showAddOrEditModal({Document? editDoc}) {
     showDialog(
       context: context,
@@ -548,82 +703,113 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     final docsAsync = ref.watch(documentsProvider);
     final semestersAsync = ref.watch(semestersProvider);
 
-    // Extract dynamic semesters list from database
-    final semesters = semestersAsync.value?.filteredSemesters.isNotEmpty == true
+    // Extract dynamic deduplicated semesters list from Period DB
+    final rawSemesters = semestersAsync.value?.filteredSemesters.isNotEmpty == true
         ? semestersAsync.value!.filteredSemesters
         : (semestersAsync.value?.semesters ?? <SemesterModel>[]);
+    final semesters = <SemesterModel>[];
+    final seenSemNumbers = <int>{};
+    for (final s in rawSemesters) {
+      if (seenSemNumbers.add(s.number)) {
+        semesters.add(s);
+      }
+    }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Row(
+      backgroundColor: AppColors.background,
+      body: Stack(
         children: [
-          const AdminSidebar(currentRoute: '/documents'),
-          Expanded(
-            child: Stack(
-              children: [
-                Column(
+          Row(
+            children: [
+              const AdminSidebar(currentRoute: '/documents'),
+              Expanded(
+                child: Stack(
                   children: [
-                    // Header Bar
-                    _buildHeader(docsAsync),
+                    Column(
+                      children: [
+                        // Header Bar
+                        _buildHeader(),
 
-                    // Multi-selection Action Bar (visible when items selected)
-                    if (_selectedIds.isNotEmpty) _buildMultiActionBar(),
-
-                    // Main Content
-                    Expanded(
-                      child: docsAsync.when(
-                        loading: () => const DocumentsSkeletonLoader(),
-                        error: (err, _) => Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.error_outline_rounded,
-                                size: 48,
-                                color: AppColors.error,
+                        // Main Content
+                        Expanded(
+                          child: docsAsync.when(
+                            skipLoadingOnReload: true,
+                            skipLoadingOnRefresh: true,
+                            loading: () => const DocumentsSkeletonLoader(),
+                            error: (err, _) => Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline_rounded,
+                                      size: 48,
+                                      color: AppColors.error,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      UserFriendlyError.format(
+                                        err,
+                                        fallback:
+                                            'Unable to load documents right now. Please try again.',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: AppColors.error),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ElevatedButton.icon(
+                                      onPressed: () => ref
+                                          .read(documentsProvider.notifier)
+                                          .refresh(),
+                                      icon: const Icon(Icons.refresh, size: 16),
+                                      label: const Text('Réessayer'),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Erreur de chargement: $err',
-                                style: const TextStyle(color: AppColors.error),
-                              ),
-                              const SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: () => ref
-                                    .read(documentsProvider.notifier)
-                                    .refresh(),
-                                icon: const Icon(Icons.refresh, size: 16),
-                                label: const Text('Réessayer'),
-                              ),
-                            ],
+                            ),
+                            data: (state) =>
+                                _buildBody(state.documents, semesters),
                           ),
                         ),
-                        data: (state) =>
-                            _buildBody(state.documents, semesters),
-                      ),
+                      ],
                     ),
+
+                    // Floating Black Selection Bar (EXACT CLONE OF USER PAGE)
+                    if (_selectedIds.isNotEmpty)
+                      Positioned(
+                        bottom: 24,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: _buildFloatingSelectionBar(
+                            docsAsync.value?.documents ?? [],
+                            semesters,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-
-                // Right Filter Drawer with Background Blur
-                if (_showFilterDrawer)
-                  _buildRightFilterDrawer(semesters),
-
-                // Right Document Detail Drawer with Background Blur
-                if (_selectedDocForDetail != null)
-                  _buildRightDetailDrawer(_selectedDocForDetail!),
-              ],
-            ),
+              ),
+            ],
           ),
+
+          // Right Filter Drawer with Full-App Background Blur
+          if (_showFilterDrawer) _buildRightFilterDrawer(semesters),
+
+          // Right Document Detail Drawer with Full-App Background Blur
+          if (_selectedDocForDetail != null)
+            _buildRightDetailDrawer(_selectedDocForDetail!, semesters),
         ],
       ),
     );
   }
 
   // ─────────────────────────────────────────────────────────────
-  // HEADER BAR
+  // HEADER BAR (EXACT CLONE OF USER PAGE)
   // ─────────────────────────────────────────────────────────────
-  Widget _buildHeader(AsyncValue<DocumentsState> docsAsync) {
+  Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
       decoration: const BoxDecoration(
@@ -656,56 +842,84 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
           const Spacer(),
 
-          // Search Field
-          Container(
-            width: 250,
+          // Exact Users page Search Bar (no blue highlight)
+          SizedBox(
+            width: 320,
             height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.search_rounded,
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() {
+                _searchQuery = v.trim();
+                _currentPage = 1;
+              }),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Rechercher...',
+                hintStyle: const TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 13,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
                   size: 18,
-                  color: Color(0xFF94A3B8),
+                  color: AppColors.textTertiary,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(fontSize: 13),
-                    decoration: const InputDecoration(
-                      hintText: 'Rechercher un document...',
-                      hintStyle: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF94A3B8),
+                suffixIcon: _searchController.text.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.slate50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Text(
+                            '⌘K',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textTertiary,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                            _currentPage = 1;
+                          });
+                        },
                       ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                filled: true,
+                fillColor: AppColors.slate50,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: const Color(0xFF655DD5).withOpacity(0.4),
+                    width: 1.5,
                   ),
                 ),
-                if (_searchController.text.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 16,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
 
           // Filter Button
           _buildHeaderIconButton(
@@ -718,34 +932,6 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                 if (_showFilterDrawer) _selectedDocForDetail = null;
               });
             },
-          ),
-          const SizedBox(width: 8),
-
-          // Export CSV Button
-          docsAsync.maybeWhen(
-            data: (st) => _buildHeaderIconButton(
-              icon: Icons.download_rounded,
-              tooltip: 'Exporter CSV',
-              onPressed: () => _exportCsv(st.documents),
-            ),
-            orElse: () => const SizedBox.shrink(),
-          ),
-          const SizedBox(width: 8),
-
-          // Print Button
-          _buildHeaderIconButton(
-            icon: Icons.print_outlined,
-            tooltip: 'Imprimer',
-            onPressed: () => html.window.print(),
-          ),
-          const SizedBox(width: 8),
-
-          // Refresh Button
-          _buildHeaderIconButton(
-            icon: Icons.refresh_rounded,
-            tooltip: 'Actualiser',
-            onPressed: () =>
-                ref.read(documentsProvider.notifier).refresh(),
           ),
           const SizedBox(width: 16),
 
@@ -802,68 +988,137 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
           ),
         ),
       ),
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
     );
   }
 
   // ─────────────────────────────────────────────────────────────
-  // MULTI-ACTION BAR
+  // FLOATING SELECTION BAR (EXACT CLONE OF USER PAGE)
   // ─────────────────────────────────────────────────────────────
-  Widget _buildMultiActionBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF6D4CF6).withOpacity(0.08),
-        border: const Border(
-          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+  Widget _buildFloatingSelectionBar(
+    List<Document> allDocs,
+    List<SemesterModel> semesters,
+  ) {
+    final count = _selectedIds.length;
+    final selectedDocs =
+        allDocs.where((d) => _selectedIds.contains(d.id)).toList();
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: Colors.white.withOpacity(0.15)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    count > 1 ? 'Sélectionnés' : 'Sélectionné',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Actions
+            _buildSelectionAction(
+              Icons.ios_share_rounded,
+              'Exporter',
+              Colors.white70,
+              () => _exportCsv(selectedDocs),
+            ),
+            _buildSelectionAction(
+              Icons.calendar_month_outlined,
+              'Changer semestre',
+              Colors.white70,
+              () => _bulkChangeSemester(selectedDocs, semesters),
+            ),
+            _buildSelectionAction(
+              Icons.delete_outline,
+              'Supprimer',
+              const Color(0xFFFCA5A5),
+              _confirmDeleteSelected,
+            ),
+            // Close button
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: Colors.white.withOpacity(0.15)),
+                ),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: () => setState(() => _selectedIds.clear()),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
         ),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6D4CF6),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '${_selectedIds.length} sélectionné${_selectedIds.length > 1 ? 's' : ''}',
-              style: const TextStyle(
-                color: Colors.white,
+    );
+  }
+
+  Widget _buildSelectionAction(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
+                color: color,
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          TextButton.icon(
-            onPressed: () {
-              setState(() => _selectedIds.clear());
-            },
-            icon: const Icon(Icons.close_rounded, size: 16),
-            label: const Text('Désélectionner'),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF64748B),
-              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-          const Spacer(),
-          ElevatedButton.icon(
-            onPressed: _confirmDeleteSelected,
-            icon: const Icon(Icons.delete_outline_rounded, size: 16),
-            label: const Text('Supprimer la sélection'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              textStyle:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -874,14 +1129,24 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   Widget _buildBody(List<Document> allDocs, List<SemesterModel> semesters) {
     final filtered = _applyFiltering(allDocs, semesters);
 
-    // Compute counts
+    // Header Category Tabs: Tous, Académiques, Administratif, Cours, Examens, Autre
     final totalCount = allDocs.length;
-    final academicCount =
-        allDocs.where((d) => d.category != 'administrative').length;
-    final adminCount =
-        allDocs.where((d) => d.category == 'administrative').length;
+    final academicCount = allDocs
+        .where((d) => AcademicDocumentType.toDbCategory(d.category) != 'administrative')
+        .length;
+    final adminCount = allDocs
+        .where((d) => AcademicDocumentType.toDbCategory(d.category) == 'administrative')
+        .length;
+    final coursesCount = allDocs
+        .where((d) => AcademicDocumentType.toDbCategory(d.category) == 'courses')
+        .length;
+    final examsCount = allDocs
+        .where((d) => AcademicDocumentType.toDbCategory(d.category) == 'exams')
+        .length;
+    final otherCount = allDocs
+        .where((d) => AcademicDocumentType.toDbCategory(d.category) == 'other')
+        .length;
 
-    // Subtabs list: Tous, Académiques, Administratifs, + each DB semester
     final tabs = <_TabItem>[
       _TabItem(
         label: 'Tous',
@@ -891,47 +1156,62 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       _TabItem(
         label: 'Académiques',
         count: academicCount,
-        icon: Icons.school_outlined,
+        icon: Icons.school_rounded,
       ),
       _TabItem(
-        label: 'Administratifs',
+        label: 'Administratif',
         count: adminCount,
         icon: Icons.description_outlined,
       ),
-      ...semesters.map(
-        (s) => _TabItem(
-          label: s.name,
-          count: allDocs.where((d) => d.semester == s.number).length,
-          icon: Icons.calendar_month_outlined,
-        ),
+      _TabItem(
+        label: 'Cours',
+        count: coursesCount,
+        icon: Icons.menu_book_rounded,
+      ),
+      _TabItem(
+        label: 'Examens',
+        count: examsCount,
+        icon: Icons.assignment_outlined,
+      ),
+      _TabItem(
+        label: 'Autre',
+        count: otherCount,
+        icon: Icons.more_horiz_rounded,
       ),
     ];
 
-    // Pagination slice
+    // Pagination slice supporting _rowsPerPage == -1 ("All")
     final totalFiltered = filtered.length;
-    final startIndex = (_currentPage - 1) * _rowsPerPage;
-    final endIndex = (startIndex + _rowsPerPage).clamp(0, totalFiltered);
+    final totalPages =
+        _rowsPerPage == -1 ? 1 : (totalFiltered / _rowsPerPage).ceil();
+    if (_currentPage > totalPages && totalPages > 0) _currentPage = totalPages;
+    final startIndex =
+        _rowsPerPage == -1 ? 0 : (_currentPage - 1) * _rowsPerPage;
+    final endIndex = _rowsPerPage == -1
+        ? totalFiltered
+        : (startIndex + _rowsPerPage).clamp(0, totalFiltered);
     final paginatedDocs = (startIndex < totalFiltered)
         ? filtered.sublist(startIndex, endIndex)
         : <Document>[];
 
     return Column(
       children: [
-        // Subpage Tabs (Tous, Académiques, Administratifs, Semestres)
-        _buildSubTabs(tabs),
+        // Header Category Tabs (Users page design)
+        _buildTabBar(tabs),
 
-        // Quick Category Pills & Table Summary Controls
-        _buildControlsRow(totalFiltered, allDocs.length),
+        // Semester Pills Bar (Users page segmented pills + dynamic Period DB semesters)
+        _buildSemesterPillsBar(semesters),
 
-        // Document Table / List
+        // Document Table Card
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          child: Container(
+            color: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.all(24),
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: AppColors.border.withOpacity(0.5)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.02),
@@ -945,7 +1225,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                 child: Column(
                   children: [
                     // Table Header Row
-                    _buildTableHeaderRow(filtered),
+                    _buildTableHeaderRow(paginatedDocs),
 
                     // Table Body / Empty State
                     Expanded(
@@ -953,8 +1233,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                           ? _buildEmptyState()
                           : ListView.separated(
                               itemCount: paginatedDocs.length,
-                              separatorBuilder: (context, index) =>
-                                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                              separatorBuilder: (context, index) => Divider(
+                                height: 1,
+                                color: AppColors.border.withOpacity(0.4),
+                              ),
                               itemBuilder: (context, index) {
                                 final d = paginatedDocs[index];
                                 final isSelected =
@@ -965,11 +1247,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                     ),
 
                     // Pagination Footer
-                    _buildPaginationFooter(
-                      totalFiltered,
-                      startIndex,
-                      endIndex,
-                    ),
+                    _buildPaginationFooter(totalFiltered),
                   ],
                 ),
               ),
@@ -981,89 +1259,38 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // SUBPAGE TABS
+  // HEADER CATEGORY TABS BAR (EXACT CLONE OF USER PAGE)
   // ─────────────────────────────────────────────────────────────
-  Widget _buildSubTabs(List<_TabItem> tabs) {
+  Widget _buildTabBar(List<_TabItem> tabs) {
     return Container(
-      decoration: const BoxDecoration(
+      width: double.infinity,
+      decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
+        border: Border(
+          bottom: BorderSide(color: AppColors.border.withOpacity(0.5)),
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.only(left: 24, top: 4),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: List.generate(tabs.length, (index) {
             final t = tabs[index];
-            final isSelected = _selectedTabIndex == index;
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  _selectedTabIndex = index;
-                  _currentPage = 1;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isSelected
-                          ? const Color(0xFF6D4CF6)
-                          : Colors.transparent,
-                      width: 2.5,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      t.icon,
-                      size: 16,
-                      color: isSelected
-                          ? const Color(0xFF6D4CF6)
-                          : const Color(0xFF94A3B8),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      t.label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w500,
-                        color: isSelected
-                            ? const Color(0xFF6D4CF6)
-                            : const Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF6D4CF6).withOpacity(0.12)
-                            : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${t.count}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? const Color(0xFF6D4CF6)
-                              : const Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            final isActive = _selectedTabIndex == index;
+            return Padding(
+              padding: EdgeInsets.only(right: index == tabs.length - 1 ? 24 : 24),
+              child: _buildTab(
+                icon: t.icon,
+                label: t.label,
+                count: t.count,
+                isActive: isActive,
+                onTap: () {
+                  setState(() {
+                    _selectedTabIndex = index;
+                    _currentPage = 1;
+                  });
+                },
+                activeColor: const Color(0xFF655DD5),
               ),
             );
           }),
@@ -1072,78 +1299,278 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // CONTROLS ROW
-  // ─────────────────────────────────────────────────────────────
-  Widget _buildControlsRow(int filteredCount, int totalCount) {
-    const categories = [
-      {'key': 'all', 'label': 'Tous'},
-      {'key': 'courses', 'label': 'Cours'},
-      {'key': 'exams', 'label': 'Examens'},
-      {'key': 'administrative', 'label': 'Administratif'},
-      {'key': 'other', 'label': 'Autre'},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        children: [
-          // Quick category pills
-          ...categories.map((c) {
-            final isSelected = _selectedCategoryPill == c['key'];
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    _selectedCategoryPill = c['key']!;
-                    _currentPage = 1;
-                  });
-                },
-                borderRadius: BorderRadius.circular(20),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF6D4CF6)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFF6D4CF6)
-                          : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Text(
-                    c['label']!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                      color: isSelected ? Colors.white : const Color(0xFF64748B),
-                    ),
-                  ),
+  Widget _buildTab({
+    required IconData icon,
+    required String label,
+    required int count,
+    required bool isActive,
+    required VoidCallback onTap,
+    required Color activeColor,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.only(bottom: 12, top: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? activeColor : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? activeColor : AppColors.textTertiary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                color: isActive ? activeColor : AppColors.textTertiary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: isActive ? const Color(0xFFE0E7FF) : AppColors.slate100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color:
+                      isActive ? const Color(0xFF4338CA) : AppColors.textTertiary,
                 ),
               ),
-            );
-          }),
-
-          const Spacer(),
-
-          // Item count label
-          Text(
-            filteredCount == totalCount
-                ? '$totalCount documents'
-                : '$filteredCount sur $totalCount documents',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SEMESTER PILLS BAR (EXACT CLONE OF USER PAGE PILLS BAR)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildSemesterPillsBar(List<SemesterModel> semesters) {
+    final activeFilterChips = <Widget>[];
+    if (_filterType != null) {
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Type: ${AcademicDocumentType.getLabel(_filterType)}',
+        onRemove: () => setState(() {
+          _filterType = null;
+          _currentPage = 1;
+        }),
+      ));
+    }
+    if (_filterCategory != null) {
+      activeFilterChips.add(_buildActiveFilterChip(
+        label:
+            'Catégorie: ${_filterCategory == 'administrative' ? 'Administratif' : 'Académique'}',
+        onRemove: () => setState(() {
+          _filterCategory = null;
+          _currentPage = 1;
+        }),
+      ));
+    }
+    if (_filterSemester != null) {
+      final semName = semesters
+              .where((s) => s.number == _filterSemester)
+              .map((s) => s.name)
+              .firstOrNull ??
+          'Semestre $_filterSemester';
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: semName,
+        onRemove: () => setState(() {
+          _filterSemester = null;
+          _currentPage = 1;
+        }),
+      ));
+    }
+    if (_filterClassId != null) {
+      final classes = ref.read(classesProvider).value?.classes ?? <ClassModel>[];
+      final clsName = classes
+              .where((c) => c.id == _filterClassId)
+              .map((c) => c.name)
+              .firstOrNull ??
+          'Classe';
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Classe: $clsName',
+        onRemove: () => setState(() {
+          _filterClassId = null;
+          _currentPage = 1;
+        }),
+      ));
+    }
+    if (_filterFileType != null) {
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Format: $_filterFileType',
+        onRemove: () => setState(() {
+          _filterFileType = null;
+          _currentPage = 1;
+        }),
+      ));
+    }
+    if (_filterDateFrom != null) {
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Du ${DateFormat('dd/MM').format(_filterDateFrom!)}',
+        onRemove: () => setState(() {
+          _filterDateFrom = null;
+          _currentPage = 1;
+        }),
+        color: AppColors.warning,
+      ));
+    }
+    if (_filterDateTo != null) {
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Au ${DateFormat('dd/MM').format(_filterDateTo!)}',
+        onRemove: () => setState(() {
+          _filterDateTo = null;
+          _currentPage = 1;
+        }),
+        color: AppColors.warning,
+      ));
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border.withOpacity(0.5)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: AppColors.slate100.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildSemesterChip(
+                      'Tous',
+                      _selectedSemesterPill == null,
+                      () => setState(() {
+                        _selectedSemesterPill = null;
+                        _currentPage = 1;
+                      }),
+                    ),
+                    ...semesters.map((s) {
+                      return _buildSemesterChip(
+                        s.name,
+                        _selectedSemesterPill == s.number,
+                        () => setState(() {
+                          _selectedSemesterPill = s.number;
+                          _currentPage = 1;
+                        }),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (activeFilterChips.isNotEmpty) ...[
+            const SizedBox(width: 16),
+            Container(width: 1, height: 24, color: AppColors.border),
+            const SizedBox(width: 12),
+            const Text(
+              'Filtres actifs:',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ...activeFilterChips,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSemesterChip(
+    String label,
+    bool isActive,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+            color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterChip({
+    required String label,
+    required VoidCallback onRemove,
+    Color? color,
+  }) {
+    final chipColor = color ?? const Color(0xFF655DD5);
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: chipColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: chipColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: chipColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: onRemove,
+            child: Icon(Icons.close, size: 14, color: chipColor),
           ),
         ],
       ),
@@ -1153,39 +1580,49 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   // ─────────────────────────────────────────────────────────────
   // TABLE HEADER ROW
   // ─────────────────────────────────────────────────────────────
-  Widget _buildTableHeaderRow(List<Document> currentDocs) {
-    final allSelected = currentDocs.isNotEmpty &&
-        currentDocs.every((d) => _selectedIds.contains(d.id));
+  Widget _buildTableHeaderRow(List<Document> pageDocs) {
+    final allPageSelected =
+        pageDocs.isNotEmpty && pageDocs.every((d) => _selectedIds.contains(d.id));
 
     return Container(
       height: 44,
       color: const Color(0xFFF9FAFB),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
       child: Row(
         children: [
-          // Select All Checkbox
+          // Select All Checkbox (EXACT CLONE OF USER PAGE)
           SizedBox(
-            width: 32,
-            child: Checkbox(
-              value: allSelected,
-              tristate:
-                  !allSelected && currentDocs.any((d) => _selectedIds.contains(d.id)),
-              activeColor: const Color(0xFF6D4CF6),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+            width: 44,
+            child: Center(
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: Checkbox(
+                  value: allPageSelected && pageDocs.isNotEmpty,
+                  tristate: false,
+                  onChanged: (v) {
+                    setState(() {
+                      if (allPageSelected) {
+                        for (final d in pageDocs) {
+                          _selectedIds.remove(d.id);
+                        }
+                      } else {
+                        for (final d in pageDocs) {
+                          _selectedIds.add(d.id);
+                        }
+                      }
+                    });
+                  },
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  side: const BorderSide(color: AppColors.slate300, width: 1.5),
+                  activeColor: const Color(0xFF655DD5),
+                ),
               ),
-              onChanged: (val) {
-                setState(() {
-                  if (val == true) {
-                    _selectedIds.addAll(currentDocs.map((d) => d.id));
-                  } else {
-                    _selectedIds.clear();
-                  }
-                });
-              },
             ),
           ),
-          const SizedBox(width: 12),
 
           // Title / Document Header
           const Expanded(
@@ -1245,7 +1682,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
           // Actions Header
           const SizedBox(
-            width: 48,
+            width: 64,
             child: Text(
               'ACTIONS',
               textAlign: TextAlign.center,
@@ -1277,35 +1714,43 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
           _showFilterDrawer = false;
         });
       },
-      hoverColor: const Color(0xFFF8FAFC),
+      hoverColor: const Color(0xFFF9FAFB),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.fromLTRB(0, 12, 20, 12),
         color: isSelected
-            ? const Color(0xFF6D4CF6).withOpacity(0.04)
+            ? const Color(0xFFF5F3FF).withOpacity(0.4)
             : Colors.transparent,
         child: Row(
           children: [
-            // Checkbox
+            // Checkbox (EXACT CLONE OF USER PAGE)
             SizedBox(
-              width: 32,
-              child: Checkbox(
-                value: isSelected,
-                activeColor: const Color(0xFF6D4CF6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+              width: 44,
+              child: Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (v) {
+                      setState(() {
+                        if (v == true) {
+                          _selectedIds.add(d.id);
+                        } else {
+                          _selectedIds.remove(d.id);
+                        }
+                      });
+                    },
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    side:
+                        const BorderSide(color: AppColors.slate300, width: 1.5),
+                    activeColor: const Color(0xFF655DD5),
+                  ),
                 ),
-                onChanged: (val) {
-                  setState(() {
-                    if (val == true) {
-                      _selectedIds.add(d.id);
-                    } else {
-                      _selectedIds.remove(d.id);
-                    }
-                  });
-                },
               ),
             ),
-            const SizedBox(width: 12),
 
             // File Icon + Title + Description preview
             Expanded(
@@ -1381,20 +1826,20 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6D4CF6).withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.person_rounded,
-                            size: 12,
-                            color: Color(0xFF6D4CF6),
-                          ),
+                        Builder(
+                          builder: (_) {
+                            final student = _findStudent(d.studentId);
+                            return UserAvatar(
+                              name: d.studentName ??
+                                  student?.fullName ??
+                                  'Étudiant',
+                              photoUrl: student?.photoUrl,
+                              gender: student?.gender,
+                              radius: 12,
+                            );
+                          },
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1468,7 +1913,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
             // Actions - Three Dots PopupMenuButton (like User page!)
             SizedBox(
-              width: 48,
+              width: 64,
               child: Center(
                 child: PopupMenuButton<String>(
                   icon: const Icon(
@@ -1677,71 +2122,135 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // PAGINATION FOOTER
+  // PAGINATION FOOTER (EXACT CLONE OF USER PAGE)
   // ─────────────────────────────────────────────────────────────
-  Widget _buildPaginationFooter(int totalItems, int start, int end) {
-    final totalPages = (totalItems / _rowsPerPage).ceil().clamp(1, 9999);
+  Widget _buildPaginationFooter(int totalItems) {
+    final totalPages =
+        _rowsPerPage == -1 ? 1 : (totalItems / _rowsPerPage).ceil();
 
     return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFAFAFB),
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(
+          top: BorderSide(color: AppColors.border.withOpacity(0.3)),
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
       ),
       child: Row(
         children: [
-          Text(
-            totalItems == 0
-                ? '0 document'
-                : 'Affichage de ${start + 1} à $end sur $totalItems documents',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
-          const Spacer(),
+          // Items per page
           const Text(
-            'Lignes par page:',
-            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            'Afficher par ',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
           ),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: _rowsPerPage,
-              items: const [
-                DropdownMenuItem(value: 5, child: Text('5')),
-                DropdownMenuItem(value: 10, child: Text('10')),
-                DropdownMenuItem(value: 20, child: Text('20')),
-                DropdownMenuItem(value: 50, child: Text('50')),
-              ],
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() {
-                    _rowsPerPage = val;
-                    _currentPage = 1;
-                  });
-                }
-              },
-              style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _rowsPerPage,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 14,
+                  color: AppColors.textTertiary,
+                ),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+                items: const [10, 20, 50, -1]
+                    .map(
+                      (v) => DropdownMenuItem(
+                        value: v,
+                        child: Text(
+                          v == -1 ? 'All' : '$v',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() {
+                      _rowsPerPage = v;
+                      _currentPage = 1;
+                    });
+                  }
+                },
+              ),
             ),
           ),
-          const SizedBox(width: 16),
+          const Spacer(),
+          // Page info
           Text(
-            '$_currentPage / $totalPages',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            'Page $_currentPage sur ${totalPages == 0 ? 1 : totalPages}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.chevron_left_rounded, size: 20),
-            onPressed: _currentPage > 1
-                ? () => setState(() => _currentPage--)
-                : null,
-            color: const Color(0xFF64748B),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right_rounded, size: 20),
-            onPressed: _currentPage < totalPages
-                ? () => setState(() => _currentPage++)
-                : null,
-            color: const Color(0xFF64748B),
+          const SizedBox(width: 12),
+          // Prev/Next
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: _currentPage > 1
+                      ? () => setState(() => _currentPage--)
+                      : null,
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(5),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.chevron_left,
+                      size: 18,
+                      color: _currentPage > 1
+                          ? AppColors.textSecondary
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: AppColors.border),
+                InkWell(
+                  onTap: _currentPage < totalPages
+                      ? () => setState(() => _currentPage++)
+                      : null,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(5),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: _currentPage < totalPages
+                          ? AppColors.textSecondary
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -2190,9 +2699,14 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   // ─────────────────────────────────────────────────────────────
   // DETAIL DRAWER
   // ─────────────────────────────────────────────────────────────
-  Widget _buildRightDetailDrawer(Document d) {
+  Widget _buildRightDetailDrawer(Document d, List<SemesterModel> semesters) {
     final df = DateFormat('dd MMMM yyyy à HH:mm', 'fr');
     final ext = (d.fileType ?? 'PDF').toUpperCase();
+    final semLabel = semesters
+            .where((s) => s.number == d.semester)
+            .map((s) => s.name)
+            .firstOrNull ??
+        'Semestre ${d.semester}';
 
     return Positioned.fill(
       child: Stack(
@@ -2353,18 +2867,18 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF6D4CF6),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.person,
-                                      color: Colors.white,
-                                      size: 18,
-                                    ),
+                                  Builder(
+                                    builder: (_) {
+                                      final student = _findStudent(d.studentId);
+                                      return UserAvatar(
+                                        name: d.studentName ??
+                                            student?.fullName ??
+                                            'Étudiant',
+                                        photoUrl: student?.photoUrl,
+                                        gender: student?.gender,
+                                        radius: 17,
+                                      );
+                                    },
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -2401,7 +2915,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                           // Metadata Grid
                           _buildDetailRow(
                             'Semestre',
-                            'Semestre ${d.semester}',
+                            semLabel,
                             Icons.calendar_month_outlined,
                           ),
                           _buildDetailRow(
@@ -2418,11 +2932,6 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                             'Date d\'ajout',
                             df.format(d.createdAt),
                             Icons.access_time_rounded,
-                          ),
-                          _buildDetailRow(
-                            'Identifiant',
-                            d.id,
-                            Icons.fingerprint_rounded,
                           ),
                         ],
                       ),
@@ -2553,11 +3062,9 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _titleController;
   late TextEditingController _descController;
-  late TextEditingController _fileUrlController;
   late TextEditingController _studentSearchController;
 
   String _selectedCategory = 'administrative';
-  int _selectedSemester = 1;
   String? _selectedClassId;
 
   // Target mode: 'all' | 'class' | 'student'
@@ -2565,11 +3072,14 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
 
   // Selected Student
   UserModel? _selectedStudent;
+  bool _clearedExistingStudent = false;
   bool _isUploading = false;
   bool _isSaving = false;
+  String _fileUrl = '';
   String? _uploadedFileName;
   int? _uploadedFileSize;
   String? _uploadedMimeType;
+  String? _formError;
 
   bool get isEditing => widget.editDoc != null;
 
@@ -2579,13 +3089,12 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
     final d = widget.editDoc;
     _titleController = TextEditingController(text: d?.title ?? '');
     _descController = TextEditingController(text: d?.cleanDescription ?? '');
-    _fileUrlController = TextEditingController(text: d?.fileUrl ?? '');
     _studentSearchController = TextEditingController();
 
     if (d != null) {
       _selectedCategory = d.category;
-      _selectedSemester = d.semester;
       _selectedClassId = d.classId;
+      _fileUrl = d.fileUrl;
       _uploadedFileName = d.fileName;
       _uploadedFileSize = d.fileSize;
       _uploadedMimeType = d.mimeType;
@@ -2604,16 +3113,64 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    _fileUrlController.dispose();
     _studentSearchController.dispose();
     super.dispose();
+  }
+
+  String get _displayFileName {
+    if (_uploadedFileName != null && _uploadedFileName!.trim().isNotEmpty) {
+      return _uploadedFileName!.trim();
+    }
+    if (_fileUrl.isEmpty) return '';
+    final uri = Uri.tryParse(_fileUrl);
+    final last = uri?.pathSegments.where((s) => s.isNotEmpty).lastOrNull;
+    return (last != null && last.isNotEmpty) ? last : _fileUrl;
+  }
+
+  String _formatBytes(int? bytes) {
+    if (bytes == null || bytes <= 0) return '';
+    if (bytes < 1024) return '$bytes o';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} Ko';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} Mo';
+  }
+
+  int _resolveCurrentSemesterNumber(SemestersState? semState) {
+    if (semState == null) return 1;
+    final list = semState.filteredSemesters.isNotEmpty
+        ? semState.filteredSemesters
+        : semState.semesters;
+    final currentFlagged =
+        list.where((s) => s.isCurrent).firstOrNull ?? semState.current;
+    if (currentFlagged != null) return currentFlagged.number;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final byDate = list.where((s) {
+      final start = DateTime(s.startDate.year, s.startDate.month, s.startDate.day);
+      final end = DateTime(s.endDate.year, s.endDate.month, s.endDate.day);
+      return !today.isBefore(start) && !today.isAfter(end);
+    }).firstOrNull;
+    if (byDate != null) return byDate.number;
+
+    return list.isNotEmpty ? list.first.number : 1;
   }
 
   Future<void> _pickAndUploadFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg'],
+        allowedExtensions: const [
+          'pdf',
+          'doc',
+          'docx',
+          'xls',
+          'xlsx',
+          'ppt',
+          'pptx',
+          'png',
+          'jpg',
+          'jpeg',
+        ],
         withData: true,
       );
       if (result == null || result.files.isEmpty) return;
@@ -2621,62 +3178,106 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
       final file = result.files.first;
       final bytes = file.bytes;
       if (bytes == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Impossible de lire le fichier sélectionné')),
-          );
-        }
+        setState(() {
+          _formError = 'Unable to read the selected file. Please choose another file.';
+        });
         return;
       }
 
-      setState(() => _isUploading = true);
-
-      final extension = file.extension ?? 'pdf';
-      final fileName = 'doc_${DateTime.now().millisecondsSinceEpoch}.$extension';
-      final storagePath = 'uploads/$fileName';
+      setState(() {
+        _isUploading = true;
+        _formError = null;
+      });
 
       final supabase = SupabaseConfig.client;
-      await supabase.storage.from('documents').uploadBinary(
-            storagePath,
-            bytes,
-            fileOptions: FileOptions(
-              contentType: _getMimeType(extension),
-              upsert: true,
-            ),
-          );
+      final user = supabase.auth.currentUser;
+      String schoolPrefix = 'shared';
+      if (user != null) {
+        try {
+          final profile = await supabase
+              .from('users')
+              .select('school_id')
+              .eq('id', user.id)
+              .maybeSingle();
+          final sid = profile?['school_id']?.toString();
+          if (sid != null && sid.isNotEmpty) {
+            schoolPrefix = sid;
+          }
+        } catch (_) {}
+      }
 
-      final publicUrl =
-          supabase.storage.from('documents').getPublicUrl(storagePath);
+      final extension = (file.extension ?? 'pdf').toLowerCase();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final mimeType = _getMimeType(extension);
+
+      final candidateBuckets = <String>[
+        'documents',
+        SupabaseConfig.attachmentsBucket,
+        SupabaseConfig.suggestionAttachmentsBucket,
+        'suggestions',
+        'profiles',
+      ];
+
+      String? uploadedUrl;
+      Object? lastError;
+
+      for (final bucket in candidateBuckets) {
+        final storagePath = bucket == 'documents'
+            ? 'uploads/${timestamp}_$safeName'
+            : '$schoolPrefix/documents/${timestamp}_$safeName';
+        try {
+          await supabase.storage.from(bucket).uploadBinary(
+                storagePath,
+                bytes,
+                fileOptions: FileOptions(contentType: mimeType),
+              );
+          uploadedUrl = supabase.storage.from(bucket).getPublicUrl(storagePath);
+          break;
+        } on StorageException catch (e) {
+          lastError = e;
+          final msg = e.message.toLowerCase();
+          final isRetryable = e.statusCode == '404' ||
+              e.statusCode == '403' ||
+              e.statusCode == '400' ||
+              e.statusCode == '415' ||
+              msg.contains('bucket') ||
+              msg.contains('mime') ||
+              msg.contains('policy') ||
+              msg.contains('not found');
+          if (!isRetryable) rethrow;
+        }
+      }
+
+      if (uploadedUrl == null) {
+        throw lastError ??
+            Exception('Aucun espace de stockage disponible pour ce fichier.');
+      }
 
       if (mounted) {
         setState(() {
-          _fileUrlController.text = publicUrl;
+          _fileUrl = uploadedUrl!;
           _uploadedFileName = file.name;
           _uploadedFileSize = file.size;
-          _uploadedMimeType = _getMimeType(extension);
+          _uploadedMimeType = mimeType;
           _isUploading = false;
+          _formError = null;
           if (_titleController.text.trim().isEmpty) {
-            _titleController.text =
-                file.name.replaceAll('.$extension', '').replaceAll('_', ' ');
+            _titleController.text = file.name
+                .replaceAll(RegExp(r'\.[^.]+$'), '')
+                .replaceAll('_', ' ');
           }
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Fichier téléversé avec succès'),
-            backgroundColor: AppColors.success,
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isUploading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur de téléversement: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        setState(() {
+          _isUploading = false;
+          _formError = UserFriendlyError.format(
+            e,
+            fallback: 'Unable to upload this file right now. Please try again.',
+          );
+        });
       }
     }
   }
@@ -2711,41 +3312,59 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
 
     final title = _titleController.text.trim();
     final description = _descController.text.trim();
-    final fileUrl = _fileUrlController.text.trim();
+    final fileUrl = _fileUrl.trim();
 
     if (fileUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez fournir un fichier ou un lien'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      setState(() {
+        _formError = 'Please upload a document file before saving.';
+      });
       return;
     }
 
-    setState(() => _isSaving = true);
+    if (_targetMode == 'class' &&
+        (_selectedClassId == null || _selectedClassId!.isEmpty)) {
+      setState(() {
+        _formError = 'Please select a target class.';
+      });
+      return;
+    }
+
+    String? targetStudentId;
+    String? targetStudentName;
+    String? targetStudentCode;
+
+    if (_targetMode == 'student') {
+      if (_selectedStudent != null) {
+        targetStudentId = _selectedStudent!.id;
+        targetStudentName = _selectedStudent!.fullName;
+        targetStudentCode = _selectedStudent!.studentCode;
+      } else if (!_clearedExistingStudent &&
+          widget.editDoc != null &&
+          widget.editDoc!.isStudentDedicated) {
+        targetStudentId = widget.editDoc!.studentId;
+        targetStudentName = widget.editDoc!.studentName;
+        targetStudentCode = widget.editDoc!.studentCode;
+      }
+      if (targetStudentId == null || targetStudentId.isEmpty) {
+        setState(() {
+          _formError = 'Please search and select a student.';
+        });
+        return;
+      }
+    }
+
+    final targetSemester = isEditing
+        ? widget.editDoc!.semester
+        : _resolveCurrentSemesterNumber(ref.read(semestersProvider).value);
+
+    setState(() {
+      _isSaving = true;
+      _formError = null;
+    });
 
     try {
       final notifier = ref.read(documentsProvider.notifier);
-
-      String? targetClassId;
-      String? targetStudentId;
-      String? targetStudentName;
-      String? targetStudentCode;
-
-      if (_targetMode == 'class') {
-        targetClassId = _selectedClassId;
-      } else if (_targetMode == 'student') {
-        if (_selectedStudent != null) {
-          targetStudentId = _selectedStudent!.id;
-          targetStudentName = _selectedStudent!.fullName;
-          targetStudentCode = _selectedStudent!.studentCode;
-        } else if (widget.editDoc != null && widget.editDoc!.isStudentDedicated) {
-          targetStudentId = widget.editDoc!.studentId;
-          targetStudentName = widget.editDoc!.studentName;
-          targetStudentCode = widget.editDoc!.studentCode;
-        }
-      }
+      final targetClassId = _targetMode == 'class' ? _selectedClassId : null;
 
       if (isEditing) {
         await notifier.updateDocument(
@@ -2753,12 +3372,12 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
           title: title,
           description: description,
           fileUrl: fileUrl,
-          fileName: _uploadedFileName,
+          fileName: _uploadedFileName ?? _displayFileName,
           fileSize: _uploadedFileSize,
           mimeType: _uploadedMimeType,
           classId: targetClassId,
           category: _selectedCategory,
-          semester: _selectedSemester,
+          semester: targetSemester,
           studentId: targetStudentId,
           studentName: targetStudentName,
           studentCode: targetStudentCode,
@@ -2768,12 +3387,12 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
           title: title,
           description: description,
           fileUrl: fileUrl,
-          fileName: _uploadedFileName,
+          fileName: _uploadedFileName ?? _displayFileName,
           fileSize: _uploadedFileSize,
           mimeType: _uploadedMimeType,
           classId: targetClassId,
           category: _selectedCategory,
-          semester: _selectedSemester,
+          semester: targetSemester,
           studentId: targetStudentId,
           studentName: targetStudentName,
           studentCode: targetStudentCode,
@@ -2795,13 +3414,13 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        setState(() {
+          _isSaving = false;
+          _formError = UserFriendlyError.format(
+            e,
+            fallback: 'Unable to save this document right now. Please try again.',
+          );
+        });
       }
     }
   }
@@ -2810,17 +3429,22 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
   Widget build(BuildContext context) {
     final classesState = ref.watch(classesProvider);
     final List<ClassModel> classes = classesState.value?.classes ?? <ClassModel>[];
-
-    final semestersState = ref.watch(semestersProvider);
-    final semesters = semestersState.value?.filteredSemesters.isNotEmpty == true
-        ? semestersState.value!.filteredSemesters
-        : (semestersState.value?.semesters ?? <SemesterModel>[]);
+    final effectiveClassId = (_selectedClassId != null &&
+            classes.any((c) => c.id == _selectedClassId))
+        ? _selectedClassId
+        : null;
 
     // Students from usersProvider
     final usersState = ref.watch(usersProvider);
     final allStudents = (usersState.value?.users ?? [])
         .where((u) => u.role == 'student')
         .toList();
+    final chosenStudent = _selectedStudent ??
+        (!_clearedExistingStudent && widget.editDoc?.studentId != null
+            ? allStudents
+                .where((u) => u.id == widget.editDoc!.studentId)
+                .firstOrNull
+            : null);
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -2892,56 +3516,96 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Inline error notice (always visible above backdrop)
+                      if (_formError != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.errorSoft,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.error.withOpacity(0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                size: 18,
+                                color: AppColors.error,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _formError!,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  size: 16,
+                                  color: AppColors.error,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _formError = null),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 24,
+                                  minHeight: 24,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
                       // Titre du document
                       _buildFieldLabel('TITRE DU DOCUMENT *'),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _titleController,
                         style: const TextStyle(fontSize: 14),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Le titre est obligatoire' : null,
-                        decoration: _inputDecoration('Ex: Attestation de scolarité 2026/2027'),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Le titre est obligatoire'
+                            : null,
+                        decoration: _inputDecoration(
+                          'Ex: Attestation de scolarité 2026/2027',
+                        ),
                       ),
                       const SizedBox(height: 18),
 
-                      // Type de document (Styled with radius and no harsh border!)
+                      // Type de document
                       _buildFieldLabel('TYPE DE DOCUMENT'),
                       const SizedBox(height: 8),
                       _buildStyledDropdown<String>(
-                        value: _selectedCategory,
+                        value: AcademicDocumentType.types
+                                .containsKey(_selectedCategory)
+                            ? _selectedCategory
+                            : 'administrative',
                         items: AcademicDocumentType.types.entries
-                            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                            .map((e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value),
+                                ))
                             .toList(),
                         onChanged: (val) {
-                          if (val != null) setState(() => _selectedCategory = val);
+                          if (val != null) {
+                            setState(() => _selectedCategory = val);
+                          }
                         },
                       ),
                       const SizedBox(height: 18),
 
-                      // Semestre (Selected via dropdown with radius!)
-                      _buildFieldLabel('SEMESTRE'),
-                      const SizedBox(height: 8),
-                      _buildStyledDropdown<int>(
-                        value: _selectedSemester,
-                        items: semesters.isNotEmpty
-                            ? semesters
-                                .map((s) => DropdownMenuItem(
-                                      value: s.number,
-                                      child: Text(s.name),
-                                    ))
-                                .toList()
-                            : const [
-                                DropdownMenuItem(value: 1, child: Text('Semestre 1')),
-                                DropdownMenuItem(value: 2, child: Text('Semestre 2')),
-                                DropdownMenuItem(value: 3, child: Text('Semestre 3')),
-                              ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _selectedSemester = val);
-                        },
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Cible du document (School-wide / Class / Single Student)
+                      // Destinataire du document (Semestre auto-assigné au semestre courant)
                       _buildFieldLabel('DESTINATAIRE DU DOCUMENT'),
                       const SizedBox(height: 8),
                       _buildStyledDropdown<String>(
@@ -2964,25 +3628,35 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                           if (val != null) {
                             setState(() {
                               _targetMode = val;
+                              _formError = null;
                               if (val != 'class') _selectedClassId = null;
                               if (val != 'student') _selectedStudent = null;
                             });
                           }
                         },
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 18),
 
                       // When target is Class: show class dropdown
                       if (_targetMode == 'class') ...[
                         _buildFieldLabel('CHOISIR LA CLASSE'),
                         const SizedBox(height: 8),
                         _buildStyledDropdown<String?>(
-                          value: _selectedClassId,
+                          value: effectiveClassId,
                           items: [
-                            const DropdownMenuItem(value: null, child: Text('Sélectionner une classe')),
-                            ...classes.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                            const DropdownMenuItem(
+                              value: null,
+                              child: Text('Sélectionner une classe'),
+                            ),
+                            ...classes.map((c) => DropdownMenuItem(
+                                  value: c.id,
+                                  child: Text(c.name),
+                                )),
                           ],
-                          onChanged: (val) => setState(() => _selectedClassId = val),
+                          onChanged: (val) => setState(() {
+                            _selectedClassId = val;
+                            _formError = null;
+                          }),
                         ),
                         const SizedBox(height: 18),
                       ],
@@ -2991,8 +3665,10 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                       if (_targetMode == 'student') ...[
                         _buildFieldLabel('RECHERCHER L\'ÉTUDIANT (NOM, MATRICULE OU EMAIL)'),
                         const SizedBox(height: 8),
-                        if (_selectedStudent != null ||
-                            (widget.editDoc != null && widget.editDoc!.isStudentDedicated && _selectedStudent == null)) ...[
+                        if (chosenStudent != null ||
+                            (!_clearedExistingStudent &&
+                                widget.editDoc != null &&
+                                widget.editDoc!.isStudentDedicated)) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             decoration: BoxDecoration(
@@ -3002,14 +3678,13 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF6D4CF6),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.person, color: Colors.white, size: 18),
+                                UserAvatar(
+                                  name: chosenStudent?.fullName ??
+                                      widget.editDoc?.studentName ??
+                                      'Étudiant',
+                                  photoUrl: chosenStudent?.photoUrl,
+                                  gender: chosenStudent?.gender,
+                                  radius: 17,
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -3017,13 +3692,23 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        _selectedStudent?.fullName ?? widget.editDoc?.studentName ?? 'Étudiant',
+                                        chosenStudent?.fullName ??
+                                            widget.editDoc?.studentName ??
+                                            'Étudiant',
                                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                                       ),
-                                      Text(
-                                        _selectedStudent?.studentCode ?? widget.editDoc?.studentCode ?? '',
-                                        style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
-                                      ),
+                                      if ((chosenStudent?.studentCode ??
+                                              widget.editDoc?.studentCode ??
+                                              chosenStudent?.email ??
+                                              '')
+                                          .isNotEmpty)
+                                        Text(
+                                          chosenStudent?.studentCode ??
+                                              widget.editDoc?.studentCode ??
+                                              chosenStudent?.email ??
+                                              '',
+                                          style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -3032,6 +3717,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                                   onPressed: () {
                                     setState(() {
                                       _selectedStudent = null;
+                                      _clearedExistingStudent = true;
                                       _studentSearchController.clear();
                                     });
                                   },
@@ -3078,6 +3764,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                                     leading: UserAvatar(
                                       name: student.fullName,
                                       photoUrl: student.photoUrl,
+                                      gender: student.gender,
                                       radius: 14,
                                     ),
                                     title: Text(student.fullName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
@@ -3088,6 +3775,8 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                                     onTap: () {
                                       setState(() {
                                         _selectedStudent = student;
+                                        _clearedExistingStudent = false;
+                                        _formError = null;
                                         _studentSearchController.clear();
                                       });
                                     },
@@ -3100,43 +3789,171 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                         ],
                       ],
 
-                      // Fichier ou Lien
-                      _buildFieldLabel('FICHIER OU LIEN *'),
+                      // Fichier du document (Dropzone + Carte fichier modifiable)
+                      _buildFieldLabel('FICHIER DU DOCUMENT *'),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _fileUrlController,
-                              style: const TextStyle(fontSize: 14),
-                              decoration: _inputDecoration('https://... ou téléversez un fichier'),
+                      if (_fileUrl.isEmpty)
+                        InkWell(
+                          onTap: _isUploading ? null : _pickAndUploadFile,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 24,
+                              horizontal: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.slate50.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.slate300,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF6D4CF6)
+                                        .withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: _isUploading
+                                      ? const IosLoader.small(
+                                          color: Color(0xFF6D4CF6),
+                                        )
+                                      : const Icon(
+                                          Icons.cloud_upload_outlined,
+                                          size: 24,
+                                          color: Color(0xFF6D4CF6),
+                                        ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _isUploading
+                                      ? 'Téléversement en cours...'
+                                      : 'Cliquez pour téléverser un document',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF6D4CF6),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'PDF, DOC, DOCX, XLS, XLSX, PPT, PNG, JPG',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          SizedBox(
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              onPressed: _isUploading ? null : _pickAndUploadFile,
-                              icon: _isUploading
-                                  ? const IosLoader.small(color: Colors.white)
-                                  : const Icon(Icons.upload_file_rounded, size: 16),
-                              label: const Text(
-                                'Téléverser',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF6D4CF6),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                shape: RoundedRectangleBorder(
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.slate50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6D4CF6)
+                                      .withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                elevation: 0,
+                                child: _isUploading
+                                    ? const Center(
+                                        child: IosLoader.small(
+                                          color: Color(0xFF6D4CF6),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.insert_drive_file_rounded,
+                                        color: Color(0xFF6D4CF6),
+                                        size: 20,
+                                      ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _displayFileName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    if (_formatBytes(_uploadedFileSize)
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        _formatBytes(_uploadedFileSize),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textTertiary,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton.icon(
+                                onPressed:
+                                    _isUploading ? null : _pickAndUploadFile,
+                                icon: const Icon(
+                                  Icons.upload_file_rounded,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Remplacer',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF6D4CF6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: AppColors.textTertiary,
+                                ),
+                                tooltip: 'Supprimer le fichier',
+                                onPressed: _isUploading
+                                    ? null
+                                    : () => setState(() {
+                                          _fileUrl = '';
+                                          _uploadedFileName = null;
+                                          _uploadedFileSize = null;
+                                          _uploadedMimeType = null;
+                                          _formError = null;
+                                        }),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
                       const SizedBox(height: 18),
 
                       // Description

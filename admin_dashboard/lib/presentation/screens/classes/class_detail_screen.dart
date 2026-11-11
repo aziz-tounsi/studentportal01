@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../providers/classes_provider.dart';
-import '../../providers/subjects_management_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 
@@ -230,7 +229,13 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.error_outline_rounded, size: 56, color: AppColors.error),
         const SizedBox(height: 16),
-        Text('Erreur: $error', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(
+          UserFriendlyError.format(
+            error,
+            fallback: 'Unable to load class details right now. Please try again.',
+          ),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
         const SizedBox(height: 16),
         Material(
           color: _brand, borderRadius: BorderRadius.circular(10),
@@ -964,7 +969,12 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                 debugPrint('Remove student error: $e');
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Erreur: $e'),
+                    content: Text(
+                      UserFriendlyError.format(
+                        e,
+                        fallback: 'Unable to remove this student from the class right now. Please try again.',
+                      ),
+                    ),
                     backgroundColor: AppColors.error,
                     behavior: SnackBarBehavior.floating,
                   ));
@@ -1220,7 +1230,12 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                   debugPrint('Transfer student error: $e');
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Erreur: $e'),
+                                      content: Text(
+                                        UserFriendlyError.format(
+                                          e,
+                                          fallback: 'Unable to transfer this student right now. Please try again.',
+                                        ),
+                                      ),
                                       backgroundColor: AppColors.error,
                                       behavior: SnackBarBehavior.floating,
                                     ));
@@ -1550,7 +1565,13 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           color: Colors.white, borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border.withOpacity(0.3)),
         ),
-        child: Text('Erreur: $e', style: const TextStyle(color: AppColors.error, fontSize: 12)),
+        child: Text(
+          UserFriendlyError.format(
+            e,
+            fallback: 'Unable to load teachers for this class right now.',
+          ),
+          style: const TextStyle(color: AppColors.error, fontSize: 12),
+        ),
       ),
       data: (teachers) {
         return Container(

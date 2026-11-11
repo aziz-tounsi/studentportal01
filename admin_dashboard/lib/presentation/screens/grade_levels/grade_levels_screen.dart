@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/utils/error_messages.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 
 import '../../../data/models/academic_models.dart';
@@ -279,7 +279,13 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
         children: [
           Icon(Icons.error_outline, size: 52, color: AppColors.error.withOpacity(0.5)),
           const SizedBox(height: 16),
-          Text('Erreur: $error', style: TextStyle(color: AppColors.slate500)),
+          Text(
+            UserFriendlyError.format(
+              error,
+              fallback: 'Unable to load grade levels right now. Please try again.',
+            ),
+            style: TextStyle(color: AppColors.slate500),
+          ),
           const SizedBox(height: 16),
           InkWell(
             onTap: () => ref.read(gradeLevelsProvider.notifier).refresh(),
@@ -1340,7 +1346,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
               if (ctx.mounted) Navigator.pop(ctx);
               _showSuccess(grade == null ? 'Niveau ajouté' : 'Niveau modifié');
             } catch (e) {
-              _showError('Erreur: $e');
+              _showError(UserFriendlyError.format(e));
             }
           },
           children: [
@@ -1456,7 +1462,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
               if (ctx.mounted) Navigator.pop(ctx);
               _showSuccess(section == null ? 'Filière ajoutée' : 'Filière modifiée');
             } catch (e) {
-              _showError('Erreur: $e');
+              _showError(UserFriendlyError.format(e));
             }
           },
           children: [
@@ -1544,7 +1550,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
               if (ctx.mounted) Navigator.pop(ctx);
               _showSuccess(examType == null ? 'Type ajouté' : 'Type modifié');
             } catch (e) {
-              _showError('Erreur: $e');
+              _showError(UserFriendlyError.format(e));
             }
           },
           children: [
@@ -1614,7 +1620,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                         if (ctx.mounted) Navigator.pop(ctx);
                         _showSuccess('Filière assignée');
                       } catch (e) {
-                        _showError('Erreur: $e');
+                        _showError(UserFriendlyError.format(e));
                       }
                     },
                   ),
@@ -1648,7 +1654,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
           .removeSectionFromGrade(gradeId, sectionId);
       _showSuccess('Filière retirée');
     } catch (e) {
-      _showError('Erreur: $e');
+      _showError(UserFriendlyError.format(e));
     }
   }
 
@@ -1687,7 +1693,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                         if (ctx.mounted) Navigator.pop(ctx);
                         _showSuccess('Niveau supprimé');
                       } catch (e) {
-                        _showError('Erreur: \$e');
+                        _showError(UserFriendlyError.format(e));
                       }
                     },
                     icon: const Icon(Icons.delete_outline, size: 16),
@@ -1743,7 +1749,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                         if (ctx.mounted) Navigator.pop(ctx);
                         _showSuccess('Filière supprimée');
                       } catch (e) {
-                        _showError('Erreur: \$e');
+                        _showError(UserFriendlyError.format(e));
                       }
                     },
                     icon: const Icon(Icons.delete_outline, size: 16),
@@ -1799,7 +1805,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                         if (ctx.mounted) Navigator.pop(ctx);
                         _showSuccess('Type supprimé');
                       } catch (e) {
-                        _showError('Erreur: \$e');
+                        _showError(UserFriendlyError.format(e));
                       }
                     },
                     icon: const Icon(Icons.delete_outline, size: 16),
@@ -2220,7 +2226,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
               if (ctx.mounted) Navigator.pop(ctx);
               _showSuccess('Classe "${nameCtrl.text.trim()}" créée');
             } catch (e) {
-              _showError('Erreur: $e');
+              _showError(UserFriendlyError.format(e));
             }
           },
           children: [

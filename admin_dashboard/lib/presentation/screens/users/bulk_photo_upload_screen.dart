@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../providers/users_provider.dart';
@@ -99,7 +100,14 @@ class _BulkPhotoUploadScreenState extends ConsumerState<BulkPhotoUploadScreen> {
                 Expanded(
                   child: usersAsync.when(
                     loading: () => const Center(child: IosLoader()),
-                    error: (e, _) => Center(child: Text('Erreur: $e')),
+                    error: (e, _) => Center(
+                      child: Text(
+                        UserFriendlyError.format(
+                          e,
+                          fallback: 'Unable to load users right now. Please try again.',
+                        ),
+                      ),
+                    ),
                     data: (state) => _buildContent(context, state.users, uploadState),
                   ),
                 ),

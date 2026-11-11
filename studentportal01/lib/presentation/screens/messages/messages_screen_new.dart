@@ -242,10 +242,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                       // Search field - pill shaped
                       Expanded(
                         child: Container(
-                          height: 48,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.95),
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(searchBtnSize / 2),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.08),
@@ -838,7 +838,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         child: Icon(typeIcon, color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 12),
-                      // Type label and title
+                      // Type label, title, and key info subtitle
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -851,46 +851,42 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                                 color: typeColor,
                               ),
                             ),
-                            Text(
-                              localizedTitle,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF1F2937),
-                                letterSpacing: -0.3,
-                                height: 1.0,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            // Key info subtitle - only show if not empty
-                            if (isPinned || keyInfo.isNotEmpty)
-                              Transform.translate(
-                                offset: const Offset(0, -10),
-                                child: Row(
-                                  children: [
-                                    if (keyInfo.isNotEmpty)
-                                      Expanded(
-                                        child: Text(
-                                          keyInfo,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey[500],
-                                            height: 1.0,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    if (isPinned)
-                                      _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
-                                  ],
+                            if (localizedTitle.isNotEmpty &&
+                                localizedTitle.toLowerCase() != typeLabel.toLowerCase()) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                localizedTitle,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF1F2937),
+                                  letterSpacing: -0.3,
                                 ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
+                            ],
+                            if (keyInfo.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                keyInfo,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[500],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ],
                         ),
                       ),
+                      // Pinned badge at top trailing position
+                      if (isPinned) ...[
+                        const SizedBox(width: 8),
+                        _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
+                      ],
                     ],
                   ),
                   // Badges row
@@ -1014,38 +1010,16 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Footer with type and time
+                  // Footer with time
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Sender info
-                      if (message.senderLabel != null) ...[
-                        Icon(
-                          Icons.person_outline,
-                          size: 12,
-                          color: Colors.grey[500],
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            l10n.localizeSenderLabel(message.senderLabel),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      const Spacer(),
                       // Timestamp
-                        Icon(
-                          Icons.access_time,
-                          size: 12,
-                          color: Colors.grey[500],
-                        ),
+                      Icon(
+                        Icons.access_time,
+                        size: 12,
+                        color: Colors.grey[500],
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         _formatTime(message.publishedAt),
@@ -1522,61 +1496,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                               letterSpacing: -0.5,
                             ),
                           ),
-                          // Sender info at bottom
-                          if (message.senderLabel != null) ...[
-                            const SizedBox(height: 20),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      Icons.person_rounded,
-                                      size: 20,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          l10n.sentByLabel,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[500],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          l10n.localizeSenderLabel(
-                                            message.senderLabel,
-                                          ),
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey[800],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 24),
                         ],
                       ),
     );
@@ -1726,12 +1646,20 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
   }
 
   String _formatTime(DateTime time) {
+    final localTime = time.toLocal();
     final now = DateTime.now();
-    final difference = now.difference(time);
+    final difference = now.difference(localTime);
     String lang = 'fr';
     try {
       lang = Localizations.localeOf(context).languageCode;
     } catch (_) {}
+
+    // If sent just now, or with clock skew / future timestamp, show instant indicator
+    if (difference.isNegative || difference.inSeconds < 60) {
+      if (lang == 'ar') return 'الآن';
+      if (lang == 'en') return 'Just now';
+      return "À l'instant";
+    }
 
     if (lang == 'ar') {
       if (difference.inMinutes < 60) {
@@ -1741,7 +1669,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
       } else if (difference.inDays < 7) {
         return 'منذ ${difference.inDays} يوم';
       } else {
-        return ArabicTypography.toLatinDigits(DateFormat('d MMM', 'ar').format(time));
+        return ArabicTypography.toLatinDigits(DateFormat('d MMM', 'ar').format(localTime));
       }
     } else if (lang == 'en') {
       if (difference.inMinutes < 60) {
@@ -1751,7 +1679,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
       } else if (difference.inDays < 7) {
         return '${difference.inDays}d ago';
       } else {
-        return DateFormat('d MMM', 'en').format(time);
+        return DateFormat('d MMM', 'en').format(localTime);
       }
     }
 
@@ -1762,7 +1690,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
     } else if (difference.inDays < 7) {
       return 'Il y a ${difference.inDays}j';
     } else {
-      return DateFormat('d MMM', 'fr_FR').format(time);
+      return DateFormat('d MMM', 'fr_FR').format(localTime);
     }
   }
 }

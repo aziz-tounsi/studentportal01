@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 
@@ -159,7 +160,12 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to update the school logo right now. Please try again.',
+              ),
+            ),
             backgroundColor: AppColors.error,
           ),
         );
@@ -241,7 +247,14 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                   child: schoolAsync.when(
                     loading: () =>
                         const Center(child: IosLoader()),
-                    error: (e, _) => Center(child: Text('Erreur: $e')),
+                    error: (e, _) => Center(
+                      child: Text(
+                        UserFriendlyError.format(
+                          e,
+                          fallback: 'Unable to load school information right now. Please try again.',
+                        ),
+                      ),
+                    ),
                     data: (data) {
                       if (_nameController.text.isEmpty &&
                           data['name'] != null) {

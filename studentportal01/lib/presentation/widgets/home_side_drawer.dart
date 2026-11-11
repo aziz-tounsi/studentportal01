@@ -183,10 +183,10 @@ class HomeSideDrawer extends ConsumerWidget {
                         const Spacer(),
                         // White Pill Logout Button with Bounce
                         Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            16,
+                          padding: EdgeInsetsDirectional.fromSTEB(
+                            26,
                             0,
-                            16,
+                            18,
                             math.max(MediaQuery.of(context).padding.bottom, 16.0) + 12,
                           ),
                           child: BouncingWrapper(
@@ -283,7 +283,7 @@ class _DrawerItem extends StatelessWidget {
           );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsetsDirectional.fromSTEB(26, 6, 16, 6),
       child: BouncingWrapper(
         shrinkScale: 0.95,
         overshootScale: 1.04,

@@ -106,8 +106,13 @@ class _BouncyDropdownSelectorState<T> extends State<BouncyDropdownSelector<T>>
       _entry?.remove();
       _entry = null;
       _closing = false;
+      _isOpen = false;
       if (mounted) {
-        setState(() => _isOpen = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {});
+          }
+        });
       }
     }
   }
@@ -124,6 +129,10 @@ class _BouncyDropdownSelectorState<T> extends State<BouncyDropdownSelector<T>>
 
     BouncyDropdownSelector._activeClosers.add(_forceClose);
     setState(() => _isOpen = true);
+
+    final mediaWidth = MediaQuery.sizeOf(context).width;
+    final desiredWidth = widget.menuWidth ?? (size.width < 220 ? 240.0 : size.width);
+    final effectiveWidth = math.min(desiredWidth, mediaWidth - 32.0);
 
     _entry = OverlayEntry(
       builder: (_) {
@@ -146,9 +155,9 @@ class _BouncyDropdownSelectorState<T> extends State<BouncyDropdownSelector<T>>
               followerAnchor: widget.menuAlignment == Alignment.bottomRight
                   ? Alignment.topRight
                   : Alignment.topLeft,
-              offset: Offset(0, size.height + 6),
+              offset: const Offset(0, 6),
               child: SizedBox(
-                width: widget.menuWidth ?? (size.width < 220 ? 240.0 : size.width),
+                width: effectiveWidth,
                 child: AnimatedBuilder(
                   animation: _c,
                   builder: (context, _) {

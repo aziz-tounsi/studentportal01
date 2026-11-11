@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/error_messages.dart';
 import '../../../../presentation/widgets/ios_loader.dart';
 import '../../../../models/announcement_model.dart';
 import '../../../../repositories/announcement_repository.dart';
@@ -312,9 +313,16 @@ class _AnnouncementComposerDialogState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save this announcement right now. Please try again.',
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -1120,7 +1128,14 @@ class _AnnouncementComposerDialogState
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors de la sélection des fichiers: $e')),
+        SnackBar(
+          content: Text(
+            UserFriendlyError.format(
+              e,
+              fallback: 'Unable to select the file right now. Please try again.',
+            ),
+          ),
+        ),
       );
     }
   }

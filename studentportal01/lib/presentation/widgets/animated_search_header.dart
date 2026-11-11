@@ -185,8 +185,8 @@ class AnimatedSearchHeader extends StatelessWidget {
                         hitPadding: const EdgeInsets.all(8),
                         onTap: onToggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -201,7 +201,7 @@ class AnimatedSearchHeader extends StatelessWidget {
                           child: Icon(
                             Icons.close_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: (22 * scale).clamp(18.0, 22.0),
                           ),
                         ),
                       ),
@@ -209,10 +209,10 @@ class AnimatedSearchHeader extends StatelessWidget {
                       // Search field - pill shaped
                       Expanded(
                         child: Container(
-                          height: 44,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.95),
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(searchBtnSize / 2),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.08),

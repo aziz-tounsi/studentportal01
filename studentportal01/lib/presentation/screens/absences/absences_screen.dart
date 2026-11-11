@@ -349,6 +349,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
             onRefresh: () async {
               ref.read(absencesRefreshingProvider.notifier).state = true;
               try {
+                ref.invalidate(ctx.studentContextProvider);
+                ref.invalidate(ctx.semestersProvider);
+                ref.invalidate(absencesSemestersProvider);
                 // ignore: unused_result
                 await ref.refresh(absencesProvider(selectedTrimester).future);
               } finally {
@@ -567,8 +570,8 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                         hitPadding: const EdgeInsets.all(8),
                         onTap: _toggleSearch,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: searchBtnSize,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
@@ -583,7 +586,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           child: Icon(
                             Icons.close_rounded,
                             color: Colors.grey[700],
-                            size: 22,
+                            size: (22 * scale).clamp(18.0, 22.0),
                           ),
                         ),
                       ),
@@ -591,10 +594,10 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                       // Search field - pill shaped
                       Expanded(
                         child: Container(
-                          height: 44,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.95),
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(searchBtnSize / 2),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.08),

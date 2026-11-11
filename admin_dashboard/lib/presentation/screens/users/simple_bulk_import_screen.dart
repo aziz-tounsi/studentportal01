@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../data/services/user_management_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 
 /// Simple bulk import screen - bypasses DataTable2 issues
@@ -1175,7 +1176,10 @@ class _SimpleBulkImportScreenState
       }
     } catch (e) {
       setState(() {
-        _status = 'Erreur lors de la lecture: $e';
+        _status = UserFriendlyError.format(
+          e,
+          fallback: 'Unable to read the selected file. Please verify the file and try again.',
+        );
         _isLoading = false;
       });
     }
@@ -1201,7 +1205,7 @@ class _SimpleBulkImportScreenState
     );
     if (_classIdByName.isEmpty) {
       setState(() {
-        _status = 'Erreur: Aucune classe trouvée dans la base de données';
+        _status = 'No classes were found. Please create a class before importing students.';
         _isImporting = false;
       });
       return;
@@ -1216,7 +1220,7 @@ class _SimpleBulkImportScreenState
 
     if (currentUserId == null) {
       setState(() {
-        _status = 'Erreur: Non connecté';
+        _status = 'Your session has expired. Please sign in again to import users.';
         _isImporting = false;
       });
       return;
@@ -1233,7 +1237,10 @@ class _SimpleBulkImportScreenState
       schoolId = userResp['school_id'];
     } catch (e) {
       setState(() {
-        _status = 'Erreur: Impossible de récupérer l\'école';
+        _status = UserFriendlyError.format(
+          e,
+          fallback: 'Unable to identify your school account right now. Please try again.',
+        );
         _isImporting = false;
       });
       return;
@@ -1437,7 +1444,9 @@ class _SimpleBulkImportScreenState
         });
         _successCount++;
       } catch (e) {
-        _errors.add('${user['email']}: $e');
+        _errors.add(
+          '${user['email']}: ${UserFriendlyError.format(e, fallback: 'Unable to import this user.')}',
+        );
         _failCount++;
       }
     }

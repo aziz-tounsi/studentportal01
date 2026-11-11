@@ -77,6 +77,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
     final semestersAsync = ref.watch(semestersProvider);
 
     return semestersAsync.when(
+      skipLoadingOnReload: true,
       data: (semesters) => _buildNav(context, semesters),
       loading: () => _buildLoadingNav(),
       error: (_, _) => _buildNav(context, _getDefaultSemesters()),
@@ -109,12 +110,18 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
   }
 
   Widget _buildNav(BuildContext context, List<SemesterInfo> semesters) {
-    if (semesters.isEmpty) {
-      semesters = _getDefaultSemesters();
-    }
+    semesters = semesters.isEmpty ? _getDefaultSemesters() : [...semesters];
 
     // Sort by number
     semesters.sort((a, b) => a.number.compareTo(b.number));
+    if (!semesters.any((s) => s.number == widget.selectedSemesterNumber)) {
+      final fallback = resolveCurrentSemesterNumber(semesters);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && fallback != widget.selectedSemesterNumber) {
+          widget.onChanged(fallback);
+        }
+      });
+    }
     final count = semesters.length;
     final currentIndex = _resolveSelectedIndex(
       semesters,
@@ -310,6 +317,7 @@ class SemesterTabBar extends ConsumerWidget {
     final color = activeColor ?? Theme.of(context).primaryColor;
 
     return semestersAsync.when(
+      skipLoadingOnReload: true,
       data: (semesters) {
         if (semesters.isEmpty) {
           // Fallback
@@ -318,8 +326,17 @@ class SemesterTabBar extends ConsumerWidget {
             SemesterInfo(id: '2', name: 'Sem. 2', number: 2, isCurrent: false),
           ], color);
         }
-        semesters.sort((a, b) => a.number.compareTo(b.number));
-        return _buildTabs(context, semesters, color);
+        final sorted = [...semesters]
+          ..sort((a, b) => a.number.compareTo(b.number));
+        if (!sorted.any((s) => s.number == selectedNumber)) {
+          final fallback = resolveCurrentSemesterNumber(sorted);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (fallback != selectedNumber) {
+              onChanged(fallback);
+            }
+          });
+        }
+        return _buildTabs(context, sorted, color);
       },
       loading: () =>
           const SizedBox(height: 40, child: Center(child: IosLoader())),

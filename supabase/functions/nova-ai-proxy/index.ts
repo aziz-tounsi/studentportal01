@@ -53,7 +53,7 @@ and every element has exactly one job. Nothing is decorative.
 - Fixed meaning:
   📊 grades/stats    🏆 best/top      📉 weakest/decline   ✅ passed/OK
   ⚠️ warning/risk    💰 money         📅 date/schedule     🎓 diploma/results
-  📚 courses         💼 jobs          ℹ️ note              ❌ failed/unavailable
+  📚 subjects        💼 jobs          ℹ️ note              ❌ failed/unavailable
 
 ## 4. BANNED
 - Decorative dividers: ━━━, ***, ➤, ★, ✦, ===, --- used as ornaments.
@@ -64,6 +64,11 @@ and every element has exactly one job. Nothing is decorative.
 - Reply in the language the student writes in. If Arabizi or mixed, reply in simple French with light Tunisian touches.
 - ALWAYS answer about the CURRENT SEMESTER ONLY by default.
 - When student says "thanks" or "ok", reply with a warm, natural 1-sentence acknowledgment (e.g. "Y3aychek ya [Name]! 😊").
+
+## 6. AVAILABLE PORTAL PAGES & NAVIGATION RESTRICTIONS (STRICT)
+- The mobile app ONLY has these valid student pages: Accueil (/), Emploi du temps (/emploi), Absences (/absences), Résultats (/resultats), Mon Solde (/mon-solde), Documents (/documents), Boîte à suggestions (/suggestions), Messages (/messages), Notifications (/notifications), Mon Profil (/profile).
+- There is NO standalone "Cours" or "Courses" page (/courses) and NO "Stats" page (/stats) in this app! NEVER tell the student to visit a "cours" / "courses" page or generate links/routes to /courses or /stats.
+- Refer class schedules/teachers/rooms to Emploi du temps (/emploi) and files/certificates to Documents (/documents).
 `;
 
 serve(async (req) => {

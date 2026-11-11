@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
@@ -60,7 +61,10 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'Erreur: $e',
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback: 'Unable to load academic periods right now. Please try again.',
+                                ),
                                 style: TextStyle(color: AppColors.error),
                               ),
                             ],
@@ -1164,7 +1168,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                                 children: [
                                                   const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
                                                   const SizedBox(width: 8),
-                                                  Expanded(child: Text(e.toString().replaceAll('Exception: ', ''))),
+                                                  Expanded(child: Text(UserFriendlyError.format(e, fallback: 'Unable to save this academic period right now. Please check your dates and try again.'))),
                                                 ],
                                               ),
                                               backgroundColor: const Color(0xFFEF4444),
@@ -2011,7 +2015,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                                 children: [
                                                   const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
                                                   const SizedBox(width: 8),
-                                                  Expanded(child: Text(e.toString().replaceAll('Exception: ', ''))),
+                                                  Expanded(child: Text(UserFriendlyError.format(e, fallback: 'Unable to save this academic period right now. Please check your dates and try again.'))),
                                                 ],
                                               ),
                                               backgroundColor: const Color(0xFFEF4444),
@@ -2240,7 +2244,14 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                         children: [
                                           const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
                                           const SizedBox(width: 8),
-                                          Expanded(child: Text('Erreur: ${e.toString()}')),
+                                          Expanded(
+                                            child: Text(
+                                              UserFriendlyError.format(
+                                                e,
+                                                fallback: 'Unable to delete this academic period right now. Please try again.',
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                       ),
                                       backgroundColor: const Color(0xFFEF4444),

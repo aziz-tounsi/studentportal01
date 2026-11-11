@@ -14,8 +14,6 @@ import '../../presentation/screens/absences/absences_screen.dart';
 import '../../presentation/screens/absences/absence_detail_screen.dart';
 import '../../presentation/screens/resultats/resultats_screen_v2.dart';
 import '../../presentation/screens/emploi/emploi_screen.dart';
-import '../../presentation/screens/courses/courses_screen.dart';
-import '../../presentation/screens/courses/course_detail_screen.dart';
 import '../../presentation/screens/mon_solde/mon_solde_screen.dart';
 import '../../presentation/screens/documents/documents_screen.dart';
 import '../../presentation/screens/profile/profile_screen.dart';
@@ -23,7 +21,6 @@ import '../../presentation/screens/settings/settings_screen.dart';
 import '../../presentation/screens/contact/contact_screen.dart';
 import '../../presentation/screens/about/about_screen.dart';
 import '../../presentation/screens/bug_report/report_bug_screen.dart';
-import '../../presentation/screens/stats/stats_screen.dart';
 import '../../presentation/screens/ai_chat/ai_chat_screen.dart';
 import '../../presentation/widgets/bubble_nav_bar.dart';
 import '../../presentation/widgets/home_side_drawer.dart';
@@ -68,10 +65,6 @@ Widget _getWidgetForRoute(String route) {
       return const MessagesScreen();
     case '/notifications':
       return const NotificationsScreen();
-    case '/stats':
-      return const StatsScreen();
-    case '/courses':
-      return const CoursesScreen();
     case '/suggestions':
       return const SuggestionsScreen();
     case '/absences':
@@ -341,15 +334,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/stats',
-            name: 'stats',
-            pageBuilder: (context, state) =>
-                NoTransitionPage(child: const StatsScreen()),
+            redirect: (context, state) => '/resultats',
           ),
           GoRoute(
             path: '/courses',
-            name: 'courses',
-            pageBuilder: (context, state) =>
-                NoTransitionPage(child: const CoursesScreen()),
+            redirect: (context, state) => '/emploi',
+          ),
+          GoRoute(
+            path: '/courses/:courseId',
+            redirect: (context, state) => '/emploi',
           ),
           GoRoute(
             path: '/suggestions',
@@ -441,14 +434,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 NoTransitionPage(child: const AIChatScreen()),
           ),
         ],
-      ),
-      GoRoute(
-        path: '/courses/:courseId',
-        name: 'course-detail',
-        builder: (context, state) {
-          final courseId = state.pathParameters['courseId']!;
-          return CourseDetailScreen(courseId: courseId);
-        },
       ),
     ],
     errorBuilder: (context, state) =>

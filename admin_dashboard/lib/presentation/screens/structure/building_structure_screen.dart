@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/building_models.dart';
 import '../../providers/building_provider.dart';
 import '../../widgets/admin_sidebar.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 
 class BuildingStructureScreen extends ConsumerStatefulWidget {
   const BuildingStructureScreen({super.key});
@@ -275,9 +275,15 @@ class _BuildingStructureScreenState
             child: Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
           ),
           const SizedBox(height: 24),
-          const Text('Impossible de charger les données', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text('Unable to load structure', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          Text('Erreur: $error', style: TextStyle(color: AppColors.textSecondary)),
+          Text(
+            UserFriendlyError.format(
+              error,
+              fallback: 'Unable to load building structure right now. Please try again.',
+            ),
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () => ref.read(buildingProvider.notifier).refresh(),

@@ -80,16 +80,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (lower.contains('invalid login credentials') ||
         lower.contains('invalid_credentials') ||
         lower.contains('invalid email or password') ||
+        lower.contains('incorrect email or password') ||
         lower.contains('invalid password') ||
         lower.contains('user not found')) {
       return 'Incorrect email or password. Please check your credentials and try again.';
     }
     if (lower.contains('email not confirmed') ||
-        lower.contains('email_not_confirmed')) {
+        lower.contains('email_not_confirmed') ||
+        lower.contains('not been confirmed')) {
       return 'Your email address is not verified yet. Please check your inbox.';
     }
     if (lower.contains('rate limit') ||
         lower.contains('too many requests') ||
+        lower.contains('too many attempts') ||
         lower.contains('over_email_send_rate_limit')) {
       return 'Too many sign-in attempts. Please wait a moment before trying again.';
     }
@@ -98,7 +101,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         lower.contains('connection') ||
         lower.contains('failed host lookup') ||
         lower.contains('clientexception') ||
-        lower.contains('timeout')) {
+        lower.contains('timeout') ||
+        lower.contains('timed out')) {
       return 'Unable to connect to the server. Please check your internet connection.';
     }
     if (lower.contains('jwt') ||
@@ -107,6 +111,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       return 'Your session has expired. Please sign in again.';
     }
     if (lower.contains('server error') ||
+        lower.contains('temporarily unavailable') ||
         lower.contains('500') ||
         lower.contains('502') ||
         lower.contains('503') ||

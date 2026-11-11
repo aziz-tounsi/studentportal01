@@ -352,45 +352,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               ),
                               child: Column(
                                 children: [
-                                  SizedBox(
-                                    height: safeTop > 0 ? safeTop + 24 : 32,
-                                  ),
+                                  const SizedBox(height: 24),
                                   // Grid Section
-                                  Transform.translate(
-                                    offset: const Offset(0, -2),
-                                    child: Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: responsivePadding,
-                                      ),
-                                      child: GridView.count(
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        crossAxisCount: screenWidth >= 600
-                                            ? (screenWidth >= 900 ? 4 : 3)
-                                            : 2,
-                                        mainAxisSpacing: screenWidth < 365
-                                            ? 10
-                                            : 14,
-                                        crossAxisSpacing: screenWidth < 365
-                                            ? 10
-                                            : 14,
-                                        childAspectRatio: screenWidth >= 600
-                                            ? 1.05
-                                            : (screenWidth < 365
-                                                ? 0.85
-                                                : (screenWidth < 390
-                                                    ? 0.88
-                                                    : 0.92)),
-                                        children: _buildGridCards(
-                                          context,
-                                          l10n,
-                                          ref,
-                                        ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: responsivePadding,
+                                    ),
+                                    child: GridView.count(
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      crossAxisCount: screenWidth >= 600
+                                          ? (screenWidth >= 900 ? 4 : 3)
+                                          : 2,
+                                      mainAxisSpacing: screenWidth < 365
+                                          ? 10
+                                          : 14,
+                                      crossAxisSpacing: screenWidth < 365
+                                          ? 10
+                                          : 14,
+                                      childAspectRatio: screenWidth >= 600
+                                          ? 1.05
+                                          : (screenWidth < 365
+                                              ? 0.85
+                                              : (screenWidth < 390
+                                                  ? 0.88
+                                                  : 0.92)),
+                                      children: _buildGridCards(
+                                        context,
+                                        l10n,
+                                        ref,
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 130),
+                                  SizedBox(
+                                    height: 120 +
+                                        MediaQuery.of(context).padding.bottom,
+                                  ),
                                 ],
                               ),
                             ),
@@ -402,91 +401,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               ),
 
-              // 5. Pinned Menu Button Row (Top Layer with subtle frosted effect when scrolled)
+              // 5. Pinned Menu Button Row (Top Layer, always transparent background)
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: AnimatedBuilder(
-                  animation: _scrollController,
-                  builder: (context, _) {
-                    final double rawOffset = _scrollController.hasClients
-                        ? _scrollController.offset
-                        : 0.0;
-                    final bool isScrolledPast =
-                        rawOffset > (cardTopPosition + 10);
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      decoration: BoxDecoration(
-                        color: isScrolledPast
-                            ? Colors.white.withValues(alpha: 0.70)
-                            : Colors.transparent,
-                        border: isScrolledPast
-                            ? Border(
-                                bottom: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.35),
-                                  width: 0.5,
-                                ),
-                              )
-                            : null,
-                      ),
-                      child: ClipRect(
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(
-                            sigmaX: isScrolledPast ? 16.0 : 0.0,
-                            sigmaY: isScrolledPast ? 16.0 : 0.0,
-                          ),
-                          child: SafeArea(
-                            bottom: false,
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                responsivePadding,
-                                12,
-                                responsivePadding,
-                                12,
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  GestureDetector(
-                                    onTap: _openDrawer,
-                                    child: Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFFFF2D78),
-                                            Color(0xFFFF5CA0),
-                                          ],
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(
-                                              0xFFFF2D78,
-                                            ).withValues(alpha: 0.3),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Icon(
-                                        Icons.menu_rounded,
-                                        color: Colors.white,
-                                        size: 26,
-                                      ),
-                                    ),
-                                  ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      responsivePadding,
+                      12,
+                      responsivePadding,
+                      0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        GestureDetector(
+                          onTap: _openDrawer,
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFFFF2D78),
+                                  Color(0xFFFF5CA0),
                                 ],
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFFFF2D78,
+                                  ).withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.menu_rounded,
+                              color: Colors.white,
+                              size: 26,
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      ],
+                    ),
+                  ),
                 ),
               ),
 

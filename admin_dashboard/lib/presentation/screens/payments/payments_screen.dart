@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../providers/payments_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
@@ -269,8 +270,13 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                                 Icon(Icons.error_outline_rounded, size: 56,
                                     color: AppColors.error.withOpacity(0.6)),
                                 const SizedBox(height: 16),
-                                Text('Erreur: $e',
-                                    style: TextStyle(color: AppColors.textSecondary)),
+                                Text(
+                                  UserFriendlyError.format(
+                                    e,
+                                    fallback: 'Unable to load payments right now. Please try again.',
+                                  ),
+                                  style: TextStyle(color: AppColors.textSecondary),
+                                ),
                                 const SizedBox(height: 20),
                                 ElevatedButton.icon(
                                   onPressed: () => ref.invalidate(paymentsProvider),
@@ -5257,7 +5263,15 @@ class _StudentPaymentDetailDialogState
       ref.read(paymentsProvider.notifier).refresh();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text(
+            UserFriendlyError.format(
+              e,
+              fallback: 'Unable to mark this payment as paid right now. Please try again.',
+            ),
+          ),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
@@ -5284,7 +5298,15 @@ class _StudentPaymentDetailDialogState
       ref.read(paymentsProvider.notifier).refresh();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text(
+            UserFriendlyError.format(
+              e,
+              fallback: 'Unable to mark this payment as unpaid right now. Please try again.',
+            ),
+          ),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
@@ -5355,7 +5377,15 @@ class _StudentPaymentDetailDialogState
       ref.read(paymentsProvider.notifier).refresh();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text(
+            UserFriendlyError.format(
+              e,
+              fallback: 'Unable to cancel this payment right now. Please try again.',
+            ),
+          ),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
@@ -5496,7 +5526,15 @@ class _StudentPaymentDetailDialogState
         ref.read(paymentsProvider.notifier).refresh();
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to update this payment right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -6407,7 +6445,12 @@ class _StudentPaymentDetailDialogState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to update the payment schedule right now. Please try again.',
+              ),
+            ),
             backgroundColor: const Color(0xFFEF4444),
           ),
         );
@@ -8214,7 +8257,7 @@ class _CreatePaymentPlanDialogState extends State<_CreatePaymentPlanDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e, fallback: 'Unable to save payment settings right now. Please try again.')), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -8429,7 +8472,15 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save pricing settings right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {

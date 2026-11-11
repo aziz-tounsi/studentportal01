@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/config/supabase_config.dart';
+import '../../core/utils/error_messages.dart';
 import '../../data/models/grading_config_model.dart';
 import '../../data/models/student_result_model.dart';
 import '../../data/models/tunisian_coefficients.dart';
@@ -196,7 +197,10 @@ class ResultsProvider extends ChangeNotifier {
       _niveaux = await _repository.getNiveaux();
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement des niveaux: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load grade levels right now. Please try again.',
+      );
       notifyListeners();
     }
   }
@@ -220,7 +224,10 @@ class ResultsProvider extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement des sections: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load sections right now. Please try again.',
+      );
       notifyListeners();
     }
   }
@@ -257,7 +264,10 @@ class ResultsProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement des années: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load academic years right now. Please try again.',
+      );
       notifyListeners();
     }
   }
@@ -320,7 +330,10 @@ class ResultsProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement des semestres: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load semesters right now. Please try again.',
+      );
       debugPrint('❌ Error loading semesters: $e');
       notifyListeners();
     }
@@ -332,7 +345,10 @@ class ResultsProvider extends ChangeNotifier {
       _classes = await _repository.getClasses();
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement des classes: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load classes right now. Please try again.',
+      );
       notifyListeners();
     }
   }
@@ -352,7 +368,10 @@ class ResultsProvider extends ChangeNotifier {
       );
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement des matières: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load subjects right now. Please try again.',
+      );
       notifyListeners();
     }
   }
@@ -384,7 +403,10 @@ class ResultsProvider extends ChangeNotifier {
       );
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement des élèves: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load students right now. Please try again.',
+      );
       debugPrint('❌ Error loading students: $e');
       notifyListeners();
     }
@@ -406,7 +428,10 @@ class ResultsProvider extends ChangeNotifier {
       );
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du chargement de la configuration: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to load grading configuration right now. Please try again.',
+      );
       notifyListeners();
     }
   }
@@ -434,7 +459,10 @@ class ResultsProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du calcul des résultats: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to calculate results right now. Please try again.',
+      );
       _isLoading = false;
       notifyListeners();
     }
@@ -458,7 +486,10 @@ class ResultsProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors du calcul: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to calculate student results right now. Please try again.',
+      );
       _isLoading = false;
       notifyListeners();
     }
@@ -486,7 +517,10 @@ class ResultsProvider extends ChangeNotifier {
       // Recalculate results
       await calculateResults();
     } catch (e) {
-      _error = 'Erreur lors de l\'enregistrement: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to save the grade right now. Please try again.',
+      );
       notifyListeners();
     }
   }
@@ -501,7 +535,10 @@ class ResultsProvider extends ChangeNotifier {
       await _repository.saveBulkGrades(gradesData);
       await calculateResults();
     } catch (e) {
-      _error = 'Erreur lors de l\'enregistrement: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to save grades right now. Please try again.',
+      );
       _isLoading = false;
       notifyListeners();
     }
@@ -514,7 +551,10 @@ class ResultsProvider extends ChangeNotifier {
       _gradingConfig = config;
       notifyListeners();
     } catch (e) {
-      _error = 'Erreur lors de l\'enregistrement: $e';
+      _error = UserFriendlyError.format(
+        e,
+        fallback: 'Unable to save grading configuration right now. Please try again.',
+      );
       notifyListeners();
     }
   }

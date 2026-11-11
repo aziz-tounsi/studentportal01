@@ -10,6 +10,7 @@ import '../../providers/users_provider.dart';
 import '../../providers/curriculum_provider.dart';
 import '../../providers/classes_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 
 class UserFormDialog extends ConsumerStatefulWidget {
@@ -313,7 +314,12 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                             final classesAsync = ref.watch(classesProvider);
                             return classesAsync.when(
                               loading: () => const LinearProgressIndicator(),
-                              error: (e, _) => Text('Erreur: $e'),
+                              error: (e, _) => Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback: 'Unable to load classes right now.',
+                                ),
+                              ),
                               data: (classesState) {
                                 final classes = classesState.classes;
                                 return _buildPremiumDropdown<String?>(
@@ -897,9 +903,14 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
         );
       }
     } else if (mounted) {
+      final errMsg = ref.read(usersProvider).value?.error;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Une erreur est survenue'),
+        SnackBar(
+          content: Text(
+            errMsg != null && errMsg.isNotEmpty
+                ? errMsg
+                : 'Unable to save user details right now. Please try again.',
+          ),
           backgroundColor: AppColors.error,
         ),
       );

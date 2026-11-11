@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../providers/absences_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
@@ -693,7 +694,13 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
         children: [
           Icon(Icons.error_outline, size: 64, color: AppColors.error),
           const SizedBox(height: 16),
-          Text('Erreur: $error', style: TextStyle(color: AppColors.textSecondary)),
+          Text(
+            UserFriendlyError.format(
+              error,
+              fallback: 'Unable to load absences right now. Please try again.',
+            ),
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () => ref.invalidate(absencesProvider),
@@ -2884,7 +2891,15 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
       if (mounted) {
         setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to record absences right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }

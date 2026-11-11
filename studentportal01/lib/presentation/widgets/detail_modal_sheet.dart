@@ -25,8 +25,8 @@ class DetailModalSheet extends StatefulWidget {
   }) {
     return showGeneralDialog<T>(
       context: context,
-      barrierDismissible: false,
-      barrierLabel: '',
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
       barrierColor: Colors.transparent,
       transitionDuration: Duration.zero,
       pageBuilder: (_, _, _) => Material(

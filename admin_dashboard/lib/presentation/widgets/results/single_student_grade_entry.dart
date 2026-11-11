@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../presentation/widgets/ios_loader.dart';
 import 'subject_exam_config_dialog.dart';
-import '../user_avatar.dart';
 
 /// A widget for entering grades for a SINGLE student
 /// Shows all subjects and their exam types in a card-based layout
@@ -182,7 +182,7 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
     if (_enrollmentId.isEmpty || _userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Erreur: Données étudiant invalides'),
+          content: Text('Invalid student information. Please close and try again.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -251,7 +251,7 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e, fallback: 'Unable to save grades right now. Please try again.')), backgroundColor: AppColors.error),
         );
       }
     } finally {

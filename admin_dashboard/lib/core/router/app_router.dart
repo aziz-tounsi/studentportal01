@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_theme.dart' show AppColors;
+import '../utils/error_messages.dart';
 import '../../presentation/screens/login_screen.dart';
 import '../../presentation/screens/dashboard/dashboard_screen.dart';
 import '../../presentation/screens/users/users_screen.dart';
@@ -36,6 +37,10 @@ final router = GoRouter(
   errorBuilder: (context, state) {
     debugPrint('GoRouter ERROR: ${state.error}');
     debugPrint('GoRouter ERROR path: ${state.uri}');
+    final friendlyMsg = UserFriendlyError.format(
+      state.error,
+      fallback: 'The page you requested could not be found. Please return to the dashboard.',
+    );
     return Scaffold(
       body: Center(
         child: Column(
@@ -43,9 +48,9 @@ final router = GoRouter(
           children: [
             Icon(Icons.error, size: 64, color: AppColors.error),
             const SizedBox(height: 16),
-            Text('Route non trouvée: ${state.uri}'),
+            const Text('Page not found'),
             const SizedBox(height: 8),
-            Text('${state.error}', style: TextStyle(color: AppColors.textSecondary)),
+            Text(friendlyMsg, style: TextStyle(color: AppColors.textSecondary)),
           ],
         ),
       ),

@@ -1,5 +1,6 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/utils/error_messages.dart';
 import '../../data/models/dashboard_models.dart';
 
 final dashboardProvider = AsyncNotifierProvider<DashboardNotifier, DashboardState>(DashboardNotifier.new);
@@ -64,7 +65,12 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
         isLoading: false,
       );
     } catch (e) {
-      return DashboardState(error: e.toString());
+      return DashboardState(
+        error: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to load dashboard statistics right now. Please try again.',
+        ),
+      );
     }
   }
 

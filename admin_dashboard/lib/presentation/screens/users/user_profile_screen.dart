@@ -9,11 +9,11 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
-import '../../../core/config/supabase_config.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
 import 'user_form_dialog.dart';
@@ -412,7 +412,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             children: [
               Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
               const SizedBox(height: 16),
-              Text('Erreur: $e', style: TextStyle(color: AppColors.error)),
+              Text(
+                UserFriendlyError.format(
+                  e,
+                  fallback: 'Unable to load this profile right now. Please try again.',
+                ),
+                style: TextStyle(color: AppColors.error),
+              ),
             ],
           ),
         ),
@@ -802,7 +808,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -909,7 +915,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -1041,7 +1047,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -2052,7 +2058,7 @@ onTap: () => _showStudentPaymentsSheet(data),
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -2423,7 +2429,7 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -2450,7 +2456,7 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -2502,7 +2508,7 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -3106,7 +3112,7 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }

@@ -972,16 +972,17 @@ String buildAISystemContext(StudentAISnapshot snap) {
     }
   }
 
-  // 8. Courses & Learning Materials
-  sb.writeln('\n=== 8. COURSES & LEARNING RESOURCES ===');
+  // 8. Class Learning Materials (Accessed via Documents / Emploi — no standalone courses screen exists)
+  sb.writeln('\n=== 8. LEARNING MATERIALS & SUBJECT FILES (NO DEDICATED COURSES PAGE EXISTS IN APP) ===');
   if (snap.courses.isEmpty) {
-    sb.writeln('No course resources uploaded.');
+    sb.writeln('No learning files uploaded. (Remind AI: There is NO /courses page in this app.)');
   } else {
+    sb.writeln('(Note for AI: Present details directly here or refer to Documents/Emploi; there is NO /courses page in the app.)');
     for (final c in snap.courses) {
       final so = c['subject_offerings'] as Map<String, dynamic>?;
       final sub = so?['subjects'] as Map<String, dynamic>?;
       final subName = sub?['name'] ?? '';
-      sb.writeln('• ${subName.isNotEmpty ? "[$subName] " : ""}${c['title'] ?? 'Cours'}: ${c['description'] ?? ''}');
+      sb.writeln('• ${subName.isNotEmpty ? "[$subName] " : ""}${c['title'] ?? 'Matière'}: ${c['description'] ?? ''}');
     }
   }
 

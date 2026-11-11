@@ -2917,7 +2917,78 @@ class AppLocalizations {
         if (paymentParts.isNotEmpty) return paymentParts.join(' • ');
         break;
 
+      case 'conseil_discipline':
+      case 'convocation_parents':
+      case 'retenue':
+        String date = (payload['meeting_date'] as String?)?.trim() ?? '';
+        String time = (payload['meeting_time'] as String?)?.trim() ?? '';
+        if (date.isEmpty) {
+          final m = RegExp(
+            r'(?:le|يوم)\s+(\d{1,2}/\d{1,2}/\d{2,4})(?:\s+(?:à|الساعة)\s+(\d{1,2}:\d{2}))?',
+            caseSensitive: false,
+          ).firstMatch(body);
+          if (m != null) {
+            date = m.group(1)?.trim() ?? '';
+            time = m.group(2)?.trim() ?? '';
+          }
+        }
+        if (date.isEmpty) {
+          final m = RegExp(r'(\d{1,2}/\d{1,2}/\d{2,4})').firstMatch(body);
+          if (m != null) date = m.group(1)?.trim() ?? '';
+        }
+        if (date.isNotEmpty) {
+          final prefix = lang == 'ar' ? 'يوم $date' : (lang == 'en' ? 'On $date' : 'Le $date');
+          return time.isNotEmpty ? '$prefix • $time' : prefix;
+        }
+        break;
+
+      case 'exclusion_classe':
+      case 'exclusion_etablissement':
+        String startDate = (payload['start_date'] as String?)?.trim() ?? '';
+        String endDate = (payload['end_date'] as String?)?.trim() ?? '';
+        if (startDate.isEmpty) {
+          final m = RegExp(
+            r'(\d{1,2}/\d{1,2}/\d{2,4}).*?(\d{1,2}/\d{1,2}/\d{2,4})',
+          ).firstMatch(body);
+          if (m != null) {
+            startDate = m.group(1)?.trim() ?? '';
+            endDate = m.group(2)?.trim() ?? '';
+          }
+        }
+        if (startDate.isNotEmpty) {
+          if (endDate.isNotEmpty && startDate != endDate) {
+            return '$startDate $arrow $endDate';
+          }
+          return lang == 'ar' ? 'يوم $startDate' : (lang == 'en' ? 'On $startDate' : 'Le $startDate');
+        }
+        break;
+
+      case 'exclusion_definitive':
+      case 'avertissement':
+        String date = (payload['sanction_date'] as String?)?.trim() ?? '';
+        if (date.isEmpty) {
+          final m = RegExp(r'(\d{1,2}/\d{1,2}/\d{2,4})').firstMatch(body);
+          if (m != null) date = m.group(1)?.trim() ?? '';
+        }
+        if (date.isNotEmpty) {
+          return lang == 'ar' ? 'يوم $date' : (lang == 'en' ? 'On $date' : 'Le $date');
+        }
+        break;
+
       default:
+        // Generic date extraction fallback for any announcement with date in text
+        final dateMatch = RegExp(
+          r'(?:le|avant\s+le|du|يوم|قبل)\s+(\d{1,2}/\d{1,2}/\d{2,4})(?:\s+(?:à|الساعة)\s+(\d{1,2}:\d{2}))?',
+          caseSensitive: false,
+        ).firstMatch(body);
+        if (dateMatch != null) {
+          final d = dateMatch.group(1)?.trim() ?? '';
+          final t = dateMatch.group(2)?.trim() ?? '';
+          if (d.isNotEmpty) {
+            final prefix = lang == 'ar' ? 'يوم $d' : (lang == 'en' ? 'On $d' : 'Le $d');
+            return t.isNotEmpty ? '$prefix • $t' : prefix;
+          }
+        }
         break;
     }
 

@@ -7,9 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/admin_sidebar.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../users/user_profile_screen.dart';
@@ -381,7 +381,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                             children: [
                               Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
                               const SizedBox(height: 16),
-                              Text('Erreur: $e'),
+                              Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback: 'Unable to load suggestions right now. Please try again.',
+                                ),
+                              ),
                               const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: () => ref

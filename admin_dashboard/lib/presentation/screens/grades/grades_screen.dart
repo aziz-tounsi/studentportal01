@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:data_table_2/data_table_2.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/utils/error_messages.dart';
 import '../../providers/grades_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
@@ -25,7 +26,14 @@ class GradesScreen extends ConsumerWidget {
                 _buildTopBar(context),
                 Expanded(child: gradesAsync.when(
                   loading: () => const Center(child: IosLoader()),
-                  error: (e, _) => Center(child: Text('Erreur: $e')),
+                  error: (e, _) => Center(
+                    child: Text(
+                      UserFriendlyError.format(
+                        e,
+                        fallback: 'Unable to load grades right now. Please try again.',
+                      ),
+                    ),
+                  ),
                   data: (state) => _buildContent(context, ref, state),
                 )),
               ],

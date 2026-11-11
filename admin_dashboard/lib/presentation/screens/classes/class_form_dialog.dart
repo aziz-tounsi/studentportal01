@@ -1,11 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/class_model.dart';
 import '../../../data/models/academic_models.dart';
 import '../../providers/classes_provider.dart';
 import '../../providers/grade_levels_provider.dart';
-import '../../providers/building_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 
 class ClassFormDialog extends ConsumerStatefulWidget {
@@ -187,7 +187,13 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: LinearProgressIndicator(),
                 ),
-                error: (e, _) => Text('Erreur: $e', style: const TextStyle(color: AppColors.error)),
+                error: (e, _) => Text(
+                  UserFriendlyError.format(
+                    e,
+                    fallback: 'Unable to load grade levels right now.',
+                  ),
+                  style: const TextStyle(color: AppColors.error),
+                ),
                 data: (state) => Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -411,7 +417,15 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save this class right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {

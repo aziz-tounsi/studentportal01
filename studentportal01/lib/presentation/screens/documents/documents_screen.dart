@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../core/theme/responsive.dart';
 import '../../../core/router/app_router.dart';
 import '../../../data/models/document_model.dart';
+import '../../../data/services/offline_cache_service.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/student_context_provider.dart';
 import '../../widgets/animated_search_header.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/bouncy_dropdown_selector.dart';
@@ -18,217 +24,120 @@ import '../../providers/nav_bar_provider.dart';
 // Semester state provider for this screen
 final docsSemesterProvider = StateProvider<int>((ref) => 1);
 
-// Demo documents dataset with distinct documents for each semester
-final List<DocumentModel> _demoDocuments = [
-  // --- SEMESTRE 1 DOCUMENTS ---
-    DocumentModel(
-      id: 's1-1',
-      schoolId: 'school1',
-      title: 'Attestation de scolarité',
-      description: 'Attestation officielle d\'inscription pour l\'année universitaire 2024-2025',
-      category: 'attestation',
-      semester: 1,
-      fileUrl: 'https://example.com/attestation.pdf',
-      fileName: 'attestation_scolarite_2024_2025.pdf',
-      fileSize: 256000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2024, 9, 15),
-    ),
-    DocumentModel(
-      id: 's1-2',
-      schoolId: 'school1',
-      title: 'Certificat d\'inscription',
-      description: 'Certificat d\'inscription administrative au titre du premier semestre',
-      category: 'certificat',
-      semester: 1,
-      fileUrl: 'https://example.com/certificat.pdf',
-      fileName: 'certificat_inscription_s1.pdf',
-      fileSize: 145000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2024, 9, 5),
-    ),
-    DocumentModel(
-      id: 's1-3',
-      schoolId: 'school1',
-      title: 'Règlement intérieur & Charte',
-      description: 'Règlement intérieur, devoirs et droits de l\'étudiant sur le campus',
-      category: 'reglement',
-      semester: 1,
-      fileUrl: 'https://example.com/reglement.pdf',
-      fileName: 'reglement_interieur_2024.pdf',
-      fileSize: 420000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2024, 9, 1),
-    ),
-    DocumentModel(
-      id: 's1-4',
-      schoolId: 'school1',
-      title: 'Carte d\'étudiant numérique',
-      description: 'Badge d\'accès sécurisé aux laboratoires et à la bibliothèque',
-      category: 'carte_etudiant',
-      semester: 1,
-      fileUrl: 'https://example.com/carte.pdf',
-      fileName: 'carte_etudiant_2024_2025.pdf',
-      fileSize: 95000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2024, 10, 1),
-    ),
-    DocumentModel(
-      id: 's1-5',
-      schoolId: 'school1',
-      title: 'Emploi du temps - Semestre 1',
-      description: 'Planning des séances de cours magistraux, TD et TP',
-      category: 'planning',
-      semester: 1,
-      fileUrl: 'https://example.com/planning_s1.pdf',
-      fileName: 'emploi_du_temps_semestre_1.pdf',
-      fileSize: 310000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2024, 9, 8),
-    ),
-    DocumentModel(
-      id: 's1-6',
-      schoolId: 'school1',
-      title: 'Calendrier des examens S1',
-      description: 'Planning des sessions principales et des rattrapages S1',
-      category: 'exams',
-      semester: 1,
-      fileUrl: 'https://example.com/calendrier_s1.pdf',
-      fileName: 'calendrier_examens_s1.pdf',
-      fileSize: 128000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2024, 11, 20),
-    ),
-    DocumentModel(
-      id: 's1-7',
-      schoolId: 'school1',
-      title: 'Relevé de notes - S1',
-      description: 'Relevé de notes et crédits ECTS validés du premier semestre',
-      category: 'releve_notes',
-      semester: 1,
-      fileUrl: 'https://example.com/releve_s1.pdf',
-      fileName: 'releve_notes_s1_2024_2025.pdf',
-      fileSize: 180000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 1, 25),
-    ),
+/// Parses raw `public.documents` rows, enforces per-student / per-class / school-wide
+/// visibility, and sorts newest first.
+List<DocumentModel> parseVisibleStudentDocuments(
+  List<Map<String, dynamic>> rawRows, {
+  String? userId,
+  String? classId,
+}) {
+  final docs = <DocumentModel>[];
+  for (final row in rawRows) {
+    try {
+      final doc = DocumentModel.fromJson(row);
+      if (doc.isVisibleToStudent(userId: userId, classId: classId)) {
+        docs.add(doc);
+      }
+    } catch (_) {}
+  }
+  docs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return docs;
+}
 
-    // --- SEMESTRE 2 DOCUMENTS ---
-    DocumentModel(
-      id: 's2-1',
-      schoolId: 'school1',
-      title: 'Emploi du temps - Semestre 2',
-      description: 'Planning des cours et des créneaux de projets du semestre 2',
-      category: 'planning',
-      semester: 2,
-      fileUrl: 'https://example.com/planning_s2.pdf',
-      fileName: 'emploi_du_temps_semestre_2.pdf',
-      fileSize: 295000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 2, 3),
-    ),
-    DocumentModel(
-      id: 's2-2',
-      schoolId: 'school1',
-      title: 'Convention de stage & Guide PFE',
-      description: 'Modèle de convention tripartite obligatoire et guide de rédaction',
-      category: 'stage_pfe',
-      semester: 2,
-      fileUrl: 'https://example.com/convention_stage.pdf',
-      fileName: 'convention_stage_et_guide_pfe.pdf',
-      fileSize: 520000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 3, 10),
-    ),
-    DocumentModel(
-      id: 's2-3',
-      schoolId: 'school1',
-      title: 'Calendrier des examens S2',
-      description: 'Planning des épreuves terminales du second semestre',
-      category: 'exams',
-      semester: 2,
-      fileUrl: 'https://example.com/calendrier_s2.pdf',
-      fileName: 'calendrier_examens_s2.pdf',
-      fileSize: 135000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 5, 15),
-    ),
-    DocumentModel(
-      id: 's2-4',
-      schoolId: 'school1',
-      title: 'Relevé de notes - S2',
-      description: 'Relevé de notes officiel du second semestre et moyennes annuelles',
-      category: 'releve_notes',
-      semester: 2,
-      fileUrl: 'https://example.com/releve_s2.pdf',
-      fileName: 'releve_notes_s2_2024_2025.pdf',
-      fileSize: 195000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 6, 20),
-    ),
-    DocumentModel(
-      id: 's2-5',
-      schoolId: 'school1',
-      title: 'Attestation de réussite S2',
-      description: 'Attestation de validation de l\'année et passage en année supérieure',
-      category: 'attestation',
-      semester: 2,
-      fileUrl: 'https://example.com/reussite_s2.pdf',
-      fileName: 'attestation_reussite_s2.pdf',
-      fileSize: 210000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 6, 28),
-    ),
+/// All documents from Supabase visible to the signed-in student (with Realtime + offline cache).
+final allStudentDocumentsProvider = FutureProvider<List<DocumentModel>>((ref) async {
+  final studentCtx = await ref.watch(studentContextProvider.future);
+  final authState = ref.watch(authProvider);
+  final supabase = Supabase.instance.client;
 
-    // --- SEMESTRE 3 DOCUMENTS ---
-    DocumentModel(
-      id: 's3-1',
-      schoolId: 'school1',
-      title: 'Emploi du temps - Semestre 3',
-      description: 'Planning des cours avancés et ateliers de spécialité',
-      category: 'planning',
-      semester: 3,
-      fileUrl: 'https://example.com/planning_s3.pdf',
-      fileName: 'emploi_du_temps_semestre_3.pdf',
-      fileSize: 310000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 9, 10),
-    ),
-    DocumentModel(
-      id: 's3-2',
-      schoolId: 'school1',
-      title: 'Guide des options de spécialité',
-      description: 'Descriptif des parcours et choix de modules optionnels',
-      category: 'administrative',
-      semester: 3,
-      fileUrl: 'https://example.com/guide_s3.pdf',
-      fileName: 'guide_specialites_s3.pdf',
-      fileSize: 450000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 9, 12),
-    ),
-    DocumentModel(
-      id: 's3-3',
-      schoolId: 'school1',
-      title: 'Planning des examens S3',
-      description: 'Calendrier des évaluations partielles et projets S3',
-      category: 'exams',
-      semester: 3,
-      fileUrl: 'https://example.com/examens_s3.pdf',
-      fileName: 'planning_examens_s3.pdf',
-      fileSize: 140000,
-      mimeType: 'application/pdf',
-      createdAt: DateTime(2025, 11, 15),
-    ),
-  ];
+  final schoolId = studentCtx?.schoolId ?? authState.user?.schoolId;
+  final userId = studentCtx?.userId ?? authState.user?.id;
+  final classId = studentCtx?.classId ?? authState.enrollment?.classId;
 
-// Demo documents provider family with distinct documents for each semester & authentic loading delay
-final documentsProvider = FutureProvider.family<List<DocumentModel>, int>((ref, semester) async {
-  await Future.delayed(const Duration(milliseconds: 260));
-  return _demoDocuments.where((doc) {
-    if (doc.category == 'courses') return false;
-    return doc.effectiveSemester == semester;
-  }).toList();
+  final primaryCacheKey =
+      'documents_school_${schoolId ?? 'none'}_user_${userId ?? 'anon'}';
+  const latestCacheKey = 'documents_latest';
+
+  List<DocumentModel> readCachedDocuments() {
+    for (final key in [primaryCacheKey, latestCacheKey]) {
+      final cached = OfflineCacheService.instance.getListOfMaps(key);
+      if (cached != null) {
+        return parseVisibleStudentDocuments(
+          cached,
+          userId: userId,
+          classId: classId,
+        );
+      }
+    }
+    return [];
+  }
+
+  // Listen for new/updated/deleted admin documents in real time when enabled.
+  RealtimeChannel? channel;
+  try {
+    channel = supabase
+        .channel('student_documents_${schoolId ?? 'global'}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'documents',
+          callback: (_) => ref.invalidateSelf(),
+        )
+        .subscribe();
+    ref.onDispose(() {
+      if (channel != null) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (_) {}
+      }
+    });
+  } catch (_) {}
+
+  if (schoolId == null || schoolId.isEmpty) {
+    return readCachedDocuments();
+  }
+
+  try {
+    final response = await supabase
+        .from('documents')
+        .select(
+          'id, school_id, class_id, title, description, category, file_url, file_name, file_size, mime_type, uploaded_by, created_at',
+        )
+        .eq('school_id', schoolId)
+        .order('created_at', ascending: false);
+
+    final rawRows = List<Map<String, dynamic>>.from(response as List);
+    final visibleRows = <Map<String, dynamic>>[];
+    final visibleDocs = <DocumentModel>[];
+
+    for (final row in rawRows) {
+      try {
+        final doc = DocumentModel.fromJson(row);
+        if (doc.isVisibleToStudent(userId: userId, classId: classId)) {
+          visibleRows.add(row);
+          visibleDocs.add(doc);
+        }
+      } catch (_) {}
+    }
+
+    visibleDocs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    OfflineCacheService.instance.setJson(primaryCacheKey, visibleRows);
+    OfflineCacheService.instance.setJson(latestCacheKey, visibleRows);
+    ConnectivityService.instance.reportNetworkSuccess();
+
+    return visibleDocs;
+  } catch (e) {
+    ConnectivityService.instance.reportNetworkError(e);
+    return readCachedDocuments();
+  }
+});
+
+/// Documents filtered for the currently selected period/semester.
+final documentsProvider =
+    FutureProvider.family<List<DocumentModel>, int>((ref, semester) async {
+  final docs = await ref.watch(allStudentDocumentsProvider.future);
+  return docs.where((doc) => doc.matchesSemester(semester)).toList();
 });
 
 class DocumentsScreen extends ConsumerStatefulWidget {
@@ -239,10 +148,12 @@ class DocumentsScreen extends ConsumerStatefulWidget {
 }
 
 class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _searchAnimController;
   String? _selectedCategory;
-  
+  bool _hasUserPickedSemester = false;
+  DateTime? _lastResumeRefresh;
+
   // Search state
   bool _isSearching = false;
   String _searchQuery = '';
@@ -261,6 +172,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _searchAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -273,6 +185,36 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
         });
       }
     });
+
+    // Ensure visiting the Documents screen checks for newly admin-sent documents.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!ref.read(allStudentDocumentsProvider).isLoading) {
+        ref.invalidate(allStudentDocumentsProvider);
+      }
+      final currentSemesters = ref.read(semestersProvider).valueOrNull;
+      if (currentSemesters != null &&
+          currentSemesters.isNotEmpty &&
+          !_hasUserPickedSemester) {
+        final activeNum = resolveCurrentSemesterNumber(currentSemesters);
+        if (ref.read(docsSemesterProvider) != activeNum) {
+          ref.read(docsSemesterProvider.notifier).state = activeNum;
+        }
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final now = DateTime.now();
+      if (_lastResumeRefresh == null ||
+          now.difference(_lastResumeRefresh!) > const Duration(seconds: 3)) {
+        _lastResumeRefresh = now;
+        ref.invalidate(semestersProvider);
+        ref.invalidate(allStudentDocumentsProvider);
+      }
+    }
   }
 
   @override
@@ -283,6 +225,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_isSearching) {
       ref.read(backSwipeInterceptorProvider.notifier).state = null;
     }
@@ -342,6 +285,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                   accentColor: const Color(0xFF6B5CE7),
                   secondaryColor: const Color(0xFF8B5CF6),
                   onChanged: (v) {
+                    _hasUserPickedSemester = true;
                     ref.read(docsSemesterProvider.notifier).state = v;
                     setState(() {
                       _selectedCategory = null;
@@ -383,9 +327,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
 
   Widget _buildContent(List<DocumentModel> documents, AppLocalizations l10n, int selectedSemester) {
     // 1. Strictly filter documents for the selected semester
-    // Courses are excluded as they belong to the Dedicated Courses Screen
+    // All document types including courses are supported in the document page
     final semesterDocs = documents.where((doc) {
-      if (doc.category == 'courses') return false;
       return doc.effectiveSemester == selectedSemester;
     }).toList();
 
@@ -446,6 +389,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
+                ref.invalidate(allStudentDocumentsProvider);
                 ref.invalidate(documentsProvider(selectedSemester));
                 await ref.read(documentsProvider(selectedSemester).future);
               },
@@ -470,12 +414,18 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
   }
 
   Widget _buildSortAndFilterBar(List<String> availableCategories, AppLocalizations l10n) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
     const allCategoriesKey = '__ALL__';
     final currentLabel = DocumentTypeHelper.getLabel(_selectedCategory, l10n);
 
+    final allCategoryKeys = <String>{
+      ...DocumentTypeHelper.types.keys,
+      ...availableCategories,
+    };
+
     final sortOptions = <MapEntry<String, String>>[
       MapEntry(allCategoriesKey, l10n.allTypes),
-      ...availableCategories.map((cat) => MapEntry(cat, DocumentTypeHelper.getLabel(cat, l10n))),
+      ...allCategoryKeys.map((cat) => MapEntry(cat, DocumentTypeHelper.getLabel(cat, l10n))),
     ];
 
     final items = sortOptions.map((entry) {
@@ -515,7 +465,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               });
             },
             menuWidth: 260.0,
-            menuAlignment: Alignment.bottomRight,
+            menuAlignment: isRtl ? Alignment.bottomLeft : Alignment.bottomRight,
             borderRadius: 22.0,
             customTrigger: (context, isOpen, toggle, selectedItem) {
               return GestureDetector(
@@ -865,10 +815,10 @@ class _DocumentCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (document.description != null) ...[
+                      if (document.cleanDescription != null) ...[
                         const SizedBox(height: 2),
                         Text(
-                          document.description!,
+                          document.cleanDescription!,
                           style: ArabicTypography.bodyStyle(
                             context,
                             fontSize: 12,
@@ -959,16 +909,33 @@ class _DocumentCard extends StatelessWidget {
         shrinkScale: 0.94,
         overshootScale: 1.05,
         delayNavigation: true,
-        onTap: () {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.translate('downloading_status')),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              backgroundColor: categoryColor,
-            ),
-          );
+        onTap: () async {
+          Navigator.of(context, rootNavigator: true).pop();
+          final url = document.fileUrl.trim();
+          if (url.isEmpty) return;
+          try {
+            final uri = Uri.parse(url);
+            final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+            if (!launched) {
+              await launchUrl(uri, mode: LaunchMode.platformDefault);
+            }
+          } catch (_) {
+            try {
+              final uri = Uri.parse(url);
+              await launchUrl(uri, mode: LaunchMode.platformDefault);
+            } catch (_) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(l10n.cannotOpenFile),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                );
+              }
+            }
+          }
         },
         child: Container(
           width: double.infinity,
@@ -1071,10 +1038,10 @@ class _DocumentCard extends StatelessWidget {
             ],
           ),
           
-          if (document.description != null && document.description!.trim().isNotEmpty) ...[
+          if ((document.cleanDescription ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 20),
             Text(
-              document.description!,
+              document.cleanDescription!.trim(),
               style: ArabicTypography.bodyStyle(
                 context,
                 fontSize: 14,

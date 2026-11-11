@@ -237,6 +237,39 @@ final suggestionsProvider = FutureProvider.autoDispose<List<Suggestion>>((ref) a
       'suggestions_latest',
       results.map((s) => s.toJson()).toList(),
     );
+    // Realtime subscription for suggestions and replies
+    RealtimeChannel? channel;
+    try {
+      channel = supabase
+          .channel('suggestions_realtime_$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'suggestions',
+            callback: (_) {
+              debugPrint('Realtime: suggestions table changed -> refreshing');
+              ref.invalidateSelf();
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'suggestion_replies',
+            callback: (_) {
+              debugPrint('Realtime: suggestion_replies table changed -> refreshing');
+              ref.invalidateSelf();
+            },
+          )
+          .subscribe();
+      ref.onDispose(() {
+        if (channel != null) {
+          try {
+            supabase.removeChannel(channel);
+          } catch (_) {}
+        }
+      });
+    } catch (_) {}
+
     ConnectivityService.instance.reportNetworkSuccess();
     return results;
   } catch (e) {

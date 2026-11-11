@@ -115,8 +115,8 @@ class StudentAnnouncement {
       senderType: json['sender_type'] as String?,
       publishedAt: DateTime.parse(
         json['published_at'] as String? ?? json['created_at'] as String,
-      ),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      ).toLocal(),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
       payload: (json['payload'] as Map<String, dynamic>?) ?? const {},
     );
   }
@@ -279,6 +279,30 @@ final globalAnnouncementsProvider = FutureProvider<List<StudentAnnouncement>>((
         )
         .toList();
 
+    // Realtime subscription for global announcements
+    RealtimeChannel? channel;
+    try {
+      channel = supabase
+          .channel('announcements_global_realtime_$schoolId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'announcements_global',
+            callback: (_) {
+              debugPrint('Realtime: announcements_global changed -> refreshing');
+              ref.invalidateSelf();
+            },
+          )
+          .subscribe();
+      ref.onDispose(() {
+        if (channel != null) {
+          try {
+            supabase.removeChannel(channel);
+          } catch (_) {}
+        }
+      });
+    } catch (_) {}
+
     OfflineCacheService.instance.setJson(cacheKey, list.map((a) => a.toJson()).toList());
     OfflineCacheService.instance.setJson('global_announcements_default', list.map((a) => a.toJson()).toList());
     ConnectivityService.instance.reportNetworkSuccess();
@@ -411,6 +435,30 @@ final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((
           ),
         )
         .toList();
+
+    // Realtime subscription for class messages
+    RealtimeChannel? channel;
+    try {
+      channel = supabase
+          .channel('announcements_class_realtime_$classId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'announcements_class',
+            callback: (_) {
+              debugPrint('Realtime: announcements_class changed -> refreshing');
+              ref.invalidateSelf();
+            },
+          )
+          .subscribe();
+      ref.onDispose(() {
+        if (channel != null) {
+          try {
+            supabase.removeChannel(channel);
+          } catch (_) {}
+        }
+      });
+    } catch (_) {}
 
     OfflineCacheService.instance.setJson(cacheKey, list.map((a) => a.toJson()).toList());
     OfflineCacheService.instance.setJson('class_messages_default', list.map((a) => a.toJson()).toList());

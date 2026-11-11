@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 
@@ -313,7 +314,14 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                 Expanded(
                   child: contactInfoAsync.when(
                     loading: () => const Center(child: IosLoader()),
-                    error: (e, _) => Center(child: Text('Erreur: $e')),
+                    error: (e, _) => Center(
+                      child: Text(
+                        UserFriendlyError.format(
+                          e,
+                          fallback: 'Unable to load contact information right now. Please try again.',
+                        ),
+                      ),
+                    ),
                     data: (data) {
                       if (!_isDataLoaded) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {

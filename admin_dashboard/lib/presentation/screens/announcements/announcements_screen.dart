@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../providers/announcements_provider.dart';
 import '../../providers/building_provider.dart';
 import '../../providers/subjects_management_provider.dart';
@@ -413,8 +414,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                               Icon(Icons.error_outline,
                                   size: 48, color: AppColors.error),
                               const SizedBox(height: 16),
-                              Text('Erreur: $e',
-                                  textAlign: TextAlign.center),
+                              Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback: 'Unable to load announcements right now. Please try again.',
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                               const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: () => ref
@@ -3014,7 +3020,7 @@ class _AnnouncementComposerDialogState
               children: [
                 Icon(Icons.error_outline, size: 16, color: AppColors.error.withOpacity(0.7)),
                 const SizedBox(width: 8),
-                const Text('Erreur de chargement des matières', style: TextStyle(fontSize: 12, color: AppColors.error)),
+                const Text('Unable to load subjects', style: TextStyle(fontSize: 12, color: AppColors.error)),
               ],
             ),
           ),
@@ -4139,7 +4145,7 @@ class _AnnouncementComposerDialogState
         return FutureBuilder<List<Map<String, dynamic>>>(
           future: SupabaseConfig.client
               .from('users')
-              .select('id, full_name, phone, student_code')
+              .select('id, full_name, phone, student_code, photo_url, gender')
               .eq('role', 'student')
               .order('full_name'),
           builder: (context, snapshot) {
@@ -4180,12 +4186,15 @@ class _AnnouncementComposerDialogState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Erreur de chargement des élèves',
+                            'Unable to load students',
                             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           ),
                           if (snapshot.hasError)
                             Text(
-                              '${snapshot.error}',
+                              UserFriendlyError.format(
+                                snapshot.error,
+                                fallback: 'Please try refreshing the page.',
+                              ),
                               style: TextStyle(fontSize: 11, color: AppColors.error.withOpacity(0.7)),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -4273,6 +4282,8 @@ class _AnnouncementComposerDialogState
                           children: [
                             UserAvatar(
                               name: selectedStudent['full_name'] ?? '?',
+                              photoUrl: selectedStudent['photo_url'] as String?,
+                              gender: selectedStudent['gender'] as String?,
                               radius: 21,
                             ),
                             const SizedBox(width: 14),
@@ -4447,6 +4458,8 @@ class _AnnouncementComposerDialogState
                                               // Avatar
                                               UserAvatar(
                                                 name: name,
+                                                photoUrl: student['photo_url'] as String?,
+                                                gender: student['gender'] as String?,
                                                 radius: 19,
                                               ),
                                               const SizedBox(width: 12),
@@ -5505,7 +5518,7 @@ class _AnnouncementComposerDialogState
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Erreur de chargement des salles',
+                    'Unable to load rooms',
                     style: TextStyle(color: AppColors.error, fontSize: 12),
                   ),
                 ),
@@ -5794,7 +5807,12 @@ class _AnnouncementComposerDialogState
             );
           },
           loading: () => const Center(child: IosLoader()),
-          error: (e, s) => Text('Erreur: $e'),
+          error: (e, s) => Text(
+            UserFriendlyError.format(
+              e,
+              fallback: 'Unable to load rooms right now.',
+            ),
+          ),
         );
       },
     );
@@ -6641,7 +6659,15 @@ class _AnnouncementComposerDialogState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to attach this file right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -6994,7 +7020,12 @@ class _AnnouncementComposerDialogState
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Erreur upload ${file.name}: $uploadError'),
+                    content: Text(
+                      UserFriendlyError.format(
+                        uploadError,
+                        fallback: 'Unable to upload attachment "${file.name}". Please try again.',
+                      ),
+                    ),
                     backgroundColor: AppColors.error,
                     duration: const Duration(seconds: 5),
                   ),
@@ -7041,7 +7072,12 @@ class _AnnouncementComposerDialogState
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Erreur upload ${file.name}: $uploadError'),
+                    content: Text(
+                      UserFriendlyError.format(
+                        uploadError,
+                        fallback: 'Unable to upload attachment "${file.name}". Please try again.',
+                      ),
+                    ),
                     backgroundColor: AppColors.error,
                     duration: const Duration(seconds: 5),
                   ),
@@ -7056,7 +7092,15 @@ class _AnnouncementComposerDialogState
       debugPrint('Save error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(
+              UserFriendlyError.format(
+                e,
+                fallback: 'Unable to save this announcement right now. Please try again.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {

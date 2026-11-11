@@ -7,13 +7,13 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
 import '../../providers/curriculum_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import 'user_form_dialog.dart';
-import 'user_profile_screen.dart';
 import 'bulk_photo_upload_screen.dart';
 import 'simple_bulk_import_screen.dart';
 import '../../widgets/ios_loader.dart';
@@ -155,7 +155,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                                   child: const Icon(Icons.error_outline_rounded, size: 28, color: AppColors.error),
                                 ),
                                 const SizedBox(height: 16),
-                                Text('Erreur: $e', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                Text(
+                                  UserFriendlyError.format(
+                                    e,
+                                    fallback: 'Unable to load users right now. Please try again.',
+                                  ),
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
                                 const SizedBox(height: 20),
                                 ElevatedButton.icon(
                                   onPressed: () => ref.invalidate(usersProvider),
@@ -1863,24 +1869,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Voulez-vous vraiment supprimer "${u.fullName}" ?'),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.slate50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 16, color: AppColors.textTertiary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('ID: ${u.id}', style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontFamily: 'monospace')),
-                  ),
-                ],
-              ),
-            ),
+            Text('Voulez-vous vraiment supprimer "${u.fullName}" ? Cette action est irréversible.'),
           ],
         ),
         actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -2363,7 +2352,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
       setState(() => _isImporting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de l\'import: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e, fallback: 'Unable to import users from this file. Please verify the file and try again.')), backgroundColor: AppColors.error),
         );
       }
     }
@@ -2396,7 +2385,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
         }
       } catch (e) {
         failed++;
-        errors.add('${user['email']}: $e');
+        errors.add('${user['email']}: ${UserFriendlyError.format(e, fallback: 'Unable to create this account.')}');
       }
     }
 

@@ -6,6 +6,7 @@ import '../../data/models/class_model.dart';
 import '../../data/models/school_models.dart';
 import '../../data/services/user_management_service.dart';
 import '../../core/config/supabase_config.dart';
+import '../../core/utils/error_messages.dart';
 
 final usersProvider = AsyncNotifierProvider<UsersNotifier, UsersState>(
   UsersNotifier.new,
@@ -154,7 +155,12 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
             .toList(),
       );
     } catch (e) {
-      return UsersState(error: e.toString());
+      return UsersState(
+        error: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to load users right now. Please try again.',
+        ),
+      );
     }
   }
 
@@ -266,7 +272,14 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       await refresh();
       return result['success'] == true;
     } catch (e) {
-      state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          error: UserFriendlyError.format(
+            e,
+            fallback: 'Unable to create this user right now. Please try again.',
+          ),
+        ),
+      );
       return false;
     }
   }
@@ -389,7 +402,14 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       return true;
     } catch (e) {
       debugPrint('UsersProvider: Update failed for $id: $e');
-      state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          error: UserFriendlyError.format(
+            e,
+            fallback: 'Unable to update user details right now. Please try again.',
+          ),
+        ),
+      );
       return false;
     }
   }
@@ -412,7 +432,14 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       await refresh();
       return true;
     } catch (e) {
-      state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          error: UserFriendlyError.format(
+            e,
+            fallback: 'Unable to remove profile photo right now. Please try again.',
+          ),
+        ),
+      );
       return false;
     }
   }
@@ -426,7 +453,14 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
     } catch (e) {
       debugPrint('Error in resetUserPassword: $e');
       if (state.hasValue && state.value != null) {
-        state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
+        state = AsyncValue.data(
+          state.value!.copyWith(
+            error: UserFriendlyError.format(
+              e,
+              fallback: 'Unable to reset the password right now. Please try again.',
+            ),
+          ),
+        );
       }
       rethrow;
     }
@@ -509,7 +543,14 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       await refresh();
       return success;
     } catch (e) {
-      state = AsyncValue.data(state.value!.copyWith(error: e.toString()));
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          error: UserFriendlyError.format(
+            e,
+            fallback: 'Unable to delete this user right now. Please try again.',
+          ),
+        ),
+      );
       return false;
     }
   }

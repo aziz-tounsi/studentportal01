@@ -8,6 +8,7 @@
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/utils/error_messages.dart';
 
 /// Student context containing all enrollment-related info
 class StudentContext {
@@ -633,7 +634,12 @@ class CoreDataService {
       });
       return result as Map<String, dynamic>? ?? {'error': 'No result'};
     } catch (e) {
-      return {'error': e.toString()};
+      return {
+        'error': UserFriendlyError.format(
+          e,
+          fallback: 'Unable to synchronize subject offerings right now. Please try again.',
+        ),
+      };
     }
   }
 

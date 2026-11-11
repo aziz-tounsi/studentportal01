@@ -11,6 +11,7 @@ import 'core/config/supabase_config.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/l10n/app_localizations.dart';
+import 'core/services/notification_service.dart';
 import 'data/services/offline_cache_service.dart';
 import 'presentation/providers/locale_provider.dart';
 import 'presentation/widgets/offline_indicator_banner.dart';
@@ -36,6 +37,9 @@ void main() {
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
       );
+
+      // Initialize native local notifications for system alerts
+      await LocalNotificationService.init();
 
       // Set system UI overlay style
       SystemChrome.setSystemUIOverlayStyle(

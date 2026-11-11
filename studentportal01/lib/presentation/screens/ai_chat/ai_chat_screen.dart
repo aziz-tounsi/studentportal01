@@ -2386,10 +2386,12 @@ class _MessageBubble extends StatelessWidget {
             children: actions.take(3).map((act) {
               return GestureDetector(
                 onTap: () {
+                  final safeRoute = resolveSafeStudentRoute(act.route);
+                  if (safeRoute == null) return;
                   ProviderScope.containerOf(context)
                       .read(navigatedFromAIChatProvider.notifier)
                       .state = true;
-                  context.go(act.route);
+                  context.go(safeRoute);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2429,6 +2431,40 @@ class _MessageBubble extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Authoritative whitelist of active student routes in the application.
+/// Guarantees that the AI assistant can never suggest or navigate to a missing/obsolete page.
+const Set<String> kValidStudentRoutes = {
+  '/',
+  '/emploi',
+  '/resultats',
+  '/absences',
+  '/mon-solde',
+  '/documents',
+  '/messages',
+  '/notifications',
+  '/suggestions',
+  '/profile',
+  '/settings',
+  '/contact',
+  '/about',
+};
+
+/// Validates a target route against active student screens and gracefully maps
+/// any legacy/hallucinated routes (such as /courses or /stats) to their actual destination.
+String? resolveSafeStudentRoute(String route) {
+  final clean = route.trim().split('?').first;
+  if (clean == '/courses' || clean.startsWith('/courses/')) {
+    return '/emploi';
+  }
+  if (clean == '/stats') {
+    return '/resultats';
+  }
+  if (kValidStudentRoutes.contains(clean) || clean.startsWith('/absences/')) {
+    return clean;
+  }
+  return null;
 }
 
 class _RouteAction {
@@ -2471,9 +2507,31 @@ List<_RouteAction> _getWelcomeActions(BuildContext context) {
 }
 
 List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
+  final lang = Localizations.localeOf(context).languageCode;
+  return _detectRouteActionsForLang(content, lang);
+}
+
+/// Pure helper returning the validated list of quick-navigation route paths
+/// detected in an AI response for a given language code.
+List<String> detectAIRoutesForLanguage(String content, String lang) {
+  return _detectRouteActionsForLang(content, lang).map((e) => e.route).toList();
+}
+
+List<_RouteAction> _detectRouteActionsForLang(String content, String lang) {
   final actions = <_RouteAction>[];
   final lower = content.toLowerCase();
-  final lang = Localizations.localeOf(context).languageCode;
+
+  bool matchesKeyword(String kw) {
+    if (kw.startsWith('/')) {
+      return lower.contains(kw);
+    }
+    // Use word boundaries for Latin words to prevent substring false positives
+    if (RegExp(r'^[a-zàâäéèêëïîôöùûüç\s-]+$', caseSensitive: false).hasMatch(kw)) {
+      return RegExp(r'\b' + RegExp.escape(kw) + r'\b', caseSensitive: false)
+          .hasMatch(lower);
+    }
+    return lower.contains(kw);
+  }
 
   void check({
     required List<String> keywords,
@@ -2483,20 +2541,22 @@ List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
     required String labelEn,
     required IconData icon,
   }) {
-    if (keywords.any((kw) => lower.contains(kw))) {
+    final safeRoute = resolveSafeStudentRoute(route);
+    if (safeRoute == null) return;
+    if (keywords.any(matchesKeyword)) {
       final label = switch (lang) {
         'ar' => labelAr,
         'fr' => labelFr,
         _ => labelEn,
       };
-      if (!actions.any((a) => a.route == route)) {
-        actions.add(_RouteAction(route: route, label: label, icon: icon));
+      if (!actions.any((a) => a.route == safeRoute)) {
+        actions.add(_RouteAction(route: safeRoute, label: label, icon: icon));
       }
     }
   }
 
   check(
-    keywords: ['/emploi', 'emploi du temps', 'جدول الأوقات', 'timetable', 'حصص'],
+    keywords: ['/emploi', 'emploi du temps', 'جدول الأوقات', 'timetable', 'حصص', 'حصة', 'حصتي', 'prochain cours', 'séance'],
     route: '/emploi',
     labelAr: 'فتح جدول الأوقات',
     labelFr: 'Emploi du temps',
@@ -2504,7 +2564,7 @@ List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
     icon: Icons.calendar_today_rounded,
   );
   check(
-    keywords: ['/resultats', 'résultat', 'résultats', 'النتائج', 'معدل', 'درجات', 'grades', 'bulletin', 'note', 'notes'],
+    keywords: ['/resultats', 'résultat', 'résultats', 'النتائج', 'معدل', 'درجات', 'grades', 'bulletin', 'moyenne'],
     route: '/resultats',
     labelAr: 'عرض النتائج والمعدلات',
     labelFr: 'Voir les Résultats',
@@ -2536,15 +2596,7 @@ List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
     icon: Icons.folder_open_rounded,
   );
   check(
-    keywords: ['/courses', 'cours', 'دروس', 'مقررات', 'course', 'courses'],
-    route: '/courses',
-    labelAr: 'المقررات والدروس',
-    labelFr: 'Mes Cours',
-    labelEn: 'My Courses',
-    icon: Icons.menu_book_rounded,
-  );
-  check(
-    keywords: ['/messages', 'message', 'messages', 'رسائل', 'رسالة'],
+    keywords: ['/messages', 'message de classe', 'messages de classe', 'رسائل الفصل', 'رسائل'],
     route: '/messages',
     labelAr: 'رسائل الفصل',
     labelFr: 'Messages de classe',
@@ -2552,7 +2604,7 @@ List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
     icon: Icons.mail_rounded,
   );
   check(
-    keywords: ['/notifications', 'notification', 'notifications', 'إشعار', 'إعلانات', 'announcement'],
+    keywords: ['/notifications', 'notification', 'notifications', 'إشعار', 'إعلانات', 'announcement', 'annonce'],
     route: '/notifications',
     labelAr: 'الإعلانات والإشعارات',
     labelFr: 'Notifications',
@@ -2568,15 +2620,7 @@ List<_RouteAction> _detectRouteActions(String content, BuildContext context) {
     icon: Icons.lightbulb_rounded,
   );
   check(
-    keywords: ['/stats', 'statistique', 'statistiques', 'إحصائيات', 'statistics'],
-    route: '/stats',
-    labelAr: 'الإحصائيات والرسوم',
-    labelFr: 'Statistiques',
-    labelEn: 'Statistics',
-    icon: Icons.bar_chart_rounded,
-  );
-  check(
-    keywords: ['/profile', 'profil', 'profile', 'الملف الشخصي', 'حسابي'],
+    keywords: ['/profile', 'mon profil', 'الملف الشخصي', 'profile'],
     route: '/profile',
     labelAr: 'الملف الشخصي',
     labelFr: 'Mon Profil',
@@ -3088,10 +3132,13 @@ class _MarkdownText extends StatelessWidget {
           recognizer: TapGestureRecognizer()
             ..onTap = () {
               if (linkTarget.startsWith('/')) {
-                ProviderScope.containerOf(context)
-                    .read(navigatedFromAIChatProvider.notifier)
-                    .state = true;
-                context.go(linkTarget);
+                final safeRoute = resolveSafeStudentRoute(linkTarget);
+                if (safeRoute != null) {
+                  ProviderScope.containerOf(context)
+                      .read(navigatedFromAIChatProvider.notifier)
+                      .state = true;
+                  context.go(safeRoute);
+                }
               }
             },
         ));

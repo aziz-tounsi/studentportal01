@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/utils/error_messages.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/services/user_management_service.dart';
 import '../../providers/users_provider.dart';
@@ -234,7 +235,13 @@ class _PasswordResetRequestsScreenState
                             color: AppColors.error,
                           ),
                           const SizedBox(height: 16),
-                          Text('Erreur: $e', textAlign: TextAlign.center),
+                          Text(
+                            UserFriendlyError.format(
+                              e,
+                              fallback: 'Unable to load password reset requests right now. Please try again.',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
                             onPressed: () {
@@ -1444,7 +1451,7 @@ class _PasswordResetRequestsScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -1557,7 +1564,7 @@ class _PasswordResetRequestsScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -1663,7 +1670,7 @@ class _PasswordResetRequestsScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -1723,7 +1730,7 @@ class _PasswordResetRequestsScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -1783,7 +1790,7 @@ class _PasswordResetRequestsScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -1836,7 +1843,7 @@ class _PasswordResetRequestsScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }
@@ -1932,7 +1939,7 @@ class _DirectResetPasswordModalState
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );
       }
     }

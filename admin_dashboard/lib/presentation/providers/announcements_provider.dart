@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import '../../core/config/supabase_config.dart';
+import '../../core/utils/error_messages.dart';
+import '../../data/services/fcm_push_service.dart';
 import '../../models/announcement_model.dart';
 import '../../repositories/announcement_repository.dart';
 
@@ -328,7 +330,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
             'is_pinned': isPinned,
             'is_important': isImportant,
             'created_by': user.id,
-            'published_at': DateTime.now().toIso8601String(),
+            'published_at': DateTime.now().toUtc().toIso8601String(),
             'announcement_type': announcementType,
             'sender_type': senderType,
             'sender_label': senderLabel ?? adminName,
@@ -344,6 +346,13 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .select('id')
           .single();
       insertedId = result['id'];
+
+      FcmPushService.sendPush(
+        title: title.isNotEmpty ? title : 'Nouveau message',
+        body: content,
+        targetUserIds: [targetStudentId],
+        route: '/messages',
+      );
     } else if (scope == 'class' && targetClassId != null) {
       final result = await supabase
           .from('announcements_class')
@@ -354,7 +363,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
             'is_pinned': isPinned,
             'is_important': isImportant,
             'created_by': user.id,
-            'published_at': DateTime.now().toIso8601String(),
+            'published_at': DateTime.now().toUtc().toIso8601String(),
             'announcement_type': announcementType,
             'sender_type': senderType,
             'sender_label': senderLabel,
@@ -366,6 +375,13 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .select('id')
           .single();
       insertedId = result['id'];
+
+      FcmPushService.sendPush(
+        title: title.isNotEmpty ? title : 'Nouveau message de classe',
+        body: content,
+        targetClassId: targetClassId,
+        route: '/messages',
+      );
     } else {
       final result = await supabase
           .from('announcements_global')
@@ -376,7 +392,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
             'is_pinned': isPinned,
             'is_important': isImportant,
             'created_by': user.id,
-            'published_at': DateTime.now().toIso8601String(),
+            'published_at': DateTime.now().toUtc().toIso8601String(),
             'announcement_type': announcementType,
             'sender_type': senderType,
             'sender_label': senderLabel,
@@ -388,6 +404,13 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .select('id')
           .single();
       insertedId = result['id'];
+
+      FcmPushService.sendPush(
+        title: title.isNotEmpty ? title : 'Nouvelle notification',
+        body: content,
+        targetSchoolId: schoolId,
+        route: '/notifications',
+      );
     }
     ref.invalidateSelf();
     return insertedId;
@@ -428,7 +451,12 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
             fileOptions: FileOptions(contentType: mimeType),
           );
     } catch (e) {
-      throw Exception('Erreur upload storage: $e');
+      throw Exception(
+        UserFriendlyError.format(
+          e,
+          fallback: 'Unable to upload the attachment right now. Please try again.',
+        ),
+      );
     }
 
     final publicUrl = supabase.storage
@@ -453,7 +481,12 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
 
       await supabase.from('announcement_attachments').insert(insertData);
     } catch (e) {
-      throw Exception('Erreur insert attachment: $e');
+      throw Exception(
+        UserFriendlyError.format(
+          e,
+          fallback: 'Unable to save the attachment details. Please try again.',
+        ),
+      );
     }
 
     try {
@@ -465,7 +498,12 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .update({'has_attachment': true})
           .eq('id', announcementId);
     } catch (e) {
-      throw Exception('Erreur update has_attachment: $e');
+      throw Exception(
+        UserFriendlyError.format(
+          e,
+          fallback: 'Unable to update the announcement attachment status. Please try again.',
+        ),
+      );
     }
   }
 

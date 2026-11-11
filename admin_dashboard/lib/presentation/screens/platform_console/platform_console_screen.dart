@@ -890,9 +890,14 @@ class _PlatformConsoleScreenState extends ConsumerState<PlatformConsoleScreen>
                 );
 
                 if (!mounted) return;
+                final errMsg = ref.read(platformConsoleProvider).errorMessage;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(ok ? 'Établissement et compte directeur créés avec succès !' : 'Erreur de création.'),
+                    content: Text(
+                      ok
+                          ? 'Établissement et compte directeur créés avec succès !'
+                          : (errMsg ?? 'Unable to create this school right now. Please try again.'),
+                    ),
                     backgroundColor: ok ? const Color(0xFF059669) : const Color(0xFFDC2626),
                   ),
                 );
@@ -968,9 +973,14 @@ class _PlatformConsoleScreenState extends ConsumerState<PlatformConsoleScreen>
                   notes: notesCtrl.text.trim(),
                 );
                 if (!mounted) return;
+                final errMsg = ref.read(platformConsoleProvider).errorMessage;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(ok ? 'Facture émise avec succès !' : 'Erreur lors de l\'émission.'),
+                    content: Text(
+                      ok
+                          ? 'Facture émise avec succès !'
+                          : (errMsg ?? 'Unable to issue this invoice right now. Please try again.'),
+                    ),
                     backgroundColor: ok ? const Color(0xFF059669) : const Color(0xFFDC2626),
                   ),
                 );

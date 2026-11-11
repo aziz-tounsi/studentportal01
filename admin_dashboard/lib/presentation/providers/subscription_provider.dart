@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/utils/error_messages.dart';
 import 'auth_provider.dart';
 
 final subscriptionProvider =
@@ -59,7 +60,7 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
       if (schoolId == null) {
         state = state.copyWith(
           isLoading: false,
-          errorMessage: 'Établissement non identifié pour cet utilisateur.',
+          errorMessage: 'Unable to identify your school account. Please sign in again.',
         );
         return;
       }
@@ -102,7 +103,10 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Erreur lors du chargement de l\'abonnement: $e',
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to load your subscription details right now. Please try again.',
+        ),
       );
     }
   }
@@ -126,7 +130,12 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
       await loadSubscription();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Échec de la soumission du paiement: $e');
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to submit payment proof right now. Please try again.',
+        ),
+      );
       return false;
     }
   }

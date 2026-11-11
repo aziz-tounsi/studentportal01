@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/utils/error_messages.dart';
 import '../../data/models/user_model.dart';
 
 final authProvider = NotifierProvider<AuthNotifier, AdminAuthState>(AuthNotifier.new);
@@ -50,7 +51,13 @@ class AuthNotifier extends Notifier<AdminAuthState> {
       }
       state = state.copyWith(isLoading: false, isAuthenticated: true, user: user, errorMessage: null, accessDenied: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to load your account right now. Please try again.',
+        ),
+      );
     }
   }
 
@@ -60,10 +67,22 @@ class AuthNotifier extends Notifier<AdminAuthState> {
       await _supabase.auth.signInWithPassword(email: email, password: password);
       return true;
     } on AuthException catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.message);
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to sign in. Please check your credentials and try again.',
+        ),
+      );
       return false;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Unable to sign in right now. Please try again.',
+        ),
+      );
       return false;
     }
   }

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../data/models/class_model.dart';
-import '../../../data/models/academic_models.dart';
 import '../../providers/classes_provider.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -847,7 +847,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
 
             timetableAsync.when(
               loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: IosLoader())),
-              error: (_, __) => const Text('Erreur de chargement', style: TextStyle(color: AppColors.error, fontSize: 12)),
+              error: (_, __) => const Text('Unable to load schedule', style: TextStyle(color: AppColors.error, fontSize: 12)),
               data: (slots) {
                 if (slots.isEmpty) {
                   return Padding(
@@ -1023,7 +1023,13 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
     return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
       const SizedBox(height: 16),
-      Text('Erreur: $error', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+      Text(
+        UserFriendlyError.format(
+          error,
+          fallback: 'Unable to load classes right now. Please try again.',
+        ),
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+      ),
       const SizedBox(height: 16),
       Material(color: _brand, borderRadius: BorderRadius.circular(10),
         child: InkWell(onTap: () => ref.read(classesProvider.notifier).refresh(), borderRadius: BorderRadius.circular(10),

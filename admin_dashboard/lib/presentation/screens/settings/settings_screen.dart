@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
@@ -1241,7 +1242,7 @@ class _ChangePasswordModalState extends ConsumerState<_ChangePasswordModal> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(UserFriendlyError.format(e)),
             backgroundColor: const Color(0xFFDC2626),
           ),
         );
@@ -1555,7 +1556,7 @@ class _EditProfileModalState extends ConsumerState<_EditProfileModal> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: const Color(0xFFDC2626)),
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: const Color(0xFFDC2626)),
         );
       }
     }

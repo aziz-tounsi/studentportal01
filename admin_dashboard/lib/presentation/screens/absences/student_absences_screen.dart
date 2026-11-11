@@ -6,9 +6,9 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../providers/absences_provider.dart';
 import '../../widgets/admin_sidebar.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 
@@ -111,7 +111,10 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Erreur: $e',
+                        UserFriendlyError.format(
+                          e,
+                          fallback: 'Unable to load student absences right now. Please try again.',
+                        ),
                         style: TextStyle(color: AppColors.error),
                       ),
                     ],
@@ -1636,7 +1639,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1692,7 +1695,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1728,7 +1731,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1788,7 +1791,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
           ),
         );

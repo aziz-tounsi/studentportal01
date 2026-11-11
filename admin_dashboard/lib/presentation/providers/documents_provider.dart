@@ -221,9 +221,13 @@ class DocumentsNotifier extends AsyncNotifier<DocumentsState> {
   }) async {
     final supabase = SupabaseConfig.client;
     final user = supabase.auth.currentUser;
-    if (user == null) return;
+    if (user == null) throw Exception('Non connecté');
 
-    final profile = await supabase.from('users').select('school_id').eq('id', user.id).single();
+    final profile = await supabase
+        .from('users')
+        .select('school_id')
+        .eq('id', user.id)
+        .single();
     final dbCategory = AcademicDocumentType.toDbCategory(category);
     final formattedDesc = formatDescription(
       userDescription: description,
@@ -234,19 +238,26 @@ class DocumentsNotifier extends AsyncNotifier<DocumentsState> {
       studentCode: studentCode,
     );
 
-    await supabase.from('documents').insert({
-      'school_id': profile['school_id'],
-      'class_id': classId,
-      'title': title,
-      'description': formattedDesc,
-      'file_url': fileUrl,
-      'file_name': fileName ?? title,
-      'file_size': fileSize,
-      'mime_type': mimeType ?? 'application/pdf',
-      'category': dbCategory,
-      'uploaded_by': user.id,
-    });
-    ref.invalidateSelf();
+    final inserted = await supabase
+        .from('documents')
+        .insert({
+          'school_id': profile['school_id'],
+          'class_id': classId,
+          'title': title,
+          'description': formattedDesc,
+          'file_url': fileUrl,
+          'file_name': fileName ?? title,
+          'file_size': fileSize,
+          'mime_type': mimeType ?? 'application/pdf',
+          'category': dbCategory,
+          'uploaded_by': user.id,
+        })
+        .select('id');
+
+    if ((inserted as List).isEmpty) {
+      throw Exception('You do not have permission to create this document.');
+    }
+    state = AsyncData(await _load());
   }
 
   Future<void> updateDocument({
@@ -275,28 +286,38 @@ class DocumentsNotifier extends AsyncNotifier<DocumentsState> {
       studentCode: studentCode,
     );
 
-    await supabase.from('documents').update({
-      'class_id': classId,
-      'title': title,
-      'description': formattedDesc,
-      'file_url': fileUrl,
-      'category': dbCategory,
-      if (fileName != null) 'file_name': fileName,
-      if (fileSize != null) 'file_size': fileSize,
-      if (mimeType != null) 'mime_type': mimeType,
-    }).eq('id', id);
-    ref.invalidateSelf();
+    final updated = await supabase
+        .from('documents')
+        .update({
+          'class_id': classId,
+          'title': title,
+          'description': formattedDesc,
+          'file_url': fileUrl,
+          'category': dbCategory,
+          if (fileName != null && fileName.isNotEmpty) 'file_name': fileName,
+          'file_size': fileSize,
+          'mime_type': mimeType,
+        })
+        .eq('id', id)
+        .select('id');
+
+    if ((updated as List).isEmpty) {
+      throw Exception(
+        'You do not have permission to modify this document, or it no longer exists.',
+      );
+    }
+    state = AsyncData(await _load());
   }
 
   Future<void> delete(String id) async {
     await SupabaseConfig.client.from('documents').delete().eq('id', id);
-    ref.invalidateSelf();
+    state = AsyncData(await _load());
   }
 
   Future<void> bulkDelete(List<String> ids) async {
     if (ids.isEmpty) return;
     await SupabaseConfig.client.from('documents').delete().filter('id', 'in', ids);
-    ref.invalidateSelf();
+    state = AsyncData(await _load());
   }
 }
 

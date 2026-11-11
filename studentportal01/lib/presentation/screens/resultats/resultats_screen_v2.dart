@@ -11,6 +11,7 @@ import '../../../data/models/grade_model.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/resultats_skeleton.dart';
 
+import '../../providers/student_context_provider.dart' show studentContextProvider, semestersProvider;
 // Import providers from the original file
 import 'resultats_screen.dart' show gradesProvider, resultatsSemesterProvider, resultatsRefreshingProvider;
 
@@ -111,6 +112,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
             onRefresh: () async {
               ref.read(resultatsRefreshingProvider.notifier).state = true;
               try {
+                ref.invalidate(studentContextProvider);
+                ref.invalidate(semestersProvider);
                 // ignore: unused_result
                 await ref.refresh(gradesProvider(selectedSemester).future);
               } finally {
@@ -346,10 +349,10 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                       const SizedBox(width: 12),
                       Expanded(
                         child: Container(
-                          height: 44,
+                          height: searchBtnSize,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.95),
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(searchBtnSize / 2),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.08),
