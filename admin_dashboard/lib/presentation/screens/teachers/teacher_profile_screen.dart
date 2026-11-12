@@ -966,7 +966,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1031,24 +1031,32 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
 
-          // Minimal Working Hours Chart
-          _buildWorkingHoursChart(now.weekday),
-          const SizedBox(height: 20),
+          // Chart: Today (horizontal chart lines: Y = hours, X = classes) vs Week (vertical hours bar chart)
+          if (!_showWeeklySchedule)
+            _buildTodayClassesHoursChart(nowMin)
+          else
+            _buildWorkingHoursChart(now.weekday),
+          const SizedBox(height: 14),
 
-          // Slots (Today or Full Week)
-          if (!_showWeeklySchedule) ...[
-            if (_timetableToday.isEmpty)
-              _buildEmptyScheduleState('Aucun cours aujourd\'hui')
-            else
-              ..._buildTimetableSlots(nowMin),
-          ] else ...[
-            if (_timetableAllSlots.isEmpty)
-              _buildEmptyScheduleState('Aucun cours planifié cette semaine')
-            else
-              _buildWeeklyScheduleView(now.weekday),
-          ],
+          // Shorter, internally scrollable schedule list
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: SingleChildScrollView(
+              child: !_showWeeklySchedule
+                  ? (_timetableToday.isEmpty
+                      ? _buildEmptyScheduleState('Aucune séance aujourd\'hui')
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: _buildTimetableSlots(nowMin),
+                        ))
+                  : (_timetableAllSlots.isEmpty
+                      ? _buildEmptyScheduleState(
+                          'Aucune séance planifiée cette semaine')
+                      : _buildWeeklyScheduleView(now.weekday)),
+            ),
+          ),
         ],
       ),
     );
@@ -1091,6 +1099,256 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     );
   }
 
+  String _extractClassName(Map<String, dynamic> slot) {
+    final so = slot['subject_offerings'] as Map<String, dynamic>?;
+    final cls = so?['classes']?['name']?.toString().trim();
+    if (cls != null && cls.isNotEmpty) return cls;
+    return 'Classe';
+  }
+
+  Widget _buildTodayClassesHoursChart(int nowMin) {
+    final Map<String, int> minutesByClass = {};
+    final Map<String, List<Map<String, dynamic>>> slotsByClass = {};
+
+    for (final s in _timetableToday) {
+      final cls = _extractClassName(s);
+      minutesByClass[cls] =
+          (minutesByClass[cls] ?? 0) + (s['durationMin'] as int? ?? 0);
+      slotsByClass.putIfAbsent(cls, () => []).add(s);
+    }
+
+    final totalTodayMin =
+        minutesByClass.values.fold<int>(0, (sum, m) => sum + m);
+    final classNames = minutesByClass.keys.toList();
+
+    int maxMinutes = 120;
+    for (final m in minutesByClass.values) {
+      if (m > maxMinutes) maxMinutes = m;
+    }
+    final maxHoursTick = ((maxMinutes + 59) ~/ 60).clamp(2, 12);
+    final scaleMaxMinutes = maxHoursTick * 60;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'HEURES PAR CLASSE — AUJOURD\'HUI',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (classNames.isNotEmpty)
+                const Text(
+                  '• Cliquer pour détails',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              const Spacer(),
+              Text(
+                _formatHoursMinutes(totalTodayMin),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _brand,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (classNames.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(
+                  'Aucune classe programmée aujourd\'hui',
+                  style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 130,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        const topReserve = 16.0;
+                        const bottomReserve = 6.0;
+                        final barZoneHeight =
+                            (constraints.maxHeight - topReserve - bottomReserve)
+                                .clamp(40.0, 200.0);
+
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            // Horizontal chart lines (Y = nb hours on the day)
+                            ...List.generate(maxHoursTick + 1, (hourVal) {
+                              final yFromBottom = bottomReserve +
+                                  (hourVal / maxHoursTick) * barZoneHeight;
+                              return Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: yFromBottom - 6,
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 26,
+                                      child: Text(
+                                        '${hourVal}h',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textTertiary,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Container(
+                                        height: 1,
+                                        color: hourVal == 0
+                                            ? const Color(0xFFCBD5E1)
+                                            : const Color(0xFFF1F5F9),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            // Clickable class bars rising to exact hour height
+                            Positioned(
+                              left: 30,
+                              right: 0,
+                              top: 0,
+                              bottom: bottomReserve,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: classNames.map((cls) {
+                                  final mins = minutesByClass[cls] ?? 0;
+                                  final ratio =
+                                      (mins / scaleMaxMinutes).clamp(0.0, 1.0);
+                                  final barH = (ratio * barZoneHeight)
+                                      .clamp(6.0, barZoneHeight);
+                                  final clsSlots = slotsByClass[cls] ?? [];
+                                  final hasActive = clsSlots.any((s) {
+                                    final sMin = s['startMin'] as int? ?? 0;
+                                    final eMin = s['endMin'] as int? ?? 0;
+                                    return nowMin >= sMin && nowMin < eMin;
+                                  });
+
+                                  return Expanded(
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => _showTodayClassDetailModal(
+                                          cls,
+                                          clsSlots,
+                                          nowMin,
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              _formatShortHours(mins),
+                                              maxLines: 1,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: hasActive
+                                                    ? _brand
+                                                    : AppColors.textSecondary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            AnimatedContainer(
+                                              duration: const Duration(
+                                                  milliseconds: 220),
+                                              width: 34,
+                                              height: barH,
+                                              decoration: BoxDecoration(
+                                                color: hasActive
+                                                    ? _brand
+                                                    : _brand.withOpacity(0.75),
+                                                borderRadius:
+                                                    const BorderRadius.vertical(
+                                                  top: Radius.circular(6),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // X-axis labels (Classes)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 30),
+                    child: Row(
+                      children: classNames.map((cls) {
+                        final clsSlots = slotsByClass[cls] ?? [];
+                        return Expanded(
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () => _showTodayClassDetailModal(
+                                cls,
+                                clsSlots,
+                                nowMin,
+                              ),
+                              child: Text(
+                                cls,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWorkingHoursChart(int currentWeekday) {
     final Map<int, int> minutesByDay = {
       1: 0,
@@ -1101,9 +1359,11 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       6: 0,
       7: 0,
     };
+    final Map<int, List<Map<String, dynamic>>> slotsByDay = {};
     for (final s in _timetableAllSlots) {
       final d = s['dayNum'] as int? ?? 1;
       minutesByDay[d] = (minutesByDay[d] ?? 0) + (s['durationMin'] as int? ?? 0);
+      slotsByDay.putIfAbsent(d, () => []).add(s);
     }
 
     final showSunday = (minutesByDay[7] ?? 0) > 0 || currentWeekday == 7;
@@ -1124,16 +1384,14 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       if (m > maxMinutes) maxMinutes = m;
     }
 
-    final displayedMinutes = _showWeeklySchedule
-        ? _timetableAllSlots.fold<int>(
-            0, (sum, s) => sum + (s['durationMin'] as int? ?? 0))
-        : (minutesByDay[currentWeekday] ?? 0);
+    final displayedMinutes = _timetableAllSlots.fold<int>(
+        0, (sum, s) => sum + (s['durationMin'] as int? ?? 0));
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
@@ -1142,14 +1400,21 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         children: [
           Row(
             children: [
-              Text(
-                _showWeeklySchedule
-                    ? 'HEURES DE TRAVAIL — CETTE SEMAINE'
-                    : 'HEURES DE TRAVAIL — AUJOURD\'HUI',
-                style: const TextStyle(
+              const Text(
+                'HEURES DE TRAVAIL — CETTE SEMAINE',
+                style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.8,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                '• Cliquer pour détails',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
                   color: AppColors.textTertiary,
                 ),
               ),
@@ -1164,62 +1429,74 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           SizedBox(
-            height: 92,
+            height: 104,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: days.map((d) {
                 final mins = minutesByDay[d] ?? 0;
                 final isToday = d == currentWeekday;
-                final isHighlighted =
-                    _showWeeklySchedule ? mins > 0 : isToday;
+                final hasWork = mins > 0;
                 final barHeight = mins <= 0
                     ? 6.0
-                    : (mins / maxMinutes * 52.0).clamp(10.0, 52.0);
+                    : (mins / maxMinutes * 46.0).clamp(10.0, 46.0);
 
                 return Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        _formatShortHours(mins),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight:
-                              isHighlighted ? FontWeight.w700 : FontWeight.w500,
-                          color: mins > 0
-                              ? (isHighlighted
-                                  ? _brand
-                                  : AppColors.textSecondary)
-                              : AppColors.slate300,
-                        ),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showDayDetailModal(
+                        d,
+                        slotsByDay[d] ?? [],
+                        isToday,
                       ),
-                      const SizedBox(height: 5),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        width: 28,
-                        height: barHeight,
-                        decoration: BoxDecoration(
-                          color: mins <= 0
-                              ? const Color(0xFFE2E8F0)
-                              : isHighlighted
-                                  ? _brand
-                                  : _brand.withOpacity(0.28),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatShortHours(mins),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight:
+                                  hasWork ? FontWeight.w700 : FontWeight.w500,
+                              color: hasWork
+                                  ? (isToday ? _brand : AppColors.textSecondary)
+                                  : AppColors.slate300,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            width: 28,
+                            height: barHeight,
+                            decoration: BoxDecoration(
+                              color: mins <= 0
+                                  ? const Color(0xFFE2E8F0)
+                                  : isToday
+                                      ? _brand
+                                      : _brand.withOpacity(0.68),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            dayLabels[d] ?? '',
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight:
+                                  isToday ? FontWeight.w700 : FontWeight.w500,
+                              color: isToday ? _brand : AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        dayLabels[d] ?? '',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight:
-                              isToday ? FontWeight.w700 : FontWeight.w500,
-                          color: isToday ? _brand : AppColors.textTertiary,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 );
               }).toList(),
@@ -1230,18 +1507,277 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     );
   }
 
+  void _showTodayClassDetailModal(
+    String className,
+    List<Map<String, dynamic>> slots,
+    int nowMin,
+  ) {
+    final totalMin =
+        slots.fold<int>(0, (sum, s) => sum + (s['durationMin'] as int? ?? 0));
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.12),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+        child: AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _brandLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.class_rounded, size: 18, color: _brand),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      className,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Aujourd\'hui • ${_formatHoursMinutes(totalMin)} (${slots.length} séance${slots.length > 1 ? 's' : ''})',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: slots.map((slot) {
+                final start = slot['startShort']?.toString() ?? '??:??';
+                final end = slot['endShort']?.toString() ?? '??:??';
+                final room =
+                    slot['shortRoom']?.toString() ?? slot['room']?.toString();
+                final durationMin = slot['durationMin'] as int? ?? 0;
+                final sMin = slot['startMin'] as int? ?? 0;
+                final eMin = slot['endMin'] as int? ?? 0;
+                final isCurrent = nowMin >= sMin && nowMin < eMin;
+                final isPast = nowMin >= eMin;
+                return _buildDetailSessionTile(
+                  primary: '$start – $end',
+                  secondary:
+                      '${_formatHoursMinutes(durationMin)}${room != null && room.isNotEmpty ? ' • $room' : ''}',
+                  statusLabel: isCurrent
+                      ? 'EN COURS'
+                      : (isPast ? 'TERMINÉ' : 'À VENIR'),
+                  isHighlighted: isCurrent,
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Fermer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDayDetailModal(
+    int dayNum,
+    List<Map<String, dynamic>> slots,
+    bool isToday,
+  ) {
+    const fullDayNames = {
+      1: 'Lundi',
+      2: 'Mardi',
+      3: 'Mercredi',
+      4: 'Jeudi',
+      5: 'Vendredi',
+      6: 'Samedi',
+      7: 'Dimanche',
+    };
+    final dayName = fullDayNames[dayNum] ?? '';
+    final totalMin =
+        slots.fold<int>(0, (sum, s) => sum + (s['durationMin'] as int? ?? 0));
+
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.12),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+        child: AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _brandLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.calendar_today_rounded,
+                    size: 18, color: _brand),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isToday ? '$dayName (Aujourd\'hui)' : dayName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      slots.isEmpty
+                          ? 'Aucune séance planifiée'
+                          : '${_formatHoursMinutes(totalMin)} • ${slots.length} séance${slots.length > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: slots.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Cet enseignant n\'a aucune séance prévue ce jour-là.',
+                      style:
+                          TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: slots.map((slot) {
+                      final cls = _extractClassName(slot);
+                      final start = slot['startShort']?.toString() ?? '??:??';
+                      final end = slot['endShort']?.toString() ?? '??:??';
+                      final room = slot['shortRoom']?.toString() ??
+                          slot['room']?.toString();
+                      final durationMin = slot['durationMin'] as int? ?? 0;
+                      return _buildDetailSessionTile(
+                        primary: cls,
+                        secondary:
+                            '$start – $end • ${_formatHoursMinutes(durationMin)}${room != null && room.isNotEmpty ? ' • $room' : ''}',
+                        statusLabel: _formatShortHours(durationMin),
+                        isHighlighted: isToday,
+                      );
+                    }).toList(),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Fermer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailSessionTile({
+    required String primary,
+    required String secondary,
+    required String statusLabel,
+    required bool isHighlighted,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isHighlighted ? const Color(0xFFF5F3FF) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isHighlighted
+              ? _brand.withOpacity(0.35)
+              : const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  primary,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  secondary,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: isHighlighted ? _brandLight : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              statusLabel,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isHighlighted ? _brand : AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyScheduleState(String message) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         children: [
-          Icon(Icons.event_busy_rounded, size: 40, color: Colors.grey.shade300),
-          const SizedBox(height: 10),
+          Icon(Icons.event_busy_rounded, size: 32, color: Colors.grey.shade300),
+          const SizedBox(height: 8),
           Text(
             message,
             style: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
@@ -1281,7 +1817,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         final isToday = dayNum == currentWeekday;
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1316,7 +1852,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                   ],
                   const Spacer(),
                   Text(
-                    '${_formatHoursMinutes(dayMins)} • ${daySlots.length} cours',
+                    '${_formatHoursMinutes(dayMins)} • ${daySlots.length} séance${daySlots.length > 1 ? 's' : ''}',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -1325,22 +1861,19 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               ...daySlots.map((slot) {
-                final so = slot['subject_offerings'] as Map<String, dynamic>?;
-                final subjectName =
-                    so?['subjects']?['name']?.toString() ?? 'Cours';
-                final className =
-                    so?['classes']?['name']?.toString() ?? '';
+                final className = _extractClassName(slot);
                 final startTime = slot['startShort']?.toString() ?? '??:??';
                 final endTime = slot['endShort']?.toString() ?? '??:??';
                 final room = slot['shortRoom']?.toString();
+                final durationMin = slot['durationMin'] as int? ?? 0;
 
                 return _buildSlotRow(
                   startTime: startTime,
                   endTime: endTime,
-                  subject: subjectName,
                   className: className,
+                  durationMin: durationMin,
                   room: room,
                   isCurrent: false,
                   isPast: false,
@@ -1358,14 +1891,13 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     final widgets = <Widget>[];
     for (int i = 0; i < _timetableToday.length; i++) {
       final slot = _timetableToday[i];
-      final so = slot['subject_offerings'] as Map<String, dynamic>?;
-      final subjectName = so?['subjects']?['name']?.toString() ?? 'Cours';
-      final className = so?['classes']?['name']?.toString() ?? '';
+      final className = _extractClassName(slot);
       final startTime = slot['startShort']?.toString() ??
           _formatShortTime(slot['start_time']?.toString());
       final endTime = slot['endShort']?.toString() ??
           _formatShortTime(slot['end_time']?.toString());
       final room = slot['shortRoom']?.toString() ?? slot['room']?.toString();
+      final durationMin = slot['durationMin'] as int? ?? 0;
 
       final sMin = slot['startMin'] as int? ?? _parseTimeToMinutes(startTime);
       final eMin = slot['endMin'] as int? ?? _parseTimeToMinutes(endTime);
@@ -1385,8 +1917,8 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       widgets.add(_buildSlotRow(
         startTime: startTime,
         endTime: endTime,
-        subject: subjectName,
         className: className,
+        durationMin: durationMin,
         room: room,
         isCurrent: isCurrent,
         isPast: isPast,
@@ -1397,29 +1929,29 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
 
   Widget _buildPauseSlot(String startTime, String endTime) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(children: [
         // Time column
         SizedBox(
-          width: 56,
+          width: 52,
           child: Column(children: [
             Text(startTime, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.grey.shade500)),
             Text(endTime, style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
           ]),
         ),
         // Separator line
-        Container(width: 1, height: 40, color: Colors.grey.shade200),
-        const SizedBox(width: 16),
+        Container(width: 1, height: 32, color: Colors.grey.shade200),
+        const SizedBox(width: 14),
         // Break card
         Expanded(
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid),
             ),
             child: Center(
-              child: Text('Pause / Préparation', style: TextStyle(fontSize: 13, color: Colors.grey.shade400)),
+              child: Text('Pause / Préparation', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
             ),
           ),
         ),
@@ -1430,36 +1962,41 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   Widget _buildSlotRow({
     required String startTime,
     required String endTime,
-    required String subject,
     required String className,
+    required int durationMin,
     String? room,
     required bool isCurrent,
     required bool isPast,
     bool showStatusBadge = true,
   }) {
+    final subtitleParts = <String>[
+      _formatHoursMinutes(durationMin),
+      if (room != null && room.isNotEmpty) room,
+    ];
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Opacity(
         opacity: isPast ? 0.5 : 1.0,
         child: Row(children: [
           // Time column
           SizedBox(
-            width: 56,
+            width: 52,
             child: Column(children: [
               Text(startTime, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isCurrent ? AppColors.textPrimary : Colors.grey.shade700)),
               Text(endTime, style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
             ]),
           ),
           // Separator line
-          Container(width: 1, height: 48, color: Colors.grey.shade200),
-          const SizedBox(width: 16),
-          // Course card
+          Container(width: 1, height: 38, color: Colors.grey.shade200),
+          const SizedBox(width: 14),
+          // Class + hours card (no course title)
           Expanded(
             child: Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: isCurrent ? const Color(0xFFEDE9FE) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: isCurrent
                       ? _brand.withOpacity(0.4)
@@ -1470,19 +2007,19 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                 if (isCurrent)
                   Container(
                     width: 4,
-                    height: 36,
-                    margin: const EdgeInsets.only(right: 12),
+                    height: 30,
+                    margin: const EdgeInsets.only(right: 10),
                     decoration: BoxDecoration(
                       color: _brand,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(subject, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                  const SizedBox(height: 4),
+                  Text(className, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  const SizedBox(height: 2),
                   Text(
-                    '$className${room != null && room.isNotEmpty ? ' • $room' : ''}',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: isCurrent ? _brand : AppColors.textTertiary),
+                    subtitleParts.join(' • '),
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: isCurrent ? _brand : AppColors.textTertiary),
                   ),
                 ])),
                 if (showStatusBadge)
