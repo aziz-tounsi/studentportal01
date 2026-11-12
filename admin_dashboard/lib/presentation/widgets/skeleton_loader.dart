@@ -1826,51 +1826,124 @@ class StudentProfileSkeletonLoader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFF8FAFC),
-      child: ShimmerLoading(
-        child: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header (matches UserProfileScreen._buildHeader)
-              Container(
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-                ),
-                child: const Row(
-                  children: [
-                    SkeletonBox(width: 40, height: 40, borderRadius: 12),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SkeletonBox(width: 190, height: 22, borderRadius: 6),
-                          SizedBox(height: 6),
-                          SkeletonBox(width: 95, height: 13, borderRadius: 4),
-                        ],
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header (buttons are static UI, only user's name is a variable)
+            Container(
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => Navigator.of(context).maybePop(),
+                        child: const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.arrow_back_rounded,
+                            size: 20,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
                       ),
                     ),
-                    SizedBox(width: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SkeletonBox(width: 105, height: 36, borderRadius: 10),
-                        SkeletonBox(width: 95, height: 36, borderRadius: 10),
-                        SkeletonBox(width: 170, height: 36, borderRadius: 10),
-                        SkeletonBox(width: 150, height: 36, borderRadius: 10),
+                        ShimmerLoading(
+                          child: SkeletonBox(
+                            width: 190,
+                            height: 22,
+                            borderRadius: 6,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Profil étudiant',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 16),
+                  IgnorePointer(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _buildHeaderOutlineButton(
+                          Icons.refresh_rounded,
+                          'Actualiser',
+                        ),
+                        _buildHeaderOutlineButton(
+                          Icons.edit_outlined,
+                          'Modifier',
+                        ),
+                        _buildHeaderOutlineButton(
+                          Icons.lock_reset_rounded,
+                          'Réinitialiser mot de passe',
+                        ),
+                        _buildHeaderOutlineButton(
+                          Icons.lock_reset_rounded,
+                          'Envoyer message élève',
+                        ),
+                        SizedBox(
+                          height: 40,
+                          child: ElevatedButton.icon(
+                            onPressed: () {},
+                            icon: const Icon(Icons.login_rounded, size: 16),
+                            label: const Text(
+                              'Se connecter en tant que',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6D4CF6),
+                              foregroundColor: Colors.white,
+                              elevation: 2,
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              shadowColor:
+                                  const Color(0xFF6D4CF6).withValues(alpha: 0.3),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 32),
+            ),
+            const SizedBox(height: 32),
 
-              // 2-Column Body (360px Left + Expanded Right)
-              Row(
+            // 2-Column Body (360px Left + Expanded Right)
+            ShimmerLoading(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Left Column
@@ -2166,8 +2239,42 @@ class StudentProfileSkeletonLoader extends StatelessWidget {
                   ),
                 ],
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderOutlineButton(IconData icon, String label) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF64748B)),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2182,43 +2289,88 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFF3F4F6),
-      child: ShimmerLoading(
-        child: Column(
-          children: [
-            // Top Bar (matches TeacherProfileScreen._buildHeader)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
-              ),
-              child: const Row(
-                children: [
-                  SkeletonBox(width: 40, height: 40, borderRadius: 12),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+      child: Column(
+        children: [
+          // Top Bar (buttons are static UI, only name/status are variables)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  borderRadius: BorderRadius.circular(12),
+                  child: const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      size: 20,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShimmerLoading(
+                        child: Row(
                           children: [
                             SkeletonBox(width: 180, height: 24, borderRadius: 6),
                             SizedBox(width: 12),
                             SkeletonBox(width: 58, height: 24, borderRadius: 12),
                           ],
                         ),
-                        SizedBox(height: 6),
-                        SkeletonBox(width: 210, height: 13, borderRadius: 4),
-                      ],
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Profil Enseignant',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IgnorePointer(
+                  child: Material(
+                    color: const Color(0xFF6D4CF6),
+                    borderRadius: BorderRadius.circular(8),
+                    elevation: 2,
+                    shadowColor: const Color(0xFF6D4CF6).withValues(alpha: 0.3),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit_rounded, color: Colors.white, size: 15),
+                          SizedBox(width: 6),
+                          Text(
+                            'Modifier le profil',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  SkeletonBox(width: 148, height: 38, borderRadius: 8),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
 
-            // Scrollable 2-Column Body
-            Expanded(
+          // Scrollable 2-Column Body
+          Expanded(
+            child: ShimmerLoading(
               child: SingleChildScrollView(
                 physics: const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(32),
@@ -2457,8 +2609,8 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
