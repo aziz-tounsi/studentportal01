@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/supabase_config.dart';
-import '../../data/services/fcm_push_service.dart';
 
 class AcademicDocumentType {
   static const Map<String, String> types = {
@@ -258,21 +257,6 @@ class DocumentsNotifier extends AsyncNotifier<DocumentsState> {
     if ((inserted as List).isEmpty) {
       throw Exception('You do not have permission to create this document.');
     }
-
-    FcmPushService.sendPush(
-      title: 'Nouveau document : $title',
-      body: (description != null && description.trim().isNotEmpty)
-          ? description.trim()
-          : 'Un nouveau document a été partagé.',
-      targetUserIds: (studentId != null && studentId.isNotEmpty) ? [studentId] : null,
-      targetClassId: (studentId == null || studentId.isEmpty) ? classId : null,
-      targetSchoolId: (studentId == null || studentId.isEmpty) &&
-              (classId == null || classId.isEmpty)
-          ? profile['school_id']?.toString()
-          : null,
-      route: '/documents',
-    );
-
     state = AsyncData(await _load());
   }
 

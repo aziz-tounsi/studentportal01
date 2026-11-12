@@ -119,7 +119,9 @@ class _RealtimeNotificationWrapperState
           debugPrint('Realtime Shell: announcements_global updated -> refreshing');
           ref.invalidate(globalAnnouncementsProvider);
 
-          if (payload.eventType == PostgresChangeEvent.insert) {
+          if (payload.eventType == PostgresChangeEvent.insert &&
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed) {
             final title =
                 record['title']?.toString() ?? 'Nouvelle notification';
             final body = record['body']?.toString() ?? '';
@@ -133,12 +135,6 @@ class _RealtimeNotificationWrapperState
               onTap: () {
                 if (mounted) context.push('/notifications');
               },
-            );
-            LocalNotificationService.showNotification(
-              id: (record['id'] ?? '').hashCode & 0x7fffffff,
-              title: title,
-              body: message,
-              routePayload: '/notifications',
             );
           }
         },
@@ -183,7 +179,9 @@ class _RealtimeNotificationWrapperState
           debugPrint('Realtime Shell: announcements_class updated -> refreshing');
           ref.invalidate(classMessagesProvider);
 
-          if (payload.eventType == PostgresChangeEvent.insert) {
+          if (payload.eventType == PostgresChangeEvent.insert &&
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed) {
             final title = record['title']?.toString() ?? 'Nouveau message';
             final body = record['body']?.toString() ?? '';
             final message =
@@ -196,12 +194,6 @@ class _RealtimeNotificationWrapperState
               onTap: () {
                 if (mounted) context.push('/messages');
               },
-            );
-            LocalNotificationService.showNotification(
-              id: (record['id'] ?? '').hashCode & 0x7fffffff,
-              title: title,
-              body: message,
-              routePayload: '/messages',
             );
           }
         },
@@ -256,7 +248,9 @@ class _RealtimeNotificationWrapperState
           debugPrint('Realtime Shell: suggestion_replies updated -> refreshing');
           ref.invalidate(suggestionsProvider);
 
-          if (payload.eventType == PostgresChangeEvent.insert) {
+          if (payload.eventType == PostgresChangeEvent.insert &&
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed) {
             final text = (record['reply_text'] ??
                     record['body'] ??
                     record['message'] ??
@@ -273,12 +267,6 @@ class _RealtimeNotificationWrapperState
               onTap: () {
                 if (mounted) context.push('/suggestions');
               },
-            );
-            LocalNotificationService.showNotification(
-              id: (record['id'] ?? '').hashCode & 0x7fffffff,
-              title: 'Réponse à votre suggestion',
-              body: message,
-              routePayload: '/suggestions',
             );
           }
         },
@@ -325,7 +313,9 @@ class _RealtimeNotificationWrapperState
           debugPrint('Realtime Shell: documents updated -> refreshing');
           ref.invalidate(allStudentDocumentsProvider);
 
-          if (payload.eventType == PostgresChangeEvent.insert) {
+          if (payload.eventType == PostgresChangeEvent.insert &&
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed) {
             final title = record['title']?.toString() ?? 'Nouveau document';
             final cleanDesc = desc
                 .replaceAll(RegExp(r'\[Semestre:\s*\d+\]'), '')
@@ -343,12 +333,6 @@ class _RealtimeNotificationWrapperState
               onTap: () {
                 if (mounted) context.push('/documents');
               },
-            );
-            LocalNotificationService.showNotification(
-              id: (record['id'] ?? '').hashCode & 0x7fffffff,
-              title: title,
-              body: message,
-              routePayload: '/documents',
             );
           }
         },

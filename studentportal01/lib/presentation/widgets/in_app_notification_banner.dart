@@ -5,6 +5,7 @@ import '../../core/router/app_router.dart';
 class InAppNotificationBanner {
   static OverlayEntry? _currentEntry;
   static Timer? _dismissTimer;
+  static final Map<String, DateTime> _recentBanners = {};
 
   static void show({
     required String title,
@@ -14,8 +15,21 @@ class InAppNotificationBanner {
     VoidCallback? onTap,
     Duration duration = const Duration(seconds: 4),
   }) {
+    final now = DateTime.now();
+    final dedupKey = '$title|$message';
+    final prev = _recentBanners[dedupKey];
+    if (prev != null && now.difference(prev).inSeconds < 6) {
+      return;
+    }
+    _recentBanners[dedupKey] = now;
+    if (_recentBanners.length > 30) {
+      _recentBanners.removeWhere((_, ts) => now.difference(ts).inSeconds > 30);
+    }
+
     _dismissTimer?.cancel();
-    _currentEntry?.remove();
+    try {
+      _currentEntry?.remove();
+    } catch (_) {}
     _currentEntry = null;
 
     final overlayState = rootNavigatorKey.currentState?.overlay;

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../presentation/widgets/in_app_notification_banner.dart';
 import '../router/app_router.dart';
 
 @pragma('vm:entry-point')
@@ -36,16 +38,13 @@ class LocalNotificationService {
     enableVibration: true,
   );
 
-  static int _safeNotificationId(Object? seed) {
-    final raw = (seed ?? DateTime.now().millisecondsSinceEpoch).hashCode;
-    return raw & 0x7fffffff;
-  }
-
   static Future<void> init() async {
     if (_isInitialized) return;
 
     try {
-      if (kIsWeb) return;
+      if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) {
+        return;
+      }
 
       // 1. Initialize Firebase Core
       try {
@@ -95,14 +94,15 @@ class LocalNotificationService {
 
       // 4. Configure Firebase messaging listeners
       try {
+        // Keep iOS foreground OS banners disabled because InAppNotificationBanner handles foreground UI
         await FirebaseMessaging.instance
             .setForegroundNotificationPresentationOptions(
-          alert: true,
+          alert: false,
           badge: true,
-          sound: true,
+          sound: false,
         );
 
-        // Foreground notification handling
+        // Foreground notification handling -> show single in-app banner (deduplicated against Realtime)
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
           final notification = message.notification;
           final title = notification?.title ??
@@ -112,11 +112,36 @@ class LocalNotificationService {
               notification?.body ?? message.data['body']?.toString() ?? '';
           final route = message.data['route']?.toString();
 
-          showNotification(
-            id: _safeNotificationId(message.messageId),
+          final IconData icon;
+          final Color color;
+          switch (route) {
+            case '/messages':
+              icon = Icons.mail_rounded;
+              color = const Color(0xFF6B5CE7);
+              break;
+            case '/documents':
+              icon = Icons.folder_shared_rounded;
+              color = const Color(0xFF3B82F6);
+              break;
+            case '/suggestions':
+              icon = Icons.mark_chat_read_rounded;
+              color = const Color(0xFF10B981);
+              break;
+            default:
+              icon = Icons.notifications_rounded;
+              color = const Color(0xFF8B5CF6);
+          }
+
+          InAppNotificationBanner.show(
             title: title,
-            body: body,
-            routePayload: route,
+            message: body.isNotEmpty ? body : 'Nouvelle notification disponible',
+            icon: icon,
+            color: color,
+            onTap: () {
+              if (route != null && route.isNotEmpty) {
+                rootNavigatorKey.currentContext?.push(route);
+              }
+            },
           );
         });
 

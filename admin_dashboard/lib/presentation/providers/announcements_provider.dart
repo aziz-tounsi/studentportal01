@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import '../../core/config/supabase_config.dart';
 import '../../core/utils/error_messages.dart';
-import '../../data/services/fcm_push_service.dart';
 import '../../models/announcement_model.dart';
 import '../../repositories/announcement_repository.dart';
 
@@ -346,13 +345,6 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .select('id')
           .single();
       insertedId = result['id'];
-
-      FcmPushService.sendPush(
-        title: title.isNotEmpty ? title : 'Nouveau message',
-        body: content,
-        targetUserIds: [targetStudentId],
-        route: '/messages',
-      );
     } else if (scope == 'class' && targetClassId != null) {
       final result = await supabase
           .from('announcements_class')
@@ -375,13 +367,6 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .select('id')
           .single();
       insertedId = result['id'];
-
-      FcmPushService.sendPush(
-        title: title.isNotEmpty ? title : 'Nouveau message de classe',
-        body: content,
-        targetClassId: targetClassId,
-        route: '/messages',
-      );
     } else {
       final result = await supabase
           .from('announcements_global')
@@ -404,13 +389,6 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .select('id')
           .single();
       insertedId = result['id'];
-
-      FcmPushService.sendPush(
-        title: title.isNotEmpty ? title : 'Nouvelle notification',
-        body: content,
-        targetSchoolId: schoolId,
-        route: '/notifications',
-      );
     }
     ref.invalidateSelf();
     return insertedId;

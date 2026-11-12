@@ -7,7 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
@@ -100,6 +100,7 @@ serve(async (req: Request) => {
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const rawServiceAccount = Deno.env.get("FIREBASE_SERVICE_ACCOUNT") ?? "";
+  const pushWebhookSecret = Deno.env.get("PUSH_WEBHOOK_SECRET") ?? "";
 
   if (!supabaseUrl || !supabaseServiceKey) {
     return new Response(
@@ -108,41 +109,55 @@ serve(async (req: Request) => {
     );
   }
 
-  // 1. Authenticate caller JWT & verify role
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return new Response(
-      JSON.stringify({ error: "Missing Authorization header" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
-  const callerClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data: { user: callerUser }, error: authErr } = await callerClient.auth.getUser();
-  if (authErr || !callerUser) {
-    return new Response(
-      JSON.stringify({ error: "Invalid or expired session" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
   const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-  const { data: callerProfile, error: profileErr } = await adminClient
-    .from("users")
-    .select("id, school_id, role")
-    .eq("id", callerUser.id)
-    .maybeSingle();
+  // 1. Authenticate either internal DB webhook secret OR caller staff/admin JWT
+  const incomingWebhookSecret = req.headers.get("x-webhook-secret") ?? "";
+  const isWebhookAuthorized =
+    Boolean(pushWebhookSecret) &&
+    Boolean(incomingWebhookSecret) &&
+    incomingWebhookSecret === pushWebhookSecret;
 
-  const allowedRoles = ["super_admin", "owner", "admin", "staff", "teacher"];
-  if (profileErr || !callerProfile || !allowedRoles.includes(callerProfile.role)) {
-    return new Response(
-      JSON.stringify({ error: "Forbidden: insufficient permissions to send notifications" }),
-      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+  let callerRole = "webhook";
+  let callerSchoolId: string | null = null;
+
+  if (!isWebhookAuthorized) {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const callerClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user: callerUser }, error: authErr } = await callerClient.auth.getUser();
+    if (authErr || !callerUser) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired session" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: callerProfile, error: profileErr } = await adminClient
+      .from("users")
+      .select("id, school_id, role")
+      .eq("id", callerUser.id)
+      .maybeSingle();
+
+    const allowedRoles = ["super_admin", "owner", "admin", "staff", "teacher"];
+    if (profileErr || !callerProfile || !allowedRoles.includes(callerProfile.role)) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: insufficient permissions to send notifications" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    callerRole = callerProfile.role;
+    callerSchoolId = callerProfile.school_id ?? null;
   }
 
   if (!rawServiceAccount) {
@@ -171,40 +186,70 @@ serve(async (req: Request) => {
 
   try {
     const payload = await req.json();
-    const { title, body, userIds = [], route = "/notifications", data = {} } = payload;
+    const {
+      title,
+      body,
+      userIds = [],
+      classId = null,
+      schoolId = null,
+      route = "/notifications",
+      data = {},
+    } = payload;
 
-    if (!title || !body) {
-      return new Response(
-        JSON.stringify({ error: "Missing title or body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const effectiveTitle =
+      String(title ?? "").trim() || "Nouvelle notification";
+    const effectiveBody =
+      String(body ?? "").trim() || "Nouvelle mise à jour disponible";
 
-    // 2. Resolve eligible user IDs scoped to caller's school (unless super_admin)
+    // 2. Resolve eligible user IDs from userIds / classId / schoolId
     let scopedUserIds: string[] = Array.isArray(userIds)
       ? userIds.filter((id): id is string => typeof id === "string" && id.length > 0)
       : [];
 
-    if (callerProfile.role !== "super_admin") {
-      if (!callerProfile.school_id) {
+    const effectiveSchoolId =
+      callerRole === "webhook" || callerRole === "super_admin"
+        ? (typeof schoolId === "string" && schoolId.length > 0 ? schoolId : callerSchoolId)
+        : callerSchoolId;
+
+    if (callerRole !== "webhook" && callerRole !== "super_admin" && !effectiveSchoolId) {
+      return new Response(
+        JSON.stringify({ error: "Caller is not associated with a school" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (scopedUserIds.length === 0 && typeof classId === "string" && classId.length > 0) {
+      let enrollQuery = adminClient
+        .from("enrollments")
+        .select("user_id")
+        .eq("class_id", classId)
+        .or("is_active.eq.true,is_active.is.null");
+
+      if (effectiveSchoolId) {
+        enrollQuery = enrollQuery.eq("school_id", effectiveSchoolId);
+      }
+
+      const { data: enrollments, error: enrollErr } = await enrollQuery;
+      if (enrollErr) {
         return new Response(
-          JSON.stringify({ error: "Caller is not associated with a school" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: enrollErr.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
-      let usersQuery = adminClient
+      scopedUserIds = Array.from(
+        new Set(
+          (enrollments || [])
+            .map((e: { user_id: string | null }) => e.user_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+    } else if (scopedUserIds.length === 0 && effectiveSchoolId) {
+      const { data: schoolUsers, error: usersErr } = await adminClient
         .from("users")
         .select("id")
-        .eq("school_id", callerProfile.school_id);
+        .eq("school_id", effectiveSchoolId)
+        .eq("role", "student");
 
-      if (scopedUserIds.length > 0) {
-        usersQuery = usersQuery.in("id", scopedUserIds);
-      } else {
-        usersQuery = usersQuery.eq("role", "student");
-      }
-
-      const { data: schoolUsers, error: usersErr } = await usersQuery;
       if (usersErr) {
         return new Response(
           JSON.stringify({ error: usersErr.message }),
@@ -212,11 +257,39 @@ serve(async (req: Request) => {
         );
       }
       scopedUserIds = (schoolUsers || []).map((u: { id: string }) => u.id);
+    } else if (
+      scopedUserIds.length > 0 &&
+      callerRole !== "webhook" &&
+      callerRole !== "super_admin" &&
+      effectiveSchoolId
+    ) {
+      // Enforce tenant isolation for explicit userIds sent via client JWT
+      const { data: validUsers, error: usersErr } = await adminClient
+        .from("users")
+        .select("id")
+        .eq("school_id", effectiveSchoolId)
+        .in("id", scopedUserIds);
+
+      if (usersErr) {
+        return new Response(
+          JSON.stringify({ error: usersErr.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      scopedUserIds = (validUsers || []).map((u: { id: string }) => u.id);
     }
 
-    if (callerProfile.role !== "super_admin" && scopedUserIds.length === 0) {
+    if (
+      scopedUserIds.length === 0 &&
+      (callerRole !== "super_admin" || Boolean(classId) || Boolean(effectiveSchoolId))
+    ) {
       return new Response(
-        JSON.stringify({ success: true, tokensFound: 0, sentCount: 0, message: "No matching users in school" }),
+        JSON.stringify({
+          success: true,
+          tokensFound: 0,
+          sentCount: 0,
+          message: "No matching target students found",
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -251,6 +324,39 @@ serve(async (req: Request) => {
       );
     }
 
+    // Deduplicate identical push bursts (e.g. legacy client call + DB trigger) within 10s
+    const rawDedup = `${effectiveTitle}|${effectiveBody}|${route}|${[...scopedUserIds].sort().join(",")}`;
+    const digestBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawDedup));
+    const dedupHash = Array.from(new Uint8Array(digestBuf))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    try {
+      await adminClient
+        .from("push_dispatch_dedup")
+        .delete()
+        .lt("created_at", new Date(Date.now() - 10_000).toISOString());
+
+      const { error: dedupErr } = await adminClient
+        .from("push_dispatch_dedup")
+        .insert({ dedup_key: dedupHash });
+
+      if (dedupErr && dedupErr.code === "23505") {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            deduplicated: true,
+            tokensFound: validRecords.length,
+            sentCount: 0,
+            message: "Skipped duplicate push within 10s window",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } catch (_) {
+      // Non-fatal if dedup table doesn't exist yet
+    }
+
     // 4. Obtain OAuth2 access token for FCM HTTP v1 API
     const accessToken = await getFcmAccessToken(serviceAccount);
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
@@ -258,8 +364,8 @@ serve(async (req: Request) => {
     // FCM v1 requires all data payload values to be strings
     const stringData: Record<string, string> = {
       route: String(route),
-      title: String(title),
-      body: String(body),
+      title: effectiveTitle,
+      body: effectiveBody,
       click_action: "FLUTTER_NOTIFICATION_CLICK",
     };
     if (data && typeof data === "object") {
@@ -292,8 +398,8 @@ serve(async (req: Request) => {
                 message: {
                   token: rec.token,
                   notification: {
-                    title: String(title),
-                    body: String(body),
+                    title: effectiveTitle,
+                    body: effectiveBody,
                   },
                   data: stringData,
                   android: {
