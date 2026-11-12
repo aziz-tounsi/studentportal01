@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/ios_loader.dart';
+import '../widgets/school_logo_preview.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // ░░░  AURORA GLASS — Login Screen  ░░░
@@ -226,17 +227,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    gradient: AppColors.primaryGradient,
                                     borderRadius: BorderRadius.circular(AppRadius.sm),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppColors.primary.withOpacity(0.4),
+                                        color: AppColors.primary.withOpacity(0.35),
                                         blurRadius: 20,
                                         offset: const Offset(0, 8),
                                       ),
                                     ],
                                   ),
-                                  child: const Icon(Icons.hexagon_rounded, color: Colors.white, size: 24),
+                                  child: const SchoolLogoPreview(
+                                    logoUrl: null,
+                                    size: 48,
+                                    borderRadius: AppRadius.sm,
+                                  ),
                                 ),
                                 const SizedBox(width: 14),
                                 Column(

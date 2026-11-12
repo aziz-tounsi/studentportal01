@@ -14,6 +14,7 @@ import '../../providers/nav_bar_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../providers/school_provider.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/school_logo_widget.dart';
 import '../../widgets/student_card.dart';
 import '../../widgets/student_card_skeleton.dart';
 
@@ -445,6 +446,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               Icons.menu_rounded,
                               color: Colors.white,
                               size: 26,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => context.go('/about'),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(15),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: SchoolLogoWidget(
+                              logoUrl: school?.logoUrl,
+                              size: 44,
+                              borderRadius: BorderRadius.circular(13),
                             ),
                           ),
                         ),

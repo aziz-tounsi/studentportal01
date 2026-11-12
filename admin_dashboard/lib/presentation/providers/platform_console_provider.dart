@@ -88,7 +88,7 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
 
       // 3. Load Schools with subscription & quotas
       final schoolsResp = await _supabase.from('schools').select('''
-        id, name, code, email, phone, address, primary_color, secondary_color, is_active, created_at,
+        id, name, code, logo_url, email, phone, address, primary_color, secondary_color, is_active, created_at,
         school_subscriptions (
           id, status, billing_cycle, current_period_start, current_period_end,
           plan:subscription_plans(id, code, name, price_tnd_monthly, price_tnd_yearly)
@@ -202,6 +202,7 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
     required String contactEmail,
     String? phone,
     String? address,
+    String? logoUrl,
     required String directorName,
     required String directorEmail,
     required String directorPassword,
@@ -216,6 +217,7 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
         'email': contactEmail,
         'phone': phone,
         'address': address,
+        if (logoUrl != null && logoUrl.isNotEmpty) 'logo_url': logoUrl,
         'primary_color': primaryColor,
         'is_active': true,
       }).select().single();
@@ -278,6 +280,29 @@ class PlatformConsoleNotifier extends Notifier<PlatformConsoleState> {
         errorMessage: UserFriendlyError.format(
           e,
           fallback: 'Unable to update the school status right now. Please try again.',
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateSchoolBranding({
+    required String schoolId,
+    String? logoUrl,
+    bool clearLogo = false,
+  }) async {
+    try {
+      await _supabase.from('schools').update({
+        'logo_url': clearLogo ? null : logoUrl,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', schoolId);
+      await loadAll();
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        errorMessage: UserFriendlyError.format(
+          e,
+          fallback: 'Impossible de mettre à jour le logo de cette école pour le moment.',
         ),
       );
       return false;

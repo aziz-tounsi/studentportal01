@@ -7,8 +7,10 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../core/theme/responsive.dart';
 import '../../providers/nav_bar_provider.dart';
+import '../../providers/school_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
+import '../../widgets/school_logo_widget.dart';
 
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
@@ -29,6 +31,10 @@ class AboutScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final school = ref.watch(schoolProvider).valueOrNull;
+    final schoolName = (school != null && school.name.trim().isNotEmpty)
+        ? school.name.trim()
+        : 'Student Portal';
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -174,32 +180,25 @@ class AboutScreen extends ConsumerWidget {
                       child: Column(
                         children: [
                           Container(
-                            width: 80,
-                            height: 80,
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                              ),
-                              shape: BoxShape.circle,
+                              borderRadius: BorderRadius.circular(22),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                                  color: Colors.black.withValues(alpha: 0.12),
                                   blurRadius: 18,
                                   offset: const Offset(0, 6),
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.school_rounded,
-                              size: 42,
-                              color: Colors.white,
+                            child: SchoolLogoWidget(
+                              logoUrl: school?.logoUrl,
+                              size: 80,
+                              borderRadius: BorderRadius.circular(22),
                             ),
                           ),
                           const SizedBox(height: 18),
                           Text(
-                            'Lycée Pythagore',
+                            schoolName,
                             style: ArabicTypography.headerStyle(
                               context,
                               fontSize: 22,

@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/services/school_branding_service.dart';
 import '../screens/settings/password_reset_requests_screen.dart';
 import '../providers/auth_provider.dart';
+import 'school_logo_preview.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // ░░░  AURORA GLASS — Sidebar Navigation  ░░░
@@ -25,6 +27,9 @@ class AdminSidebar extends ConsumerWidget {
       error: (_, __) => 0,
     );
     final isSuperAdmin = ref.watch(authProvider).user?.role == 'super_admin';
+    final schoolBranding = ref.watch(currentSchoolBrandingProvider).value;
+    final schoolLogoUrl = schoolBranding?['logo_url'] as String?;
+    final schoolName = (schoolBranding?['name'] as String?)?.trim();
 
     return Container(
       width: 272,
@@ -93,20 +98,19 @@ class AdminSidebar extends ConsumerWidget {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(13),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF2563EB).withOpacity(0.45),
+                            color: const Color(0xFF2563EB).withOpacity(0.35),
                             blurRadius: 16,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.hexagon_outlined,
-                        color: Colors.white,
-                        size: 22,
+                      child: SchoolLogoPreview(
+                        logoUrl: schoolLogoUrl,
+                        size: 42,
+                        borderRadius: 13,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -114,17 +118,21 @@ class AdminSidebar extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'PythaOne',
-                            style: TextStyle(
+                          Text(
+                            (schoolName != null && schoolName.isNotEmpty)
+                                ? schoolName
+                                : 'PythaOne',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 19,
+                              fontSize: 18,
                               fontWeight: FontWeight.w800,
                               letterSpacing: -0.5,
                             ),
                           ),
                           Text(
-                            'Espace Administration',
+                            isSuperAdmin ? 'Console SaaS' : 'Espace Administration',
                             style: TextStyle(
                               color: const Color(0xFF60A5FA).withOpacity(0.6),
                               fontSize: 11,

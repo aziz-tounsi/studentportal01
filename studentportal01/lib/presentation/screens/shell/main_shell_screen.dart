@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../../providers/announcements_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/school_provider.dart';
 import '../../providers/student_context_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/bubble_nav_bar.dart';
@@ -361,6 +362,26 @@ class _RealtimeNotificationWrapperState
         },
       );
 
+      // 5. School branding updates (logo_url, name)
+      _globalRealtimeChannel?.onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'schools',
+        callback: (payload) {
+          if (!mounted) return;
+          final mySchoolId = _currentSchoolId;
+          final recSchoolId = payload.newRecord['id']?.toString();
+          if (mySchoolId != null &&
+              recSchoolId != null &&
+              recSchoolId.isNotEmpty &&
+              recSchoolId != mySchoolId) {
+            return;
+          }
+          debugPrint('Realtime Shell: school branding updated -> refreshing');
+          ref.invalidate(schoolProvider);
+        },
+      );
+
       _globalRealtimeChannel?.subscribe((status, error) {
         debugPrint(
           'Realtime Shell subscription status: $status, error: $error',
@@ -384,6 +405,7 @@ class _RealtimeNotificationWrapperState
         }
         if (!mounted) return;
         ref.invalidate(semestersProvider);
+        ref.invalidate(schoolProvider);
         ref.invalidate(globalAnnouncementsProvider);
         ref.invalidate(classMessagesProvider);
         ref.invalidate(allStudentDocumentsProvider);

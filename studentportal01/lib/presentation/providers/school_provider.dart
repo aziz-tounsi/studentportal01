@@ -18,7 +18,7 @@ Future<SchoolModel?> _fetchSchool(String schoolId) async {
     final supabase = Supabase.instance.client;
     final response = await supabase
         .from('schools')
-        .select('id, name, logo_url, address, phone, email, created_at')
+        .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, created_at')
         .eq('id', schoolId)
         .maybeSingle();
     if (response != null) {

@@ -9,6 +9,7 @@ import '../../../core/theme/responsive.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/bouncing_wrapper.dart';
+import '../../widgets/school_logo_widget.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 
@@ -424,6 +425,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                Center(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(22),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.14),
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
+                                    ),
+                                    child: SchoolLogoWidget(
+                                      logoUrl: null,
+                                      size: 84,
+                                      borderRadius: BorderRadius.circular(22),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
                                 // Title
                                 FittedBox(
                                   fit: BoxFit.scaleDown,

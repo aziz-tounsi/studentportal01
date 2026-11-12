@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../data/services/school_branding_service.dart';
+import '../../providers/platform_console_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/school_logo_preview.dart';
 
 class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
   @override
@@ -46,10 +48,12 @@ class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
     }
   }
 
-  Future<bool> saveSchool(Map<String, dynamic> data) async {
+  Future<String?> saveSchool(Map<String, dynamic> data) async {
     try {
       final schoolId = await _getSchoolId();
-      if (schoolId == null) return false;
+      if (schoolId == null) {
+        return 'Aucun établissement associé à votre compte.';
+      }
 
       final supabase = Supabase.instance.client;
       final existing = await supabase
@@ -57,6 +61,14 @@ class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
           .select('id')
           .eq('id', schoolId)
           .maybeSingle();
+
+      final current = state.value ?? {};
+      final merged = {
+        ...current,
+        'id': schoolId,
+        'name': data['name'],
+        'logo_url': data['logo_url'],
+      };
 
       if (existing != null) {
         await supabase
@@ -77,10 +89,15 @@ class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
         });
       }
 
-      state = AsyncValue.data(data);
-      return true;
+      state = AsyncValue.data(merged);
+      ref.invalidate(currentSchoolBrandingProvider);
+      ref.invalidate(platformConsoleProvider);
+      return null;
     } catch (e) {
-      return false;
+      return UserFriendlyError.format(
+        e,
+        fallback: 'Erreur lors de la sauvegarde des informations de l\'école.',
+      );
     }
   }
 }
@@ -103,6 +120,8 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
   bool _isLoading = false;
   bool _hasChanges = false;
   String? _logoUrl;
+  String? _schoolId;
+  bool _populated = false;
   bool _uploadingLogo = false;
 
   @override
@@ -118,40 +137,22 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
   }
 
   void _populateFields(Map<String, dynamic> data) {
+    if (_populated) return;
+    _populated = true;
     _nameController.text = data['name'] ?? '';
     setState(() {
+      _schoolId = data['id'] as String?;
       _logoUrl = data['logo_url'] as String?;
     });
   }
 
   Future<void> _pickLogo() async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
-    );
-    if (image == null) return;
-
     setState(() => _uploadingLogo = true);
-
     try {
-      final supabase = Supabase.instance.client;
-      final bytes = await image.readAsBytes();
-      final ext = _extensionFromFile(image);
-      final fileName = 'logo_${DateTime.now().millisecondsSinceEpoch}.$ext';
-      final storagePath = 'logos/$fileName';
-      final mimeType = image.mimeType ?? 'image/png';
-
-      await supabase.storage
-          .from('profiles')
-          .uploadBinary(storagePath, bytes,
-              fileOptions: FileOptions(contentType: mimeType));
-
-      final publicUrl = supabase.storage
-          .from('profiles')
-          .getPublicUrl(storagePath);
-
+      final publicUrl = await SchoolBrandingService.pickAndUploadLogo(
+        schoolId: _schoolId ?? ref.read(schoolInfoProvider).value?['id'] as String?,
+      );
+      if (publicUrl == null || !mounted) return;
       setState(() {
         _logoUrl = publicUrl;
         _hasChanges = true;
@@ -163,7 +164,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
             content: Text(
               UserFriendlyError.format(
                 e,
-                fallback: 'Unable to update the school logo right now. Please try again.',
+                fallback: 'Impossible de téléverser le logo pour le moment.',
               ),
             ),
             backgroundColor: AppColors.error,
@@ -175,17 +176,11 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
     }
   }
 
-  String _extensionFromFile(XFile file) {
-    final path = file.path;
-    final mimeType = file.mimeType;
-    if (path.contains('.')) {
-      final dotExt = path.split('.').last;
-      if (!dotExt.contains('/')) return dotExt;
-    }
-    if (mimeType != null && mimeType.contains('/')) {
-      return mimeType.split('/').last;
-    }
-    return 'png';
+  void _resetToDefaultLogo() {
+    setState(() {
+      _logoUrl = null;
+      _hasChanges = true;
+    });
   }
 
   Future<void> _saveChanges() async {
@@ -198,36 +193,38 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
       'logo_url': _logoUrl,
     };
 
-    final success =
+    final errorMessage =
         await ref.read(schoolInfoProvider.notifier).saveSchool(data);
+    final success = errorMessage == null;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
-      _hasChanges = false;
+      if (success) _hasChanges = false;
     });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                success ? Icons.check_circle : Icons.error,
-                color: AppColors.textOnPrimary,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              success ? Icons.check_circle : Icons.error,
+              color: AppColors.textOnPrimary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                success ? 'Informations sauvegardées avec succès!' : errorMessage,
               ),
-              const SizedBox(width: 12),
-              Text(success
-                  ? 'Informations sauvegardées avec succès!'
-                  : 'Erreur lors de la sauvegarde'),
-            ],
-          ),
-          backgroundColor: success ? AppColors.success : AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
+            ),
+          ],
         ),
-      );
-    }
+        backgroundColor: success ? AppColors.success : AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
@@ -400,7 +397,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: _pickLogo,
+                      onTap: _uploadingLogo ? null : _pickLogo,
                       child: Container(
                         width: 120,
                         height: 120,
@@ -408,27 +405,18 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                           color: const Color(0xFF8B5CF6).withOpacity(0.05),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                            color: const Color(0xFF8B5CF6).withOpacity(0.25),
                             width: 2,
                             strokeAlign: BorderSide.strokeAlignInside,
                           ),
                         ),
                         child: _uploadingLogo
-                            ? const Center(
-                                child: IosLoader())
-                            : _logoUrl != null
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: Image.network(
-                                      _logoUrl!,
-                                      fit: BoxFit.cover,
-                                      width: 120,
-                                      height: 120,
-                                      errorBuilder: (_, __, ___) =>
-                                          _buildLogoPlaceholder(),
-                                    ),
-                                  )
-                                : _buildLogoPlaceholder(),
+                            ? const Center(child: IosLoader())
+                            : SchoolLogoPreview(
+                                logoUrl: _logoUrl,
+                                size: 116,
+                                borderRadius: 14,
+                              ),
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -436,35 +424,84 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Logo de l\'établissement',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: [
+                              const Text(
+                                'Logo de l\'établissement',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: (_logoUrl != null && _logoUrl!.isNotEmpty)
+                                      ? const Color(0xFF10B981).withOpacity(0.12)
+                                      : const Color(0xFF64748B).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  (_logoUrl != null && _logoUrl!.isNotEmpty)
+                                      ? 'Personnalisé'
+                                      : 'Par défaut',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: (_logoUrl != null && _logoUrl!.isNotEmpty)
+                                        ? const Color(0xFF059669)
+                                        : const Color(0xFF475569),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
-                            'Le logo apparaît sur la carte d\'étudiant\ndans l\'application mobile.',
+                            'Ce logo s\'affiche pour votre école dans l\'application mobile et l\'espace administration.',
                             style: TextStyle(
                               fontSize: 13,
                               color: AppColors.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: _pickLogo,
-                            icon: const Icon(Icons.upload, size: 18),
-                            label: const Text('Changer le logo'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF8B5CF6),
-                              side: const BorderSide(
-                                color: Color(0xFF8B5CF6),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 8,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _uploadingLogo ? null : _pickLogo,
+                                icon: const Icon(Icons.upload, size: 18),
+                                label: const Text('Changer le logo'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF8B5CF6),
+                                  side: const BorderSide(
+                                    color: Color(0xFF8B5CF6),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
+                              if (_logoUrl != null && _logoUrl!.isNotEmpty)
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      _uploadingLogo ? null : _resetToDefaultLogo,
+                                  icon: const Icon(Icons.restart_alt, size: 18),
+                                  label: const Text('Logo par défaut'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF64748B),
+                                    side: BorderSide(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
@@ -475,33 +512,6 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildLogoPlaceholder() {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        color: const Color(0xFF8B5CF6).withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.add_photo_alternate_outlined,
-              color: Color(0xFF8B5CF6), size: 32),
-          SizedBox(height: 4),
-          Text(
-            'Ajouter',
-            style: TextStyle(
-              color: Color(0xFF8B5CF6),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
