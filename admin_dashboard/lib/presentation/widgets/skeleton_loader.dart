@@ -1827,233 +1827,347 @@ class StudentProfileSkeletonLoader extends StatelessWidget {
     return Container(
       color: const Color(0xFFF8FAFC),
       child: ShimmerLoading(
-        child: Column(
-          children: [
-            // Top Bar
-            Container(
-              height: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-              ),
-              child: const Row(
-                children: [
-                  SkeletonBox(width: 36, height: 36, borderRadius: 10),
-                  SizedBox(width: 14),
-                  SkeletonBox(width: 140, height: 18, borderRadius: 5),
-                  Spacer(),
-                  SkeletonBox(width: 130, height: 38, borderRadius: 8),
-                  SizedBox(width: 10),
-                  SkeletonBox(width: 90, height: 38, borderRadius: 8),
-                  SizedBox(width: 10),
-                  SkeletonBox(width: 36, height: 36, borderRadius: 8),
-                ],
-              ),
-            ),
-
-            // Scrollable Content
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header (matches UserProfileScreen._buildHeader)
+              Container(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                ),
+                child: const Row(
                   children: [
-                    // Profile Header Card
-                    Container(
-                      margin: const EdgeInsets.all(24),
-                      padding: const EdgeInsets.all(28),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFF1F5F9)),
-                      ),
-                      child: const Row(
-                        children: [
-                          SkeletonCircle(size: 96),
-                          SizedBox(width: 28),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SkeletonBox(width: 200, height: 22, borderRadius: 6),
-                                SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    SkeletonBox(width: 85, height: 24, borderRadius: 6),
-                                    SizedBox(width: 8),
-                                    SkeletonBox(width: 75, height: 24, borderRadius: 6),
-                                    SizedBox(width: 8),
-                                    SkeletonBox(width: 60, height: 24, borderRadius: 6),
-                                  ],
-                                ),
-                                SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    SkeletonBox(width: 16, height: 16, borderRadius: 4),
-                                    SizedBox(width: 8),
-                                    SkeletonBox(width: 90, height: 12, borderRadius: 4),
-                                    SizedBox(width: 24),
-                                    SkeletonBox(width: 16, height: 16, borderRadius: 4),
-                                    SizedBox(width: 8),
-                                    SkeletonBox(width: 100, height: 12, borderRadius: 4),
-                                    SizedBox(width: 24),
-                                    SkeletonBox(width: 16, height: 16, borderRadius: 4),
-                                    SizedBox(width: 8),
-                                    SkeletonBox(width: 140, height: 12, borderRadius: 4),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Quick Stats Row (4 Cards)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Row(
-                        children: List.generate(4, (_) => Expanded(
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 6),
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFF1F5F9)),
-                            ),
-                            child: const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    SkeletonBox(width: 38, height: 38, borderRadius: 10),
-                                    Spacer(),
-                                    SkeletonBox(width: 44, height: 18, borderRadius: 6),
-                                  ],
-                                ),
-                                SizedBox(height: 16),
-                                SkeletonBox(width: 65, height: 24, borderRadius: 6),
-                                SizedBox(height: 6),
-                                SkeletonBox(width: 100, height: 12, borderRadius: 4),
-                              ],
-                            ),
-                          ),
-                        )),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // 3 Feature Cards (Attendance, Payment, Academic)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Row(
-                        children: List.generate(3, (_) => Expanded(
-                          child: Container(
-                            height: 240,
-                            margin: const EdgeInsets.symmetric(horizontal: 6),
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFF1F5F9)),
-                            ),
-                            child: const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    SkeletonBox(width: 36, height: 36, borderRadius: 8),
-                                    SizedBox(width: 12),
-                                    SkeletonBox(width: 110, height: 16, borderRadius: 5),
-                                    Spacer(),
-                                    SkeletonBox(width: 60, height: 22, borderRadius: 6),
-                                  ],
-                                ),
-                                SizedBox(height: 24),
-                                Row(
-                                  children: [
-                                    SkeletonBox(width: 80, height: 12, borderRadius: 4),
-                                    Spacer(),
-                                    SkeletonBox(width: 50, height: 12, borderRadius: 4),
-                                  ],
-                                ),
-                                SizedBox(height: 16),
-                                SkeletonBox(width: double.infinity, height: 6, borderRadius: 3),
-                                SizedBox(height: 20),
-                                Row(
-                                  children: [
-                                    SkeletonBox(width: 100, height: 12, borderRadius: 4),
-                                    Spacer(),
-                                    SkeletonBox(width: 40, height: 12, borderRadius: 4),
-                                  ],
-                                ),
-                                SizedBox(height: 16),
-                                SkeletonBox(width: double.infinity, height: 6, borderRadius: 3),
-                              ],
-                            ),
-                          ),
-                        )),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Bottom Tabs / List Section
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 24),
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFF1F5F9)),
-                      ),
+                    SkeletonBox(width: 40, height: 40, borderRadius: 12),
+                    SizedBox(width: 16),
+                    Expanded(
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
-                            children: [
-                              SkeletonBox(width: 100, height: 32, borderRadius: 8),
-                              SizedBox(width: 10),
-                              SkeletonBox(width: 100, height: 32, borderRadius: 8),
-                              SizedBox(width: 10),
-                              SkeletonBox(width: 100, height: 32, borderRadius: 8),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          ...List.generate(2, (_) => Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFF8FAFC)),
-                            ),
-                            child: const Row(
-                              children: [
-                                SkeletonCircle(size: 32),
-                                SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SkeletonBox(width: 140, height: 13, borderRadius: 4),
-                                    SizedBox(height: 4),
-                                    SkeletonBox(width: 80, height: 10, borderRadius: 3),
-                                  ],
-                                ),
-                                Spacer(),
-                                SkeletonBox(width: 60, height: 20, borderRadius: 6),
-                              ],
-                            ),
-                          )),
+                          SkeletonBox(width: 190, height: 22, borderRadius: 6),
+                          SizedBox(height: 6),
+                          SkeletonBox(width: 95, height: 13, borderRadius: 4),
                         ],
                       ),
+                    ),
+                    SizedBox(width: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        SkeletonBox(width: 105, height: 36, borderRadius: 10),
+                        SkeletonBox(width: 95, height: 36, borderRadius: 10),
+                        SkeletonBox(width: 170, height: 36, borderRadius: 10),
+                        SkeletonBox(width: 150, height: 36, borderRadius: 10),
+                      ],
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 32),
+
+              // 2-Column Body (360px Left + Expanded Right)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left Column
+                  SizedBox(
+                    width: 360,
+                    child: Column(
+                      children: [
+                        // Profile Card
+                        Container(
+                          padding: const EdgeInsets.all(28),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: [
+                              const SkeletonCircle(size: 100),
+                              const SizedBox(height: 16),
+                              const SkeletonBox(width: 170, height: 18, borderRadius: 5),
+                              const SizedBox(height: 8),
+                              const SkeletonBox(width: 84, height: 24, borderRadius: 20),
+                              const SizedBox(height: 6),
+                              const SkeletonBox(width: 88, height: 12, borderRadius: 4),
+                              const SizedBox(height: 24),
+                              ...List.generate(
+                                5,
+                                (_) => const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 100,
+                                        child: SkeletonBox(width: 68, height: 12, borderRadius: 4),
+                                      ),
+                                      Expanded(
+                                        child: SkeletonBox(width: double.infinity, height: 12, borderRadius: 4),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                              const SizedBox(height: 16),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: SkeletonBox(width: 105, height: 13, borderRadius: 4),
+                              ),
+                              const SizedBox(height: 12),
+                              ...List.generate(
+                                3,
+                                (_) => const Padding(
+                                  padding: EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      SkeletonBox(width: 28, height: 28, borderRadius: 8),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: SkeletonBox(width: double.infinity, height: 12, borderRadius: 4),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Security Card
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  SkeletonBox(width: 18, height: 18, borderRadius: 4),
+                                  SizedBox(width: 8),
+                                  SkeletonBox(width: 75, height: 15, borderRadius: 4),
+                                ],
+                              ),
+                              SizedBox(height: 16),
+                              SkeletonBox(width: 115, height: 12, borderRadius: 4),
+                              SizedBox(height: 8),
+                              SkeletonBox(width: double.infinity, height: 42, borderRadius: 10),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 32),
+
+                  // Right Column
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // Stats Grid (4 cards)
+                        Row(
+                          children: List.generate(4, (i) {
+                            return Expanded(
+                              child: Container(
+                                margin: EdgeInsets.only(right: i < 3 ? 16 : 0),
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    SkeletonBox(width: 42, height: 42, borderRadius: 12),
+                                    SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          SkeletonBox(width: 38, height: 22, borderRadius: 5),
+                                          SizedBox(height: 6),
+                                          SkeletonBox(width: double.infinity, height: 12, borderRadius: 4),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Calendar + Payments Cards (440px height)
+                        SizedBox(
+                          height: 440,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Presence Calendar Skeleton
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          SkeletonBox(width: 150, height: 16, borderRadius: 4),
+                                          Spacer(),
+                                          SkeletonBox(width: 110, height: 26, borderRadius: 8),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Row(
+                                        children: List.generate(
+                                          7,
+                                          (_) => const Expanded(
+                                            child: Center(
+                                              child: SkeletonBox(width: 22, height: 12, borderRadius: 3),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Expanded(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: List.generate(
+                                            5,
+                                            (_) => Row(
+                                              children: List.generate(
+                                                7,
+                                                (_) => const Expanded(
+                                                  child: Center(
+                                                    child: SkeletonBox(width: 30, height: 30, borderRadius: 8),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 32),
+
+                              // Payments Donut Card Skeleton
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          SkeletonBox(width: 90, height: 16, borderRadius: 4),
+                                          Spacer(),
+                                          SkeletonBox(width: 55, height: 13, borderRadius: 4),
+                                        ],
+                                      ),
+                                      const SkeletonCircle(size: 156),
+                                      Column(
+                                        children: List.generate(
+                                          5,
+                                          (_) => const Padding(
+                                            padding: EdgeInsets.only(top: 10),
+                                            child: Row(
+                                              children: [
+                                                SkeletonBox(width: 18, height: 18, borderRadius: 4),
+                                                SizedBox(width: 10),
+                                                SkeletonBox(width: 80, height: 12, borderRadius: 4),
+                                                Spacer(),
+                                                SkeletonBox(width: 60, height: 12, borderRadius: 4),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Activity Log Card Skeleton
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SkeletonBox(width: 135, height: 16, borderRadius: 4),
+                              const SizedBox(height: 16),
+                              Container(
+                                height: 38,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: SkeletonBox(width: 60, height: 11))),
+                                    Expanded(flex: 4, child: Align(alignment: Alignment.centerLeft, child: SkeletonBox(width: 80, height: 11))),
+                                    Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: SkeletonBox(width: 50, height: 11))),
+                                  ],
+                                ),
+                              ),
+                              ...List.generate(
+                                3,
+                                (_) => const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  child: Row(
+                                    children: [
+                                      Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: SkeletonBox(width: 90, height: 12))),
+                                      Expanded(flex: 4, child: Align(alignment: Alignment.centerLeft, child: SkeletonBox(width: 180, height: 12))),
+                                      Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: SkeletonBox(width: 85, height: 12))),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2071,35 +2185,34 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
       child: ShimmerLoading(
         child: Column(
           children: [
-            // Top Bar
+            // Top Bar (matches TeacherProfileScreen._buildHeader)
             Container(
-              height: 72,
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
               ),
               child: const Row(
                 children: [
-                  SkeletonBox(width: 38, height: 38, borderRadius: 10),
+                  SkeletonBox(width: 40, height: 40, borderRadius: 12),
                   SizedBox(width: 16),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          SkeletonBox(width: 180, height: 22, borderRadius: 6),
-                          SizedBox(width: 12),
-                          SkeletonBox(width: 65, height: 22, borderRadius: 10),
-                        ],
-                      ),
-                      SizedBox(height: 6),
-                      SkeletonBox(width: 140, height: 12, borderRadius: 4),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            SkeletonBox(width: 180, height: 24, borderRadius: 6),
+                            SizedBox(width: 12),
+                            SkeletonBox(width: 58, height: 24, borderRadius: 12),
+                          ],
+                        ),
+                        SizedBox(height: 6),
+                        SkeletonBox(width: 210, height: 13, borderRadius: 4),
+                      ],
+                    ),
                   ),
-                  Spacer(),
-                  SkeletonBox(width: 140, height: 38, borderRadius: 8),
+                  SkeletonBox(width: 148, height: 38, borderRadius: 8),
                 ],
               ),
             ),
@@ -2122,9 +2235,8 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
                       ),
                       child: Column(
                         children: [
-                          // Top Banner Placeholder
                           Container(
-                            height: 88,
+                            height: 96,
                             decoration: const BoxDecoration(
                               color: Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.only(
@@ -2133,39 +2245,41 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
                               ),
                             ),
                           ),
-                          // Overlapping Avatar & Info
                           Transform.translate(
-                            offset: const Offset(0, -44),
+                            offset: const Offset(0, -48),
                             child: Column(
                               children: [
-                                const SkeletonCircle(size: 108),
-                                const SizedBox(height: 14),
-                                const SkeletonBox(width: 160, height: 18, borderRadius: 5),
+                                const SkeletonCircle(size: 128),
+                                const SizedBox(height: 12),
+                                const SkeletonBox(width: 160, height: 20, borderRadius: 5),
                                 const SizedBox(height: 6),
-                                const SkeletonBox(width: 110, height: 12, borderRadius: 4),
-                                const SizedBox(height: 20),
-                                const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                                const SizedBox(height: 18),
+                                const SkeletonBox(width: 130, height: 14, borderRadius: 4),
+                                const SizedBox(height: 24),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 24),
                                   child: Column(
-                                    children: List.generate(4, (_) => const Padding(
-                                      padding: EdgeInsets.only(bottom: 14),
-                                      child: Row(
-                                        children: [
-                                          SkeletonBox(width: 32, height: 32, borderRadius: 8),
-                                          SizedBox(width: 12),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              SkeletonBox(width: 60, height: 10, borderRadius: 3),
-                                              SizedBox(height: 4),
-                                              SkeletonBox(width: 120, height: 12, borderRadius: 4),
-                                            ],
-                                          ),
-                                        ],
+                                    children: List.generate(
+                                      3,
+                                      (_) => const Padding(
+                                        padding: EdgeInsets.only(bottom: 16),
+                                        child: Row(
+                                          children: [
+                                            SkeletonBox(width: 18, height: 18, borderRadius: 4),
+                                            SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  SkeletonBox(width: 95, height: 11, borderRadius: 3),
+                                                  SizedBox(height: 4),
+                                                  SkeletonBox(width: 155, height: 13, borderRadius: 4),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    )),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -2177,15 +2291,15 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
 
                     const SizedBox(width: 32),
 
-                    // Right Column: Specialty + Classes + Timetable (Expanded)
+                    // Right Column: Specialty + Classes + Timetable
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Card 1: Specialty & Levels
+                          // Card 1: Spécialité & Niveaux
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(22),
+                            padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
@@ -2194,89 +2308,87 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Row(
-                                  children: [
-                                    SkeletonBox(width: 34, height: 34, borderRadius: 8),
-                                    SizedBox(width: 12),
-                                    SkeletonBox(width: 150, height: 16, borderRadius: 5),
-                                  ],
-                                ),
-                                const SizedBox(height: 18),
+                                const SkeletonBox(width: 145, height: 11, borderRadius: 4),
+                                const SizedBox(height: 14),
                                 Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: const [
-                                    SkeletonBox(width: 90, height: 28, borderRadius: 14),
-                                    SkeletonBox(width: 75, height: 28, borderRadius: 14),
-                                    SkeletonBox(width: 105, height: 28, borderRadius: 14),
-                                    SkeletonBox(width: 80, height: 28, borderRadius: 14),
-                                    SkeletonBox(width: 95, height: 28, borderRadius: 14),
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    const SkeletonBox(width: 115, height: 38, borderRadius: 12),
+                                    Container(width: 1, height: 32, color: const Color(0xFFE5E7EB)),
+                                    const SkeletonBox(width: 92, height: 36, borderRadius: 12),
+                                    const SkeletonBox(width: 108, height: 36, borderRadius: 12),
+                                    const SkeletonBox(width: 96, height: 36, borderRadius: 12),
                                   ],
                                 ),
                               ],
                             ),
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
 
-                          // Card 2: Classes
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(22),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Row(
-                                  children: [
-                                    SkeletonBox(width: 34, height: 34, borderRadius: 8),
-                                    SizedBox(width: 12),
-                                    SkeletonBox(width: 130, height: 16, borderRadius: 5),
-                                    Spacer(),
-                                    SkeletonBox(width: 50, height: 22, borderRadius: 6),
-                                  ],
-                                ),
-                                const SizedBox(height: 18),
-                                Row(
-                                  children: List.generate(3, (_) => Expanded(
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(horizontal: 6),
-                                      padding: const EdgeInsets.all(14),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: const Color(0xFFF1F5F9)),
-                                      ),
-                                      child: const Row(
+                          // Section 2: Classes Assignées (Header + 2-column grid of cards)
+                          const Row(
+                            children: [
+                              SkeletonBox(width: 165, height: 20, borderRadius: 5),
+                              Spacer(),
+                              SkeletonBox(width: 72, height: 26, borderRadius: 12),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: List.generate(2, (i) {
+                              return Expanded(
+                                child: Container(
+                                  margin: EdgeInsets.only(right: i == 0 ? 16 : 0),
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                                  ),
+                                  child: const Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
                                         children: [
-                                          SkeletonBox(width: 36, height: 36, borderRadius: 8),
-                                          SizedBox(width: 10),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              SkeletonBox(width: 80, height: 13, borderRadius: 4),
-                                              SizedBox(height: 4),
-                                              SkeletonBox(width: 60, height: 10, borderRadius: 3),
-                                            ],
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                SkeletonBox(width: 115, height: 17, borderRadius: 5),
+                                                SizedBox(height: 6),
+                                                SkeletonBox(width: 85, height: 12, borderRadius: 4),
+                                              ],
+                                            ),
                                           ),
+                                          SkeletonBox(width: 40, height: 40, borderRadius: 12),
                                         ],
                                       ),
-                                    ),
-                                  )),
+                                      SizedBox(height: 14),
+                                      Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                      SizedBox(height: 14),
+                                      Row(
+                                        children: [
+                                          SkeletonBox(width: 90, height: 12, borderRadius: 4),
+                                          SizedBox(width: 20),
+                                          SkeletonBox(width: 60, height: 12, borderRadius: 4),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ],
-                            ),
+                              );
+                            }),
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
 
-                          // Card 3: Timetable / Schedule
+                          // Card 3: Emploi du temps (Timeline view matching Aujourd'hui default)
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(22),
+                            padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
@@ -2287,37 +2399,54 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
                               children: [
                                 const Row(
                                   children: [
-                                    SkeletonBox(width: 34, height: 34, borderRadius: 8),
-                                    SizedBox(width: 12),
-                                    SkeletonBox(width: 140, height: 16, borderRadius: 5),
+                                    SkeletonBox(width: 18, height: 18, borderRadius: 4),
+                                    SizedBox(width: 10),
+                                    SkeletonBox(width: 150, height: 20, borderRadius: 5),
+                                    Spacer(),
+                                    SkeletonBox(width: 165, height: 36, borderRadius: 12),
                                   ],
                                 ),
-                                const SizedBox(height: 18),
-                                Row(
-                                  children: List.generate(6, (_) => const Expanded(
-                                    child: Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 4),
-                                      child: SkeletonBox(width: double.infinity, height: 14, borderRadius: 4),
-                                    ),
-                                  )),
-                                ),
-                                const SizedBox(height: 14),
-                                ...List.generate(3, (_) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    children: List.generate(6, (_) => Expanded(
-                                      child: Container(
-                                        height: 38,
-                                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFFF1F5F9)),
+                                const SizedBox(height: 24),
+                                ...List.generate(
+                                  3,
+                                  (_) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Row(
+                                      children: [
+                                        const SizedBox(
+                                          width: 56,
+                                          child: Column(
+                                            children: [
+                                              SkeletonBox(width: 40, height: 12, borderRadius: 3),
+                                              SizedBox(height: 4),
+                                              SkeletonBox(width: 34, height: 10, borderRadius: 3),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    )),
+                                        Container(width: 1, height: 48, color: const Color(0xFFE5E7EB)),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Container(
+                                            padding: const EdgeInsets.all(14),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                                            ),
+                                            child: const Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                SkeletonBox(width: 160, height: 14, borderRadius: 4),
+                                                SizedBox(height: 6),
+                                                SkeletonBox(width: 115, height: 12, borderRadius: 4),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                )),
+                                ),
                               ],
                             ),
                           ),

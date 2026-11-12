@@ -536,32 +536,22 @@ class _PasswordResetRequestsScreenState
   // SUBPAGE TABS (EXACT CLONE OF DOCUMENTS PAGE)
   // ─────────────────────────────────────────────────────────────
   Widget _buildTabsBar(AsyncValue<List<Map<String, dynamic>>> requestsAsync) {
-    final list = requestsAsync.value ?? [];
-    final pendingCount = list.where((r) => r['status'] == 'pending').length;
-    final approvedCount = list.where((r) => r['status'] == 'approved').length;
-    final rejectedCount = list.where((r) => r['status'] == 'rejected').length;
-    final allCount = list.length;
-
     final tabs = [
       (
         icon: Icons.hourglass_empty_rounded,
         label: 'En attente',
-        count: pendingCount,
       ),
       (
         icon: Icons.check_circle_outline_rounded,
         label: 'Approuvées',
-        count: approvedCount,
       ),
       (
         icon: Icons.cancel_outlined,
         label: 'Rejetées',
-        count: rejectedCount,
       ),
       (
         icon: Icons.format_list_bulleted_rounded,
         label: 'Toutes',
-        count: allCount,
       ),
     ];
 
@@ -584,7 +574,6 @@ class _PasswordResetRequestsScreenState
               child: _buildTab(
                 icon: t.icon,
                 label: t.label,
-                count: t.count,
                 isActive: _selectedTabIndex == index,
                 onTap: () {
                   setState(() {
@@ -605,7 +594,6 @@ class _PasswordResetRequestsScreenState
   Widget _buildTab({
     required IconData icon,
     required String label,
-    required int count,
     required bool isActive,
     required VoidCallback onTap,
     required Color activeColor,
@@ -636,24 +624,6 @@ class _PasswordResetRequestsScreenState
                 fontSize: 13,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                 color: isActive ? activeColor : AppColors.textTertiary,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.slate100,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: isActive
-                      ? AppColors.textSecondary
-                      : AppColors.textTertiary,
-                ),
               ),
             ),
           ],
@@ -2871,21 +2841,6 @@ class _DirectResetPasswordModalState
                                         ],
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        u.role.toUpperCase(),
-                                        style: const TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF64748B),
-                                        ),
-                                      ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -2908,67 +2863,42 @@ class _DirectResetPasswordModalState
                 ),
               ),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _pwdCtrl,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        letterSpacing: 0.5,
-                      ),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
-                        ),
-                      ),
+              TextField(
+                controller: _pwdCtrl,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  letterSpacing: 0.5,
+                ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  suffixIcon: IconButton(
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      size: 18,
+                      color: Color(0xFF64748B),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: Color(0xFF6D4CF6)),
                     tooltip: 'Générer un autre',
                     onPressed: _regeneratePassword,
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D4CF6).withOpacity(0.1),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      fixedSize: const Size(44, 44),
-                    ),
                   ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(Icons.copy_rounded, color: Color(0xFF64748B)),
-                    tooltip: 'Copier',
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: _pwdCtrl.text));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Mot de passe copié !'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      fixedSize: const Size(44, 44),
-                    ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                   ),
-                ],
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
+                  ),
+                ),
               ),
 
               const SizedBox(height: 24),

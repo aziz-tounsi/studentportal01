@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/services/school_branding_service.dart';
-import '../../providers/platform_console_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/school_logo_preview.dart';
@@ -91,7 +90,6 @@ class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
 
       state = AsyncValue.data(merged);
       ref.invalidate(currentSchoolBrandingProvider);
-      ref.invalidate(platformConsoleProvider);
       return null;
     } catch (e) {
       return UserFriendlyError.format(

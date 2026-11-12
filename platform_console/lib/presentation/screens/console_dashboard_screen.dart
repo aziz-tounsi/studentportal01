@@ -308,20 +308,48 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
                   final spent = (quota?['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
                   final budget = (quota?['monthly_budget_usd'] as num?)?.toDouble() ?? 25.0;
 
+                  final logoUrl = s['logo_url'] as String?;
+
                   return DataRow(
                     cells: [
-                      DataCell(Text(s['name'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildSchoolLogoThumb(logoUrl, size: 32, radius: 8),
+                            const SizedBox(width: 10),
+                            Text(
+                              s['name'] ?? '',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
                       DataCell(Text(s['code'] ?? '—', style: const TextStyle(color: Colors.white70))),
                       DataCell(Text(plan?['name'] ?? 'Essai Standard', style: const TextStyle(color: Colors.white70))),
                       DataCell(_buildStatusBadge(isActive ? (sub?['status'] ?? 'actif') : 'inactif')),
                       DataCell(Text('\$${spent.toStringAsFixed(2)} / \$${budget.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white70))),
                       DataCell(
-                        IconButton(
-                          icon: Icon(
-                            isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
-                            color: isActive ? ConsoleColors.warning : ConsoleColors.success,
-                          ),
-                          onPressed: () => ref.read(platformProvider.notifier).toggleSchoolStatus(s['id'], !isActive),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.image_outlined,
+                                color: Color(0xFF60A5FA),
+                              ),
+                              tooltip: 'Changer le logo de l\'école',
+                              onPressed: () => _showSchoolLogoModal(context, s),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                                color: isActive ? ConsoleColors.warning : ConsoleColors.success,
+                              ),
+                              tooltip: isActive ? 'Suspendre l\'école' : 'Réactiver l\'école',
+                              onPressed: () => ref.read(platformProvider.notifier).toggleSchoolStatus(s['id'], !isActive),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -587,7 +615,188 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
     );
   }
 
+  Widget _buildSchoolLogoThumb(String? logoUrl, {double size = 32, double radius = 8}) {
+    final trimmed = logoUrl?.trim();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: (trimmed != null && trimmed.isNotEmpty)
+          ? Image.network(
+              trimmed,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Image.asset(
+                'assets/images/app_logo.png',
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+              ),
+            )
+          : Image.asset(
+              'assets/images/app_logo.png',
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+            ),
+    );
+  }
+
   // Modals
+  void _showSchoolLogoModal(BuildContext context, Map<String, dynamic> school) {
+    final schoolId = school['id'] as String;
+    final schoolName = school['name'] as String? ?? 'École';
+    String? draftLogoUrl = school['logo_url'] as String?;
+    bool uploading = false;
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (sbContext, setSbState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: Text(
+            'Logo — $schoolName',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 128,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.14),
+                    ),
+                  ),
+                  child: uploading
+                      ? const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        )
+                      : Center(
+                          child: _buildSchoolLogoThumb(
+                            draftLogoUrl,
+                            size: 112,
+                            radius: 14,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  (draftLogoUrl != null && draftLogoUrl!.isNotEmpty)
+                      ? 'Logo personnalisé configuré pour cette école.'
+                      : 'Utilise actuellement le logo par défaut de l\'application.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: uploading || saving
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              setSbState(() => uploading = true);
+                              try {
+                                final url = await ref
+                                    .read(platformProvider.notifier)
+                                    .pickAndUploadSchoolLogo(schoolId: schoolId);
+                                if (!ctx.mounted) return;
+                                if (url != null) {
+                                  setSbState(() => draftLogoUrl = url);
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text('Échec téléversement logo: $e'),
+                                      backgroundColor: ConsoleColors.error,
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (ctx.mounted) {
+                                  setSbState(() => uploading = false);
+                                }
+                              }
+                            },
+                      icon: const Icon(Icons.upload, size: 18),
+                      label: const Text('Téléverser un logo'),
+                    ),
+                    if (draftLogoUrl != null && draftLogoUrl!.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: uploading || saving
+                            ? null
+                            : () => setSbState(() => draftLogoUrl = null),
+                        icon: const Icon(Icons.restart_alt, size: 18),
+                        label: const Text('Réinitialiser par défaut'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                          side: const BorderSide(color: Colors.white24),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: uploading || saving
+                  ? null
+                  : () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      setSbState(() => saving = true);
+                      final ok = await ref
+                          .read(platformProvider.notifier)
+                          .updateSchoolBranding(
+                            schoolId: schoolId,
+                            logoUrl: draftLogoUrl,
+                            clearLogo:
+                                draftLogoUrl == null || draftLogoUrl!.isEmpty,
+                          );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (!mounted) return;
+                      final errMsg = ref.read(platformProvider).errorMessage;
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ok
+                                ? 'Logo de $schoolName mis à jour !'
+                                : (errMsg ?? 'Impossible de sauvegarder le logo.'),
+                          ),
+                          backgroundColor: ok
+                              ? ConsoleColors.success
+                              : ConsoleColors.error,
+                        ),
+                      );
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Enregistrer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showCreateSchoolModal(BuildContext context, List<Map<String, dynamic>> plans) {
     final nameCtrl = TextEditingController();
     final codeCtrl = TextEditingController();
@@ -596,6 +805,8 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
     final directorEmailCtrl = TextEditingController();
     final directorPassCtrl = TextEditingController(text: 'Director2026!');
     String selectedPlanId = plans.isNotEmpty ? plans[0]['id'] : '';
+    String? selectedLogoUrl;
+    bool uploadingLogo = false;
 
     showDialog(
       context: context,
@@ -609,6 +820,74 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: uploadingLogo
+                            ? const Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : _buildSchoolLogoThumb(
+                                selectedLogoUrl,
+                                size: 64,
+                                radius: 14,
+                              ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: uploadingLogo
+                                  ? null
+                                  : () async {
+                                      setSbState(() => uploadingLogo = true);
+                                      try {
+                                        final url = await ref
+                                            .read(platformProvider.notifier)
+                                            .pickAndUploadSchoolLogo(
+                                              schoolId: codeCtrl.text.trim().isNotEmpty
+                                                  ? codeCtrl.text.trim()
+                                                  : 'new_school',
+                                            );
+                                        if (!ctx.mounted) return;
+                                        if (url != null) {
+                                          setSbState(() => selectedLogoUrl = url);
+                                        }
+                                      } catch (_) {} finally {
+                                        if (ctx.mounted) {
+                                          setSbState(() => uploadingLogo = false);
+                                        }
+                                      }
+                                    },
+                              icon: const Icon(Icons.image_outlined, size: 16),
+                              label: const Text('Logo de l\'école (optionnel)'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white24),
+                              ),
+                            ),
+                            if (selectedLogoUrl != null)
+                              TextButton(
+                                onPressed: () =>
+                                    setSbState(() => selectedLogoUrl = null),
+                                child: const Text('Par défaut'),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(labelText: 'Nom de l\'établissement *'),
@@ -666,29 +945,32 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
             ElevatedButton(
-              onPressed: () async {
-                if (nameCtrl.text.trim().isEmpty || codeCtrl.text.trim().isEmpty || directorEmailCtrl.text.trim().isEmpty) {
-                  return;
-                }
-                Navigator.pop(ctx);
-                final ok = await ref.read(platformProvider.notifier).createSchool(
-                  name: nameCtrl.text.trim(),
-                  code: codeCtrl.text.trim(),
-                  email: emailCtrl.text.trim(),
-                  directorName: directorNameCtrl.text.trim(),
-                  directorEmail: directorEmailCtrl.text.trim(),
-                  directorPassword: directorPassCtrl.text.trim(),
-                  planId: selectedPlanId,
-                );
+              onPressed: uploadingLogo
+                  ? null
+                  : () async {
+                      if (nameCtrl.text.trim().isEmpty || codeCtrl.text.trim().isEmpty || directorEmailCtrl.text.trim().isEmpty) {
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      final ok = await ref.read(platformProvider.notifier).createSchool(
+                        name: nameCtrl.text.trim(),
+                        code: codeCtrl.text.trim(),
+                        email: emailCtrl.text.trim(),
+                        logoUrl: selectedLogoUrl,
+                        directorName: directorNameCtrl.text.trim(),
+                        directorEmail: directorEmailCtrl.text.trim(),
+                        directorPassword: directorPassCtrl.text.trim(),
+                        planId: selectedPlanId,
+                      );
 
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(ok ? 'Établissement créé avec succès !' : 'Erreur de création.'),
-                    backgroundColor: ok ? ConsoleColors.success : ConsoleColors.error,
-                  ),
-                );
-              },
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ok ? 'Établissement créé avec succès !' : 'Erreur de création.'),
+                          backgroundColor: ok ? ConsoleColors.success : ConsoleColors.error,
+                        ),
+                      );
+                    },
               child: const Text('Créer l\'Établissement'),
             ),
           ],

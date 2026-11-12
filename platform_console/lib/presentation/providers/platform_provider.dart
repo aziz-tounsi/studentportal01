@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/services/user_management_service.dart';
 
@@ -82,7 +83,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
 
       // 3. Schools
       final schoolsResp = await _supabase.from('schools').select('''
-        id, name, code, email, phone, address, primary_color, secondary_color, is_active, created_at,
+        id, name, code, logo_url, email, phone, address, primary_color, secondary_color, is_active, created_at,
         school_subscriptions (
           id, status, billing_cycle, current_period_start, current_period_end,
           plan:subscription_plans(id, code, name, price_tnd_monthly, price_tnd_yearly)
@@ -232,10 +233,71 @@ class PlatformNotifier extends Notifier<PlatformState> {
     }
   }
 
+  Future<String?> pickAndUploadSchoolLogo({String? schoolId}) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+    if (image == null) return null;
+
+    final bytes = await image.readAsBytes();
+    final name = image.name;
+    var ext = 'png';
+    if (name.contains('.')) {
+      final candidate = name.split('.').last.toLowerCase();
+      if (candidate.isNotEmpty && !candidate.contains('/')) ext = candidate;
+    } else if (image.mimeType != null && image.mimeType!.contains('/')) {
+      final sub = image.mimeType!.split('/').last.toLowerCase();
+      ext = sub == 'jpeg' ? 'jpg' : sub;
+    }
+
+    final mimeType = image.mimeType ??
+        switch (ext) {
+          'jpg' || 'jpeg' => 'image/jpeg',
+          'webp' => 'image/webp',
+          'gif' => 'image/gif',
+          _ => 'image/png',
+        };
+
+    final sanitizedId =
+        (schoolId ?? 'new').replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '');
+    final storagePath =
+        'logos/${sanitizedId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+    await _supabase.storage.from('profiles').uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: FileOptions(contentType: mimeType),
+        );
+
+    return _supabase.storage.from('profiles').getPublicUrl(storagePath);
+  }
+
+  Future<bool> updateSchoolBranding({
+    required String schoolId,
+    String? logoUrl,
+    bool clearLogo = false,
+  }) async {
+    try {
+      await _supabase.from('schools').update({
+        'logo_url': clearLogo ? null : logoUrl,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', schoolId);
+      await loadAll();
+      return true;
+    } catch (e) {
+      state = state.copyWith(errorMessage: 'Erreur mise à jour logo: $e');
+      return false;
+    }
+  }
+
   Future<bool> createSchool({
     required String name,
     required String code,
     required String email,
+    String? logoUrl,
     required String directorName,
     required String directorEmail,
     required String directorPassword,
@@ -246,6 +308,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
         'name': name,
         'code': code.toLowerCase().trim(),
         'email': email,
+        if (logoUrl != null && logoUrl.isNotEmpty) 'logo_url': logoUrl,
         'is_active': true,
       }).select().single();
 

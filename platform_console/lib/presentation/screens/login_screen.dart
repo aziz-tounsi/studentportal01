@@ -12,8 +12,8 @@ class ConsoleLoginScreen extends ConsumerStatefulWidget {
 }
 
 class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
-  final _emailCtrl = TextEditingController(text: 'admin@isgc.dz');
-  final _passCtrl = TextEditingController(text: 'Admin1234!');
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
   bool _obscure = true;
 
   @override

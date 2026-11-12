@@ -91,7 +91,8 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
-      return true;
+      await _loadUserData();
+      return state.isAuthenticated;
     } on AuthException catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.message);
       return false;

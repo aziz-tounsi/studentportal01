@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/services/school_branding_service.dart';
 import '../screens/settings/password_reset_requests_screen.dart';
-import '../providers/auth_provider.dart';
 import 'school_logo_preview.dart';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -26,7 +25,6 @@ class AdminSidebar extends ConsumerWidget {
       loading: () => 0,
       error: (_, __) => 0,
     );
-    final isSuperAdmin = ref.watch(authProvider).user?.role == 'super_admin';
     final schoolBranding = ref.watch(currentSchoolBrandingProvider).value;
     final schoolLogoUrl = schoolBranding?['logo_url'] as String?;
     final schoolName = (schoolBranding?['name'] as String?)?.trim();
@@ -132,7 +130,7 @@ class AdminSidebar extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            isSuperAdmin ? 'Console SaaS' : 'Espace Administration',
+                            'Espace Administration',
                             style: TextStyle(
                               color: const Color(0xFF60A5FA).withOpacity(0.6),
                               fontSize: 11,
@@ -300,16 +298,6 @@ class AdminSidebar extends ConsumerWidget {
                         route: '/settings',
                         currentRoute: currentRoute,
                       ),
-                      if (isSuperAdmin) ...[
-                        const SizedBox(height: 16),
-                        _SectionTitle(title: 'PLATEFORME SAAS'),
-                        _NavItem(
-                          icon: Icons.admin_panel_settings_outlined,
-                          label: 'Console Fondateur',
-                          route: '/platform-console',
-                          currentRoute: currentRoute,
-                        ),
-                      ],
                       const SizedBox(height: 20),
                     ],
                   ),
