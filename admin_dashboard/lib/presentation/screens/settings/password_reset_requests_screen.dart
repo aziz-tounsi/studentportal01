@@ -2873,7 +2873,7 @@ class _DirectResetPasswordModalState
                 ),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
+                  fillColor: Colors.white,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   suffixIcon: IconButton(

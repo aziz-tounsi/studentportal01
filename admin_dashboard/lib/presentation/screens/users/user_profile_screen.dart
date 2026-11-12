@@ -352,6 +352,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   bool _showPassword = false;
   bool _isResettingPassword = false;
   int _selectedMonthOffset = 0;
+  int _activityPage = 1;
+  int _activityPerPage = 10;
   RealtimeChannel? _userChannel;
 
   @override
@@ -1775,85 +1777,305 @@ onTap: () => _showStudentPaymentsSheet(data),
   // ==================== ACTIVITY LOG ====================
   Widget _buildActivityLog(UserProfileData data) {
     final activities = data.activityLog;
+    final totalItems = activities.length;
+    final totalPages =
+        _activityPerPage == -1 ? 1 : (totalItems / _activityPerPage).ceil();
+    if (_activityPage > totalPages && totalPages > 0) {
+      _activityPage = totalPages;
+    }
+    final startIndex =
+        _activityPerPage == -1 ? 0 : (_activityPage - 1) * _activityPerPage;
+    final endIndex = _activityPerPage == -1
+        ? totalItems
+        : (startIndex + _activityPerPage).clamp(0, totalItems);
+    final pageActivities = (startIndex < totalItems)
+        ? activities.sublist(startIndex, endIndex)
+        : <Map<String, dynamic>>[];
+
     return Container(
-      decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Activité Récente', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
-          const SizedBox(height: 16),
-          if (activities.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  children: [
-                    Icon(Icons.history_rounded, size: 40, color: AppColors.slate300),
-                    const SizedBox(height: 12),
-                    Text('Aucune activité récente', style: TextStyle(color: AppColors.slate400, fontSize: 13)),
-                  ],
-                ),
-              ),
-            )
-          else
-            // Table
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Table(
-                columnWidths: const {
-                  0: FlexColumnWidth(2),
-                  1: FlexColumnWidth(4),
-                  2: FlexColumnWidth(2),
-                },
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withOpacity(0.5)),
+        boxShadow: AppShadows.card,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Card Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              child: Row(
                 children: [
-                  // Header
-                  TableRow(
-                    decoration: BoxDecoration(color: AppColors.slate50),
-                    children: [
-                      _tableHeader('Action'),
-                      _tableHeader('Détails'),
-                      _tableHeader('Date'),
-                    ],
+                  const Text(
+                    'Activité Récente',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.slate800,
+                    ),
                   ),
-                  // Rows
-                  ...activities.take(10).map((a) {
-                    final action = a['action'] as String? ?? '';
-                    final type = a['type'] as String? ?? '';
-                    final detail = (a['details'] ?? a['detail']) as String? ?? '';
-                    final date = a['date'] as String? ?? '';
-                    return TableRow(
-                      decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
-                      ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: _activityBadge(action, type),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: Text(detail, style: TextStyle(color: AppColors.slate600, fontSize: 13), overflow: TextOverflow.ellipsis),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: Text(_formatActivityDate(date), style: TextStyle(color: AppColors.slate400, fontSize: 12)),
-                        ),
-                      ],
-                    );
-                  }),
+                  const Spacer(),
+                  Text(
+                    '$totalItems activité${totalItems > 1 ? 's' : ''}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
                 ],
               ),
             ),
-        ],
+
+            if (activities.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Column(
+                    children: [
+                      Icon(Icons.history_rounded,
+                          size: 40, color: AppColors.slate300),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Aucune activité récente',
+                        style: TextStyle(
+                            color: AppColors.slate400, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              // Table Header Row (Users table style)
+              Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF9FAFB),
+                  border: Border(
+                    top: BorderSide(color: Color(0xFFE2E8F0)),
+                    bottom: BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(flex: 2, child: _activityHeaderLabel('ACTION')),
+                    Expanded(flex: 5, child: _activityHeaderLabel('DÉTAILS')),
+                    Expanded(flex: 2, child: _activityHeaderLabel('DATE')),
+                  ],
+                ),
+              ),
+
+              // Table Body Rows
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: pageActivities.length,
+                separatorBuilder: (context, index) =>
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                itemBuilder: (context, index) {
+                  final a = pageActivities[index];
+                  final action = a['action'] as String? ?? '';
+                  final type = a['type'] as String? ?? '';
+                  final detail = (a['details'] ?? a['detail']) as String? ?? '';
+                  final date = a['date'] as String? ?? '';
+
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {},
+                      hoverColor: const Color(0xFFF9FAFB),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: _activityBadge(action, type),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 5,
+                              child: Text(
+                                detail,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                _formatActivityDate(date),
+                                style: const TextStyle(
+                                  color: AppColors.textTertiary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // Bottom Pagination Footer (Exact Users table footer)
+              _buildActivityPagination(totalItems),
+            ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _tableHeader(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Text(text, style: TextStyle(color: AppColors.slate500, fontWeight: FontWeight.w600, fontSize: 12)),
+  Widget _activityHeaderLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textTertiary,
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _buildActivityPagination(int totalItems) {
+    final totalPages =
+        _activityPerPage == -1 ? 1 : (totalItems / _activityPerPage).ceil();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.3))),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Text(
+            'Afficher par ',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _activityPerPage,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 14,
+                  color: AppColors.textTertiary,
+                ),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+                items: const [10, 20, 50, -1]
+                    .map(
+                      (v) => DropdownMenuItem(
+                        value: v,
+                        child: Text(
+                          v == -1 ? 'All' : '$v',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() {
+                      _activityPerPage = v;
+                      _activityPage = 1;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Page $_activityPage sur ${totalPages == 0 ? 1 : totalPages}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: _activityPage > 1
+                      ? () => setState(() => _activityPage--)
+                      : null,
+                  borderRadius:
+                      const BorderRadius.horizontal(left: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.chevron_left,
+                      size: 18,
+                      color: _activityPage > 1
+                          ? AppColors.textSecondary
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: AppColors.border),
+                InkWell(
+                  onTap: _activityPage < totalPages
+                      ? () => setState(() => _activityPage++)
+                      : null,
+                  borderRadius:
+                      const BorderRadius.horizontal(right: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: _activityPage < totalPages
+                          ? AppColors.textSecondary
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

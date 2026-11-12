@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../providers/users_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
@@ -25,10 +27,13 @@ class TeacherProfileScreen extends ConsumerStatefulWidget {
 
 class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   bool _loading = true;
+  bool _showWeeklySchedule = false;
+  bool _isResettingPassword = false;
   Map<String, dynamic>? _user;
   List<Map<String, dynamic>> _assignments = [];
   List<Map<String, dynamic>> _classDetails = [];
   List<Map<String, dynamic>> _timetableToday = [];
+  List<Map<String, dynamic>> _timetableAllSlots = [];
   Set<String> _subjects = {};
   Set<String> _niveaux = {};
   Map<String, String> _niveauFilieres = {};
@@ -41,12 +46,72 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     _loadData();
   }
 
+  int _parseDayOfWeek(dynamic value) {
+    if (value is int) return value.clamp(1, 7);
+    if (value is String) {
+      switch (value.toLowerCase().trim()) {
+        case 'monday':
+        case 'lundi':
+        case '1':
+          return 1;
+        case 'tuesday':
+        case 'mardi':
+        case '2':
+          return 2;
+        case 'wednesday':
+        case 'mercredi':
+        case '3':
+          return 3;
+        case 'thursday':
+        case 'jeudi':
+        case '4':
+          return 4;
+        case 'friday':
+        case 'vendredi':
+        case '5':
+          return 5;
+        case 'saturday':
+        case 'samedi':
+        case '6':
+          return 6;
+        case 'sunday':
+        case 'dimanche':
+        case '7':
+          return 7;
+      }
+    }
+    return 1;
+  }
+
+  int _parseTimeToMinutes(String? timeStr) {
+    if (timeStr == null || !timeStr.contains(':')) return 0;
+    final parts = timeStr.split(':');
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    return h * 60 + m;
+  }
+
+  String _formatShortTime(String? timeStr) {
+    if (timeStr == null || timeStr.length < 5) return '??:??';
+    return timeStr.substring(0, 5);
+  }
+
   Future<void> _loadData() async {
+    _assignments = [];
+    _classDetails = [];
+    _timetableToday = [];
+    _timetableAllSlots = [];
+    _subjects = {};
+    _niveaux = {};
+    _niveauFilieres = {};
+    _mainSubject = '';
+    _hireDate = '-';
+
     final supabase = SupabaseConfig.adminClient;
     try {
       _user = await supabase
           .from('users')
-          .select('id, full_name, email, phone, photo_url, role, is_active, created_at, gender, nationality')
+          .select('id, full_name, email, phone, photo_url, role, is_active, created_at, gender, nationality, school_id')
           .eq('id', widget.teacherId)
           .maybeSingle();
 
@@ -58,7 +123,11 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       _assignments = List<Map<String, dynamic>>.from(raw as List);
 
       // Student counts per class
-      final classIds = _assignments.map((a) => a['class_id']?.toString()).where((id) => id != null).toSet().toList();
+      final classIds = _assignments
+          .map((a) => a['class_id']?.toString())
+          .where((id) => id != null)
+          .toSet()
+          .toList();
       for (final cId in classIds) {
         try {
           final countResp = await supabase.from('enrollments').select('id').eq('class_id', cId!);
@@ -77,35 +146,113 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         } catch (_) {}
       }
 
-      // Today's timetable
+      // Weekly + Today timetable across subject_offerings.teacher_id AND teacher_assignments (subject_id + class_id)
       final now = DateTime.now();
-      const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-      final dayName = dayNames[now.weekday - 1];
       try {
-        final offerings = await supabase
+        final Set<String> offeringIds = {};
+
+        final directOfferings = await supabase
             .from('subject_offerings')
-            .select('id, class_id')
+            .select('id')
             .eq('teacher_id', widget.teacherId);
-        final offeringIds = (offerings as List).map((e) => e['id'] as String).toList();
-        if (offeringIds.isNotEmpty) {
-          List<dynamic> slots;
-          try {
-            slots = await supabase
-                .from('timetable_slots')
-                .select('*, subject_offerings(subject_id, class_id, subjects(name, code), classes(name))')
-                .inFilter('subject_offering_id', offeringIds)
-                .eq('day_of_week', dayName)
-                .order('start_time');
-          } catch (_) {
-            slots = await supabase
-                .from('timetable_slots')
-                .select('*, subject_offerings(subject_id, class_id, subjects(name, code), classes(name))')
-                .inFilter('subject_offering_id', offeringIds)
-                .eq('day_of_week', now.weekday)
-                .order('start_time');
-          }
-          _timetableToday = List<Map<String, dynamic>>.from(slots);
+        for (final o in (directOfferings as List)) {
+          final oid = o['id']?.toString();
+          if (oid != null) offeringIds.add(oid);
         }
+
+        final assignmentPairs = _assignments
+            .where((a) => a['subject_id'] != null && a['class_id'] != null)
+            .map((a) => '${a['subject_id']}_${a['class_id']}')
+            .toSet();
+
+        if (classIds.isNotEmpty && assignmentPairs.isNotEmpty) {
+          final classOfferings = await supabase
+              .from('subject_offerings')
+              .select('id, subject_id, class_id')
+              .inFilter('class_id', classIds.cast<String>());
+          for (final o in (classOfferings as List)) {
+            final key = '${o['subject_id']}_${o['class_id']}';
+            if (assignmentPairs.contains(key)) {
+              final oid = o['id']?.toString();
+              if (oid != null) offeringIds.add(oid);
+            }
+          }
+        }
+
+        final List<Map<String, dynamic>> rawSlots = [];
+        final Set<String> seenSlotIds = {};
+
+        if (offeringIds.isNotEmpty) {
+          final slotsResp = await supabase
+              .from('timetable_slots')
+              .select('*, subject_offerings(subject_id, class_id, subjects(name, code), classes(name))')
+              .inFilter('subject_offering_id', offeringIds.toList())
+              .order('start_time');
+          for (final s in (slotsResp as List)) {
+            final slot = Map<String, dynamic>.from(s as Map);
+            final type = (slot['timetable_type'] as String? ?? 'class').toLowerCase();
+            if (type == 'exam') continue;
+            final id = slot['id']?.toString();
+            if (id == null || seenSlotIds.add(id)) {
+              rawSlots.add(slot);
+            }
+          }
+        }
+
+        // Also match by teacher_name if any slot references teacher name directly
+        final teacherName = (_user?['full_name'] as String?)?.trim() ?? '';
+        if (teacherName.isNotEmpty) {
+          try {
+            final namedSlotsResp = await supabase
+                .from('timetable_slots')
+                .select('*, subject_offerings(subject_id, class_id, subjects(name, code), classes(name))')
+                .ilike('teacher_name', teacherName)
+                .order('start_time');
+            for (final s in (namedSlotsResp as List)) {
+              final slot = Map<String, dynamic>.from(s as Map);
+              final type = (slot['timetable_type'] as String? ?? 'class').toLowerCase();
+              if (type == 'exam') continue;
+              final id = slot['id']?.toString();
+              if (id == null || seenSlotIds.add(id)) {
+                rawSlots.add(slot);
+              }
+            }
+          } catch (_) {}
+        }
+
+        final enriched = rawSlots.map((slot) {
+          final startStr = _formatShortTime(slot['start_time']?.toString());
+          final endStr = _formatShortTime(slot['end_time']?.toString());
+          final sMin = _parseTimeToMinutes(startStr);
+          final eMin = _parseTimeToMinutes(endStr);
+          final durationMin = (eMin > sMin) ? (eMin - sMin) : 0;
+          final dayNum = _parseDayOfWeek(slot['day_of_week']);
+
+          String? rawRoom = slot['room']?.toString();
+          if (rawRoom != null && rawRoom.contains('·')) {
+            rawRoom = rawRoom.split('·').map((e) => e.trim()).last;
+          }
+
+          return {
+            ...slot,
+            'dayNum': dayNum,
+            'startShort': startStr,
+            'endShort': endStr,
+            'startMin': sMin,
+            'endMin': eMin,
+            'durationMin': durationMin,
+            'shortRoom': rawRoom,
+          };
+        }).toList()
+          ..sort((a, b) {
+            final dCmp = (a['dayNum'] as int).compareTo(b['dayNum'] as int);
+            if (dCmp != 0) return dCmp;
+            return (a['startMin'] as int).compareTo(b['startMin'] as int);
+          });
+
+        _timetableAllSlots = enriched;
+        _timetableToday =
+            enriched.where((s) => s['dayNum'] == now.weekday).toList();
       } catch (e) {
         debugPrint('Teacher timetable load error: $e');
       }
@@ -114,10 +261,8 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       for (final a in _assignments) {
         final sName = (a['subjects'] as Map?)?['name']?.toString();
         if (sName != null) _subjects.add(sName);
-        // Get niveau from assignment OR class→niveaux
         final aN = (a['niveaux'] as Map?)?['name']?.toString();
         final cN = ((a['classes'] as Map?)?['niveaux'] as Map?)?['name']?.toString();
-        // Get filière/section from class
         final sectionName = ((a['classes'] as Map?)?['sections'] as Map?)?['name']?.toString();
         if (aN != null) {
           _niveaux.add(aN);
@@ -144,17 +289,10 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  String _initials(String? name) {
-    if (name == null || name.isEmpty) return '?';
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return parts[0][0].toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
+      backgroundColor: AppColors.background,
       body: Row(children: [
         const AdminSidebar(currentRoute: '/users'),
         Expanded(
@@ -174,235 +312,609 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                         ),
                       ]),
                     )
-                  : Column(children: [
-                      _buildHeader(),
-                      Expanded(child: _buildBody()),
-                    ]),
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 32),
+                          _buildBody(),
+                        ],
+                      ),
+                    ),
         ),
       ]),
     );
   }
 
   // ══════════════════════════════════════════════════════════════
-  //  HEADER
+  //  HEADER (MATCHING STUDENT PROFILE HEADER STYLE)
   // ══════════════════════════════════════════════════════════════
   Widget _buildHeader() {
-    final isActive = _user?['is_active'] == true;
     final fullName = _user?['full_name']?.toString() ?? 'Enseignant';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.slate100)),
+      ),
+      child: Row(
+        children: [
+          _iconButton(
+            icon: Icons.arrow_back_rounded,
+            onTap: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                context.go('/users');
+              }
+            },
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fullName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const Text(
+                  'Profil enseignant',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _outlineButton(
+                icon: Icons.refresh_rounded,
+                label: 'Actualiser',
+                onTap: () {
+                  setState(() => _loading = true);
+                  _loadData();
+                },
+              ),
+              _outlineButton(
+                icon: Icons.lock_reset_rounded,
+                label: 'Réinitialiser mot de passe',
+                onTap: _isResettingPassword ? null : _resetPassword,
+                isLoading: _isResettingPassword,
+              ),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: _showEditTeacherDialog,
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text(
+                    'Modifier le profil',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6D4CF6),
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconButton({required IconData icon, required VoidCallback onTap}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(icon, size: 20, color: AppColors.slate600),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _outlineButton({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+    bool isLoading = false,
+  }) {
+    return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
-      child: Row(children: [
-        // Back button
-        InkWell(
-          onTap: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              context.go('/classes');
-            }
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.transparent,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isLoading)
+                  const IosLoader.small(color: AppColors.slate500)
+                else
+                  Icon(icon, size: 16, color: AppColors.slate500),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.slate500,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
-            child: const Icon(Icons.arrow_back_rounded, size: 20, color: AppColors.textSecondary),
           ),
         ),
-        const SizedBox(width: 16),
-        // Name & subtitle
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(fullName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.3)),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isActive ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA)),
+      ),
+    );
+  }
+
+  Future<void> _resetPassword() async {
+    final fullName = _user?['full_name']?.toString() ?? 'cet enseignant';
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          title: const Text('Réinitialiser le mot de passe'),
+          content: Text(
+            'Voulez-vous générer un nouveau mot de passe pour $fullName ?',
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
                 ),
-                child: Text(
-                  isActive ? 'Actif' : 'Inactif',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isActive ? const Color(0xFF15803D) : const Color(0xFFDC2626)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6D4CF6),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 2,
+                    ),
+                    child: const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
                 ),
-              ),
-            ]),
-            const SizedBox(height: 2),
-            Text(
-              'Profil Enseignant • ID: TEA-${widget.teacherId.substring(0, 8).toUpperCase()}',
-              style: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+              ],
             ),
-          ]),
+          ],
         ),
-        // Modifier le profil button
-        Material(
-          color: _brand,
-          borderRadius: BorderRadius.circular(8),
-          elevation: 2,
-          shadowColor: _brand.withOpacity(0.3),
-          child: InkWell(
-            onTap: () => _showEditTeacherDialog(),
-            borderRadius: BorderRadius.circular(8),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+      ),
+    );
+
+    if (confirm != true) return;
+    setState(() => _isResettingPassword = true);
+
+    try {
+      final newPassword = await ref
+          .read(usersProvider.notifier)
+          .resetUserPassword(widget.teacherId);
+
+      if (newPassword != null && mounted) {
+        showDialog(
+          context: context,
+          barrierColor: Colors.black.withOpacity(0.08),
+          builder: (ctx) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            child: AlertDialog(
+              title: Row(
                 children: [
-                  Icon(Icons.edit_rounded, color: Colors.white, size: 15),
-                  SizedBox(width: 6),
-                  Text('Modifier le profil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                  Icon(Icons.check_circle, color: AppColors.success),
+                  const SizedBox(width: 12),
+                  const Text('Mot de passe réinitialisé'),
                 ],
               ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Nouveau mot de passe pour $fullName :'),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.slate100,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            newPassword,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy, size: 18),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: newPassword));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Mot de passe copié!'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6D4CF6),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Fermer'),
+                ),
+              ],
             ),
           ),
-        ),
-      ]),
-    );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isResettingPassword = false);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════
   //  BODY – 2-column layout
   // ══════════════════════════════════════════════════════════════
   Widget _buildBody() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── LEFT: Profile card (exact match to Student Profile 360px) ──
+        SizedBox(width: 360, child: _buildProfileCard()),
+        const SizedBox(width: 32),
+        // ── RIGHT: Specialty, Classes, Timetable ──
+        Expanded(child: _buildRightColumn()),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  LEFT PROFILE CARD (MATCHES STUDENT PROFILE CARD + COPIABLE)
+  // ══════════════════════════════════════════════════════════════
+  Widget _buildProfileCard() {
+    final fullName = _user?['full_name']?.toString() ?? 'Enseignant';
+    final email = _user?['email']?.toString() ?? '-';
+    final phone = (_user?['phone']?.toString() ?? '').trim();
+    final photoUrl = _user?['photo_url']?.toString();
+    final gender = _user?['gender']?.toString();
+    final nationality = _user?['nationality']?.toString();
+    final isActive = _user?['is_active'] == true;
+    final teacherCode = 'TEA-${widget.teacherId.substring(0, 8).toUpperCase()}';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.card,
+      ),
+      padding: const EdgeInsets.all(28),
+      child: Column(
         children: [
-          // ── LEFT: Profile card ──
-          SizedBox(width: 340, child: _buildProfileCard()),
-          const SizedBox(width: 32),
-          // ── RIGHT: Specialty, Classes, Timetable ──
-          Expanded(child: _buildRightColumn()),
+          // Avatar
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              UserAvatar(
+                name: fullName,
+                photoUrl: photoUrl,
+                radius: 50,
+                gender: gender,
+              ),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: _pickAndUploadPhoto,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.border, width: 2),
+                      boxShadow: AppShadows.sm,
+                    ),
+                    child: Icon(Icons.camera_alt_rounded, size: 14, color: AppColors.slate500),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Name (click to copy)
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: fullName));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Nom copié!'),
+                    duration: Duration(seconds: 1),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              child: Text(
+                fullName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.slate800,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Role + Active/Inactive badge (moved from header)
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                ),
+                child: Text(
+                  'Enseignant',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isActive ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA),
+                  ),
+                ),
+                child: Text(
+                  isActive ? 'Actif' : 'Inactif',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isActive ? const Color(0xFF15803D) : const Color(0xFFDC2626),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Clickable Teacher ID
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: teacherCode));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('ID copié!'),
+                    duration: Duration(seconds: 1),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              child: Text(
+                teacherCode,
+                style: TextStyle(
+                  color: AppColors.slate400,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Copiable Info Rows
+          _profileInfoRow('Spécialité', _mainSubject),
+          _profileInfoRow('Embauche', _hireDate),
+          if (gender != null && gender.isNotEmpty) _profileInfoRow('Genre', gender),
+          if (nationality != null && nationality.isNotEmpty)
+            _profileInfoRow('Nationalité', nationality),
+          const SizedBox(height: 20),
+          Divider(color: AppColors.border, thickness: 1),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Contact Rapide',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AppColors.slate500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _contactRow(Icons.email_outlined, email),
+          const SizedBox(height: 8),
+          _contactRow(Icons.phone_outlined, phone.isNotEmpty ? phone : '-'),
         ],
       ),
     );
   }
 
-  // ══════════════════════════════════════════════════════════════
-  //  LEFT PROFILE CARD
-  // ══════════════════════════════════════════════════════════════
-  Widget _buildProfileCard() {
-    final fullName = _user?['full_name']?.toString() ?? 'Enseignant';
-    final email = _user?['email']?.toString() ?? '-';
-    final phone = _user?['phone']?.toString() ?? '-';
-    final photoUrl = _user?['photo_url']?.toString();
-    final gender = _user?['gender']?.toString();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
-      ),
-      child: Column(children: [
-        // Gradient banner
-        Container(
-          height: 96,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_brand.withOpacity(0.10), const Color(0xFFEDE9FE)],
-            ),
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
-          ),
-        ),
-        // Avatar + info – overlaps the banner
-        Transform.translate(
-          offset: const Offset(0, -48),
-          child: Column(children: [
-            // Avatar
-            Stack(
-              children: [
-                UserAvatar(
-                  name: fullName,
-                  photoUrl: photoUrl,
-                  gender: gender,
-                  radius: 64,
-                  borderColor: Colors.white,
-                  borderWidth: 4,
-                ),
-                // Camera edit button
-                Positioned(
-                  top: 0, right: 0,
-                  child: InkWell(
-                    onTap: _pickAndUploadPhoto,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade200),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 6)],
-                      ),
-                      child: const Icon(Icons.camera_alt_rounded, size: 15, color: _brand),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Name
-            Text(fullName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-            const SizedBox(height: 4),
-            // Subject title
-            Text(
-              'Professeur ${_subjects.isNotEmpty ? "d\'${_subjects.first}" : ""}',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _brand),
-            ),
-            const SizedBox(height: 24),
-            // Contact info blocks
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(children: [
-                _contactBlock(Icons.mail_outlined, 'Email Professionnel', email),
-                const SizedBox(height: 10),
-                _contactBlock(Icons.phone_outlined, 'Téléphone', phone.isNotEmpty ? phone : '-'),
-                const SizedBox(height: 10),
-                _contactBlock(Icons.calendar_month_outlined, 'Date d\'embauche', _hireDate),
-              ]),
-            ),
-            const SizedBox(height: 8),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _avatarFallback(String name, double size) {
-    return Container(
-      width: size, height: size,
-      decoration: const BoxDecoration(shape: BoxShape.circle, color: _brandLight),
-      child: Center(
-        child: Text(_initials(name), style: TextStyle(fontSize: size * 0.3, fontWeight: FontWeight.w700, color: _brand)),
-      ),
-    );
-  }
-
-  Widget _contactBlock(IconData icon, String label, String value) {
+  Widget _profileInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(children: [
-        Icon(icon, size: 18, color: AppColors.textTertiary),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.grey.shade400)),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary), overflow: TextOverflow.ellipsis),
-        ])),
-      ]),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: AppColors.slate400,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: value));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$label copié!'),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        value,
+                        style: const TextStyle(
+                          color: AppColors.slate700,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.copy, size: 12, color: AppColors.slate300),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _contactRow(IconData icon, String text) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: text));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$text copié!'),
+              duration: const Duration(seconds: 1),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 14, color: AppColors.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(color: AppColors.slate600, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.copy, size: 12, color: AppColors.slate300),
+          ],
+        ),
+      ),
     );
   }
 
@@ -578,9 +1090,31 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   }
 
   // ── Emploi du temps ──
+  String _formatHoursMinutes(int totalMinutes) {
+    if (totalMinutes <= 0) return '0h 00min';
+    final h = totalMinutes ~/ 60;
+    final m = totalMinutes % 60;
+    if (m == 0) return '${h}h';
+    return '${h}h ${m.toString().padLeft(2, '0')}';
+  }
+
+  String _formatShortHours(int totalMinutes) {
+    if (totalMinutes <= 0) return '—';
+    final h = totalMinutes ~/ 60;
+    final m = totalMinutes % 60;
+    if (m == 0) return '${h}h';
+    return '${h}h${m.toString().padLeft(2, '0')}';
+  }
+
   Widget _buildTimetableSection() {
     final now = DateTime.now();
     final nowMin = now.hour * 60 + now.minute;
+    final activeSlots =
+        _showWeeklySchedule ? _timetableAllSlots : _timetableToday;
+    final activeMinutes = activeSlots.fold<int>(
+      0,
+      (sum, s) => sum + (s['durationMin'] as int? ?? 0),
+    );
 
     return Container(
       width: double.infinity,
@@ -588,53 +1122,387 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.card,
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header
-        Row(children: [
-          const Icon(Icons.calendar_today_rounded, size: 18, color: _brand),
-          const SizedBox(width: 10),
-          const Text('Emploi du temps', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          const Spacer(),
-          // Toggle buttons
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12)),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_rounded, size: 18, color: _brand),
+              const SizedBox(width: 10),
+              const Text(
+                'Emploi du temps',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
                 ),
-                child: const Text('Aujourd\'hui', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Text('Semaine', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade500)),
+              const SizedBox(width: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _brandLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_formatHoursMinutes(activeMinutes)} • ${activeSlots.length} séance${activeSlots.length > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _brand,
+                  ),
+                ),
               ),
-            ]),
+              const Spacer(),
+              // Clickable Toggle buttons
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    _buildScheduleToggleBtn(
+                      label: 'Aujourd\'hui',
+                      isActive: !_showWeeklySchedule,
+                      onTap: () => setState(() => _showWeeklySchedule = false),
+                    ),
+                    _buildScheduleToggleBtn(
+                      label: 'Semaine',
+                      isActive: _showWeeklySchedule,
+                      onTap: () => setState(() => _showWeeklySchedule = true),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ]),
-        const SizedBox(height: 24),
-        // Slots
-        if (_timetableToday.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12)),
-            child: Column(children: [
-              Icon(Icons.event_busy_rounded, size: 40, color: Colors.grey.shade300),
+          const SizedBox(height: 18),
+
+          // Minimal Working Hours Chart
+          _buildWorkingHoursChart(now.weekday),
+          const SizedBox(height: 20),
+
+          // Slots (Today or Full Week)
+          if (!_showWeeklySchedule) ...[
+            if (_timetableToday.isEmpty)
+              _buildEmptyScheduleState('Aucun cours aujourd\'hui')
+            else
+              ..._buildTimetableSlots(nowMin),
+          ] else ...[
+            if (_timetableAllSlots.isEmpty)
+              _buildEmptyScheduleState('Aucun cours planifié cette semaine')
+            else
+              _buildWeeklyScheduleView(now.weekday),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleToggleBtn({
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+              color: isActive ? AppColors.textPrimary : Colors.grey.shade500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorkingHoursChart(int currentWeekday) {
+    final Map<int, int> minutesByDay = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+      6: 0,
+      7: 0,
+    };
+    for (final s in _timetableAllSlots) {
+      final d = s['dayNum'] as int? ?? 1;
+      minutesByDay[d] = (minutesByDay[d] ?? 0) + (s['durationMin'] as int? ?? 0);
+    }
+
+    final showSunday = (minutesByDay[7] ?? 0) > 0 || currentWeekday == 7;
+    final days = showSunday ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6];
+    const dayLabels = {
+      1: 'Lun',
+      2: 'Mar',
+      3: 'Mer',
+      4: 'Jeu',
+      5: 'Ven',
+      6: 'Sam',
+      7: 'Dim',
+    };
+
+    int maxMinutes = 60;
+    for (final d in days) {
+      final m = minutesByDay[d] ?? 0;
+      if (m > maxMinutes) maxMinutes = m;
+    }
+
+    final displayedMinutes = _showWeeklySchedule
+        ? _timetableAllSlots.fold<int>(
+            0, (sum, s) => sum + (s['durationMin'] as int? ?? 0))
+        : (minutesByDay[currentWeekday] ?? 0);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                _showWeeklySchedule
+                    ? 'HEURES DE TRAVAIL — CETTE SEMAINE'
+                    : 'HEURES DE TRAVAIL — AUJOURD\'HUI',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _formatHoursMinutes(displayedMinutes),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _brand,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 92,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: days.map((d) {
+                final mins = minutesByDay[d] ?? 0;
+                final isToday = d == currentWeekday;
+                final isHighlighted =
+                    _showWeeklySchedule ? mins > 0 : isToday;
+                final barHeight = mins <= 0
+                    ? 6.0
+                    : (mins / maxMinutes * 52.0).clamp(10.0, 52.0);
+
+                return Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        _formatShortHours(mins),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight:
+                              isHighlighted ? FontWeight.w700 : FontWeight.w500,
+                          color: mins > 0
+                              ? (isHighlighted
+                                  ? _brand
+                                  : AppColors.textSecondary)
+                              : AppColors.slate300,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        width: 28,
+                        height: barHeight,
+                        decoration: BoxDecoration(
+                          color: mins <= 0
+                              ? const Color(0xFFE2E8F0)
+                              : isHighlighted
+                                  ? _brand
+                                  : _brand.withOpacity(0.28),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        dayLabels[d] ?? '',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight:
+                              isToday ? FontWeight.w700 : FontWeight.w500,
+                          color: isToday ? _brand : AppColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyScheduleState(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.event_busy_rounded, size: 40, color: Colors.grey.shade300),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            style: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklyScheduleView(int currentWeekday) {
+    const fullDayNames = {
+      1: 'Lundi',
+      2: 'Mardi',
+      3: 'Mercredi',
+      4: 'Jeudi',
+      5: 'Vendredi',
+      6: 'Samedi',
+      7: 'Dimanche',
+    };
+
+    final Map<int, List<Map<String, dynamic>>> grouped = {};
+    for (final s in _timetableAllSlots) {
+      final d = s['dayNum'] as int? ?? 1;
+      grouped.putIfAbsent(d, () => []).add(s);
+    }
+
+    final sortedDays = grouped.keys.toList()..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sortedDays.map((dayNum) {
+        final daySlots = grouped[dayNum]!;
+        final dayMins = daySlots.fold<int>(
+          0,
+          (sum, s) => sum + (s['durationMin'] as int? ?? 0),
+        );
+        final isToday = dayNum == currentWeekday;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    fullDayNames[dayNum] ?? '',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isToday ? _brand : AppColors.textPrimary,
+                    ),
+                  ),
+                  if (isToday) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _brandLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Aujourd\'hui',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: _brand,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  Text(
+                    '${_formatHoursMinutes(dayMins)} • ${daySlots.length} cours',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 10),
-              const Text('Aucun cours aujourd\'hui', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
-            ]),
-          )
-        else
-          ..._buildTimetableSlots(nowMin),
-      ]),
+              ...daySlots.map((slot) {
+                final so = slot['subject_offerings'] as Map<String, dynamic>?;
+                final subjectName =
+                    so?['subjects']?['name']?.toString() ?? 'Cours';
+                final className =
+                    so?['classes']?['name']?.toString() ?? '';
+                final startTime = slot['startShort']?.toString() ?? '??:??';
+                final endTime = slot['endShort']?.toString() ?? '??:??';
+                final room = slot['shortRoom']?.toString();
+
+                return _buildSlotRow(
+                  startTime: startTime,
+                  endTime: endTime,
+                  subject: subjectName,
+                  className: className,
+                  room: room,
+                  isCurrent: false,
+                  isPast: false,
+                  showStatusBadge: false,
+                );
+              }),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -645,21 +1513,22 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       final so = slot['subject_offerings'] as Map<String, dynamic>?;
       final subjectName = so?['subjects']?['name']?.toString() ?? 'Cours';
       final className = so?['classes']?['name']?.toString() ?? '';
-      final startTime = slot['start_time']?.toString().substring(0, 5) ?? '??:??';
-      final endTime = slot['end_time']?.toString().substring(0, 5) ?? '??:??';
-      final room = slot['room']?.toString();
+      final startTime = slot['startShort']?.toString() ??
+          _formatShortTime(slot['start_time']?.toString());
+      final endTime = slot['endShort']?.toString() ??
+          _formatShortTime(slot['end_time']?.toString());
+      final room = slot['shortRoom']?.toString() ?? slot['room']?.toString();
 
-      final sp = startTime.split(':');
-      final ep = endTime.split(':');
-      final sMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp.length > 1 ? sp[1] : '0') ?? 0);
-      final eMin = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep.length > 1 ? ep[1] : '0') ?? 0);
+      final sMin = slot['startMin'] as int? ?? _parseTimeToMinutes(startTime);
+      final eMin = slot['endMin'] as int? ?? _parseTimeToMinutes(endTime);
       final isCurrent = nowMin >= sMin && nowMin < eMin;
       final isPast = nowMin >= eMin;
 
-      // Check for gap → Pause / Préparation
+      // Check for gap -> Pause / Préparation
       if (i > 0) {
         final prevSlot = _timetableToday[i - 1];
-        final prevEnd = prevSlot['end_time']?.toString().substring(0, 5) ?? '00:00';
+        final prevEnd = prevSlot['endShort']?.toString() ??
+            _formatShortTime(prevSlot['end_time']?.toString());
         if (prevEnd != startTime) {
           widgets.add(_buildPauseSlot(prevEnd, startTime));
         }
@@ -718,6 +1587,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     String? room,
     required bool isCurrent,
     required bool isPast,
+    bool showStatusBadge = true,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -742,35 +1612,48 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
               decoration: BoxDecoration(
                 color: isCurrent ? const Color(0xFFEDE9FE) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: isCurrent
-                    ? const Border(left: BorderSide(color: _brand, width: 4))
-                    : Border.all(color: Colors.grey.shade200),
+                border: Border.all(
+                  color: isCurrent
+                      ? _brand.withOpacity(0.4)
+                      : Colors.grey.shade200,
+                ),
               ),
               child: Row(children: [
+                if (isCurrent)
+                  Container(
+                    width: 4,
+                    height: 36,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: _brand,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(subject, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: isCurrent ? AppColors.textPrimary : AppColors.textPrimary)),
+                  Text(subject, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   const SizedBox(height: 4),
                   Text(
-                    '$className${room != null ? ' • $room' : ''}',
+                    '$className${room != null && room.isNotEmpty ? ' • $room' : ''}',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: isCurrent ? _brand : AppColors.textTertiary),
                   ),
                 ])),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isCurrent ? _brand.withOpacity(0.1) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    isCurrent ? 'EN COURS' : (isPast ? 'TERMINÉ' : 'À VENIR'),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: isCurrent ? _brand : Colors.grey.shade500,
-                      letterSpacing: 0.5,
+                if (showStatusBadge)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isCurrent ? _brand.withOpacity(0.1) : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      isCurrent ? 'EN COURS' : (isPast ? 'TERMINÉ' : 'À VENIR'),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isCurrent ? _brand : Colors.grey.shade500,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
-                ),
               ]),
             ),
           ),
