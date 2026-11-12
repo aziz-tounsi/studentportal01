@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../../providers/announcements_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/bubble_nav_bar.dart';
-import '../../widgets/in_app_notification_banner.dart';
 import '../../../core/services/notification_service.dart';
 import '../documents/documents_screen.dart';
 
 /// Wraps authenticated app shell to manage FCM token sync and Supabase Realtime
-/// foreground notification banners and local alerts.
+/// provider refreshes plus deduplicated native OS foreground notifications.
 class RealtimeNotificationWrapper extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -123,18 +121,23 @@ class _RealtimeNotificationWrapperState
               WidgetsBinding.instance.lifecycleState ==
                   AppLifecycleState.resumed) {
             final title =
-                record['title']?.toString() ?? 'Nouvelle notification';
-            final body = record['body']?.toString() ?? '';
+                record['title']?.toString().trim().isNotEmpty == true
+                    ? record['title']!.toString().trim()
+                    : 'Nouvelle notification';
+            final body = record['body']?.toString().trim() ?? '';
             final message =
                 body.isNotEmpty ? body : 'Nouvelle notification disponible';
-            InAppNotificationBanner.show(
+            final recId = record['id']?.toString();
+            final dedupKey = recId != null && recId.isNotEmpty
+                ? 'announcements_global:$recId'
+                : null;
+            LocalNotificationService.showNotification(
+              id: LocalNotificationService.stableNotificationId(
+                  dedupKey ?? '$title|$message|/notifications'),
               title: title,
-              message: message,
-              icon: Icons.notifications_rounded,
-              color: const Color(0xFF8B5CF6),
-              onTap: () {
-                if (mounted) context.push('/notifications');
-              },
+              body: message,
+              routePayload: '/notifications',
+              dedupKey: dedupKey,
             );
           }
         },
@@ -167,8 +170,9 @@ class _RealtimeNotificationWrapperState
           }
 
           final recPayload = record['payload'];
+          String? targetStudentId;
           if (recPayload is Map) {
-            final targetStudentId = recPayload['target_student_id']?.toString();
+            targetStudentId = recPayload['target_student_id']?.toString();
             if (targetStudentId != null &&
                 targetStudentId.isNotEmpty &&
                 targetStudentId != userId) {
@@ -182,18 +186,29 @@ class _RealtimeNotificationWrapperState
           if (payload.eventType == PostgresChangeEvent.insert &&
               WidgetsBinding.instance.lifecycleState ==
                   AppLifecycleState.resumed) {
-            final title = record['title']?.toString() ?? 'Nouveau message';
-            final body = record['body']?.toString() ?? '';
-            final message =
-                body.isNotEmpty ? body : 'Nouveau message de classe disponible';
-            InAppNotificationBanner.show(
+            final rawTitle = record['title']?.toString().trim() ?? '';
+            final title = rawTitle.isNotEmpty
+                ? rawTitle
+                : (targetStudentId != null && targetStudentId.isNotEmpty
+                    ? 'Nouveau message'
+                    : 'Nouveau message de classe');
+            final cleanBody = (record['body']?.toString() ?? '')
+                .replaceFirst(RegExp(r'^\*\*@[^*]+\*\*\s*'), '')
+                .trim();
+            final message = cleanBody.isNotEmpty
+                ? cleanBody
+                : 'Nouveau message disponible';
+            final recId = record['id']?.toString();
+            final dedupKey = recId != null && recId.isNotEmpty
+                ? 'announcements_class:$recId'
+                : null;
+            LocalNotificationService.showNotification(
+              id: LocalNotificationService.stableNotificationId(
+                  dedupKey ?? '$title|$message|/messages'),
               title: title,
-              message: message,
-              icon: Icons.mail_rounded,
-              color: const Color(0xFF6B5CE7),
-              onTap: () {
-                if (mounted) context.push('/messages');
-              },
+              body: message,
+              routePayload: '/messages',
+              dedupKey: dedupKey,
             );
           }
         },
@@ -238,7 +253,7 @@ class _RealtimeNotificationWrapperState
                 return;
               }
             } catch (_) {
-              // If verification fails, still refresh provider quietly without popping another user's banner
+              // If verification fails, still refresh provider quietly without popping another user's alert
               if (mounted) ref.invalidate(suggestionsProvider);
               return;
             }
@@ -255,18 +270,22 @@ class _RealtimeNotificationWrapperState
                     record['body'] ??
                     record['message'] ??
                     '')
-                .toString();
+                .toString()
+                .trim();
             final message = text.isNotEmpty
                 ? text
-                : 'L\'administration a répondu à votre suggestion';
-            InAppNotificationBanner.show(
+                : 'L\'administration a répondu à votre suggestion.';
+            final recId = record['id']?.toString();
+            final dedupKey = recId != null && recId.isNotEmpty
+                ? 'suggestion_replies:$recId'
+                : null;
+            LocalNotificationService.showNotification(
+              id: LocalNotificationService.stableNotificationId(
+                  dedupKey ?? 'Réponse à votre suggestion|$message|/suggestions'),
               title: 'Réponse à votre suggestion',
-              message: message,
-              icon: Icons.mark_chat_read_rounded,
-              color: const Color(0xFF10B981),
-              onTap: () {
-                if (mounted) context.push('/suggestions');
-              },
+              body: message,
+              routePayload: '/suggestions',
+              dedupKey: dedupKey,
             );
           }
         },
@@ -316,7 +335,9 @@ class _RealtimeNotificationWrapperState
           if (payload.eventType == PostgresChangeEvent.insert &&
               WidgetsBinding.instance.lifecycleState ==
                   AppLifecycleState.resumed) {
-            final title = record['title']?.toString() ?? 'Nouveau document';
+            final rawTitle = record['title']?.toString().trim() ?? '';
+            final title =
+                'Nouveau document : ${rawTitle.isNotEmpty ? rawTitle : 'Document'}';
             final cleanDesc = desc
                 .replaceAll(RegExp(r'\[Semestre:\s*\d+\]'), '')
                 .replaceAll(RegExp(r'\[Student:\s*[^\]]+\]'), '')
@@ -324,15 +345,17 @@ class _RealtimeNotificationWrapperState
                 .trim();
             final message = cleanDesc.isNotEmpty
                 ? cleanDesc
-                : 'Un nouveau document a été partagé';
-            InAppNotificationBanner.show(
+                : 'Un nouveau document a été partagé.';
+            final recId = record['id']?.toString();
+            final dedupKey =
+                recId != null && recId.isNotEmpty ? 'documents:$recId' : null;
+            LocalNotificationService.showNotification(
+              id: LocalNotificationService.stableNotificationId(
+                  dedupKey ?? '$title|$message|/documents'),
               title: title,
-              message: message,
-              icon: Icons.folder_shared_rounded,
-              color: const Color(0xFF3B82F6),
-              onTap: () {
-                if (mounted) context.push('/documents');
-              },
+              body: message,
+              routePayload: '/documents',
+              dedupKey: dedupKey,
             );
           }
         },

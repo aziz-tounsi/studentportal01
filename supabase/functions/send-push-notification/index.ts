@@ -404,9 +404,15 @@ serve(async (req: Request) => {
                   data: stringData,
                   android: {
                     priority: "HIGH",
+                    ttl: "86400s",
+                    direct_boot_ok: true,
                     notification: {
-                      channel_id: "student_portal_channel",
+                      channel_id: "student_portal_alerts_v2",
                       sound: "default",
+                      default_vibrate_timings: true,
+                      default_light_settings: true,
+                      notification_priority: "PRIORITY_MAX",
+                      visibility: "PUBLIC",
                       click_action: "FLUTTER_NOTIFICATION_CLICK",
                     },
                   },

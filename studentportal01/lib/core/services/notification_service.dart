@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../presentation/widgets/in_app_notification_banner.dart';
 import '../router/app_router.dart';
 
 @pragma('vm:entry-point')
@@ -29,13 +27,17 @@ class LocalNotificationService {
   static StreamSubscription<String>? _tokenRefreshSub;
   static final Map<String, DateTime> _recentNotifications = {};
 
+  static int stableNotificationId(String key) => key.hashCode & 0x7fffffff;
+
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'student_portal_channel',
+    'student_portal_alerts_v2',
     'Student Portal Notifications',
     description: 'Notifications for announcements, messages, and document updates.',
     importance: Importance.max,
     playSound: true,
     enableVibration: true,
+    enableLights: true,
+    showBadge: true,
   );
 
   static Future<void> init() async {
@@ -94,7 +96,7 @@ class LocalNotificationService {
 
       // 4. Configure Firebase messaging listeners
       try {
-        // Keep iOS foreground OS banners disabled because InAppNotificationBanner handles foreground UI
+        // Keep iOS native FCM presentation alerts off because showNotification presents unified OS alerts deduplicated with Realtime
         await FirebaseMessaging.instance
             .setForegroundNotificationPresentationOptions(
           alert: false,
@@ -102,7 +104,7 @@ class LocalNotificationService {
           sound: false,
         );
 
-        // Foreground notification handling -> show single in-app banner (deduplicated against Realtime)
+        // Foreground notification handling -> post single native phone OS notification
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
           final notification = message.notification;
           final title = notification?.title ??
@@ -111,37 +113,21 @@ class LocalNotificationService {
           final body =
               notification?.body ?? message.data['body']?.toString() ?? '';
           final route = message.data['route']?.toString();
+          final table = message.data['table']?.toString();
+          final recordId = message.data['record_id']?.toString();
+          final dedupKey = (table != null &&
+                  table.isNotEmpty &&
+                  recordId != null &&
+                  recordId.isNotEmpty)
+              ? '$table:$recordId'
+              : null;
 
-          final IconData icon;
-          final Color color;
-          switch (route) {
-            case '/messages':
-              icon = Icons.mail_rounded;
-              color = const Color(0xFF6B5CE7);
-              break;
-            case '/documents':
-              icon = Icons.folder_shared_rounded;
-              color = const Color(0xFF3B82F6);
-              break;
-            case '/suggestions':
-              icon = Icons.mark_chat_read_rounded;
-              color = const Color(0xFF10B981);
-              break;
-            default:
-              icon = Icons.notifications_rounded;
-              color = const Color(0xFF8B5CF6);
-          }
-
-          InAppNotificationBanner.show(
+          showNotification(
+            id: stableNotificationId(dedupKey ?? '$title|$body|${route ?? ''}'),
             title: title,
-            message: body.isNotEmpty ? body : 'Nouvelle notification disponible',
-            icon: icon,
-            color: color,
-            onTap: () {
-              if (route != null && route.isNotEmpty) {
-                rootNavigatorKey.currentContext?.push(route);
-              }
-            },
+            body: body.isNotEmpty ? body : 'Nouvelle notification disponible',
+            routePayload: route,
+            dedupKey: dedupKey,
           );
         });
 
@@ -259,13 +245,16 @@ class LocalNotificationService {
     required String title,
     required String body,
     String? routePayload,
+    String? dedupKey,
   }) async {
     try {
       if (kIsWeb) return;
       final now = DateTime.now();
-      final key = '$title|$body|${routePayload ?? ''}';
+      final key = (dedupKey != null && dedupKey.isNotEmpty)
+          ? dedupKey
+          : '$title|$body|${routePayload ?? ''}';
       final prev = _recentNotifications[key];
-      if (prev != null && now.difference(prev).inSeconds < 5) {
+      if (prev != null && now.difference(prev).inSeconds < 20) {
         return;
       }
       _recentNotifications[key] = now;
@@ -284,9 +273,13 @@ class LocalNotificationService {
         _channel.name,
         channelDescription: _channel.description,
         importance: Importance.max,
-        priority: Priority.high,
+        priority: Priority.max,
+        visibility: NotificationVisibility.public,
         playSound: true,
         enableVibration: true,
+        enableLights: true,
+        channelShowBadge: true,
+        ticker: title,
         icon: '@mipmap/ic_launcher',
       );
 
