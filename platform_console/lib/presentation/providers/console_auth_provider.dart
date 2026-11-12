@@ -34,11 +34,20 @@ class ConsoleAuthState {
 
 class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
   SupabaseClient get _supabase => Supabase.instance.client;
+  ConsoleAuthState _currentState = ConsoleAuthState();
+
+  void _setState(ConsoleAuthState newState) {
+    _currentState = newState;
+    try {
+      state = newState;
+    } catch (_) {}
+  }
 
   @override
   ConsoleAuthState build() {
+    _currentState = ConsoleAuthState();
     Future.microtask(_init);
-    return ConsoleAuthState();
+    return _currentState;
   }
 
   void _init() {
@@ -46,7 +55,7 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
       if (data.event == AuthChangeEvent.signedIn) {
         _loadUserData();
       } else if (data.event == AuthChangeEvent.signedOut) {
-        state = ConsoleAuthState();
+        _setState(ConsoleAuthState());
       }
     });
 
@@ -58,7 +67,7 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
   Future<void> _loadUserData() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
-    state = state.copyWith(isLoading: true);
+    _setState(_currentState.copyWith(isLoading: true));
     try {
       final resp = await _supabase
           .from('users')
@@ -69,41 +78,45 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
       final role = resp['role'] as String?;
       if (role != 'super_admin') {
         await _supabase.auth.signOut();
-        state = ConsoleAuthState(
+        _setState(ConsoleAuthState(
           isAuthenticated: false,
-          errorMessage: 'Accès refusé. Cette console est strictement réservée au super_admin de la plateforme.',
-        );
+          errorMessage:
+              'Accès refusé. Cette console est strictement réservée au super_admin de la plateforme.',
+        ));
         return;
       }
 
-      state = state.copyWith(
+      _setState(_currentState.copyWith(
         isLoading: false,
         isAuthenticated: true,
         user: resp,
         errorMessage: null,
-      );
+      ));
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      _setState(_currentState.copyWith(
+          isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<bool> signIn(String email, String password) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    _setState(_currentState.copyWith(isLoading: true, errorMessage: null));
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
       await _loadUserData();
-      return state.isAuthenticated;
+      return _currentState.isAuthenticated;
     } on AuthException catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.message);
+      _setState(
+          _currentState.copyWith(isLoading: false, errorMessage: e.message));
       return false;
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      _setState(_currentState.copyWith(
+          isLoading: false, errorMessage: e.toString()));
       return false;
     }
   }
 
   Future<void> signOut() async {
     await _supabase.auth.signOut();
-    state = ConsoleAuthState();
+    _setState(ConsoleAuthState());
   }
 }

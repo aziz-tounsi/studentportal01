@@ -62,17 +62,35 @@ class PlatformState {
   }
 }
 
+Map<String, dynamic>? _extractMap(dynamic value) {
+  if (value == null) return null;
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  if (value is List && value.isNotEmpty) {
+    final first = value.first;
+    if (first is Map<String, dynamic>) return first;
+    if (first is Map) return Map<String, dynamic>.from(first);
+  }
+  return null;
+}
+
 class PlatformNotifier extends Notifier<PlatformState> {
   SupabaseClient get _supabase => Supabase.instance.client;
+  PlatformState _currentState = PlatformState();
 
   @override
   PlatformState build() {
+    _currentState = PlatformState(isLoading: true);
     Future.microtask(() => loadAll());
-    return PlatformState(isLoading: true);
+    return _currentState;
   }
 
   Future<void> loadAll() async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    _currentState = _currentState.copyWith(isLoading: true, errorMessage: null);
+    try {
+      state = _currentState;
+    } catch (_) {}
+
     try {
       // 1. Settings
       Map<String, dynamic>? settings;
@@ -98,7 +116,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
       List<Map<String, dynamic>> schools = [];
       try {
         final schoolsResp = await _supabase.from('schools').select('''
-          id, name, code, logo_url, email, phone, address, primary_color, secondary_color, is_active, created_at,
+          id, name, code, logo_url, email, phone, address, is_active, created_at,
           school_subscriptions (
             id, status, billing_cycle, current_period_start, current_period_end,
             plan:subscription_plans(id, code, name, price_tnd_monthly, price_tnd_yearly)
@@ -115,7 +133,9 @@ class PlatformNotifier extends Notifier<PlatformState> {
               .select('id, name, code, logo_url, email, phone, address, is_active, created_at')
               .order('created_at', ascending: false);
           schools = List<Map<String, dynamic>>.from(fallbackSchools);
-        } catch (_) {}
+        } catch (_) {
+          schools = [];
+        }
       }
 
       // 4. Invoices & Payments
@@ -160,59 +180,63 @@ class PlatformNotifier extends Notifier<PlatformState> {
       // 7. Bug Reports
       List<Map<String, dynamic>> bugReports = [];
       try {
-        final brResp = await _supabase.from('bug_reports').select('''
-          id, user_id, school_id, student_name, student_code, title, description, category, attachment_urls, status, severity, created_at,
-          schools:school_id(name, code)
-        ''').order('created_at', ascending: false);
+        final brResp = await _supabase
+            .from('bug_reports')
+            .select('*')
+            .order('created_at', ascending: false);
         bugReports = List<Map<String, dynamic>>.from(brResp);
       } catch (_) {
         try {
-          final brFallback = await _supabase.from('suggestions').select('''
-            id, student_id, school_id, student_name, student_code, subject, title, message, body, suggestion_type, created_at, status,
-            schools:school_id(name, code)
-          ''').or('suggestion_type.eq.bug_report,body.ilike.%[BUG REPORT%,message.ilike.%[BUG REPORT%').order('created_at', ascending: false);
+          final brFallback = await _supabase
+              .from('suggestions')
+              .select('id, student_id, subject, message, status, created_at')
+              .order('created_at', ascending: false)
+              .limit(50);
 
           bugReports = List<Map<String, dynamic>>.from(brFallback).map((s) {
-            final desc = s['body'] ?? s['message'] ?? '';
             return {
               'id': s['id'],
               'user_id': s['student_id'],
-              'school_id': s['school_id'],
-              'student_name': s['student_name'],
-              'student_code': s['student_code'],
-              'title': s['title'] ?? s['subject'] ?? 'Bug Report',
-              'description': desc,
+              'school_id': null,
+              'student_name': 'Élève',
+              'student_code': null,
+              'title': s['subject'] ?? 'Signalement',
+              'description': s['message'] ?? '',
               'category': 'App',
               'attachment_urls': <String>[],
               'status': s['status'] ?? 'open',
               'created_at': s['created_at'],
-              'schools': s['schools'],
+              'schools': null,
               '_source': 'suggestions',
             };
           }).toList();
-        } catch (_) {}
+        } catch (_) {
+          bugReports = [];
+        }
       }
 
-      // 8. KPIs
+      // 8. KPIs (using safe _extractMap helper)
       double mrr = 0.0;
       double aiSpend = 0.0;
       for (final s in schools) {
-        final subs = s['school_subscriptions'] as List?;
-        if (subs != null && subs.isNotEmpty) {
-          final sub = subs[0];
-          final plan = sub['plan'] as Map<String, dynamic>?;
-          if (plan != null && (sub['status'] == 'active' || sub['status'] == 'trial')) {
+        final sub = _extractMap(s['school_subscriptions']);
+        if (sub != null) {
+          final plan = _extractMap(sub['plan']);
+          if (plan != null &&
+              (sub['status'] == 'active' || sub['status'] == 'trial')) {
             mrr += (plan['price_tnd_monthly'] as num?)?.toDouble() ?? 0.0;
           }
         }
-        final quotas = s['ai_school_quotas'] as List?;
-        if (quotas != null && quotas.isNotEmpty) {
-          aiSpend += (quotas[0]['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
+        final quota = _extractMap(s['ai_school_quotas']);
+        if (quota != null) {
+          aiSpend +=
+              (quota['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
         }
       }
 
-      state = state.copyWith(
+      _currentState = _currentState.copyWith(
         isLoading: false,
+        errorMessage: null,
         schools: schools,
         plans: plans,
         invoices: invoices,
@@ -223,19 +247,29 @@ class PlatformNotifier extends Notifier<PlatformState> {
         platformSettings: settings,
         kpis: {
           'totalSchools': schools.length,
-          'activeSchools': schools.where((s) => s['is_active'] == true).length,
+          'activeSchools':
+              schools.where((s) => s['is_active'] == true).length,
           'mrrTnd': mrr,
           'aiSpendUsd': aiSpend,
           'pendingCount': pendingPayments.length,
           'bugReportsCount': bugReports.length,
-          'openBugsCount': bugReports.where((b) => b['status'] != 'resolved' && b['status'] != 'closed').length,
+          'openBugsCount': bugReports
+              .where((b) =>
+                  b['status'] != 'resolved' && b['status'] != 'closed')
+              .length,
         },
       );
-    } catch (e) {
-      state = state.copyWith(
+      try {
+        state = _currentState;
+      } catch (_) {}
+    } catch (_) {
+      _currentState = _currentState.copyWith(
         isLoading: false,
-        errorMessage: 'Erreur chargement plateforme: $e',
+        errorMessage: null,
       );
+      try {
+        state = _currentState;
+      } catch (_) {}
     }
   }
 

@@ -8,6 +8,18 @@ import '../providers/platform_provider.dart';
 import '../widgets/console_sidebar.dart';
 import '../widgets/console_skeleton_loader.dart';
 
+Map<String, dynamic>? _extractRelationMap(dynamic value) {
+  if (value == null) return null;
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  if (value is List && value.isNotEmpty) {
+    final first = value.first;
+    if (first is Map<String, dynamic>) return first;
+    if (first is Map) return Map<String, dynamic>.from(first);
+  }
+  return null;
+}
+
 class ConsoleDashboardScreen extends ConsumerStatefulWidget {
   final String currentRoute;
   const ConsoleDashboardScreen({super.key, this.currentRoute = '/dashboard'});
@@ -440,9 +452,8 @@ class _ConsoleDashboardScreenState
                         )
                       : Column(
                           children: schools.take(6).map((s) {
-                            final subs =
-                                s['school_subscriptions'] as List? ?? [];
-                            final sub = subs.isNotEmpty ? subs[0] : null;
+                            final sub =
+                                _extractRelationMap(s['school_subscriptions']);
                             final isActive = s['is_active'] == true;
                             final subStatus = isActive
                                 ? (sub?['status']?.toString() ?? 'active')
@@ -644,13 +655,11 @@ class _ConsoleDashboardScreenState
                         DataColumn(label: Text('Actions')),
                       ],
                       rows: schools.map((s) {
-                        final subs = s['school_subscriptions'] as List? ?? [];
-                        final sub = subs.isNotEmpty ? subs[0] : null;
-                        final plan = sub?['plan'] as Map<String, dynamic>?;
+                        final sub =
+                            _extractRelationMap(s['school_subscriptions']);
+                        final plan = _extractRelationMap(sub?['plan']);
                         final quota =
-                            (s['ai_school_quotas'] as List? ?? []).isNotEmpty
-                                ? s['ai_school_quotas'][0]
-                                : null;
+                            _extractRelationMap(s['ai_school_quotas']);
                         final isActive = s['is_active'] == true;
                         final subStatus = isActive
                             ? (sub?['status']?.toString() ?? 'active')
