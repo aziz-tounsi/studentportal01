@@ -341,6 +341,31 @@ class _ConsoleDashboardScreenState extends ConsumerState<ConsoleDashboardScreen>
                               tooltip: 'Changer le logo de l\'école',
                               onPressed: () => _showSchoolLogoModal(context, s),
                             ),
+                            PopupMenuButton<String>(
+                              tooltip: 'Statut abonnement SaaS (active / past_due / suspended)',
+                              icon: const Icon(Icons.credit_score_outlined, color: Color(0xFFA78BFA)),
+                              color: const Color(0xFF1E293B),
+                              onSelected: (status) => ref
+                                  .read(platformProvider.notifier)
+                                  .updateSchoolSubscriptionStatus(s['id'], status),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'active',
+                                  child: Text('Active (Accès complet)',
+                                      style: TextStyle(color: Color(0xFF34D399))),
+                                ),
+                                PopupMenuItem(
+                                  value: 'past_due',
+                                  child: Text('Past Due (Bannière préavis)',
+                                      style: TextStyle(color: Color(0xFFFBBF24))),
+                                ),
+                                PopupMenuItem(
+                                  value: 'suspended',
+                                  child: Text('Suspended (Gel complet école)',
+                                      style: TextStyle(color: Color(0xFFF87171))),
+                                ),
+                              ],
+                            ),
                             IconButton(
                               icon: Icon(
                                 isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,

@@ -17,6 +17,8 @@ class UserModel {
   final String? className;  // Current class name (from enrollment)
   final String? initialPassword;  // Auto-generated password for admin reference
   final bool isActive;
+  final String accountStatus; // 'active' | 'paused_unpaid'
+  final bool forcePasswordChange;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -39,6 +41,8 @@ class UserModel {
     this.className,
     this.initialPassword,
     this.isActive = true,
+    this.accountStatus = 'active',
+    this.forcePasswordChange = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -65,6 +69,8 @@ class UserModel {
       className: json['class_name'] as String?,
       initialPassword: json['initial_password'] as String?,
       isActive: json['is_active'] as bool? ?? true,
+      accountStatus: json['account_status'] as String? ?? 'active',
+      forcePasswordChange: json['force_password_change'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -90,6 +96,8 @@ class UserModel {
       'class_name': className,
       'initial_password': initialPassword,
       'is_active': isActive,
+      'account_status': accountStatus,
+      'force_password_change': forcePasswordChange,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -114,6 +122,8 @@ class UserModel {
     String? className,
     String? initialPassword,
     bool? isActive,
+    String? accountStatus,
+    bool? forcePasswordChange,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -136,6 +146,8 @@ class UserModel {
       className: className ?? this.className,
       initialPassword: initialPassword ?? this.initialPassword,
       isActive: isActive ?? this.isActive,
+      accountStatus: accountStatus ?? this.accountStatus,
+      forcePasswordChange: forcePasswordChange ?? this.forcePasswordChange,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

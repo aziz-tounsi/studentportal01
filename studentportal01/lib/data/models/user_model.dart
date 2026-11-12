@@ -17,6 +17,7 @@ class UserModel {
   final String? niveauId;
   final String? sectionId;
   final String? initialPassword;
+  final String accountStatus;
 
   UserModel({
     required this.id,
@@ -37,6 +38,7 @@ class UserModel {
     this.niveauId,
     this.sectionId,
     this.initialPassword,
+    this.accountStatus = 'active',
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -73,6 +75,7 @@ class UserModel {
       niveauId: json['niveau_id'] as String?,
       sectionId: json['section_id'] as String?,
       initialPassword: json['initial_password'] as String?,
+      accountStatus: (json['account_status'] as String?) ?? 'active',
     );
   }
 
@@ -96,6 +99,7 @@ class UserModel {
       'niveau_id': niveauId,
       'section_id': sectionId,
       'initial_password': initialPassword,
+      'account_status': accountStatus,
     };
   }
 
@@ -118,6 +122,7 @@ class UserModel {
     String? niveauId,
     String? sectionId,
     String? initialPassword,
+    String? accountStatus,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -138,6 +143,7 @@ class UserModel {
       niveauId: niveauId ?? this.niveauId,
       sectionId: sectionId ?? this.sectionId,
       initialPassword: initialPassword ?? this.initialPassword,
+      accountStatus: accountStatus ?? this.accountStatus,
     );
   }
 }

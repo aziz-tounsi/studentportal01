@@ -21,6 +21,7 @@ class UsersState {
   final String? roleFilter;
   final String? classFilter;
   final String searchQuery;
+  final String? lastCreatedEmail;
 
   UsersState({
     this.users = const [],
@@ -31,6 +32,7 @@ class UsersState {
     this.roleFilter,
     this.classFilter,
     this.searchQuery = '',
+    this.lastCreatedEmail,
   });
 
   UsersState copyWith({
@@ -42,6 +44,7 @@ class UsersState {
     String? roleFilter,
     String? classFilter,
     String? searchQuery,
+    String? lastCreatedEmail,
   }) => UsersState(
     users: users ?? this.users,
     classes: classes ?? this.classes,
@@ -51,6 +54,7 @@ class UsersState {
     roleFilter: roleFilter ?? this.roleFilter,
     classFilter: classFilter ?? this.classFilter,
     searchQuery: searchQuery ?? this.searchQuery,
+    lastCreatedEmail: lastCreatedEmail ?? this.lastCreatedEmail,
   );
 
   List<UserModel> get filteredUsers {
@@ -251,7 +255,7 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
 
       // Create user securely through Edge Function
       final result = await UserManagementService.createUser(
-        email: email,
+        email: email.trim().toLowerCase(),
         password: password,
         fullName: fullName,
         role: role,
@@ -269,15 +273,27 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
         schoolId: schoolId,
       );
 
+      final createdEmail =
+          (result['user'] as Map?)?['email']?.toString() ?? email;
       await refresh();
+      if (state.value != null) {
+        state = AsyncValue.data(
+          state.value!.copyWith(lastCreatedEmail: createdEmail),
+        );
+      }
       return result['success'] == true;
     } catch (e) {
+      final raw = e.toString().toLowerCase();
+      final errMsg = (raw.contains('already registered') ||
+              raw.contains('déjà enregistré'))
+          ? 'Cet e-mail est déjà enregistré dans le système.'
+          : UserFriendlyError.format(
+              e,
+              fallback: 'Unable to create this user right now. Please try again.',
+            );
       state = AsyncValue.data(
         state.value!.copyWith(
-          error: UserFriendlyError.format(
-            e,
-            fallback: 'Unable to create this user right now. Please try again.',
-          ),
+          error: errMsg,
         ),
       );
       return false;

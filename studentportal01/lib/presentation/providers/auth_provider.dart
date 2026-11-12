@@ -21,6 +21,7 @@ class AuthState {
   final EnrollmentModel? enrollment;
   final String? errorMessage;
   final bool accessDenied; // Non-student tried to login
+  final bool schoolSuspended; // School SaaS subscription suspended
 
   AuthState({
     this.isLoading = false,
@@ -30,6 +31,7 @@ class AuthState {
     this.enrollment,
     this.errorMessage,
     this.accessDenied = false,
+    this.schoolSuspended = false,
   });
 
   AuthState copyWith({
@@ -40,6 +42,7 @@ class AuthState {
     EnrollmentModel? enrollment,
     String? errorMessage,
     bool? accessDenied,
+    bool? schoolSuspended,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
@@ -49,6 +52,7 @@ class AuthState {
       enrollment: enrollment ?? this.enrollment,
       errorMessage: errorMessage,
       accessDenied: accessDenied ?? this.accessDenied,
+      schoolSuspended: schoolSuspended ?? this.schoolSuspended,
     );
   }
 }
@@ -240,7 +244,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       try {
         userResponse = await _supabase
             .from('users')
-            .select('id, school_id, role, full_name, email, phone, photo_url, student_code, date_of_birth, address, created_at, updated_at, niveau, niveau_code, section_code, niveau_id, section_id, initial_password')
+            .select('id, school_id, role, full_name, email, phone, photo_url, student_code, date_of_birth, address, created_at, updated_at, niveau, niveau_code, section_code, niveau_id, section_id, initial_password, account_status')
             .eq('id', userId)
             .maybeSingle();
       } catch (e) {
@@ -432,16 +436,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       SchoolModel? school;
+      bool schoolSuspended = false;
       if (user.schoolId != null) {
         try {
           final schoolResp = await _supabase
               .from('schools')
-              .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, created_at')
+              .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, is_active, created_at, school_subscriptions(status)')
               .eq('id', user.schoolId!)
               .maybeSingle();
           if (schoolResp != null) {
             school = SchoolModel.fromJson(schoolResp);
-            debugPrint('AuthProvider: School loaded: ${school.name}, code=${school.code}');
+            final isActiveSchool = schoolResp['is_active'] as bool? ?? true;
+            final subs = schoolResp['school_subscriptions'] as List?;
+            final subStatus = (subs != null && subs.isNotEmpty)
+                ? (subs.first as Map)['status']?.toString()
+                : null;
+            schoolSuspended = !isActiveSchool || subStatus == 'suspended';
+            debugPrint('AuthProvider: School loaded: ${school.name}, code=${school.code}, suspended=$schoolSuspended');
           }
         } catch (e) {
           debugPrint('AuthProvider: Error loading school branding: $e');
@@ -456,6 +467,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         enrollment: enrollment,
         errorMessage: null,
         accessDenied: false,
+        schoolSuspended: schoolSuspended,
       );
 
       // Save to persistent offline cache
@@ -645,21 +657,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
       throw 'password_update_failed';
     }
 
-    // 3. Update public.users initial_password so the admin on the student profile gets the new password
+    // 3. Clear temporary initial_password in public.users (never store plaintext user passwords permanently)
     try {
       await _supabase.from('users').update({
-        'initial_password': newPassword,
+        'initial_password': null,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', userId);
 
       // Update in-memory user state
       if (state.user != null) {
         state = state.copyWith(
-          user: state.user!.copyWith(initialPassword: newPassword),
+          user: state.user!.copyWith(initialPassword: null),
         );
       }
     } catch (e) {
-      debugPrint('AuthProvider: Failed to update initial_password in users table: $e');
+      debugPrint('AuthProvider: Failed to clear initial_password in users table: $e');
     }
 
     // 4. Alert the admin dashboard by logging into password_reset_requests

@@ -11,11 +11,38 @@ class AdminAuthState {
   final UserModel? user;
   final String? errorMessage;
   final bool accessDenied;
+  final String? schoolSubscriptionStatus;
+  final bool schoolIsActive;
 
-  AdminAuthState({this.isLoading = false, this.isAuthenticated = false, this.user, this.errorMessage, this.accessDenied = false});
+  AdminAuthState({
+    this.isLoading = false,
+    this.isAuthenticated = false,
+    this.user,
+    this.errorMessage,
+    this.accessDenied = false,
+    this.schoolSubscriptionStatus,
+    this.schoolIsActive = true,
+  });
 
-  AdminAuthState copyWith({bool? isLoading, bool? isAuthenticated, UserModel? user, String? errorMessage, bool? accessDenied}) {
-    return AdminAuthState(isLoading: isLoading ?? this.isLoading, isAuthenticated: isAuthenticated ?? this.isAuthenticated, user: user ?? this.user, errorMessage: errorMessage, accessDenied: accessDenied ?? this.accessDenied);
+  AdminAuthState copyWith({
+    bool? isLoading,
+    bool? isAuthenticated,
+    UserModel? user,
+    String? errorMessage,
+    bool? accessDenied,
+    String? schoolSubscriptionStatus,
+    bool? schoolIsActive,
+  }) {
+    return AdminAuthState(
+      isLoading: isLoading ?? this.isLoading,
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      user: user ?? this.user,
+      errorMessage: errorMessage,
+      accessDenied: accessDenied ?? this.accessDenied,
+      schoolSubscriptionStatus:
+          schoolSubscriptionStatus ?? this.schoolSubscriptionStatus,
+      schoolIsActive: schoolIsActive ?? this.schoolIsActive,
+    );
   }
 }
 
@@ -52,7 +79,48 @@ class AuthNotifier extends Notifier<AdminAuthState> {
         state = AdminAuthState(accessDenied: true, errorMessage: message);
         return;
       }
-      state = state.copyWith(isLoading: false, isAuthenticated: true, user: user, errorMessage: null, accessDenied: false);
+
+      // Check master SaaS school subscription & active kill-switch
+      String? subStatus = 'active';
+      bool schoolIsActive = true;
+      if (user.schoolId != null) {
+        try {
+          final schoolRow = await _supabase
+              .from('schools')
+              .select('is_active, school_subscriptions(status)')
+              .eq('id', user.schoolId!)
+              .maybeSingle();
+          if (schoolRow != null) {
+            schoolIsActive = schoolRow['is_active'] as bool? ?? true;
+            final subs = schoolRow['school_subscriptions'] as List?;
+            if (subs != null && subs.isNotEmpty) {
+              subStatus = (subs.first as Map)['status']?.toString();
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!schoolIsActive || subStatus == 'suspended') {
+        await _supabase.auth.signOut();
+        state = AdminAuthState(
+          accessDenied: true,
+          schoolSubscriptionStatus: subStatus ?? 'suspended',
+          schoolIsActive: false,
+          errorMessage:
+              'L\'abonnement de votre établissement est suspendu. Veuillez contacter l\'administrateur de la plateforme.',
+        );
+        return;
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        isAuthenticated: true,
+        user: user,
+        errorMessage: null,
+        accessDenied: false,
+        schoolSubscriptionStatus: subStatus,
+        schoolIsActive: schoolIsActive,
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -61,6 +129,30 @@ class AuthNotifier extends Notifier<AdminAuthState> {
           fallback: 'Unable to load your account right now. Please try again.',
         ),
       );
+    }
+  }
+
+  Future<String?> completeForcedPasswordChange(String newPassword) async {
+    final userId = state.user?.id ?? _supabase.auth.currentUser?.id;
+    if (userId == null) return 'Session expirée';
+    try {
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+      await _supabase.from('users').update({
+        'force_password_change': false,
+        'initial_password': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+      if (state.user != null) {
+        state = state.copyWith(
+          user: state.user!.copyWith(
+            forcePasswordChange: false,
+            initialPassword: null,
+          ),
+        );
+      }
+      return null;
+    } catch (e) {
+      return UserFriendlyError.format(e);
     }
   }
 

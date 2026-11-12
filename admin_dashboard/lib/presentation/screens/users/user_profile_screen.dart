@@ -621,12 +621,88 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               _outlineButton(icon: Icons.edit_outlined, label: 'Modifier', onTap: () => _showEditDialog(user)),
               _brandOutlineButton(label: 'Réinitialiser mot de passe', onTap: _isResettingPassword ? null : () => _resetPassword(user), isLoading: _isResettingPassword),
               if (isStudent) ...[
+                _buildAccountStatusButton(user),
                 _brandOutlineButton(label: 'Envoyer message élève', onTap: () => _sendMessageToStudent(user)),
                 _successButton(icon: Icons.login_rounded, label: 'Se connecter en tant que', onTap: () => _loginAsStudent(user)),
               ],
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAccountStatusButton(Map<String, dynamic> user) {
+    final status = (user['account_status'] as String? ?? 'active').toLowerCase();
+    final isPaused = status == 'paused_unpaid';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isPaused ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isPaused
+              ? const Color(0xFFFCA5A5)
+              : const Color(0xFF86EFAC),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () async {
+            final nextStatus = isPaused ? 'active' : 'paused_unpaid';
+            final ok = await UserManagementService.setAccountStatus(
+              userId: widget.userId,
+              accountStatus: nextStatus,
+            );
+            if (!mounted) return;
+            if (ok) {
+              ref.invalidate(userProfileDataProvider(widget.userId));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    nextStatus == 'paused_unpaid'
+                        ? 'Accès élève suspendu pour impayé.'
+                        : 'Accès élève réactivé.',
+                  ),
+                  backgroundColor: nextStatus == 'paused_unpaid'
+                      ? AppColors.warning
+                      : AppColors.success,
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Impossible de modifier le statut d\'accès.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isPaused ? Icons.lock_outline_rounded : Icons.verified_user_outlined,
+                  size: 16,
+                  color: isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  isPaused ? 'Suspendu (Impayé) — Réactiver' : 'Accès actif',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

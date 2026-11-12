@@ -9,6 +9,7 @@ class UserManagementService {
     required String fullName,
     required String role,
     required String schoolId,
+    bool forcePasswordChange = true,
   }) async {
     try {
       final response = await _client.functions.invoke(
@@ -20,6 +21,7 @@ class UserManagementService {
           'full_name': fullName,
           'role': role,
           'school_id': schoolId,
+          'force_password_change': forcePasswordChange,
         },
       );
 

@@ -8,7 +8,13 @@ const corsHeaders = {
 };
 
 interface RequestBody {
-  action: "create_user" | "delete_user" | "reset_password" | "bulk_delete_users";
+  action:
+    | "create_user"
+    | "delete_user"
+    | "reset_password"
+    | "bulk_delete_users"
+    | "set_account_status"
+    | "approve_password_reset";
   email?: string;
   password?: string;
   role?: string;
@@ -29,6 +35,10 @@ interface RequestBody {
   user_id?: string;
   user_ids?: string[];
   new_password?: string;
+  force_password_change?: boolean;
+  account_status?: "active" | "paused_unpaid";
+  request_id?: string;
+  admin_notes?: string;
 }
 
 function generateSecurePassword(length = 12): string {
@@ -36,6 +46,16 @@ function generateSecurePassword(length = 12): string {
   const array = new Uint32Array(length);
   crypto.getRandomValues(array);
   return Array.from(array, (x) => chars[x % chars.length]).join("");
+}
+
+function slugify(value: string, fallback = "school"): string {
+  const cleaned = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned || fallback;
 }
 
 serve(async (req) => {
@@ -110,14 +130,13 @@ serve(async (req) => {
     // ACTION: CREATE USER
     // ------------------------------------------------------------------------
     if (action === "create_user") {
-      const email = body.email?.trim().toLowerCase();
-      const password = body.password || generateSecurePassword();
       const fullName = body.full_name?.trim();
       const role = body.role || "student";
+      const password = body.password || generateSecurePassword();
 
-      if (!email || !fullName) {
+      if (!fullName) {
         return new Response(
-          JSON.stringify({ error: "Email and full_name are required" }),
+          JSON.stringify({ error: "full_name is required" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -132,7 +151,57 @@ serve(async (req) => {
         );
       }
 
-      // Create Supabase Auth User
+      // Rule 2: Auto-generate unique school email if student has no email
+      let email = body.email?.trim().toLowerCase() || "";
+      if (!email && role === "student") {
+        const { data: schoolRow } = await adminClient
+          .from("schools")
+          .select("code, name")
+          .eq("id", schoolId)
+          .maybeSingle();
+        const schoolSlug = slugify(schoolRow?.code || schoolRow?.name || schoolId.slice(0, 8), "school");
+        const studentSlug = slugify(
+          body.student_code || fullName.split(" ")[0] || "student",
+          "student"
+        );
+        const suffix = body.student_code
+          ? slugify(body.student_code, "st")
+          : crypto.randomUUID().slice(0, 6);
+        let candidate = `${studentSlug}.${suffix}@${schoolSlug}.app`;
+        // Ensure zero collision
+        const { data: collision } = await adminClient
+          .from("users")
+          .select("id")
+          .ilike("email", candidate)
+          .maybeSingle();
+        if (collision) {
+          candidate = `${studentSlug}.${crypto.randomUUID().slice(0, 6)}@${schoolSlug}.app`;
+        }
+        email = candidate;
+      }
+
+      if (!email) {
+        return new Response(
+          JSON.stringify({ error: "Email and full_name are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Rule 1: Global email uniqueness check across ALL schools before creating auth user
+      const { data: existingGlobal } = await adminClient
+        .from("users")
+        .select("id")
+        .ilike("email", email)
+        .maybeSingle();
+
+      if (existingGlobal) {
+        return new Response(
+          JSON.stringify({ error: "This email is already registered in the system." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create Supabase Auth User with email_confirm = true (no verification link needed)
       const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -145,13 +214,21 @@ serve(async (req) => {
       });
 
       if (authError || !authData.user) {
+        const msg = (authError?.message || "").toLowerCase();
+        const isDuplicate = msg.includes("already") || msg.includes("registered") || msg.includes("exists");
         return new Response(
-          JSON.stringify({ error: authError?.message || "Failed to create auth user" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            error: isDuplicate
+              ? "This email is already registered in the system."
+              : (authError?.message || "Failed to create auth user"),
+          }),
+          { status: isDuplicate ? 409 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       const newUserId = authData.user.id;
+      const forcePasswordChange =
+        body.force_password_change ?? (role === "owner" || role === "admin" || role === "staff");
 
       // Insert profile in public.users
       const { error: userInsertError } = await adminClient.from("users").insert({
@@ -169,6 +246,8 @@ serve(async (req) => {
         gender: body.gender || null,
         nationality: body.nationality || null,
         initial_password: password,
+        account_status: body.account_status || "active",
+        force_password_change: forcePasswordChange,
       });
 
       if (userInsertError) {
@@ -227,6 +306,7 @@ serve(async (req) => {
             role,
             school_id: schoolId,
             password,
+            force_password_change: forcePasswordChange,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -379,6 +459,160 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, deleted, failed }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // ACTION: SET ACCOUNT STATUS (active | paused_unpaid)
+    // ------------------------------------------------------------------------
+    if (action === "set_account_status") {
+      const targetUserId = body.user_id;
+      const accountStatus = body.account_status;
+      if (!targetUserId || (accountStatus !== "active" && accountStatus !== "paused_unpaid")) {
+        return new Response(
+          JSON.stringify({ error: "user_id and valid account_status ('active' | 'paused_unpaid') are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: targetUser } = await adminClient
+        .from("users")
+        .select("id, school_id, account_status")
+        .eq("id", targetUserId)
+        .maybeSingle();
+
+      if (!targetUser) {
+        return new Response(
+          JSON.stringify({ error: "User not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!isSuperAdmin && targetUser.school_id !== callerProfile.school_id) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: Cannot update account status for user in another school" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await adminClient
+        .from("users")
+        .update({ account_status: accountStatus, updated_at: new Date().toISOString() })
+        .eq("id", targetUserId);
+
+      await adminClient.from("audit_logs").insert({
+        school_id: targetUser.school_id,
+        actor_id: callerUser.id,
+        actor_role: callerProfile.role,
+        action: "set_account_status",
+        target_table: "users",
+        target_id: targetUserId,
+        old_data: { account_status: targetUser.account_status },
+        new_data: { account_status: accountStatus },
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, account_status: accountStatus }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // ACTION: APPROVE PASSWORD RESET REQUEST (No raw password stored in table)
+    // ------------------------------------------------------------------------
+    if (action === "approve_password_reset") {
+      const requestId = body.request_id;
+      const targetUserId = body.user_id;
+      if (!requestId && !targetUserId) {
+        return new Response(
+          JSON.stringify({ error: "request_id or user_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      let resolvedUserId = targetUserId;
+      if (requestId && !resolvedUserId) {
+        const { data: reqRow } = await adminClient
+          .from("password_reset_requests")
+          .select("user_id")
+          .eq("id", requestId)
+          .maybeSingle();
+        resolvedUserId = reqRow?.user_id;
+      }
+
+      if (!resolvedUserId) {
+        return new Response(
+          JSON.stringify({ error: "No linked user account for this request" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: targetUser } = await adminClient
+        .from("users")
+        .select("id, school_id")
+        .eq("id", resolvedUserId)
+        .maybeSingle();
+
+      if (!targetUser) {
+        return new Response(
+          JSON.stringify({ error: "User not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!isSuperAdmin && targetUser.school_id !== callerProfile.school_id) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: Cannot approve request for user in another school" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const newPassword = body.new_password?.trim() || generateSecurePassword();
+
+      const { error: authUpdErr } = await adminClient.auth.admin.updateUserById(resolvedUserId, {
+        password: newPassword,
+      });
+
+      if (authUpdErr) {
+        return new Response(
+          JSON.stringify({ error: authUpdErr.message }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await adminClient
+        .from("users")
+        .update({
+          initial_password: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", resolvedUserId);
+
+      if (requestId) {
+        await adminClient
+          .from("password_reset_requests")
+          .update({
+            status: "approved",
+            processed_at: new Date().toISOString(),
+            processed_by: callerUser.id,
+            new_password_sent: true,
+            admin_notes: body.admin_notes || "Approuvé par l'administration",
+          })
+          .eq("id", requestId);
+      }
+
+      await adminClient.from("audit_logs").insert({
+        school_id: targetUser.school_id,
+        actor_id: callerUser.id,
+        actor_role: callerProfile.role,
+        action: "approve_password_reset",
+        target_table: "users",
+        target_id: resolvedUserId,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, password: newPassword }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

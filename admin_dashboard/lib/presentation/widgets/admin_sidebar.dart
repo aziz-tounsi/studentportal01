@@ -287,12 +287,6 @@ class AdminSidebar extends ConsumerWidget {
                         badgeCount: pendingCount,
                       ),
                       _NavItem(
-                        icon: Icons.receipt_long_outlined,
-                        label: 'Abonnement',
-                        route: '/subscription',
-                        currentRoute: currentRoute,
-                      ),
-                      _NavItem(
                         icon: Icons.tune_outlined,
                         label: 'Paramètres',
                         route: '/settings',

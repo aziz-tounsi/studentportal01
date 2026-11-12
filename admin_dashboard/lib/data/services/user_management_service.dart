@@ -26,6 +26,8 @@ class UserManagementService {
     String? gender,
     String? nationality,
     String? schoolId,
+    bool? forcePasswordChange,
+    String accountStatus = 'active',
   }) async {
     try {
       final response = await _client.functions.invoke(
@@ -48,6 +50,9 @@ class UserManagementService {
           'gender': gender,
           'nationality': nationality,
           'school_id': schoolId,
+          if (forcePasswordChange != null)
+            'force_password_change': forcePasswordChange,
+          'account_status': accountStatus,
         },
       );
 
@@ -68,21 +73,51 @@ class UserManagementService {
       if (SupabaseConfig.serviceRoleKey.isNotEmpty) {
         debugPrint('UserManagementService: Executing direct serviceRole fallback for local dev.');
         final authClient = SupabaseConfig.adminClient;
+        var resolvedEmail = email.trim().toLowerCase();
+
+        // Rule 2 fallback: auto-generate student school email if blank
+        if (resolvedEmail.isEmpty && role == 'student' && schoolId != null) {
+          final schoolRow = await authClient
+              .from('schools')
+              .select('code, name')
+              .eq('id', schoolId)
+              .maybeSingle();
+          final rawSlug = (schoolRow?['code'] ?? schoolRow?['name'] ?? schoolId.substring(0, 8)).toString();
+          final schoolSlug = rawSlug.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+          final stSlug = (studentCode?.isNotEmpty == true ? studentCode! : fullName.split(' ').first)
+              .toLowerCase()
+              .replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+          resolvedEmail = '$stSlug.$schoolSlug@school.app';
+        }
+
+        // Rule 1 fallback: global email uniqueness check across ALL schools
+        final existing = await authClient
+            .from('users')
+            .select('id')
+            .ilike('email', resolvedEmail)
+            .maybeSingle();
+        if (existing != null) {
+          throw Exception('Cet e-mail est déjà enregistré dans le système.');
+        }
+
         final authResp = await authClient.auth.admin.createUser(
           AdminUserAttributes(
-            email: email,
+            email: resolvedEmail,
             password: password,
             emailConfirm: true,
-            userMetadata: {'role': role, 'full_name': fullName},
+            userMetadata: {'role': role, 'full_name': fullName, 'school_id': schoolId},
           ),
         );
         final newUserId = authResp.user?.id;
         if (newUserId == null) throw Exception('Local auth user creation failed');
 
+        final shouldForcePwd = forcePasswordChange ??
+            (role == 'owner' || role == 'admin' || role == 'staff');
+
         await authClient.from('users').insert({
           'id': newUserId,
           'school_id': schoolId,
-          'email': email,
+          'email': resolvedEmail,
           'full_name': fullName,
           'role': role,
           'phone': phone,
@@ -94,6 +129,8 @@ class UserManagementService {
           'gender': gender,
           'nationality': nationality,
           'initial_password': password,
+          'account_status': accountStatus,
+          'force_password_change': shouldForcePwd,
         });
 
         if (role == 'student' && classId != null && academicYearId != null) {
@@ -110,10 +147,44 @@ class UserManagementService {
 
         return {
           'success': true,
-          'user': {'id': newUserId, 'email': email, 'password': password},
+          'user': {'id': newUserId, 'email': resolvedEmail, 'password': password},
         };
       }
       rethrow;
+    }
+  }
+
+  /// Switch student account_status ('active' | 'paused_unpaid')
+  static Future<bool> setAccountStatus({
+    required String userId,
+    required String accountStatus,
+  }) async {
+    try {
+      final response = await _client.functions.invoke(
+        'manage-users',
+        body: {
+          'action': 'set_account_status',
+          'user_id': userId,
+          'account_status': accountStatus,
+        },
+      );
+      if (response.status == 200 && response.data?['success'] == true) {
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      await _client
+          .from('users')
+          .update({
+            'account_status': accountStatus,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
+      return true;
+    } catch (e) {
+      debugPrint('UserManagementService.setAccountStatus error: $e');
+      return false;
     }
   }
 

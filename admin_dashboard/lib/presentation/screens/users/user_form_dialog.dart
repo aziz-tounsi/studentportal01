@@ -361,12 +361,19 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                       const SizedBox(height: 20),
                       _buildPremiumTextField(
                         controller: _emailController,
-                        label: 'Email professionnel',
-                        placeholder: 'j.dupont@lycee.fr',
+                        label: _selectedRole == 'student'
+                            ? 'Email (optionnel — auto-généré si vide)'
+                            : 'Email professionnel',
+                        placeholder: _selectedRole == 'student'
+                            ? 'Laisser vide pour email établissement automatique'
+                            : 'j.dupont@lycee.fr',
                         enabled: !isEditing,
                         validator: (v) {
-                          if (v == null || v.isEmpty) return 'Requis';
-                          if (!v.contains('@')) return 'Email invalide';
+                          final trimmed = v?.trim() ?? '';
+                          if (trimmed.isEmpty) {
+                            return _selectedRole == 'student' ? null : 'Requis';
+                          }
+                          if (!trimmed.contains('@')) return 'Email invalide';
                           return null;
                         },
                       ),
@@ -887,11 +894,13 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
       Navigator.pop(context);
 
       if (!isEditing) {
+        final resolvedEmail =
+            ref.read(usersProvider).value?.lastCreatedEmail ?? email;
         // Show credentials dialog for newly created user
         _showCredentialsDialog(
           context,
           _fullNameController.text,
-          email,
+          resolvedEmail,
           password,
         );
       } else {

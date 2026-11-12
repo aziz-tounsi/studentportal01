@@ -1184,17 +1184,32 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             )
           else
             SizedBox(
-              height: 130,
+              height: 136,
               child: Column(
                 children: [
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        const topReserve = 16.0;
-                        const bottomReserve = 6.0;
+                        const leftAxisWidth = 30.0;
+                        const topReserve = 18.0;
+                        const bottomReserve = 8.0;
+                        final plotWidth =
+                            (constraints.maxWidth - leftAxisWidth).clamp(60.0, 2000.0);
                         final barZoneHeight =
                             (constraints.maxHeight - topReserve - bottomReserve)
                                 .clamp(40.0, 200.0);
+
+                        final points = List<Offset>.generate(classNames.length, (i) {
+                          final cls = classNames[i];
+                          final mins = minutesByClass[cls] ?? 0;
+                          final ratio = (mins / scaleMaxMinutes).clamp(0.0, 1.0);
+                          final colW = plotWidth / classNames.length;
+                          final x = leftAxisWidth + (i + 0.5) * colW;
+                          final y = bottomReserve + ratio * barZoneHeight;
+                          // Convert bottom-up y to top-down canvas y
+                          final canvasY = constraints.maxHeight - y;
+                          return Offset(x, canvasY);
+                        });
 
                         return Stack(
                           clipBehavior: Clip.none,
@@ -1232,77 +1247,83 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                                 ),
                               );
                             }),
-                            // Clickable class bars rising to exact hour height
-                            Positioned(
-                              left: 30,
-                              right: 0,
-                              top: 0,
-                              bottom: bottomReserve,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: classNames.map((cls) {
-                                  final mins = minutesByClass[cls] ?? 0;
-                                  final ratio =
-                                      (mins / scaleMaxMinutes).clamp(0.0, 1.0);
-                                  final barH = (ratio * barZoneHeight)
-                                      .clamp(6.0, barZoneHeight);
-                                  final clsSlots = slotsByClass[cls] ?? [];
-                                  final hasActive = clsSlots.any((s) {
-                                    final sMin = s['startMin'] as int? ?? 0;
-                                    final eMin = s['endMin'] as int? ?? 0;
-                                    return nowMin >= sMin && nowMin < eMin;
-                                  });
-
-                                  return Expanded(
-                                    child: MouseRegion(
-                                      cursor: SystemMouseCursors.click,
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: () => _showTodayClassDetailModal(
-                                          cls,
-                                          clsSlots,
-                                          nowMin,
-                                        ),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              _formatShortHours(mins),
-                                              maxLines: 1,
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                color: hasActive
-                                                    ? _brand
-                                                    : AppColors.textSecondary,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 220),
-                                              width: 34,
-                                              height: barH,
-                                              decoration: BoxDecoration(
-                                                color: hasActive
-                                                    ? _brand
-                                                    : _brand.withOpacity(0.75),
-                                                borderRadius:
-                                                    const BorderRadius.vertical(
-                                                  top: Radius.circular(6),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
+                            // Line chart + soft gradient area
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _TodayLineChartPainter(
+                                  points: points,
+                                  baselineY:
+                                      constraints.maxHeight - bottomReserve,
+                                  leftEdge: leftAxisWidth,
+                                  rightEdge: constraints.maxWidth,
+                                  brandColor: _brand,
+                                ),
                               ),
                             ),
+                            // Clickable node dots & hour labels per class on X
+                            ...List.generate(classNames.length, (i) {
+                              final cls = classNames[i];
+                              final mins = minutesByClass[cls] ?? 0;
+                              final pt = points[i];
+                              final clsSlots = slotsByClass[cls] ?? [];
+                              final hasActive = clsSlots.any((s) {
+                                final sMin = s['startMin'] as int? ?? 0;
+                                final eMin = s['endMin'] as int? ?? 0;
+                                return nowMin >= sMin && nowMin < eMin;
+                              });
+
+                              return Positioned(
+                                left: pt.dx - 24,
+                                top: (pt.dy - 22).clamp(0.0, constraints.maxHeight - 36),
+                                width: 48,
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => _showTodayClassDetailModal(
+                                      cls,
+                                      clsSlots,
+                                      nowMin,
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _formatShortHours(mins),
+                                          maxLines: 1,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: hasActive
+                                                ? _brand
+                                                : AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Container(
+                                          width: hasActive ? 12 : 10,
+                                          height: hasActive ? 12 : 10,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: _brand,
+                                              width: hasActive ? 3 : 2.5,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: _brand.withOpacity(0.25),
+                                                blurRadius: 6,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
                           ],
                         );
                       },
@@ -2772,3 +2793,84 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     );
   }
 }
+
+class _TodayLineChartPainter extends CustomPainter {
+  final List<Offset> points;
+  final double baselineY;
+  final double leftEdge;
+  final double rightEdge;
+  final Color brandColor;
+
+  _TodayLineChartPainter({
+    required this.points,
+    required this.baselineY,
+    required this.leftEdge,
+    required this.rightEdge,
+    required this.brandColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+
+    final List<Offset> linePts;
+    if (points.length == 1) {
+      final p = points.first;
+      final spanHalf = ((rightEdge - leftEdge) * 0.28).clamp(28.0, 90.0);
+      final x1 = (p.dx - spanHalf).clamp(leftEdge, rightEdge);
+      final x2 = (p.dx + spanHalf).clamp(leftEdge, rightEdge);
+      linePts = [Offset(x1, p.dy), Offset(x2, p.dy)];
+    } else {
+      linePts = points;
+    }
+
+    final linePath = Path()..moveTo(linePts.first.dx, linePts.first.dy);
+    for (int i = 0; i < linePts.length - 1; i++) {
+      final p0 = linePts[i];
+      final p1 = linePts[i + 1];
+      final midX = (p0.dx + p1.dx) / 2;
+      linePath.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
+    }
+
+    final fillPath = Path.from(linePath)
+      ..lineTo(linePts.last.dx, baselineY)
+      ..lineTo(linePts.first.dx, baselineY)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          brandColor.withValues(alpha: 0.18),
+          brandColor.withValues(alpha: 0.01),
+        ],
+      ).createShader(Rect.fromLTRB(leftEdge, 0, rightEdge, baselineY));
+
+    canvas.drawPath(fillPath, fillPaint);
+
+    final strokePaint = Paint()
+      ..color = brandColor
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawPath(linePath, strokePaint);
+
+    // Subtle vertical guide lines from each class point down to baseline
+    final dashPaint = Paint()
+      ..color = brandColor.withValues(alpha: 0.16)
+      ..strokeWidth = 1.2;
+    for (final p in points) {
+      canvas.drawLine(p, Offset(p.dx, baselineY), dashPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TodayLineChartPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.baselineY != baselineY ||
+        oldDelegate.brandColor != brandColor;
+  }
+}
+

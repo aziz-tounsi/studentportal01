@@ -13,6 +13,7 @@ import 'core/theme/app_theme.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/services/notification_service.dart';
 import 'data/services/offline_cache_service.dart';
+import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/locale_provider.dart';
 import 'presentation/widgets/offline_indicator_banner.dart';
 
@@ -168,16 +169,29 @@ class StudentPortalApp extends ConsumerWidget {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         routerConfig: router,
         builder: (context, child) {
+          final authState = ref.watch(authProvider);
           final mediaQuery = MediaQuery.of(context);
           final clampedTextScaler = mediaQuery.textScaler.clamp(
             minScaleFactor: 0.85,
             maxScaleFactor: 1.10,
           );
+
+          Widget body = child ?? const SizedBox.shrink();
+          if (authState.isAuthenticated &&
+              (authState.schoolSuspended ||
+                  authState.user?.accountStatus == 'paused_unpaid')) {
+            body = _AccessLockedScreen(
+              isSchoolSuspended: authState.schoolSuspended,
+              onRefresh: () => ref.read(authProvider.notifier).refreshUserData(),
+              onSignOut: () => ref.read(authProvider.notifier).signOut(),
+            );
+          }
+
           return MediaQuery(
             data: mediaQuery.copyWith(textScaler: clampedTextScaler),
             child: Stack(
               children: [
-                child ?? const SizedBox.shrink(),
+                body,
                 const Positioned(
                   top: 0,
                   left: 0,
@@ -191,6 +205,115 @@ class StudentPortalApp extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _AccessLockedScreen extends StatelessWidget {
+  final bool isSchoolSuspended;
+  final VoidCallback onRefresh;
+  final VoidCallback onSignOut;
+
+  const _AccessLockedScreen({
+    required this.isSchoolSuspended,
+    required this.onRefresh,
+    required this.onSignOut,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.lock_person_rounded,
+                      size: 32,
+                      color: Color(0xFFDC2626),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    isSchoolSuspended
+                        ? 'Accès établissement suspendu'
+                        : 'Accès temporairement suspendu',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    isSchoolSuspended
+                        ? 'Les services de votre établissement sont temporairement suspendus. Veuillez contacter la direction de votre école.'
+                        : 'Votre accès aux notes, emplois du temps, absences et documents est mis en pause en raison de frais de scolarité impayés. Veuillez régulariser auprès de l\'administration.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton.icon(
+                      onPressed: onRefresh,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Vérifier mon accès'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6D4CF6),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: onSignOut,
+                    child: const Text(
+                      'Se déconnecter',
+                      style: TextStyle(color: Color(0xFF64748B)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

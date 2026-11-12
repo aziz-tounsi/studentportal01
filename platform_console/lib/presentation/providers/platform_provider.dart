@@ -338,6 +338,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
         fullName: directorName,
         role: 'owner',
         schoolId: schoolId,
+        forcePasswordChange: true,
       );
 
       if (userResult['success'] != true) {
@@ -353,12 +354,36 @@ class PlatformNotifier extends Notifier<PlatformState> {
   }
 
   Future<bool> toggleSchoolStatus(String schoolId, bool isActive) async {
+    return updateSchoolSubscriptionStatus(
+      schoolId,
+      isActive ? 'active' : 'suspended',
+    );
+  }
+
+  Future<bool> updateSchoolSubscriptionStatus(
+    String schoolId,
+    String subscriptionStatus,
+  ) async {
     try {
-      await _supabase.from('schools').update({'is_active': isActive}).eq('id', schoolId);
+      final isSuspended = subscriptionStatus == 'suspended';
+      await _supabase.from('schools').update({
+        'is_active': !isSuspended,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', schoolId);
+
+      await _supabase.from('school_subscriptions').update({
+        'status': subscriptionStatus,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('school_id', schoolId);
+
+      await _supabase.from('ai_school_quotas').update({
+        'kill_switch_enabled': isSuspended,
+      }).eq('school_id', schoolId);
+
       await loadAll();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Erreur: $e');
+      state = state.copyWith(errorMessage: 'Erreur statut abonnement: $e');
       return false;
     }
   }

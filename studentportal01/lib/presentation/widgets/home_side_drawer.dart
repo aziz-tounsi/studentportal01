@@ -9,9 +9,7 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/theme/arabic_typography.dart';
 import '../providers/auth_provider.dart';
 import '../providers/nav_bar_provider.dart';
-import '../providers/school_provider.dart';
 import 'bouncing_wrapper.dart';
-import 'school_logo_widget.dart';
 
 class HomeSideDrawer extends ConsumerWidget {
   const HomeSideDrawer({super.key});
@@ -19,7 +17,6 @@ class HomeSideDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
-    final school = ref.watch(schoolProvider).valueOrNull;
     final l10n = AppLocalizations.of(context);
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -148,54 +145,6 @@ class HomeSideDrawer extends ConsumerWidget {
                     child: Column(
                       children: [
                         const SizedBox(height: 24),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 22),
-                          child: Row(
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: SchoolLogoWidget(
-                                  logoUrl: school?.logoUrl,
-                                  size: 46,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  (school != null && school.name.isNotEmpty)
-                                      ? school.name
-                                      : 'Student Portal',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: ArabicTypography.headerStyle(
-                                    context,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF1F2937),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Divider(
-                          height: 1,
-                          indent: 22,
-                          endIndent: 22,
-                          color: Colors.black.withValues(alpha: 0.06),
-                        ),
-                        const SizedBox(height: 18),
                         _DrawerItem(
                           icon: Icons.person_rounded,
                           label: l10n.monProfil,

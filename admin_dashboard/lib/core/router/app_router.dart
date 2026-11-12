@@ -28,7 +28,6 @@ import '../../presentation/screens/settings/password_reset_requests_screen.dart'
 import '../../presentation/screens/structure/building_structure_screen.dart';
 import '../../presentation/screens/teachers/teacher_profile_screen.dart';
 import '../../presentation/screens/teachers/professors_screen.dart';
-import '../../presentation/screens/subscription/subscription_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -110,7 +109,6 @@ final router = GoRouter(
     GoRoute(path: '/results', pageBuilder: (_, _) => const NoTransitionPage(child: ResultsScreen())),
     GoRoute(path: '/suggestions', pageBuilder: (_, _) => const NoTransitionPage(child: SuggestionsScreen())),
     GoRoute(path: '/payments', pageBuilder: (_, _) => const NoTransitionPage(child: PaymentsScreen())),
-    GoRoute(path: '/subscription', pageBuilder: (_, _) => const NoTransitionPage(child: SubscriptionScreen())),
     GoRoute(path: '/documents', pageBuilder: (_, _) => const NoTransitionPage(child: DocumentsScreen())),
     GoRoute(
       path: '/structure',

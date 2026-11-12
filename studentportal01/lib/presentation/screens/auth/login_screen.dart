@@ -230,10 +230,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onTapOutside: (_) => FocusScope.of(ctx).unfocus(),
                       style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 16),
                       decoration: InputDecoration(
-                        hintText: 'exemple@email.com',
+                        hintText: 'Email ou matricule élève',
                         hintStyle: TextStyle(color: Colors.grey.shade400),
                         prefixIcon: const Icon(
-                          Icons.email_outlined,
+                          Icons.badge_outlined,
                           color: Color(0xFFFF2D78),
                         ),
                         filled: true,
