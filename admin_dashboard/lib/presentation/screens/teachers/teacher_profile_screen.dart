@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
-import '../../providers/users_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
@@ -28,7 +27,6 @@ class TeacherProfileScreen extends ConsumerStatefulWidget {
 class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   bool _loading = true;
   bool _showWeeklySchedule = false;
-  bool _isResettingPassword = false;
   Map<String, dynamic>? _user;
   List<Map<String, dynamic>> _assignments = [];
   List<Map<String, dynamic>> _classDetails = [];
@@ -389,12 +387,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                   _loadData();
                 },
               ),
-              _outlineButton(
-                icon: Icons.lock_reset_rounded,
-                label: 'Réinitialiser mot de passe',
-                onTap: _isResettingPassword ? null : _resetPassword,
-                isLoading: _isResettingPassword,
-              ),
               SizedBox(
                 height: 40,
                 child: ElevatedButton.icon(
@@ -448,7 +440,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     required IconData icon,
     required String label,
     VoidCallback? onTap,
-    bool isLoading = false,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -472,10 +463,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (isLoading)
-                  const IosLoader.small(color: AppColors.slate500)
-                else
-                  Icon(icon, size: 16, color: AppColors.slate500),
+                Icon(icon, size: 16, color: AppColors.slate500),
                 const SizedBox(width: 8),
                 Text(
                   label,
@@ -491,146 +479,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _resetPassword() async {
-    final fullName = _user?['full_name']?.toString() ?? 'cet enseignant';
-    final confirm = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.08),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: AlertDialog(
-          title: const Text('Réinitialiser le mot de passe'),
-          content: Text(
-            'Voulez-vous générer un nouveau mot de passe pour $fullName ?',
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          actions: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                SizedBox(
-                  height: 40,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF6B7280),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 40,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D4CF6),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      elevation: 2,
-                    ),
-                    child: const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm != true) return;
-    setState(() => _isResettingPassword = true);
-
-    try {
-      final newPassword = await ref
-          .read(usersProvider.notifier)
-          .resetUserPassword(widget.teacherId);
-
-      if (newPassword != null && mounted) {
-        showDialog(
-          context: context,
-          barrierColor: Colors.black.withOpacity(0.08),
-          builder: (ctx) => BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-            child: AlertDialog(
-              title: Row(
-                children: [
-                  Icon(Icons.check_circle, color: AppColors.success),
-                  const SizedBox(width: 12),
-                  const Text('Mot de passe réinitialisé'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Nouveau mot de passe pour $fullName :'),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.slate100,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SelectableText(
-                            newPassword,
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.copy, size: 18),
-                          onPressed: () {
-                            Clipboard.setData(ClipboardData(text: newPassword));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Mot de passe copié!'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6D4CF6),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Fermer'),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isResettingPassword = false);
-    }
   }
 
   // ══════════════════════════════════════════════════════════════

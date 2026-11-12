@@ -1868,68 +1868,70 @@ onTap: () => _showStudentPaymentsSheet(data),
                 ),
               ),
 
-              // Table Body Rows
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: pageActivities.length,
-                separatorBuilder: (context, index) =>
-                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                itemBuilder: (context, index) {
-                  final a = pageActivities[index];
-                  final action = a['action'] as String? ?? '';
-                  final type = a['type'] as String? ?? '';
-                  final detail = (a['details'] ?? a['detail']) as String? ?? '';
-                  final date = a['date'] as String? ?? '';
+              // Table Body Rows (short fixed max-height, scrollable inside)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 215),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: pageActivities.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  itemBuilder: (context, index) {
+                    final a = pageActivities[index];
+                    final action = a['action'] as String? ?? '';
+                    final type = a['type'] as String? ?? '';
+                    final detail = (a['details'] ?? a['detail']) as String? ?? '';
+                    final date = a['date'] as String? ?? '';
 
-                  return Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {},
-                      hoverColor: const Color(0xFFF9FAFB),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 14,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: _activityBadge(action, type),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 5,
-                              child: Text(
-                                detail,
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                _formatActivityDate(date),
-                                style: const TextStyle(
-                                  color: AppColors.textTertiary,
-                                  fontSize: 12,
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {},
+                        hoverColor: const Color(0xFFF9FAFB),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 11,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: _activityBadge(action, type),
                                 ),
                               ),
-                            ),
-                          ],
+                              Expanded(
+                                flex: 5,
+                                child: Text(
+                                  detail,
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  _formatActivityDate(date),
+                                  style: const TextStyle(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
 
               // Bottom Pagination Footer (Exact Users table footer)

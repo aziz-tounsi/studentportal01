@@ -2392,10 +2392,6 @@ class TeacherProfileSkeletonLoader extends StatelessWidget {
                           Icons.refresh_rounded,
                           'Actualiser',
                         ),
-                        _buildTeacherOutlineBtn(
-                          Icons.lock_reset_rounded,
-                          'Réinitialiser mot de passe',
-                        ),
                         SizedBox(
                           height: 40,
                           child: ElevatedButton.icon(
