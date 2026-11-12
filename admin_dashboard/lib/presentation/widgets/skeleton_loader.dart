@@ -3075,7 +3075,7 @@ class DocumentsSkeletonLoader extends StatelessWidget {
 /// Minimalist Instagram-style Skeleton Loader for Password Reset Requests Screen
 class PasswordResetsSkeletonLoader extends StatelessWidget {
   final int rowCount;
-  const PasswordResetsSkeletonLoader({super.key, this.rowCount = 6});
+  const PasswordResetsSkeletonLoader({super.key, this.rowCount = 7});
 
   @override
   Widget build(BuildContext context) {
@@ -3084,37 +3084,22 @@ class PasswordResetsSkeletonLoader extends StatelessWidget {
       child: ShimmerLoading(
         child: Column(
           children: [
-            // Subtabs skeleton
+            // Subtabs skeleton (matching DocumentsSkeletonLoader)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.only(left: 24, top: 12, bottom: 12),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
               ),
-              child: Row(
-                children: const [
-                  SkeletonBox(width: 110, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 110, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 100, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 80, height: 32, borderRadius: 8),
-                ],
-              ),
-            ),
-
-            // Controls & Filter row skeleton
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              color: Colors.white,
-              child: Row(
-                children: const [
-                  SkeletonBox(width: 180, height: 26, borderRadius: 13),
-                  Spacer(),
-                  SkeletonBox(width: 110, height: 16),
-                  SizedBox(width: 12),
-                  SkeletonBox(width: 32, height: 32, borderRadius: 8),
+              child: const Row(
+                children: [
+                  SkeletonBox(width: 106, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 112, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 96, height: 26, borderRadius: 6),
+                  SizedBox(width: 24),
+                  SkeletonBox(width: 82, height: 26, borderRadius: 6),
                 ],
               ),
             ),
@@ -3136,12 +3121,12 @@ class PasswordResetsSkeletonLoader extends StatelessWidget {
                         // Header row skeleton
                         Container(
                           height: 44,
-                          color: const Color(0xFFF8FAFC),
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          color: const Color(0xFFF9FAFB),
+                          padding: const EdgeInsets.fromLTRB(14, 0, 20, 0),
                           child: const Row(
                             children: [
-                              SkeletonBox(width: 18, height: 18, borderRadius: 4),
-                              SizedBox(width: 18),
+                              SkeletonBox(width: 16, height: 16, borderRadius: 3),
+                              SizedBox(width: 14),
                               SkeletonBox(width: 120, height: 12),
                               Spacer(flex: 3),
                               SkeletonBox(width: 110, height: 12),
@@ -3150,7 +3135,7 @@ class PasswordResetsSkeletonLoader extends StatelessWidget {
                               Spacer(flex: 2),
                               SkeletonBox(width: 70, height: 12),
                               Spacer(),
-                              SkeletonBox(width: 20, height: 12),
+                              SkeletonBox(width: 30, height: 12),
                             ],
                           ),
                         ),
@@ -3166,20 +3151,20 @@ class PasswordResetsSkeletonLoader extends StatelessWidget {
                             itemBuilder: (context, index) {
                               return Container(
                                 height: 64,
-                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                padding: const EdgeInsets.fromLTRB(14, 0, 20, 0),
                                 child: const Row(
                                   children: [
-                                    SkeletonBox(width: 18, height: 18, borderRadius: 4),
-                                    SizedBox(width: 18),
-                                    SkeletonCircle(size: 36),
+                                    SkeletonBox(width: 16, height: 16, borderRadius: 3),
                                     SizedBox(width: 14),
+                                    SkeletonCircle(size: 36),
+                                    SizedBox(width: 12),
                                     Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         SkeletonBox(width: 150, height: 13),
                                         SizedBox(height: 6),
-                                        SkeletonBox(width: 180, height: 11),
+                                        SkeletonBox(width: 180, height: 10),
                                       ],
                                     ),
                                     Spacer(flex: 3),
@@ -3187,7 +3172,7 @@ class PasswordResetsSkeletonLoader extends StatelessWidget {
                                     Spacer(flex: 2),
                                     SkeletonBox(width: 80, height: 12),
                                     Spacer(flex: 2),
-                                    SkeletonBox(width: 76, height: 24, borderRadius: 6),
+                                    SkeletonBox(width: 76, height: 22, borderRadius: 6),
                                     Spacer(),
                                     SkeletonBox(width: 24, height: 24, borderRadius: 6),
                                   ],
@@ -3197,20 +3182,18 @@ class PasswordResetsSkeletonLoader extends StatelessWidget {
                           ),
                         ),
 
-                        // Pagination footer skeleton
+                        // Pagination footer skeleton (Documents page style)
                         Container(
-                          height: 52,
+                          height: 50,
                           color: const Color(0xFFFAFAFB),
                           padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: const Row(
                             children: [
-                              SkeletonBox(width: 140, height: 13),
+                              SkeletonBox(width: 115, height: 24, borderRadius: 8),
                               Spacer(),
-                              SkeletonBox(width: 90, height: 13),
-                              SizedBox(width: 16),
-                              SkeletonBox(width: 28, height: 28, borderRadius: 6),
-                              SizedBox(width: 8),
-                              SkeletonBox(width: 28, height: 28, borderRadius: 6),
+                              SkeletonBox(width: 80, height: 12),
+                              SizedBox(width: 12),
+                              SkeletonBox(width: 58, height: 28, borderRadius: 6),
                             ],
                           ),
                         ),

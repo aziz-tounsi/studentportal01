@@ -68,12 +68,21 @@ class PasswordResetRequestsScreen extends ConsumerStatefulWidget {
 }
 
 class _PasswordResetRequestsScreenState
-    extends ConsumerState<PasswordResetRequestsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+    extends ConsumerState<PasswordResetRequestsScreen> {
+  int _selectedTabIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   Timer? _searchDebounce;
+
+  // Pagination state (matching DocumentsScreen)
+  int _currentPage = 1;
+  int _rowsPerPage = 10;
+
+  // Filter Drawer State
+  bool _showFilterDrawer = false;
+  String? _filterAccountLinked; // 'linked', 'unlinked'
+  DateTime? _filterDateFrom;
+  DateTime? _filterDateTo;
 
   // Multi-selection state
   final Set<String> _selectedIds = <String>{};
@@ -81,24 +90,31 @@ class _PasswordResetRequestsScreenState
   // Tabs: 0: En attente, 1: Approuvées, 2: Rejetées, 3: Toutes
   final List<String> _filterKeys = ['pending', 'approved', 'rejected', 'all'];
 
+  bool get _hasActiveFilters =>
+      _filterAccountLinked != null ||
+      _filterDateFrom != null ||
+      _filterDateTo != null;
+
+  void _resetFilters() {
+    setState(() {
+      _selectedTabIndex = 0;
+      _filterAccountLinked = null;
+      _filterDateFrom = null;
+      _filterDateTo = null;
+      _currentPage = 1;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {
-          _selectedIds.clear();
-        });
-      }
-    });
-
     _searchController.addListener(() {
       _searchDebounce?.cancel();
       _searchDebounce = Timer(const Duration(milliseconds: 250), () {
         if (mounted) {
           setState(() {
             _searchQuery = _searchController.text.trim().toLowerCase();
+            _currentPage = 1;
           });
         }
       });
@@ -113,7 +129,6 @@ class _PasswordResetRequestsScreenState
 
   @override
   void dispose() {
-    _tabController.dispose();
     _searchController.dispose();
     _searchDebounce?.cancel();
     super.dispose();
@@ -128,10 +143,49 @@ class _PasswordResetRequestsScreenState
       final status = (r['status'] as String? ?? 'pending').toLowerCase();
       final fullName = (r['full_name'] as String? ?? '').toLowerCase();
       final email = (r['email'] as String? ?? '').toLowerCase();
+      final userId = r['user_id'] as String?;
 
       // Tab status condition
       if (statusFilter != 'all' && status != statusFilter) {
         return false;
+      }
+
+      // Account linkage filter
+      if (_filterAccountLinked == 'linked' && userId == null) {
+        return false;
+      }
+      if (_filterAccountLinked == 'unlinked' && userId != null) {
+        return false;
+      }
+
+      // Date range filter (requested_at)
+      if (_filterDateFrom != null || _filterDateTo != null) {
+        DateTime? requestedAt;
+        try {
+          if (r['requested_at'] != null) {
+            requestedAt = DateTime.parse(r['requested_at']).toLocal();
+          }
+        } catch (_) {}
+        if (requestedAt == null) return false;
+        if (_filterDateFrom != null) {
+          final startOfDay = DateTime(
+            _filterDateFrom!.year,
+            _filterDateFrom!.month,
+            _filterDateFrom!.day,
+          );
+          if (requestedAt.isBefore(startOfDay)) return false;
+        }
+        if (_filterDateTo != null) {
+          final endOfDay = DateTime(
+            _filterDateTo!.year,
+            _filterDateTo!.month,
+            _filterDateTo!.day,
+            23,
+            59,
+            59,
+          );
+          if (requestedAt.isAfter(endOfDay)) return false;
+        }
       }
 
       // Search query condition
@@ -210,63 +264,83 @@ class _PasswordResetRequestsScreenState
   @override
   Widget build(BuildContext context) {
     final requestsAsync = ref.watch(passwordResetRequestsProvider);
+    final allRequests = requestsAsync.value ?? <Map<String, dynamic>>[];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: Row(
+      body: Stack(
         children: [
-          const AdminSidebar(currentRoute: '/password-resets'),
-          Expanded(
-            child: Column(
-              children: [
-                _buildHeader(requestsAsync),
-                _buildTabsBar(requestsAsync),
-                if (_selectedIds.isNotEmpty) _buildMultiActionBar(),
-                Expanded(
-                  child: requestsAsync.when(
-                    loading: () => const PasswordResetsSkeletonLoader(),
-                    error: (e, stack) => Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.error_outline_rounded,
-                            size: 48,
-                            color: AppColors.error,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            UserFriendlyError.format(
-                              e,
-                              fallback: 'Unable to load password reset requests right now. Please try again.',
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              ref.invalidate(passwordResetRequestsProvider);
-                              ref.invalidate(pendingPasswordResetCountProvider);
-                            },
-                            icon: const Icon(Icons.refresh_rounded, size: 16),
-                            label: const Text('Réessayer'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF6D4CF6),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+          Row(
+            children: [
+              const AdminSidebar(currentRoute: '/password-resets'),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildHeader(requestsAsync),
+                    _buildTabsBar(requestsAsync),
+                    Expanded(
+                      child: requestsAsync.when(
+                        loading: () => const PasswordResetsSkeletonLoader(),
+                        error: (e, stack) => Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.error_outline_rounded,
+                                size: 48,
+                                color: AppColors.error,
                               ),
-                            ),
+                              const SizedBox(height: 16),
+                              Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback:
+                                      'Unable to load password reset requests right now. Please try again.',
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  ref.invalidate(passwordResetRequestsProvider);
+                                  ref.invalidate(
+                                      pendingPasswordResetCountProvider);
+                                },
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Réessayer'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6D4CF6),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                        data: (requests) => _buildContent(requests),
                       ),
                     ),
-                    data: (requests) => _buildContent(requests),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+
+          // Floating Selection Bar Overlay (Bottom Center, matching DocumentsScreen)
+          if (_selectedIds.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildFloatingSelectionBar(allRequests),
+              ),
+            ),
+
+          // Right-side Filter Drawer Overlay
+          if (_showFilterDrawer) _buildRightFilterDrawer(),
         ],
       ),
     );
@@ -314,83 +388,89 @@ class _PasswordResetRequestsScreenState
           ),
           const Spacer(),
 
-          // Debounced Search Input (250px)
-          Container(
-            width: 250,
+          // Exact Documents page Search Bar (no blue Web focus highlight)
+          SizedBox(
+            width: 320,
             height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.search_rounded,
+            child: TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Rechercher...',
+                hintStyle: const TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 13,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
                   size: 18,
-                  color: Color(0xFF94A3B8),
+                  color: AppColors.textTertiary,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(fontSize: 13),
-                    decoration: const InputDecoration(
-                      hintText: 'Rechercher un utilisateur...',
-                      hintStyle: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF94A3B8),
+                suffixIcon: _searchController.text.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.slate50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Text(
+                            '⌘K',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textTertiary,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                            _currentPage = 1;
+                          });
+                        },
                       ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                filled: true,
+                fillColor: AppColors.slate50,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: const Color(0xFF655DD5).withOpacity(0.4),
+                    width: 1.5,
                   ),
                 ),
-                if (_searchController.text.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 16,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
 
-          // Export CSV Button
-          requestsAsync.maybeWhen(
-            data: (list) => _buildHeaderIconButton(
-              icon: Icons.download_rounded,
-              tooltip: 'Exporter CSV',
-              onPressed: () => _exportCsv(_filterRequests(list, _tabController.index)),
-            ),
-            orElse: () => const SizedBox.shrink(),
-          ),
-          const SizedBox(width: 8),
-
-          // Print Button
+          // Filter Button
           _buildHeaderIconButton(
-            icon: Icons.print_outlined,
-            tooltip: 'Imprimer',
-            onPressed: () => html.window.print(),
-          ),
-          const SizedBox(width: 8),
-
-          // Refresh Button
-          _buildHeaderIconButton(
-            icon: Icons.refresh_rounded,
-            tooltip: 'Actualiser',
+            icon: Icons.filter_list_rounded,
+            tooltip: 'Filtres',
+            isActive: _showFilterDrawer || _hasActiveFilters,
             onPressed: () {
-              ref.invalidate(passwordResetRequestsProvider);
-              ref.invalidate(pendingPasswordResetCountProvider);
+              setState(() => _showFilterDrawer = !_showFilterDrawer);
             },
           ),
           const SizedBox(width: 16),
@@ -453,7 +533,7 @@ class _PasswordResetRequestsScreenState
   }
 
   // ─────────────────────────────────────────────────────────────
-  // SUBPAGE TABS
+  // SUBPAGE TABS (EXACT CLONE OF DOCUMENTS PAGE)
   // ─────────────────────────────────────────────────────────────
   Widget _buildTabsBar(AsyncValue<List<Map<String, dynamic>>> requestsAsync) {
     final list = requestsAsync.value ?? [];
@@ -462,56 +542,117 @@ class _PasswordResetRequestsScreenState
     final rejectedCount = list.where((r) => r['status'] == 'rejected').length;
     final allCount = list.length;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+    final tabs = [
+      (
+        icon: Icons.hourglass_empty_rounded,
+        label: 'En attente',
+        count: pendingCount,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: TabBar(
-        controller: _tabController,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        dividerColor: Colors.transparent,
-        indicatorColor: const Color(0xFF6D4CF6),
-        indicatorWeight: 2.5,
-        labelColor: const Color(0xFF6D4CF6),
-        unselectedLabelColor: const Color(0xFF64748B),
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-        tabs: [
-          _buildTab('En attente', Icons.hourglass_empty_rounded, pendingCount, const Color(0xFFFEF3C7), const Color(0xFFD97706)),
-          _buildTab('Approuvées', Icons.check_circle_outline_rounded, approvedCount, const Color(0xFFECFDF5), const Color(0xFF059669)),
-          _buildTab('Rejetées', Icons.cancel_outlined, rejectedCount, const Color(0xFFFEE2E2), const Color(0xFFDC2626)),
-          _buildTab('Toutes', Icons.format_list_bulleted_rounded, allCount, const Color(0xFFF1F5F9), const Color(0xFF64748B)),
-        ],
+      (
+        icon: Icons.check_circle_outline_rounded,
+        label: 'Approuvées',
+        count: approvedCount,
+      ),
+      (
+        icon: Icons.cancel_outlined,
+        label: 'Rejetées',
+        count: rejectedCount,
+      ),
+      (
+        icon: Icons.format_list_bulleted_rounded,
+        label: 'Toutes',
+        count: allCount,
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border.withOpacity(0.5)),
+        ),
+      ),
+      padding: const EdgeInsets.only(left: 24, top: 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(tabs.length, (index) {
+            final t = tabs[index];
+            return Padding(
+              padding: const EdgeInsets.only(right: 24),
+              child: _buildTab(
+                icon: t.icon,
+                label: t.label,
+                count: t.count,
+                isActive: _selectedTabIndex == index,
+                onTap: () {
+                  setState(() {
+                    _selectedTabIndex = index;
+                    _selectedIds.clear();
+                    _currentPage = 1;
+                  });
+                },
+                activeColor: const Color(0xFF655DD5),
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
 
-  Tab _buildTab(String label, IconData icon, int count, Color badgeBg, Color badgeFg) {
-    return Tab(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+  Widget _buildTab({
+    required IconData icon,
+    required String label,
+    required int count,
+    required bool isActive,
+    required VoidCallback onTap,
+    required Color activeColor,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.only(bottom: 12, top: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? activeColor : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16),
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? activeColor : AppColors.textTertiary,
+            ),
             const SizedBox(width: 8),
-            Text(label),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                color: isActive ? activeColor : AppColors.textTertiary,
+              ),
+            ),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: badgeBg,
-                borderRadius: BorderRadius.circular(10),
+                color: AppColors.slate100,
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 '$count',
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: badgeFg,
+                  fontWeight: FontWeight.w700,
+                  color: isActive
+                      ? AppColors.textSecondary
+                      : AppColors.textTertiary,
                 ),
               ),
             ),
@@ -522,98 +663,135 @@ class _PasswordResetRequestsScreenState
   }
 
   // ─────────────────────────────────────────────────────────────
-  // MULTI-ACTION BAR
+  // FLOATING SELECTION BAR (EXACT CLONE OF DOCUMENTS PAGE)
   // ─────────────────────────────────────────────────────────────
-  Widget _buildMultiActionBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF6D4CF6).withOpacity(0.08),
-        border: const Border(
-          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+  Widget _buildFloatingSelectionBar(List<Map<String, dynamic>> allRequests) {
+    final count = _selectedIds.length;
+    final selectedRequests =
+        allRequests.where((r) => _selectedIds.contains(r['id'])).toList();
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: Colors.white.withOpacity(0.15)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    count > 1 ? 'Sélectionnés' : 'Sélectionné',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Actions
+            _buildSelectionAction(
+              Icons.ios_share_rounded,
+              'Exporter',
+              Colors.white70,
+              () => _exportCsv(selectedRequests),
+            ),
+            _buildSelectionAction(
+              Icons.check_circle_outline_rounded,
+              'Approuver',
+              const Color(0xFF6EE7B7),
+              _confirmBatchApprove,
+            ),
+            _buildSelectionAction(
+              Icons.highlight_off_rounded,
+              'Rejeter',
+              const Color(0xFFFCD34D),
+              _confirmBatchReject,
+            ),
+            _buildSelectionAction(
+              Icons.delete_outline,
+              'Supprimer',
+              const Color(0xFFFCA5A5),
+              _confirmBatchDelete,
+            ),
+            // Close button
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: Colors.white.withOpacity(0.15)),
+                ),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: () => setState(() => _selectedIds.clear()),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
         ),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6D4CF6),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '${_selectedIds.length} sélectionné${_selectedIds.length > 1 ? 's' : ''}',
-              style: const TextStyle(
-                color: Colors.white,
+    );
+  }
+
+  Widget _buildSelectionAction(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
+                color: color,
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          TextButton.icon(
-            onPressed: () {
-              setState(() => _selectedIds.clear());
-            },
-            icon: const Icon(Icons.close_rounded, size: 16),
-            label: const Text('Désélectionner'),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF64748B),
-              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-          const Spacer(),
-
-          // Batch Approve
-          ElevatedButton.icon(
-            onPressed: _confirmBatchApprove,
-            icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-            label: const Text('Approuver la sélection'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF059669),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Batch Reject
-          ElevatedButton.icon(
-            onPressed: _confirmBatchReject,
-            icon: const Icon(Icons.highlight_off_rounded, size: 16),
-            label: const Text('Rejeter la sélection'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD97706),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Batch Delete
-          ElevatedButton.icon(
-            onPressed: _confirmBatchDelete,
-            icon: const Icon(Icons.delete_outline_rounded, size: 16),
-            label: const Text('Supprimer'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -622,90 +800,72 @@ class _PasswordResetRequestsScreenState
   // CONTENT & DATA TABLE
   // ─────────────────────────────────────────────────────────────
   Widget _buildContent(List<Map<String, dynamic>> requests) {
-    final currentTabFiltered = _filterRequests(requests, _tabController.index);
-    final pendingCount = requests.where((r) => r['status'] == 'pending').length;
+    final currentTabFiltered = _filterRequests(requests, _selectedTabIndex);
+
+    // Pagination slice supporting _rowsPerPage == -1 ("All")
+    final totalFiltered = currentTabFiltered.length;
+    final totalPages =
+        _rowsPerPage == -1 ? 1 : (totalFiltered / _rowsPerPage).ceil();
+    if (_currentPage > totalPages && totalPages > 0) {
+      _currentPage = totalPages;
+    }
+    final startIndex =
+        _rowsPerPage == -1 ? 0 : (_currentPage - 1) * _rowsPerPage;
+    final endIndex = _rowsPerPage == -1
+        ? totalFiltered
+        : (startIndex + _rowsPerPage).clamp(0, totalFiltered);
+    final paginatedRequests = (startIndex < totalFiltered)
+        ? currentTabFiltered.sublist(startIndex, endIndex)
+        : <Map<String, dynamic>>[];
 
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Quick Status Pill & Controls Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Row(
-              children: [
-                if (pendingCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          size: 14,
-                          color: Color(0xFFD97706),
+          // Active Filter Chips Bar (matching DocumentsScreen)
+          if (_hasActiveFilters)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    if (_filterAccountLinked != null)
+                      _buildActiveFilterChip(
+                        label: _filterAccountLinked == 'linked'
+                            ? 'Compte : Lié'
+                            : 'Compte : Non lié',
+                        onRemove: () => setState(() {
+                          _filterAccountLinked = null;
+                          _currentPage = 1;
+                        }),
+                      ),
+                    if (_filterDateFrom != null || _filterDateTo != null)
+                      _buildActiveFilterChip(
+                        label:
+                            'Date : ${_filterDateFrom != null ? DateFormat('dd/MM/yyyy').format(_filterDateFrom!) : '...'} → ${_filterDateTo != null ? DateFormat('dd/MM/yyyy').format(_filterDateTo!) : '...'}',
+                        onRemove: () => setState(() {
+                          _filterDateFrom = null;
+                          _filterDateTo = null;
+                          _currentPage = 1;
+                        }),
+                      ),
+                    TextButton(
+                      onPressed: _resetFilters,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textTertiary,
+                        textStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$pendingCount demande${pendingCount > 1 ? 's' : ''} en attente de traitement',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFFD97706),
-                          ),
-                        ),
-                      ],
+                      ),
+                      child: const Text('Effacer tout'),
                     ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 14,
-                          color: Color(0xFF059669),
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Toutes les demandes sont traitées',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF059669),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const Spacer(),
-                Text(
-                  'Affichage de ${currentTabFiltered.length} demande${currentTabFiltered.length > 1 ? 's' : ''}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
 
           // Main Table Card
           Expanded(
@@ -713,7 +873,7 @@ class _PasswordResetRequestsScreenState
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: AppColors.border.withOpacity(0.5)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.02),
@@ -724,31 +884,569 @@ class _PasswordResetRequestsScreenState
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: currentTabFiltered.isEmpty
-                    ? _buildEmptyState()
-                    : Column(
-                        children: [
-                          _buildTableHeader(currentTabFiltered),
-                          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: currentTabFiltered.length,
+                child: Column(
+                  children: [
+                    _buildTableHeader(paginatedRequests),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    Expanded(
+                      child: paginatedRequests.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.separated(
+                              itemCount: paginatedRequests.length,
                               separatorBuilder: (context, index) =>
-                                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                  const Divider(
+                                      height: 1, color: Color(0xFFF1F5F9)),
                               itemBuilder: (context, index) {
-                                final req = currentTabFiltered[index];
+                                final req = paginatedRequests[index];
                                 final reqId = req['id'] as String;
                                 final isSelected = _selectedIds.contains(reqId);
                                 return _buildTableRow(req, isSelected);
                               },
                             ),
-                          ),
-                        ],
-                      ),
+                    ),
+                    _buildPaginationFooter(totalFiltered),
+                  ],
+                ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterChip({
+    required String label,
+    required VoidCallback onRemove,
+  }) {
+    const chipColor = Color(0xFF655DD5);
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: chipColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: chipColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: chipColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: onRemove,
+            child: const Icon(Icons.close, size: 14, color: chipColor),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationFooter(int totalItems) {
+    final totalPages =
+        _rowsPerPage == -1 ? 1 : (totalItems / _rowsPerPage).ceil();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(
+          top: BorderSide(color: AppColors.border.withOpacity(0.3)),
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Items per page
+          const Text(
+            'Afficher par ',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _rowsPerPage,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 14,
+                  color: AppColors.textTertiary,
+                ),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+                items: const [10, 20, 50, -1]
+                    .map(
+                      (v) => DropdownMenuItem(
+                        value: v,
+                        child: Text(
+                          v == -1 ? 'All' : '$v',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() {
+                      _rowsPerPage = v;
+                      _currentPage = 1;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+          const Spacer(),
+          // Page info
+          Text(
+            'Page $_currentPage sur ${totalPages == 0 ? 1 : totalPages}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          const SizedBox(width: 12),
+          // Prev/Next
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: _currentPage > 1
+                      ? () => setState(() => _currentPage--)
+                      : null,
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(5),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.chevron_left,
+                      size: 18,
+                      color: _currentPage > 1
+                          ? AppColors.textSecondary
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: AppColors.border),
+                InkWell(
+                  onTap: _currentPage < totalPages
+                      ? () => setState(() => _currentPage++)
+                      : null,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(5),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: _currentPage < totalPages
+                          ? AppColors.textSecondary
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // RIGHT FILTER DRAWER (EXACT CLONE OF DOCUMENTS PAGE)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildRightFilterDrawer() {
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          // Blurred Backdrop
+          GestureDetector(
+            onTap: () => setState(() => _showFilterDrawer = false),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.black.withOpacity(0.2)),
+            ),
+          ),
+
+          // Slide-over Drawer Panel
+          Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              width: 380,
+              height: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    blurRadius: 24,
+                    offset: Offset(-4, 0),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 18,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: AppColors.border.withOpacity(0.5),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text(
+                          'Filtres',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () =>
+                              setState(() => _showFilterDrawer = false),
+                          color: AppColors.textTertiary,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Filter Fields
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Statut (synced with subtabs)
+                          _buildFilterLabel('STATUT'),
+                          const SizedBox(height: 8),
+                          _buildFilterDropdown<int>(
+                            value: _selectedTabIndex,
+                            hint: 'Tous les statuts',
+                            items: const [
+                              DropdownMenuItem(
+                                value: 3,
+                                child: Text('Tous les statuts'),
+                              ),
+                              DropdownMenuItem(
+                                value: 0,
+                                child: Text('En attente'),
+                              ),
+                              DropdownMenuItem(
+                                value: 1,
+                                child: Text('Approuvées'),
+                              ),
+                              DropdownMenuItem(
+                                value: 2,
+                                child: Text('Rejetées'),
+                              ),
+                            ],
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() {
+                                  _selectedTabIndex = v;
+                                  _selectedIds.clear();
+                                  _currentPage = 1;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Liaison compte
+                          _buildFilterLabel('COMPTE UTILISATEUR'),
+                          const SizedBox(height: 8),
+                          _buildFilterDropdown<String?>(
+                            value: _filterAccountLinked,
+                            hint: 'Tous les comptes',
+                            items: const [
+                              DropdownMenuItem(
+                                value: null,
+                                child: Text('Tous les comptes'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'linked',
+                                child: Text('Compte lié'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'unlinked',
+                                child: Text('Non lié'),
+                              ),
+                            ],
+                            onChanged: (v) => setState(() {
+                              _filterAccountLinked = v;
+                              _currentPage = 1;
+                            }),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Période (Date de demande)
+                          _buildFilterLabel('PÉRIODE (DATE)'),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDatePickerField(
+                                  value: _filterDateFrom,
+                                  hint: 'Du',
+                                  onTap: () async {
+                                    final date = await showDatePicker(
+                                      context: context,
+                                      initialDate:
+                                          _filterDateFrom ?? DateTime.now(),
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime.now(),
+                                    );
+                                    if (date != null) {
+                                      setState(() {
+                                        _filterDateFrom = date;
+                                        _currentPage = 1;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildDatePickerField(
+                                  value: _filterDateTo,
+                                  hint: 'Au',
+                                  onTap: () async {
+                                    final date = await showDatePicker(
+                                      context: context,
+                                      initialDate:
+                                          _filterDateTo ?? DateTime.now(),
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime.now(),
+                                    );
+                                    if (date != null) {
+                                      setState(() {
+                                        _filterDateTo = date;
+                                        _currentPage = 1;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Bottom Buttons Container
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 20,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFAFAFB),
+                      border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: _resetFilters,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF374151),
+                                backgroundColor: Colors.white,
+                                side:
+                                    const BorderSide(color: Color(0xFFD1D5DB)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text(
+                                'Réinitialiser',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6D4CF6),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      const Color(0xFF6D4CF6).withOpacity(0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() => _showFilterDrawer = false);
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: const Center(
+                                  child: Text(
+                                    'Appliquer',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textTertiary,
+        letterSpacing: 1.0,
+      ),
+    );
+  }
+
+  Widget _buildFilterDropdown<T>({
+    required T value,
+    required String hint,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.slate50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: Text(
+            hint,
+            style: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+          ),
+          isExpanded: true,
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          items: items,
+          onChanged: onChanged,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          borderRadius: BorderRadius.circular(8),
+          dropdownColor: Colors.white,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 20,
+            color: AppColors.textTertiary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatePickerField({
+    DateTime? value,
+    required String hint,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: AppColors.slate50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value != null ? DateFormat('dd/MM/yyyy').format(value) : hint,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: value != null
+                      ? AppColors.textPrimary
+                      : AppColors.textTertiary,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.calendar_today_outlined,
+              size: 16,
+              color: AppColors.textTertiary,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -797,37 +1495,47 @@ class _PasswordResetRequestsScreenState
   }
 
   Widget _buildTableHeader(List<Map<String, dynamic>> items) {
-    final allSelected = items.isNotEmpty && items.every((r) => _selectedIds.contains(r['id']));
+    final allSelected =
+        items.isNotEmpty && items.every((r) => _selectedIds.contains(r['id']));
 
     return Container(
       height: 44,
-      color: const Color(0xFFF8FAFC),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      color: const Color(0xFFF9FAFB),
+      padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
       child: Row(
         children: [
-          // Master Checkbox
+          // Master Checkbox (EXACT CLONE OF DOCUMENTS/USER PAGE)
           SizedBox(
-            width: 32,
-            child: Checkbox(
-              value: allSelected,
-              activeColor: const Color(0xFF6D4CF6),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+            width: 44,
+            child: Center(
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: Checkbox(
+                  value: allSelected && items.isNotEmpty,
+                  tristate: false,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  side: const BorderSide(color: AppColors.slate300, width: 1.5),
+                  activeColor: const Color(0xFF655DD5),
+                  onChanged: (val) {
+                    setState(() {
+                      if (allSelected) {
+                        for (final r in items) {
+                          _selectedIds.remove(r['id']);
+                        }
+                      } else {
+                        _selectedIds
+                            .addAll(items.map((r) => r['id'] as String));
+                      }
+                    });
+                  },
+                ),
               ),
-              onChanged: (val) {
-                setState(() {
-                  if (val == true) {
-                    _selectedIds.addAll(items.map((r) => r['id'] as String));
-                  } else {
-                    for (final r in items) {
-                      _selectedIds.remove(r['id']);
-                    }
-                  }
-                });
-              },
             ),
           ),
-          const SizedBox(width: 12),
 
           // Utilisateur Header
           const Expanded(
@@ -937,31 +1645,40 @@ class _PasswordResetRequestsScreenState
       hoverColor: const Color(0xFFF8FAFC),
       child: Container(
         height: 64,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        color: isSelected ? const Color(0xFF6D4CF6).withOpacity(0.04) : Colors.transparent,
+        padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
+        color: isSelected
+            ? const Color(0xFF655DD5).withOpacity(0.04)
+            : Colors.transparent,
         child: Row(
           children: [
             // Checkbox
             SizedBox(
-              width: 32,
-              child: Checkbox(
-                value: isSelected,
-                activeColor: const Color(0xFF6D4CF6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+              width: 44,
+              child: Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: Checkbox(
+                    value: isSelected,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    side: const BorderSide(color: AppColors.slate300, width: 1.5),
+                    activeColor: const Color(0xFF655DD5),
+                    onChanged: (val) {
+                      setState(() {
+                        if (val == true) {
+                          _selectedIds.add(requestId);
+                        } else {
+                          _selectedIds.remove(requestId);
+                        }
+                      });
+                    },
+                  ),
                 ),
-                onChanged: (val) {
-                  setState(() {
-                    if (val == true) {
-                      _selectedIds.add(requestId);
-                    } else {
-                      _selectedIds.remove(requestId);
-                    }
-                  });
-                },
               ),
             ),
-            const SizedBox(width: 12),
 
             // Utilisateur
             Expanded(

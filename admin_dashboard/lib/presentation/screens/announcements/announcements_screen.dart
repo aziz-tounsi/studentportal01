@@ -6491,7 +6491,9 @@ class _AnnouncementComposerDialogState
               ],
             ),
           ),
-        );
+        ),
+            ],
+          );
       },
     );
   }
