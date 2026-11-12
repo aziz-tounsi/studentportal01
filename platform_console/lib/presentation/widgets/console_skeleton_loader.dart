@@ -1,0 +1,379 @@
+import 'package:flutter/material.dart';
+
+/// Animated shimmer wrapper matching Admin Dashboard SkeletonLoader
+class ConsoleShimmerLoading extends StatefulWidget {
+  final Widget child;
+  final bool isLoading;
+
+  const ConsoleShimmerLoading({
+    super.key,
+    required this.child,
+    this.isLoading = true,
+  });
+
+  @override
+  State<ConsoleShimmerLoading> createState() => _ConsoleShimmerLoadingState();
+}
+
+class _ConsoleShimmerLoadingState extends State<ConsoleShimmerLoading>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.4, end: 0.85).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isLoading) return widget.child;
+
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) => Opacity(
+        opacity: _animation.value,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class ConsoleSkeletonBox extends StatelessWidget {
+  final double? width;
+  final double? height;
+  final double borderRadius;
+  final BoxShape shape;
+  final Color? color;
+
+  const ConsoleSkeletonBox({
+    super.key,
+    this.width,
+    this.height,
+    this.borderRadius = 8,
+    this.shape = BoxShape.rectangle,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: color ?? const Color(0xFFE2E8F0),
+        shape: shape,
+        borderRadius:
+            shape == BoxShape.circle ? null : BorderRadius.circular(borderRadius),
+      ),
+    );
+  }
+}
+
+Widget _skeletonCard({required Widget child}) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE2E8F0)),
+    ),
+    child: child,
+  );
+}
+
+Widget _skeletonKpiRow(int count) {
+  return Row(
+    children: List.generate(count, (i) {
+      return Expanded(
+        child: Padding(
+          padding: EdgeInsets.only(right: i < count - 1 ? 16 : 0),
+          child: _skeletonCard(
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    ConsoleSkeletonBox(width: 38, height: 38, borderRadius: 10),
+                    Spacer(),
+                    ConsoleSkeletonBox(width: 56, height: 22, borderRadius: 11),
+                  ],
+                ),
+                SizedBox(height: 16),
+                ConsoleSkeletonBox(width: 96, height: 26, borderRadius: 6),
+                SizedBox(height: 8),
+                ConsoleSkeletonBox(width: 130, height: 12, borderRadius: 4),
+              ],
+            ),
+          ),
+        ),
+      );
+    }),
+  );
+}
+
+Widget _skeletonTable({int rows = 6, int cols = 5}) {
+  return _skeletonCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            ConsoleSkeletonBox(width: 200, height: 18, borderRadius: 6),
+            Spacer(),
+            ConsoleSkeletonBox(width: 120, height: 34, borderRadius: 8),
+          ],
+        ),
+        const SizedBox(height: 18),
+        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+        const SizedBox(height: 14),
+        ...List.generate(rows, (r) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Row(
+              children: List.generate(cols, (c) {
+                return Expanded(
+                  flex: c == 0 ? 2 : 1,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: c < cols - 1 ? 16 : 0),
+                    child: Row(
+                      children: [
+                        if (c == 0) ...[
+                          const ConsoleSkeletonBox(
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: ConsoleSkeletonBox(
+                            height: c == cols - 1 ? 26 : 14,
+                            borderRadius: c == cols - 1 ? 13 : 5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          );
+        }),
+      ],
+    ),
+  );
+}
+
+// 1. Overview Page Skeleton
+class ConsoleOverviewSkeleton extends StatelessWidget {
+  const ConsoleOverviewSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _skeletonKpiRow(4),
+            const SizedBox(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: _skeletonTable(rows: 5, cols: 4),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: _skeletonCard(
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ConsoleSkeletonBox(width: 160, height: 18, borderRadius: 6),
+                        SizedBox(height: 16),
+                        ConsoleSkeletonBox(height: 64, borderRadius: 12),
+                        SizedBox(height: 12),
+                        ConsoleSkeletonBox(height: 64, borderRadius: 12),
+                        SizedBox(height: 12),
+                        ConsoleSkeletonBox(height: 64, borderRadius: 12),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 2. Schools Page Skeleton
+class ConsoleSchoolsSkeleton extends StatelessWidget {
+  const ConsoleSchoolsSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          children: [
+            _skeletonKpiRow(3),
+            const SizedBox(height: 22),
+            _skeletonTable(rows: 7, cols: 6),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 3. Billing Page Skeleton
+class ConsoleBillingSkeleton extends StatelessWidget {
+  const ConsoleBillingSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          children: [
+            _skeletonCard(
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ConsoleSkeletonBox(width: 250, height: 18, borderRadius: 6),
+                  SizedBox(height: 16),
+                  ConsoleSkeletonBox(height: 68, borderRadius: 12),
+                  SizedBox(height: 12),
+                  ConsoleSkeletonBox(height: 68, borderRadius: 12),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            _skeletonTable(rows: 6, cols: 5),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 4. AI Telemetry Page Skeleton
+class ConsoleAiTelemetrySkeleton extends StatelessWidget {
+  const ConsoleAiTelemetrySkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          children: [
+            _skeletonCard(
+              child: const Row(
+                children: [
+                  ConsoleSkeletonBox(width: 44, height: 44, borderRadius: 12),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ConsoleSkeletonBox(width: 280, height: 16, borderRadius: 6),
+                        SizedBox(height: 8),
+                        ConsoleSkeletonBox(width: 360, height: 12, borderRadius: 4),
+                      ],
+                    ),
+                  ),
+                  ConsoleSkeletonBox(width: 52, height: 28, borderRadius: 14),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            _skeletonTable(rows: 7, cols: 6),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 5. Audit Logs Page Skeleton
+class ConsoleAuditSkeleton extends StatelessWidget {
+  const ConsoleAuditSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: _skeletonTable(rows: 9, cols: 5),
+      ),
+    );
+  }
+}
+
+// 6. Bug Reports Page Skeleton
+class ConsoleBugReportsSkeleton extends StatelessWidget {
+  const ConsoleBugReportsSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          children: [
+            _skeletonKpiRow(4),
+            const SizedBox(height: 22),
+            ...List.generate(3, (_) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _skeletonCard(
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          ConsoleSkeletonBox(width: 72, height: 22, borderRadius: 6),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: ConsoleSkeletonBox(height: 16, borderRadius: 6),
+                          ),
+                          SizedBox(width: 16),
+                          ConsoleSkeletonBox(width: 96, height: 26, borderRadius: 13),
+                        ],
+                      ),
+                      SizedBox(height: 12),
+                      ConsoleSkeletonBox(height: 54, borderRadius: 10),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}

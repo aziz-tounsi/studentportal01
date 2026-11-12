@@ -37,7 +37,7 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
 
   @override
   ConsoleAuthState build() {
-    _init();
+    Future.microtask(_init);
     return ConsoleAuthState();
   }
 

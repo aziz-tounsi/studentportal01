@@ -27,11 +27,45 @@ final _router = GoRouter(
     ),
     GoRoute(
       path: '/',
-      pageBuilder: (_, _) => const NoTransitionPage(child: ConsoleDashboardScreen()),
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/dashboard'),
+      ),
     ),
     GoRoute(
       path: '/dashboard',
-      pageBuilder: (_, _) => const NoTransitionPage(child: ConsoleDashboardScreen()),
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/dashboard'),
+      ),
+    ),
+    GoRoute(
+      path: '/schools',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/schools'),
+      ),
+    ),
+    GoRoute(
+      path: '/billing',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/billing'),
+      ),
+    ),
+    GoRoute(
+      path: '/ai-telemetry',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/ai-telemetry'),
+      ),
+    ),
+    GoRoute(
+      path: '/audit',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/audit'),
+      ),
+    ),
+    GoRoute(
+      path: '/bugs',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/bugs'),
+      ),
     ),
   ],
 );
@@ -42,9 +76,9 @@ class PlatformConsoleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Pythagore Platform Console',
+      title: 'PythaOne SaaS Console',
       debugShowCheckedModeBanner: false,
-      theme: ConsoleTheme.darkTheme,
+      theme: ConsoleTheme.lightTheme,
       routerConfig: _router,
     );
   }

@@ -67,7 +67,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
 
   @override
   PlatformState build() {
-    loadAll();
+    Future.microtask(() => loadAll());
     return PlatformState(isLoading: true);
   }
 
@@ -75,51 +75,87 @@ class PlatformNotifier extends Notifier<PlatformState> {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       // 1. Settings
-      final settings = await _supabase.from('platform_settings').select().eq('id', 1).maybeSingle();
+      Map<String, dynamic>? settings;
+      try {
+        settings = await _supabase
+            .from('platform_settings')
+            .select()
+            .eq('id', 1)
+            .maybeSingle();
+      } catch (_) {}
 
       // 2. Plans
-      final plansResp = await _supabase.from('subscription_plans').select().order('price_tnd_monthly');
-      final plans = List<Map<String, dynamic>>.from(plansResp);
+      List<Map<String, dynamic>> plans = [];
+      try {
+        final plansResp = await _supabase
+            .from('subscription_plans')
+            .select()
+            .order('price_tnd_monthly');
+        plans = List<Map<String, dynamic>>.from(plansResp);
+      } catch (_) {}
 
       // 3. Schools
-      final schoolsResp = await _supabase.from('schools').select('''
-        id, name, code, logo_url, email, phone, address, primary_color, secondary_color, is_active, created_at,
-        school_subscriptions (
-          id, status, billing_cycle, current_period_start, current_period_end,
-          plan:subscription_plans(id, code, name, price_tnd_monthly, price_tnd_yearly)
-        ),
-        ai_school_quotas (
-          monthly_budget_usd, spent_current_month_usd, tokens_current_month, is_quota_exceeded, kill_switch_enabled
-        )
-      ''').order('created_at', ascending: false);
-      final schools = List<Map<String, dynamic>>.from(schoolsResp);
+      List<Map<String, dynamic>> schools = [];
+      try {
+        final schoolsResp = await _supabase.from('schools').select('''
+          id, name, code, logo_url, email, phone, address, primary_color, secondary_color, is_active, created_at,
+          school_subscriptions (
+            id, status, billing_cycle, current_period_start, current_period_end,
+            plan:subscription_plans(id, code, name, price_tnd_monthly, price_tnd_yearly)
+          ),
+          ai_school_quotas (
+            monthly_budget_usd, spent_current_month_usd, tokens_current_month, is_quota_exceeded, kill_switch_enabled
+          )
+        ''').order('created_at', ascending: false);
+        schools = List<Map<String, dynamic>>.from(schoolsResp);
+      } catch (_) {
+        try {
+          final fallbackSchools = await _supabase
+              .from('schools')
+              .select('id, name, code, logo_url, email, phone, address, is_active, created_at')
+              .order('created_at', ascending: false);
+          schools = List<Map<String, dynamic>>.from(fallbackSchools);
+        } catch (_) {}
+      }
 
       // 4. Invoices & Payments
-      final invoicesResp = await _supabase.from('invoices').select('''
-        id, invoice_number, school_id, amount, currency, status, issue_date, due_date, notes,
-        school:schools(id, name, code)
-      ''').order('issue_date', ascending: false);
-      final invoices = List<Map<String, dynamic>>.from(invoicesResp);
+      List<Map<String, dynamic>> invoices = [];
+      try {
+        final invoicesResp = await _supabase.from('invoices').select('''
+          id, invoice_number, school_id, amount, currency, status, issue_date, due_date, notes,
+          school:schools(id, name, code)
+        ''').order('issue_date', ascending: false);
+        invoices = List<Map<String, dynamic>>.from(invoicesResp);
+      } catch (_) {}
 
-      final paymentsResp = await _supabase.from('invoice_payments').select('''
-        id, invoice_id, amount, payment_method, transaction_ref, is_verified, receipt_url, notes, created_at,
-        invoice:invoices(id, invoice_number, amount, school:schools(id, name, code))
-      ''').eq('is_verified', false).order('created_at', ascending: false);
-      final pendingPayments = List<Map<String, dynamic>>.from(paymentsResp);
+      List<Map<String, dynamic>> pendingPayments = [];
+      try {
+        final paymentsResp = await _supabase.from('invoice_payments').select('''
+          id, invoice_id, amount, payment_method, transaction_ref, is_verified, receipt_url, notes, created_at,
+          invoice:invoices(id, invoice_number, amount, school:schools(id, name, code))
+        ''').eq('is_verified', false).order('created_at', ascending: false);
+        pendingPayments = List<Map<String, dynamic>>.from(paymentsResp);
+      } catch (_) {}
 
       // 5. AI Telemetry Logs
-      final aiLogsResp = await _supabase.from('ai_usage_logs').select('''
-        id, school_id, student_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms, status, created_at,
-        school:schools(name)
-      ''').order('created_at', ascending: false).limit(100);
-      final aiLogs = List<Map<String, dynamic>>.from(aiLogsResp);
+      List<Map<String, dynamic>> aiLogs = [];
+      try {
+        final aiLogsResp = await _supabase.from('ai_usage_logs').select('''
+          id, school_id, student_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms, status, created_at,
+          school:schools(name)
+        ''').order('created_at', ascending: false).limit(100);
+        aiLogs = List<Map<String, dynamic>>.from(aiLogsResp);
+      } catch (_) {}
 
       // 6. Audit Logs
-      final auditResp = await _supabase.from('audit_logs').select('''
-        id, school_id, actor_id, actor_role, action, target_table, target_id, created_at,
-        school:schools(name)
-      ''').order('created_at', ascending: false).limit(100);
-      final auditLogs = List<Map<String, dynamic>>.from(auditResp);
+      List<Map<String, dynamic>> auditLogs = [];
+      try {
+        final auditResp = await _supabase.from('audit_logs').select('''
+          id, school_id, actor_id, actor_role, action, target_table, target_id, created_at,
+          school:schools(name)
+        ''').order('created_at', ascending: false).limit(100);
+        auditLogs = List<Map<String, dynamic>>.from(auditResp);
+      } catch (_) {}
 
       // 7. Bug Reports
       List<Map<String, dynamic>> bugReports = [];
@@ -130,7 +166,6 @@ class PlatformNotifier extends Notifier<PlatformState> {
         ''').order('created_at', ascending: false);
         bugReports = List<Map<String, dynamic>>.from(brResp);
       } catch (_) {
-        // Fallback: fetch suggestions that were isolated as bug reports
         try {
           final brFallback = await _supabase.from('suggestions').select('''
             id, student_id, school_id, student_name, student_code, subject, title, message, body, suggestion_type, created_at, status,
