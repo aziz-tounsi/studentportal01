@@ -120,6 +120,7 @@ END $$;
 
 -- RPC: Create password reset request by email OR student_code (matricule)
 -- Never persists raw/plaintext new passwords in the database.
+DROP FUNCTION IF EXISTS public.create_password_reset_request(TEXT);
 CREATE OR REPLACE FUNCTION public.create_password_reset_request(p_email TEXT)
 RETURNS UUID
 LANGUAGE plpgsql
