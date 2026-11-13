@@ -39,9 +39,7 @@ final _router = GoRouter(
     ),
     GoRoute(
       path: '/schools',
-      pageBuilder: (_, _) => const NoTransitionPage(
-        child: ConsoleDashboardScreen(currentRoute: '/schools'),
-      ),
+      redirect: (_, _) => '/dashboard',
     ),
     GoRoute(
       path: '/billing',

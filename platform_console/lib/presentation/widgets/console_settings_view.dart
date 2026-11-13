@@ -34,7 +34,7 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
 
     final settings = widget.platformState.platformSettings ?? {};
     _defaultModelCtrl = TextEditingController(
@@ -182,6 +182,10 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
                   icon: const Icon(Icons.tune_rounded, size: 18),
                   text: tr.tabPlatform,
                 ),
+                const Tab(
+                  icon: Icon(Icons.loyalty_outlined, size: 18),
+                  text: 'Plans & Tarifs',
+                ),
                 Tab(
                   icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
                   text: tr.tabSecurity,
@@ -203,6 +207,7 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
               children: [
                 _buildLanguageTab(tr, currentLang),
                 _buildPlatformConfigTab(tr),
+                _buildSubscriptionPlansTab(tr),
                 _buildSecurityTab(tr),
                 _buildSystemTab(tr),
               ],
@@ -1134,6 +1139,644 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
           ),
         ],
       ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // TAB 3: Subscription Plans & Pricing Catalog
+  // ---------------------------------------------------------------------------
+  Widget _buildSubscriptionPlansTab(ConsoleStrings tr) {
+    final plans = widget.platformState.plans;
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: ConsoleColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Formules & Tarification SaaS',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: ConsoleColors.textPrimary,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Créez et configurez vos modèles d\'abonnement (mensuel fixe, prix par élève, quotas IA).',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: ConsoleColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => _showCreatePlanDialog(context),
+                      icon: const Icon(Icons.add, size: 17),
+                      label: const Text('Nouveau Plan'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6D4CF6),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const Divider(color: ConsoleColors.divider),
+                const SizedBox(height: 20),
+
+                if (plans.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(
+                      child: Text(
+                        'Aucun plan d\'abonnement configuré.',
+                        style: TextStyle(color: ConsoleColors.textSecondary),
+                      ),
+                    ),
+                  )
+                else
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: plans.map((p) {
+                      final name = p['name']?.toString() ?? 'Plan';
+                      final code = p['code']?.toString() ?? '';
+                      final priceTnd = (p['price_tnd_monthly'] as num?)?.toDouble() ?? 0.0;
+                      final priceYearly = (p['price_tnd_yearly'] as num?)?.toDouble() ?? 0.0;
+                      final maxStudents = p['max_students'] ?? 0;
+                      final maxStorage = p['max_storage_gb'] ?? 10;
+                      final dailyAi = p['daily_ai_messages_per_student'] ?? 30;
+                      final tokens = p['monthly_ai_token_budget_school'] ?? 5000000;
+                      final hasWhiteLabel = p['has_white_label'] == true;
+                      final isPopular = code == 'standard';
+
+                      return Container(
+                        width: 320,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: isPopular ? const Color(0xFFFBF9FF) : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isPopular ? const Color(0xFF6D4CF6) : ConsoleColors.cardBorder,
+                            width: isPopular ? 1.5 : 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isPopular
+                                  ? const Color(0xFF6D4CF6).withValues(alpha: 0.06)
+                                  : Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: ConsoleColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    code,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontFamily: 'monospace',
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Text(
+                                  '${priceTnd.toStringAsFixed(0)} TND',
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF6D4CF6),
+                                  ),
+                                ),
+                                const Text(
+                                  ' / mois',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: ConsoleColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '(${priceYearly.toStringAsFixed(0)} TND facturé annuellement)',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: ConsoleColors.textTertiary,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Divider(color: ConsoleColors.divider),
+                            const SizedBox(height: 12),
+
+                            _planFeatureRow(Icons.groups_outlined, '$maxStudents élèves inclus'),
+                            const SizedBox(height: 8),
+                            _planFeatureRow(Icons.cloud_outlined, '$maxStorage Go stockage cloud'),
+                            const SizedBox(height: 8),
+                            _planFeatureRow(Icons.auto_awesome_outlined, '$dailyAi msgs IA/élève/jour'),
+                            const SizedBox(height: 8),
+                            _planFeatureRow(Icons.token_outlined, '${(tokens / 1000000).toStringAsFixed(1)}M tokens IA/mois'),
+                            const SizedBox(height: 8),
+                            _planFeatureRow(
+                              Icons.verified_outlined,
+                              hasWhiteLabel ? 'Marque Blanche incluse' : 'Logo plateforme',
+                              isActive: hasWhiteLabel,
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _planFeatureRow(IconData icon, String text, {bool isActive = true}) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: isActive ? const Color(0xFF6D4CF6) : ConsoleColors.textTertiary,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
+              color: isActive ? ConsoleColors.textPrimary : ConsoleColors.textTertiary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showCreatePlanDialog(BuildContext context) {
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    final codeCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final monthlyPriceCtrl = TextEditingController(text: '450');
+    final yearlyPriceCtrl = TextEditingController(text: '4500');
+    final eurPriceCtrl = TextEditingController(text: '140');
+    final maxStudentsCtrl = TextEditingController(text: '300');
+    final maxStorageCtrl = TextEditingController(text: '20');
+    final dailyAiCtrl = TextEditingController(text: '40');
+    final tokensCtrl = TextEditingController(text: '10000000');
+    String selectedPricingModel = 'Prix Fixe Mensuel';
+    bool whiteLabel = false;
+    bool prioritySupport = false;
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Container(
+            width: 680,
+            constraints: const BoxConstraints(maxHeight: 740),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Créer un Nouveau Plan d\'Abonnement',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Définissez les tarifs et quotas pour les établissements scolaires.',
+                              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () => Navigator.pop(dialogCtx),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFFF8FAFC),
+                          ),
+                          child: const Icon(Icons.close, size: 18, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(28),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionIndicator('IDENTITÉ DU PLAN & MODÈLE'),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: _buildDialogField(
+                                  controller: nameCtrl,
+                                  label: 'Nom de la formule *',
+                                  placeholder: 'ex: Forfait Pro Mensuel',
+                                  onChanged: (val) {
+                                    codeCtrl.text = val.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '-');
+                                  },
+                                  validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: codeCtrl,
+                                  label: 'Code / Slug *',
+                                  placeholder: 'ex: pro-mensuel',
+                                  validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Modèle de tarification *',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedPricingModel,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                                    border: InputBorder.none,
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 'Prix Fixe Mensuel', child: Text('Prix Fixe Mensuel (ex: 450 DT / mois)')),
+                                    DropdownMenuItem(value: 'Tarif Par Élève', child: Text('Tarif Par Élève (ex: 4.5 DT / élève / mois)')),
+                                    DropdownMenuItem(value: 'Sur Mesure', child: Text('Sur Mesure / Grand Compte')),
+                                  ],
+                                  onChanged: (v) {
+                                    if (v != null) setDialogState(() => selectedPricingModel = v);
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          _buildSectionIndicator('TARIFS (TND & EUR)'),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: monthlyPriceCtrl,
+                                  label: 'Prix Mensuel (TND) *',
+                                  placeholder: '450.00',
+                                  keyboardType: TextInputType.number,
+                                  validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: yearlyPriceCtrl,
+                                  label: 'Prix Annuel (TND) *',
+                                  placeholder: '4500.00',
+                                  keyboardType: TextInputType.number,
+                                  validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: eurPriceCtrl,
+                                  label: 'Prix Mensuel (EUR)',
+                                  placeholder: '140.00',
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          _buildSectionIndicator('LIMITES & QUOTAS ACADÉMIQUES'),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: maxStudentsCtrl,
+                                  label: 'Max Étudiants *',
+                                  placeholder: '500',
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: maxStorageCtrl,
+                                  label: 'Stockage Cloud (Go)',
+                                  placeholder: '20',
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: dailyAiCtrl,
+                                  label: 'Messages IA / élève / jour',
+                                  placeholder: '40',
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _buildDialogField(
+                                  controller: tokensCtrl,
+                                  label: 'Tokens IA / mois école',
+                                  placeholder: '10000000',
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          _buildSectionIndicator('OPTIONS PREMIUM'),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SwitchListTile(
+                                  title: const Text('Marque Blanche (White-label)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  subtitle: const Text('Personnalisation complète du logo établissement', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                                  value: whiteLabel,
+                                  activeColor: const Color(0xFF6D4CF6),
+                                  contentPadding: EdgeInsets.zero,
+                                  onChanged: (v) => setDialogState(() => whiteLabel = v),
+                                ),
+                              ),
+                              Expanded(
+                                child: SwitchListTile(
+                                  title: const Text('Support Prioritaire 24/7', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  subtitle: const Text('Assistance dédiée et SLA garanti', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                                  value: prioritySupport,
+                                  activeColor: const Color(0xFF6D4CF6),
+                                  contentPadding: EdgeInsets.zero,
+                                  onChanged: (v) => setDialogState(() => prioritySupport = v),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                    border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        height: 40,
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx),
+                          child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 40,
+                        child: ElevatedButton.icon(
+                          onPressed: isSubmitting ? null : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setDialogState(() => isSubmitting = true);
+                            final ok = await ref.read(platformProvider.notifier).createSubscriptionPlan(
+                              code: codeCtrl.text.trim(),
+                              name: nameCtrl.text.trim(),
+                              description: descCtrl.text.trim(),
+                              priceTndMonthly: double.tryParse(monthlyPriceCtrl.text.trim()) ?? 0.0,
+                              priceTndYearly: double.tryParse(yearlyPriceCtrl.text.trim()) ?? 0.0,
+                              priceEurMonthly: double.tryParse(eurPriceCtrl.text.trim()) ?? 0.0,
+                              maxStudents: int.tryParse(maxStudentsCtrl.text.trim()) ?? 100,
+                              maxStorageGb: double.tryParse(maxStorageCtrl.text.trim()) ?? 10.0,
+                              dailyAiMessages: int.tryParse(dailyAiCtrl.text.trim()) ?? 30,
+                              monthlyAiTokenBudget: int.tryParse(tokensCtrl.text.trim()) ?? 5000000,
+                              hasWhiteLabel: whiteLabel,
+                              hasPrioritySupport: prioritySupport,
+                              pricingModel: selectedPricingModel,
+                            );
+                            if (!ctx.mounted) return;
+                            Navigator.pop(dialogCtx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok ? 'Nouveau plan d\'abonnement créé avec succès !' : 'Erreur de création du plan.'),
+                                backgroundColor: ok ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                              ),
+                            );
+                          },
+                          icon: isSubmitting
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.check_rounded, size: 17),
+                          label: const Text('Créer le Plan', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6D4CF6),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionIndicator(String title) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6D4CF6),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+            color: Color(0xFF4B5563),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDialogField({
+    required TextEditingController controller,
+    required String label,
+    String? placeholder,
+    TextInputType keyboardType = TextInputType.text,
+    ValueChanged<String>? onChanged,
+    FormFieldValidator<String>? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          onChanged: onChanged,
+          validator: validator,
+          style: const TextStyle(fontSize: 14),
+          decoration: InputDecoration(
+            hintText: placeholder,
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+          ),
+        ),
+      ],
     );
   }
 }

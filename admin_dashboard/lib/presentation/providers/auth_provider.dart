@@ -71,11 +71,9 @@ class AuthNotifier extends Notifier<AdminAuthState> {
     try {
       final resp = await _supabase.from('users').select().eq('id', userId).single();
       final user = UserModel.fromJson(resp);
-      if (!['admin', 'staff', 'owner', 'manager'].contains(user.role)) {
+      if (!['admin', 'staff', 'owner', 'manager', 'super_admin'].contains(user.role)) {
         await _supabase.auth.signOut();
-        final message = user.role == 'super_admin'
-            ? 'Access denied. Super admin accounts must sign in using the dedicated Platform Console.'
-            : 'Access denied. This dashboard is for school administrators only.';
+        final message = 'Access denied. This dashboard is for school administrators only.';
         state = AdminAuthState(accessDenied: true, errorMessage: message);
         return;
       }

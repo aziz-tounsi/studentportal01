@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/localization/console_translations.dart';
+import '../../core/services/invoice_pdf_generator.dart';
 import '../../core/theme/console_theme.dart';
 import '../providers/console_auth_provider.dart';
 import '../providers/platform_provider.dart';
@@ -35,6 +36,17 @@ class _ConsoleDashboardScreenState
     extends ConsumerState<ConsoleDashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _schoolsStatusFilter = 'all'; // 'all', 'active', 'suspended'
+  int _schoolsPage = 0;
+  int _schoolsPageSize = 10;
+  String _bugStatusFilter = 'all'; // 'all', 'open', 'in_progress', 'resolved'
+  int _bugsPage = 0;
+  int _bugsPageSize = 10;
+  String _auditActionFilter = 'all';
+  int _auditPage = 0;
+  int _auditPageSize = 10;
+  int _telemetryPage = 0;
+  int _telemetryPageSize = 10;
 
   @override
   void didUpdateWidget(covariant ConsoleDashboardScreen oldWidget) {
@@ -118,7 +130,7 @@ class _ConsoleDashboardScreenState
       case '/settings':
         return ConsoleSettingsView(platformState: state, user: user);
       case '/schools':
-        return _buildSchoolsPage(state, tr);
+        return _buildOverviewPage(state, tr);
       case '/billing':
         return _buildBillingPage(state, tr);
       case '/ai-telemetry':
@@ -284,21 +296,6 @@ class _ConsoleDashboardScreenState
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          IconButton(
-            tooltip: tr.refreshTooltip,
-            onPressed: () => ref.read(platformProvider.notifier).loadAll(),
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            color: ConsoleColors.textSecondary,
-            style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFFF8FAFC),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: const BorderSide(color: ConsoleColors.cardBorder),
-              ),
-            ),
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          ),
           if (widget.currentRoute == '/schools' ||
               widget.currentRoute == '/dashboard' ||
               widget.currentRoute == '/') ...[
@@ -382,29 +379,57 @@ class _ConsoleDashboardScreenState
   }
 
   // ══════════════════════════════════════════════════════════════
-  // 1. OVERVIEW PAGE
+  // 1. OVERVIEW PAGE & UNIFIED SCHOOLS TABLE
   // ══════════════════════════════════════════════════════════════
   Widget _buildOverviewPage(PlatformState state, ConsoleStrings tr) {
     final kpis = state.kpis;
-    final schools = state.schools.where((s) {
+    final allSchools = state.schools;
+
+    // Filter by search query
+    final searchedSchools = allSchools.where((s) {
       if (_searchQuery.isEmpty) return true;
       final name = (s['name'] ?? '').toString().toLowerCase();
       final code = (s['code'] ?? '').toString().toLowerCase();
-      return name.contains(_searchQuery) || code.contains(_searchQuery);
+      final email = (s['email'] ?? '').toString().toLowerCase();
+      final phone = (s['phone'] ?? '').toString().toLowerCase();
+      return name.contains(_searchQuery) ||
+          code.contains(_searchQuery) ||
+          email.contains(_searchQuery) ||
+          phone.contains(_searchQuery);
     }).toList();
+
+    // Counts for tabs
+    final totalCount = searchedSchools.length;
+    final activeCount = searchedSchools.where((s) => s['is_active'] == true).length;
+    final suspendedCount = searchedSchools.where((s) => s['is_active'] != true).length;
+
+    // Filter by status tab
+    final filteredSchools = searchedSchools.where((s) {
+      if (_schoolsStatusFilter == 'active') return s['is_active'] == true;
+      if (_schoolsStatusFilter == 'suspended') return s['is_active'] != true;
+      return true;
+    }).toList();
+
+    // Pagination
+    final pageStart = _schoolsPage * _schoolsPageSize;
+    final paginatedSchools = filteredSchools.skip(pageStart).take(_schoolsPageSize).toList();
+
+    final realAiSpend = (kpis['aiSpendUsd'] as double? ?? 0.0);
+    final realAiTokens = (kpis['aiTokensMonth'] as int? ?? 0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── KPI METRICS ROW ──
           Row(
             children: [
               Expanded(
                 child: _buildMetricCard(
                   tr.kpiActiveSchools,
                   '${kpis['activeSchools'] ?? 0}',
-                  '${kpis['totalSchools'] ?? 0} total',
+                  '${kpis['totalSchools'] ?? 0} total enregistrées',
                   Icons.domain_rounded,
                   ConsoleColors.primary,
                 ),
@@ -423,8 +448,8 @@ class _ConsoleDashboardScreenState
               Expanded(
                 child: _buildMetricCard(
                   tr.totalCostUsd,
-                  '\$${(kpis['aiSpendUsd'] as double? ?? 0.0).toStringAsFixed(2)}',
-                  tr.aiUsageTitle,
+                  '\$${realAiSpend.toStringAsFixed(4)}',
+                  '$realAiTokens tokens • Dépenses réelles API',
                   Icons.auto_awesome_rounded,
                   ConsoleColors.brand,
                 ),
@@ -441,120 +466,679 @@ class _ConsoleDashboardScreenState
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 2,
-                child: _surfaceCard(
-                  title: tr.recentSchoolsTitle,
-                  trailing: TextButton(
-                    onPressed: () => context.go('/schools'),
-                    child: Text(tr.viewAll),
+          const SizedBox(height: 20),
+
+          // ── QUICK ACTIONS BAR ──
+          _surfaceCard(
+            title: tr.quickActionsTitle,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _quickActionRow(
+                    icon: Icons.add_business_outlined,
+                    color: ConsoleColors.brand,
+                    title: tr.quickActionAddSchool,
+                    subtitle: tr.quickActionAddSchoolDesc,
+                    onTap: () => _showCreateSchoolModal(context, state.plans),
                   ),
-                  child: schools.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 28),
-                          child: Center(
-                            child: Text(
-                              tr.noSchoolsRegistered,
-                              style: const TextStyle(
-                                  color: ConsoleColors.textSecondary),
-                            ),
-                          ),
-                        )
-                      : Column(
-                          children: schools.take(6).map((s) {
-                            final sub =
-                                _extractRelationMap(s['school_subscriptions']);
-                            final isActive = s['is_active'] == true;
-                            final subStatus = isActive
-                                ? (sub?['status']?.toString() ?? 'active')
-                                : 'suspended';
-                            return Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: const BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                      color: ConsoleColors.divider),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  _buildSchoolLogoThumb(
-                                    s['logo_url'] as String?,
-                                    size: 36,
-                                    radius: 9,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          s['name'] ?? '',
-                                          style: const TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: ConsoleColors.textPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          s['code'] ?? '—',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: ConsoleColors.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  _buildStatusBadge(subStatus),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: _surfaceCard(
-                  title: tr.quickActionsTitle,
-                  child: Column(
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _quickActionRow(
+                    icon: Icons.receipt_long_outlined,
+                    color: ConsoleColors.success,
+                    title: 'Générer Facture PDF',
+                    subtitle: 'Émettre la facture type au format officiel',
+                    onTap: () => _showInvoiceGeneratorModal(context, state.schools),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _quickActionRow(
+                    icon: Icons.tune_rounded,
+                    color: const Color(0xFF2563EB),
+                    title: tr.quickActionSettings,
+                    subtitle: 'Paramètres, quotas & tarifs des forfaits',
+                    onTap: () => context.go('/settings'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── UNIFIED SCHOOLS TABLE (MATCHING USERS TABLE) ──
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: ConsoleColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Table header with title & status tabs
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  child: Row(
                     children: [
-                      _quickActionRow(
-                        icon: Icons.add_business_outlined,
-                        color: ConsoleColors.brand,
-                        title: tr.quickActionAddSchool,
-                        subtitle: tr.quickActionAddSchoolDesc,
-                        onTap: () =>
-                            _showCreateSchoolModal(context, state.plans),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Établissements Scolaires ($totalCount)',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: ConsoleColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Gérez les écoles SaaS, forfaits, contacts directeurs et quotas IA en temps réel.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                      _quickActionRow(
-                        icon: Icons.receipt_long_outlined,
-                        color: ConsoleColors.success,
-                        title: tr.quickActionIssueInvoice,
-                        subtitle:
-                            '${kpis['pendingCount'] ?? 0} ${tr.statusPending}',
-                        onTap: () => context.go('/billing'),
+                      // Status tabs: Tous / Actifs / Suspendus
+                      Row(
+                        children: [
+                          _buildFilterChipItem(
+                            label: 'Tous',
+                            count: totalCount,
+                            isSelected: _schoolsStatusFilter == 'all',
+                            onTap: () => setState(() {
+                              _schoolsStatusFilter = 'all';
+                              _schoolsPage = 0;
+                            }),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildFilterChipItem(
+                            label: 'Actifs',
+                            count: activeCount,
+                            isSelected: _schoolsStatusFilter == 'active',
+                            activeColor: ConsoleColors.success,
+                            onTap: () => setState(() {
+                              _schoolsStatusFilter = 'active';
+                              _schoolsPage = 0;
+                            }),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildFilterChipItem(
+                            label: 'Suspendus',
+                            count: suspendedCount,
+                            isSelected: _schoolsStatusFilter == 'suspended',
+                            activeColor: ConsoleColors.error,
+                            onTap: () => setState(() {
+                              _schoolsStatusFilter = 'suspended';
+                              _schoolsPage = 0;
+                            }),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      _quickActionRow(
-                        icon: Icons.tune_rounded,
-                        color: const Color(0xFF2563EB),
-                        title: tr.quickActionSettings,
-                        subtitle: tr.quickActionSettingsDesc,
-                        onTap: () => context.go('/settings'),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        height: 38,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showCreateSchoolModal(context, state.plans),
+                          icon: const Icon(Icons.add_rounded, size: 17),
+                          label: const Text('Nouvelle École', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6D4CF6),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
+                const Divider(height: 1, color: ConsoleColors.divider),
+
+                // Table content
+                filteredSchools.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.domain_disabled_rounded, size: 48, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              Text(
+                                tr.noSchoolsRegistered,
+                                style: const TextStyle(fontSize: 14, color: ConsoleColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                          headingRowHeight: 46,
+                          dataRowMinHeight: 64,
+                          dataRowMaxHeight: 68,
+                          horizontalMargin: 24,
+                          columnSpacing: 28,
+                          columns: const [
+                            DataColumn(label: Text('ÉTABLISSEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('CONTACT DIRECTEUR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('FORMULE & TARIF', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('QUOTA IA MENSUEL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('STATUT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('CRÉATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                          ],
+                          rows: paginatedSchools.map((s) {
+                            final sub = _extractRelationMap(s['school_subscriptions']);
+                            final plan = _extractRelationMap(sub?['plan']);
+                            final quota = _extractRelationMap(s['ai_school_quotas']);
+                            final isActive = s['is_active'] == true;
+                            final subStatus = isActive
+                                ? (sub?['status']?.toString() ?? 'active')
+                                : 'suspended';
+                            final spent = (quota?['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
+                            final budget = (quota?['monthly_budget_usd'] as num?)?.toDouble() ?? 25.0;
+                            final isQuotaExceeded = quota?['is_quota_exceeded'] == true || spent >= budget;
+                            final killSwitch = quota?['kill_switch_enabled'] == true;
+
+                            final directorPhone = s['phone'] as String?;
+                            final email = s['email'] as String? ?? '—';
+                            final createdAt = s['created_at'] != null
+                                ? s['created_at'].toString().split('T')[0]
+                                : '—';
+
+                            return DataRow(
+                              cells: [
+                                // 1. School Info (Logo + Name + Code)
+                                DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _buildSchoolLogoThumb(
+                                        s['logo_url'] as String?,
+                                        size: 38,
+                                        radius: 10,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            s['name'] ?? '',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13.5,
+                                              color: ConsoleColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF1F5F9),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              (s['code'] ?? '—').toString().toUpperCase(),
+                                              style: const TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF64748B),
+                                                fontFamily: 'monospace',
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // 2. Director Contact
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        email,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: ConsoleColors.textPrimary,
+                                        ),
+                                      ),
+                                      if (directorPhone != null && directorPhone.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.phone_rounded, size: 12, color: Color(0xFF6D4CF6)),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              directorPhone,
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                color: ConsoleColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                // 3. Plan & Pricing
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEDE9FE),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          plan?['name'] ?? 'Plan Pro',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF6D4CF6),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${plan?['price_tnd_monthly'] ?? 850} TND / mois',
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: ConsoleColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // 4. AI Quota & Budget
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '\$${spent.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: isQuotaExceeded ? ConsoleColors.error : ConsoleColors.textPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            ' / \$${budget.toStringAsFixed(0)} USD',
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              color: ConsoleColors.textSecondary,
+                                            ),
+                                          ),
+                                          if (isQuotaExceeded || killSwitch) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: ConsoleColors.errorSoft,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                killSwitch ? 'KILL SWITCH' : 'DÉPASSÉ',
+                                                style: const TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: ConsoleColors.error,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      SizedBox(
+                                        width: 110,
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(4),
+                                          child: LinearProgressIndicator(
+                                            value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0.0,
+                                            backgroundColor: const Color(0xFFE2E8F0),
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              isQuotaExceeded ? ConsoleColors.error : const Color(0xFF6D4CF6),
+                                            ),
+                                            minHeight: 4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // 5. Status
+                                DataCell(_buildStatusBadge(subStatus)),
+                                // 6. Created Date
+                                DataCell(
+                                  Text(
+                                    createdAt,
+                                    style: const TextStyle(fontSize: 12, color: ConsoleColors.textSecondary),
+                                  ),
+                                ),
+                                // 7. 3-Dots Action Menu
+                                DataCell(
+                                  PopupMenuButton<String>(
+                                    tooltip: 'Actions établissement',
+                                    icon: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: ConsoleColors.cardBorder),
+                                      ),
+                                      child: const Icon(
+                                        Icons.more_horiz_rounded,
+                                        size: 18,
+                                        color: ConsoleColors.textPrimary,
+                                      ),
+                                    ),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 6,
+                                    onSelected: (val) async {
+                                      switch (val) {
+                                        case 'quota':
+                                          _showEditAiQuotaModal(context, s);
+                                          break;
+                                        case 'invoice':
+                                          _showInvoiceGeneratorModal(
+                                            context,
+                                            state.schools,
+                                            preselectedSchoolId: s['id'],
+                                          );
+                                          break;
+                                        case 'logo':
+                                          _showSchoolLogoModal(context, s);
+                                          break;
+                                        case 'plan':
+                                          _showChangePlanModal(context, s, state.plans);
+                                          break;
+                                        case 'toggle_status':
+                                          final ok = await ref
+                                              .read(platformProvider.notifier)
+                                              .toggleSchoolStatus(s['id'], !isActive);
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(ok
+                                                  ? (isActive
+                                                      ? 'Établissement suspendu.'
+                                                      : 'Établissement réactivé !')
+                                                  : 'Erreur lors du changement de statut.'),
+                                              backgroundColor: ok
+                                                  ? (isActive ? ConsoleColors.warning : ConsoleColors.success)
+                                                  : ConsoleColors.error,
+                                            ),
+                                          );
+                                          break;
+                                      }
+                                    },
+                                    itemBuilder: (_) => [
+                                      const PopupMenuItem(
+                                        value: 'quota',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.auto_awesome_rounded, size: 17, color: Color(0xFF6D4CF6)),
+                                            SizedBox(width: 10),
+                                            Text('Modifier Quota IA & Budget'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'invoice',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.picture_as_pdf_rounded, size: 17, color: ConsoleColors.success),
+                                            SizedBox(width: 10),
+                                            Text('Générer Facture PDF'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'logo',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.image_outlined, size: 17, color: ConsoleColors.primary),
+                                            SizedBox(width: 10),
+                                            Text('Changer le Logo'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'plan',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.card_membership_rounded, size: 17, color: Color(0xFF2563EB)),
+                                            SizedBox(width: 10),
+                                            Text('Changer de Forfait'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuDivider(),
+                                      PopupMenuItem(
+                                        value: 'toggle_status',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                                              size: 17,
+                                              color: isActive ? ConsoleColors.warning : ConsoleColors.success,
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              isActive ? 'Suspendre l\'accès école' : 'Réactiver l\'accès école',
+                                              style: TextStyle(
+                                                color: isActive ? ConsoleColors.warning : ConsoleColors.success,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+
+                // Table pagination bar
+                _buildTablePaginationBar(
+                  totalItems: filteredSchools.length,
+                  currentPage: _schoolsPage,
+                  pageSize: _schoolsPageSize,
+                  onPageChanged: (newPage) => setState(() => _schoolsPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _schoolsPageSize = newSize;
+                    _schoolsPage = 0;
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChipItem({
+    required String label,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Color activeColor = const Color(0xFF6D4CF6),
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withValues(alpha: 0.1) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? activeColor.withValues(alpha: 0.4) : ConsoleColors.cardBorder,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? activeColor : ConsoleColors.textSecondary,
               ),
-            ],
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: isSelected ? activeColor.withValues(alpha: 0.18) : const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? activeColor : ConsoleColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTablePaginationBar({
+    required int totalItems,
+    required int currentPage,
+    required int pageSize,
+    required ValueChanged<int> onPageChanged,
+    required ValueChanged<int> onPageSizeChanged,
+  }) {
+    final totalPages = (totalItems / pageSize).ceil();
+    final startIdx = totalItems == 0 ? 0 : currentPage * pageSize + 1;
+    final endIdx = ((currentPage + 1) * pageSize).clamp(0, totalItems);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFAFAFB),
+        border: Border(top: BorderSide(color: Color(0xFFE9EAF2))),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Text('Afficher par ', style: TextStyle(fontSize: 12, color: ConsoleColors.textSecondary)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: ConsoleColors.cardBorder),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: pageSize,
+                isDense: true,
+                borderRadius: BorderRadius.circular(8),
+                items: const [
+                  DropdownMenuItem(value: 5, child: Text('5', style: TextStyle(fontSize: 12))),
+                  DropdownMenuItem(value: 10, child: Text('10', style: TextStyle(fontSize: 12))),
+                  DropdownMenuItem(value: 20, child: Text('20', style: TextStyle(fontSize: 12))),
+                  DropdownMenuItem(value: 50, child: Text('50', style: TextStyle(fontSize: 12))),
+                ],
+                onChanged: (v) {
+                  if (v != null) onPageSizeChanged(v);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text(
+            totalItems == 0 ? '0 résultat' : '$startIdx–$endIdx sur $totalItems',
+            style: const TextStyle(fontSize: 12, color: ConsoleColors.textSecondary),
+          ),
+          const Spacer(),
+          Text(
+            'Page ${totalPages == 0 ? 1 : currentPage + 1} sur ${totalPages == 0 ? 1 : totalPages}',
+            style: const TextStyle(fontSize: 12, color: ConsoleColors.textSecondary),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: ConsoleColors.cardBorder),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: currentPage > 0 ? () => onPageChanged(currentPage - 1) : null,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Icon(
+                      Icons.chevron_left,
+                      size: 18,
+                      color: currentPage > 0 ? ConsoleColors.textPrimary : ConsoleColors.textTertiary,
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 22, color: ConsoleColors.cardBorder),
+                InkWell(
+                  onTap: (currentPage + 1) < totalPages ? () => onPageChanged(currentPage + 1) : null,
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: (currentPage + 1) < totalPages ? ConsoleColors.textPrimary : ConsoleColors.textTertiary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -623,181 +1207,337 @@ class _ConsoleDashboardScreenState
     );
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // 2. SCHOOLS PAGE
-  // ══════════════════════════════════════════════════════════════
-  Widget _buildSchoolsPage(PlatformState state, ConsoleStrings tr) {
-    final schools = state.schools.where((s) {
-      if (_searchQuery.isEmpty) return true;
-      final name = (s['name'] ?? '').toString().toLowerCase();
-      final code = (s['code'] ?? '').toString().toLowerCase();
-      final email = (s['email'] ?? '').toString().toLowerCase();
-      return name.contains(_searchQuery) ||
-          code.contains(_searchQuery) ||
-          email.contains(_searchQuery);
-    }).toList();
+  Widget _buildSectionIndicator(String title) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6D4CF6),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+            color: Color(0xFF4B5563),
+          ),
+        ),
+      ],
+    );
+  }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _surfaceCard(
-            title: '${tr.headerSchoolsTitle} (${schools.length})',
-            child: schools.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32),
-                    child: Center(
-                      child: Text(
-                        tr.noSchoolsRegistered,
-                        style: const TextStyle(color: ConsoleColors.textSecondary),
+  void _showEditAiQuotaModal(BuildContext context, Map<String, dynamic> school) {
+    final schoolId = school['id'] as String;
+    final schoolName = school['name'] as String? ?? 'Établissement';
+    final quota = _extractRelationMap(school['ai_school_quotas']);
+    final currentBudget = (quota?['monthly_budget_usd'] as num?)?.toDouble() ?? 25.0;
+    final currentSpent = (quota?['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
+    final currentDaily = (quota?['daily_messages_per_student'] as num?)?.toInt() ?? 30;
+    final currentKill = quota?['kill_switch_enabled'] == true;
+
+    final budgetCtrl = TextEditingController(text: currentBudget.toStringAsFixed(2));
+    final dailyCtrl = TextEditingController(text: currentDaily.toString());
+    bool killSwitch = currentKill;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.15),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+        child: StatefulBuilder(
+          builder: (sbContext, setSbState) => Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: ConsoleColors.brandSoft,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.auto_awesome_rounded, color: ConsoleColors.brand, size: 22),
                       ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      headingRowColor:
-                          WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                      columns: [
-                        DataColumn(label: Text(tr.colSchool)),
-                        DataColumn(label: Text(tr.colCode)),
-                        DataColumn(label: Text(tr.colPlan)),
-                        DataColumn(label: Text(tr.colStatus)),
-                        DataColumn(label: Text(tr.colAiUsage)),
-                        DataColumn(label: Text(tr.colActions)),
-                      ],
-                      rows: schools.map((s) {
-                        final sub =
-                            _extractRelationMap(s['school_subscriptions']);
-                        final plan = _extractRelationMap(sub?['plan']);
-                        final quota =
-                            _extractRelationMap(s['ai_school_quotas']);
-                        final isActive = s['is_active'] == true;
-                        final subStatus = isActive
-                            ? (sub?['status']?.toString() ?? 'active')
-                            : 'suspended';
-                        final spent =
-                            (quota?['spent_current_month_usd'] as num?)
-                                    ?.toDouble() ??
-                                0.0;
-                        final budget = (quota?['monthly_budget_usd'] as num?)
-                                ?.toDouble() ??
-                            25.0;
-
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildSchoolLogoThumb(
-                                    s['logo_url'] as String?,
-                                    size: 32,
-                                    radius: 8,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    s['name'] ?? '',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: ConsoleColors.textPrimary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            DataCell(Text(
-                              s['code'] ?? '—',
-                              style: const TextStyle(
-                                  color: ConsoleColors.textSecondary),
-                            )),
-                            DataCell(Text(
-                              plan?['name'] ?? 'Essai Standard',
-                              style: const TextStyle(
-                                  color: ConsoleColors.textSecondary),
-                            )),
-                            DataCell(_buildStatusBadge(subStatus)),
-                            DataCell(Text(
-                              '\$${spent.toStringAsFixed(2)} / \$${budget.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                  color: ConsoleColors.textSecondary),
-                            )),
-                            DataCell(
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.image_outlined,
-                                      color: ConsoleColors.primary,
-                                      size: 20,
-                                    ),
-                                    tooltip: 'Changer le logo de l\'école',
-                                    onPressed: () =>
-                                        _showSchoolLogoModal(context, s),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    tooltip:
-                                        'Statut abonnement (active / past_due / suspended)',
-                                    icon: const Icon(
-                                      Icons.credit_score_outlined,
-                                      color: ConsoleColors.brand,
-                                      size: 20,
-                                    ),
-                                    onSelected: (status) => ref
-                                        .read(platformProvider.notifier)
-                                        .updateSchoolSubscriptionStatus(
-                                            s['id'], status),
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(
-                                        value: 'active',
-                                        child: Text('Active (Accès complet)',
-                                            style: TextStyle(
-                                                color: ConsoleColors.success)),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'past_due',
-                                        child: Text(
-                                            'Past Due (Bannière préavis)',
-                                            style: TextStyle(
-                                                color: ConsoleColors.warning)),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'suspended',
-                                        child: Text('Suspended (Gel complet)',
-                                            style: TextStyle(
-                                                color: ConsoleColors.error)),
-                                      ),
-                                    ],
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      isActive
-                                          ? Icons.pause_circle_outline
-                                          : Icons.play_circle_outline,
-                                      color: isActive
-                                          ? ConsoleColors.warning
-                                          : ConsoleColors.success,
-                                      size: 20,
-                                    ),
-                                    tooltip: isActive
-                                        ? 'Suspendre l\'école'
-                                        : 'Réactiver l\'école',
-                                    onPressed: () => ref
-                                        .read(platformProvider.notifier)
-                                        .toggleSchoolStatus(s['id'], !isActive),
-                                  ),
-                                ],
-                              ),
-                            ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Quota & Budget IA — $schoolName',
+                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ConsoleColors.textPrimary)),
+                            const SizedBox(height: 3),
+                            Text('Dépenses actuelles ce mois: \$${currentSpent.toStringAsFixed(4)} USD',
+                                style: const TextStyle(fontSize: 12, color: ConsoleColors.textSecondary)),
                           ],
-                        );
-                      }).toList(),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionIndicator('BUDGET MENSUEL MAXIMUM (USD)'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: budgetCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      prefixText: '\$ ',
+                      hintText: '25.00',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  _buildSectionIndicator('MESSAGES PAR ÉTUDIANT / JOUR'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: dailyCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: '30',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: killSwitch ? ConsoleColors.errorSoft : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: killSwitch ? ConsoleColors.error : const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Arrêt d\'urgence IA (Kill Switch École)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: killSwitch ? ConsoleColors.error : ConsoleColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Désactive immédiatement l\'accès à l\'IA pour cet établissement.',
+                                style: TextStyle(fontSize: 11.5, color: ConsoleColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: killSwitch,
+                          activeThumbColor: ConsoleColors.error,
+                          onChanged: (val) => setSbState(() => killSwitch = val),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 26),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        height: 40,
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF6B7280)),
+                          child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 40,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            final budget = double.tryParse(budgetCtrl.text.trim()) ?? currentBudget;
+                            final daily = int.tryParse(dailyCtrl.text.trim()) ?? currentDaily;
+                            Navigator.pop(ctx);
+                            final ok = await ref.read(platformProvider.notifier).updateSchoolAiQuota(
+                              schoolId: schoolId,
+                              monthlyBudgetUsd: budget,
+                              dailyMessagesPerStudent: daily,
+                              killSwitchEnabled: killSwitch,
+                            );
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok ? 'Quota IA mis à jour avec succès !' : 'Erreur mise à jour quota.'),
+                                backgroundColor: ok ? ConsoleColors.success : ConsoleColors.error,
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6D4CF6),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                          child: const Text('Enregistrer le Quota', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  void _showChangePlanModal(BuildContext context, Map<String, dynamic> school, List<Map<String, dynamic>> plans) {
+    if (plans.isEmpty) return;
+    final schoolId = school['id'] as String;
+    final schoolName = school['name'] as String? ?? 'Établissement';
+    final sub = _extractRelationMap(school['school_subscriptions']);
+    String selectedPlanId = sub?['plan_id'] as String? ?? plans.first['id'] as String;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.15),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+        child: StatefulBuilder(
+          builder: (sbContext, setSbState) => Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              width: 480,
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: ConsoleColors.brandSoft,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.card_membership_rounded, color: ConsoleColors.brand, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Changer le Forfait — $schoolName',
+                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ConsoleColors.textPrimary)),
+                            const SizedBox(height: 3),
+                            const Text('Sélectionnez la nouvelle formule d\'abonnement.',
+                                style: TextStyle(fontSize: 12, color: ConsoleColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionIndicator('CHOISIR UNE FORMULE D\'ABONNEMENT'),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: plans.any((p) => p['id'] == selectedPlanId) ? selectedPlanId : plans.first['id'],
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                    ),
+                    items: plans.map((p) {
+                      return DropdownMenuItem<String>(
+                        value: p['id'] as String,
+                        child: Text('${p['name']} (${p['price_tnd_monthly']} TND/mois)'),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setSbState(() => selectedPlanId = val);
+                    },
+                  ),
+                  const SizedBox(height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        height: 40,
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF6B7280)),
+                          child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 40,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            final ok = await ref.read(platformProvider.notifier).updateSchoolSubscriptionPlan(
+                              schoolId: schoolId,
+                              planId: selectedPlanId,
+                            );
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok ? 'Forfait mis à jour avec succès !' : 'Erreur mise à jour forfait.'),
+                                backgroundColor: ok ? ConsoleColors.success : ConsoleColors.error,
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6D4CF6),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                          child: const Text('Confirmer le changement', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -807,11 +1547,12 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   Widget _buildBillingPage(PlatformState state, ConsoleStrings tr) {
     final pending = state.pendingPayments;
-    final invoices = state.invoices.where((inv) {
+    final allInvoices = state.invoices;
+
+    final searchedInvoices = allInvoices.where((inv) {
       if (_searchQuery.isEmpty) return true;
       final num = (inv['invoice_number'] ?? '').toString().toLowerCase();
-      final sName =
-          ((inv['school'] as Map?)?['name'] ?? '').toString().toLowerCase();
+      final sName = ((inv['school'] as Map?)?['name'] ?? '').toString().toLowerCase();
       return num.contains(_searchQuery) || sName.contains(_searchQuery);
     }).toList();
 
@@ -820,162 +1561,286 @@ class _ConsoleDashboardScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _surfaceCard(
-            title: '${tr.pendingInvoicesCount} (${pending.length})',
-            child: pending.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    child: Center(
-                      child: Text(
-                        tr.noSchoolsRegistered,
-                        style: const TextStyle(color: ConsoleColors.textSecondary),
+          // ── PENDING PAYMENTS ──
+          if (pending.isNotEmpty) ...[
+            _surfaceCard(
+              title: 'Vérification des Virements en Attente (${pending.length})',
+              child: Column(
+                children: pending.map((p) {
+                  final inv = p['invoice'] as Map<String, dynamic>?;
+                  final school = inv?['school'] as Map<String, dynamic>?;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: ConsoleColors.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF6D4CF6).withValues(alpha: 0.25),
                       ),
                     ),
-                  )
-                : Column(
-                    children: pending.map((p) {
-                      final inv = p['invoice'] as Map<String, dynamic>?;
-                      final school = inv?['school'] as Map<String, dynamic>?;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: ConsoleColors.surfaceSubtle,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: ConsoleColors.brand.withValues(alpha: 0.25),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: ConsoleColors.brandSoft,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.account_balance_outlined,
+                            color: Color(0xFF6D4CF6),
+                            size: 22,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: ConsoleColors.brandSoft,
-                                borderRadius: BorderRadius.circular(10),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${school?['name'] ?? "École"} — Facture N° ${inv?['invoice_number'] ?? ""}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: ConsoleColors.textPrimary,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.account_balance_outlined,
-                                color: ConsoleColors.brand,
-                                size: 20,
+                              const SizedBox(height: 3),
+                              Text(
+                                'Réf transaction: ${p['transaction_ref'] ?? "N/A"} • Montant déclaré: ${p['amount']} TND',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: ConsoleColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          height: 38,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final ok = await ref
+                                  .read(platformProvider.notifier)
+                                  .verifyPayment(p['id']);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(ok
+                                      ? 'Paiement validé avec succès !'
+                                      : 'Erreur lors de la validation du paiement.'),
+                                  backgroundColor: ok
+                                      ? ConsoleColors.success
+                                      : ConsoleColors.error,
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.check_rounded, size: 16),
+                            label: const Text('Valider & Marquer Payé', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: ConsoleColors.success,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // ── INVOICES TABLE MATCHING USERS TABLE ──
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: ConsoleColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Historique des Factures Émises (${searchedInvoices.length})',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: ConsoleColors.textPrimary,
                               ),
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                            const SizedBox(height: 4),
+                            Text(
+                              'Factures officielles conformes avec timbre fiscal et arrêté légal en toutes lettres.',
+                              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 38,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showInvoiceGeneratorModal(context, state.schools),
+                          icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                          label: const Text('Nouvelle Facture PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6D4CF6),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: ConsoleColors.divider),
+
+                searchedInvoices.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Aucune facture enregistrée pour l\'instant.',
+                                style: TextStyle(fontSize: 14, color: ConsoleColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                          headingRowHeight: 46,
+                          dataRowMinHeight: 60,
+                          dataRowMaxHeight: 64,
+                          horizontalMargin: 24,
+                          columnSpacing: 28,
+                          columns: const [
+                            DataColumn(label: Text('N° FACTURE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('ÉTABLISSEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('MONTANT TOTAL TTC', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('DATE ÉCHÉANCE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('STATUT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('ACTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                          ],
+                          rows: searchedInvoices.map((inv) {
+                            final school = inv['school'] as Map<String, dynamic>?;
+                            final schoolName = school?['name']?.toString() ?? 'École';
+                            final invNum = inv['invoice_number']?.toString() ?? 'FAC-2026';
+                            final amount = (inv['amount'] as num?)?.toDouble() ?? 0.0;
+                            final currency = inv['currency']?.toString() ?? 'TND';
+                            final dueDate = inv['due_date']?.toString() ?? '—';
+                            final status = inv['status']?.toString() ?? 'issued';
+
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      invNum,
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12.5,
+                                        color: ConsoleColors.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
                                   Text(
-                                    '${school?['name'] ?? "School"} — ${inv?['invoice_number'] ?? ""}',
+                                    schoolName,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary),
+                                  ),
+                                ),
+                                DataCell(
+                                  Text(
+                                    '${InvoicePdfGenerator.formatTnd(amount)} $currency',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13.5,
-                                      color: ConsoleColors.textPrimary,
+                                      color: Color(0xFF6D4CF6),
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Réf: ${p['transaction_ref'] ?? "N/A"} • Amount: ${p['amount']} TND',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: ConsoleColors.textSecondary,
+                                ),
+                                DataCell(
+                                  Text(dueDate, style: const TextStyle(color: ConsoleColors.textSecondary, fontSize: 12.5)),
+                                ),
+                                DataCell(_buildStatusBadge(status)),
+                                DataCell(
+                                  SizedBox(
+                                    height: 32,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () async {
+                                        final invoiceData = InvoiceDataModel(
+                                          invoiceNumber: invNum,
+                                          date: DateTime.tryParse(inv['issue_date']?.toString() ?? '') ?? DateTime.now(),
+                                          issuerName: 'Aziz Tounsi',
+                                          matriculeFiscale: '2007778S',
+                                          clientName: schoolName,
+                                          timbreFiscal: 1.0,
+                                          items: [
+                                            InvoiceItemModel(
+                                              index: 1,
+                                              ref: 'P-0001',
+                                              designation: 'Abonnement Plateforme Académique SaaS',
+                                              quantity: 1,
+                                              unitPriceHt: amount > 1.0 ? amount - 1.0 : amount,
+                                              tvaPercent: 0.0,
+                                            ),
+                                          ],
+                                        );
+                                        await InvoicePdfGenerator.downloadOrPrintInvoice(invoiceData);
+                                      },
+                                      icon: const Icon(Icons.download_rounded, size: 14),
+                                      label: const Text('Télécharger PDF', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF6D4CF6),
+                                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                      ),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                final ok = await ref
-                                    .read(platformProvider.notifier)
-                                    .verifyPayment(p['id']);
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(ok
-                                        ? tr.settingsSavedToast
-                                        : 'Error validating payment.'),
-                                    backgroundColor: ok
-                                        ? ConsoleColors.success
-                                        : ConsoleColors.error,
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.check_rounded, size: 16),
-                              label: Text(tr.actionMarkPaid),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: ConsoleColors.success,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                              ),
-                            ),
-                          ],
+                                ),
+                              ],
+                            );
+                          }).toList(),
                         ),
-                      );
-                    }).toList(),
-                  ),
-          ),
-          const SizedBox(height: 22),
-          _surfaceCard(
-            title: '${tr.invoicesSectionTitle} (${invoices.length})',
-            child: invoices.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Center(
-                      child: Text(
-                        tr.noSchoolsRegistered,
-                        style: const TextStyle(color: ConsoleColors.textSecondary),
                       ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      headingRowColor:
-                          WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                      columns: [
-                        DataColumn(label: Text(tr.colInvoiceNumber)),
-                        DataColumn(label: Text(tr.colSchool)),
-                        DataColumn(label: Text(tr.colAmount)),
-                        DataColumn(label: Text(tr.colDueDate)),
-                        DataColumn(label: Text(tr.colStatus)),
-                      ],
-                      rows: invoices.map((inv) {
-                        final school = inv['school'] as Map<String, dynamic>?;
-                        return DataRow(
-                          cells: [
-                            DataCell(Text(
-                              inv['invoice_number'] ?? '',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: ConsoleColors.textPrimary,
-                              ),
-                            )),
-                            DataCell(Text(
-                              school?['name'] ?? '—',
-                              style: const TextStyle(
-                                  color: ConsoleColors.textSecondary),
-                            )),
-                            DataCell(Text(
-                              '${inv['amount']} ${inv['currency'] ?? 'TND'}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: ConsoleColors.textPrimary,
-                              ),
-                            )),
-                            DataCell(Text(
-                              inv['due_date'] ?? '—',
-                              style: const TextStyle(
-                                  color: ConsoleColors.textSecondary),
-                            )),
-                            DataCell(
-                                _buildStatusBadge(inv['status'] ?? 'issued')),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -988,28 +1853,39 @@ class _ConsoleDashboardScreenState
   Widget _buildAiTelemetryPage(PlatformState state, ConsoleStrings tr) {
     final settings = state.platformSettings;
     final killSwitch = settings?['global_ai_kill_switch'] == true;
-    final logs = state.recentAiLogs.where((l) {
+    final allLogs = state.recentAiLogs;
+
+    final filteredLogs = allLogs.where((l) {
       if (_searchQuery.isEmpty) return true;
       final model = (l['model'] ?? '').toString().toLowerCase();
-      final sName =
-          ((l['school'] as Map?)?['name'] ?? '').toString().toLowerCase();
+      final sName = ((l['school'] as Map?)?['name'] ?? '').toString().toLowerCase();
       return model.contains(_searchQuery) || sName.contains(_searchQuery);
     }).toList();
+
+    final pageStart = _telemetryPage * _telemetryPageSize;
+    final paginatedLogs = filteredLogs.skip(pageStart).take(_telemetryPageSize).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── KILL SWITCH ALERT ──
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: killSwitch ? ConsoleColors.errorSoft : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color:
-                    killSwitch ? ConsoleColors.error : ConsoleColors.cardBorder,
+                color: killSwitch ? ConsoleColors.error : ConsoleColors.cardBorder,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -1024,8 +1900,7 @@ class _ConsoleDashboardScreenState
                   ),
                   child: Icon(
                     killSwitch ? Icons.power_off : Icons.power,
-                    color:
-                        killSwitch ? ConsoleColors.error : ConsoleColors.success,
+                    color: killSwitch ? ConsoleColors.error : ConsoleColors.success,
                     size: 24,
                   ),
                 ),
@@ -1036,19 +1911,19 @@ class _ConsoleDashboardScreenState
                     children: [
                       Text(
                         killSwitch
-                            ? tr.killSwitchStatusBlocked
-                            : tr.killSwitchStatusActive,
+                            ? 'Kill Switch IA Général Activé — Requêtes Bloquées'
+                            : 'Passerelle IA Active & Opérationnelle',
                         style: TextStyle(
-                          color: killSwitch
-                              ? ConsoleColors.error
-                              : ConsoleColors.textPrimary,
+                          color: killSwitch ? ConsoleColors.error : ConsoleColors.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        tr.killSwitchWarning,
+                        killSwitch
+                            ? 'Toutes les requêtes Gemini/OpenAI des étudiants et professeurs sont actuellement suspendues.'
+                            : 'Supervisez la consommation en jetons et les dépenses réelles API par établissement.',
                         style: const TextStyle(
                           color: ConsoleColors.textSecondary,
                           fontSize: 12.5,
@@ -1066,62 +1941,163 @@ class _ConsoleDashboardScreenState
               ],
             ),
           ),
-          const SizedBox(height: 22),
-          _surfaceCard(
-            title: '${tr.aiUsageTitle} (${logs.length})',
-            child: logs.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Center(
-                      child: Text(
-                        tr.noSchoolsRegistered,
-                        style: const TextStyle(color: ConsoleColors.textSecondary),
-                      ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      headingRowColor:
-                          WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                      columns: [
-                        DataColumn(label: Text(tr.colSchool)),
-                        DataColumn(label: Text(tr.fieldDefaultModel)),
-                        DataColumn(label: Text(tr.totalTokensUsed)),
-                        DataColumn(label: Text(tr.totalCostUsd)),
-                        const DataColumn(label: Text('Latency')),
-                        DataColumn(label: Text(tr.colStatus)),
-                      ],
-                      rows: logs.map((l) {
-                        final school = l['school'] as Map<String, dynamic>?;
-                        final cost =
-                            (l['cost_usd'] as num?)?.toDouble() ?? 0.0;
-                        return DataRow(
-                          cells: [
-                            DataCell(Text(school?['name'] ?? '—')),
-                            DataCell(Text(
-                              l['model'] ?? '',
+          const SizedBox(height: 24),
+
+          // ── TELEMETRY LOGS TABLE ──
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: ConsoleColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Consommation IA & Télémétrie (${filteredLogs.length})',
                               style: const TextStyle(
-                                fontSize: 12,
-                                color: ConsoleColors.textSecondary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: ConsoleColors.textPrimary,
                               ),
-                            )),
-                            DataCell(Text('${l['total_tokens'] ?? 0}')),
-                            DataCell(Text(
-                              '\$${cost.toStringAsFixed(5)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: ConsoleColors.success,
-                              ),
-                            )),
-                            DataCell(Text('${l['latency_ms'] ?? "—"} ms')),
-                            DataCell(
-                                _buildStatusBadge(l['status'] ?? 'success')),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Coûts réels en dollars calculés sur les tokens d\'entrée/sortie et latences relevées.',
+                              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                            ),
                           ],
-                        );
-                      }).toList(),
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                const Divider(height: 1, color: ConsoleColors.divider),
+
+                filteredLogs.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.auto_awesome_outlined, size: 48, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Aucun log de télémétrie IA enregistré pour le moment.',
+                                style: TextStyle(fontSize: 14, color: ConsoleColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                          headingRowHeight: 46,
+                          dataRowMinHeight: 56,
+                          dataRowMaxHeight: 60,
+                          horizontalMargin: 24,
+                          columnSpacing: 28,
+                          columns: const [
+                            DataColumn(label: Text('ÉTABLISSEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('MODÈLE IA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('JETONS CONSOMMÉS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('COÛT RÉEL (USD)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('LATENCE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('STATUT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                          ],
+                          rows: paginatedLogs.map((l) {
+                            final school = l['school'] as Map<String, dynamic>?;
+                            final cost = (l['cost_usd'] as num?)?.toDouble() ?? 0.0;
+                            final model = l['model']?.toString() ?? 'gemini-1.5-flash';
+                            final tokens = l['total_tokens'] ?? 0;
+                            final latency = l['latency_ms'] ?? '—';
+                            final status = l['status']?.toString() ?? 'success';
+
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  Text(
+                                    school?['name'] ?? 'Plateforme',
+                                    style: const TextStyle(fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary),
+                                  ),
+                                ),
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      model,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontFamily: 'monospace',
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF334155),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataCell(Text('$tokens tokens', style: const TextStyle(fontSize: 12.5))),
+                                DataCell(
+                                  Text(
+                                    '\$${cost.toStringAsFixed(5)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: ConsoleColors.success,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(Text('$latency ms', style: const TextStyle(color: ConsoleColors.textSecondary, fontSize: 12))),
+                                DataCell(_buildStatusBadge(status)),
+                                DataCell(
+                                  school != null
+                                      ? IconButton(
+                                          icon: const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF6D4CF6)),
+                                          tooltip: 'Ajuster le quota de cette école',
+                                          onPressed: () => _showEditAiQuotaModal(context, school),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+
+                _buildTablePaginationBar(
+                  totalItems: filteredLogs.length,
+                  currentPage: _telemetryPage,
+                  pageSize: _telemetryPageSize,
+                  onPageChanged: (newPage) => setState(() => _telemetryPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _telemetryPageSize = newSize;
+                    _telemetryPage = 0;
+                  }),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1132,111 +2108,243 @@ class _ConsoleDashboardScreenState
   // 5. AUDIT PAGE
   // ══════════════════════════════════════════════════════════════
   Widget _buildAuditPage(PlatformState state, ConsoleStrings tr) {
-    final logs = state.auditLogs.where((a) {
-      if (_searchQuery.isEmpty) return true;
+    final allLogs = state.auditLogs;
+
+    final filteredLogs = allLogs.where((a) {
       final act = (a['action'] ?? '').toString().toLowerCase();
       final tbl = (a['target_table'] ?? '').toString().toLowerCase();
       final role = (a['actor_role'] ?? '').toString().toLowerCase();
-      return act.contains(_searchQuery) ||
-          tbl.contains(_searchQuery) ||
-          role.contains(_searchQuery);
+
+      if (_auditActionFilter != 'all') {
+        if (!act.contains(_auditActionFilter) && !tbl.contains(_auditActionFilter)) {
+          return false;
+        }
+      }
+
+      if (_searchQuery.isEmpty) return true;
+      return act.contains(_searchQuery) || tbl.contains(_searchQuery) || role.contains(_searchQuery);
     }).toList();
+
+    final pageStart = _auditPage * _auditPageSize;
+    final paginatedLogs = filteredLogs.skip(pageStart).take(_auditPageSize).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
-      child: _surfaceCard(
-        title: '${tr.headerAuditTitle} (${logs.length})',
-        child: logs.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.symmetric(vertical: 28),
-                child: Center(
-                  child: Text(
-                    tr.noAuditLogsFound,
-                    style: const TextStyle(color: ConsoleColors.textSecondary),
-                  ),
-                ),
-              )
-            : SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  headingRowColor:
-                      WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                  columns: [
-                    DataColumn(label: Text(tr.colTimestamp)),
-                    DataColumn(label: Text(tr.colSchool)),
-                    DataColumn(label: Text(tr.colActor)),
-                    DataColumn(label: Text(tr.colActionName)),
-                    DataColumn(label: Text(tr.colTargetSchool)),
-                  ],
-                  rows: logs.map((a) {
-                    final school = a['school'] as Map<String, dynamic>?;
-                    final date = a['created_at'] != null
-                        ? a['created_at'].toString().split('.')[0]
-                        : '';
-                    return DataRow(
-                      cells: [
-                        DataCell(Text(date,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: ConsoleColors.textSecondary))),
-                        DataCell(Text(school?['name'] ?? 'Platform')),
-                        DataCell(Text(
-                          a['actor_role'] ?? 'system',
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ConsoleColors.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Journaux d\'Audit Système (${filteredLogs.length})',
                           style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: ConsoleColors.brand,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: ConsoleColors.textPrimary,
                           ),
-                        )),
-                        DataCell(Text(
-                          a['action'] ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        )),
-                        DataCell(Text(a['target_table'] ?? '')),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Historique immuable de toutes les actions administratives et de sécurité.',
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                        ),
                       ],
-                    );
-                  }).toList(),
-                ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      _buildFilterChipItem(
+                        label: 'Tous',
+                        count: allLogs.length,
+                        isSelected: _auditActionFilter == 'all',
+                        onTap: () => setState(() {
+                          _auditActionFilter = 'all';
+                          _auditPage = 0;
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFilterChipItem(
+                        label: 'Auth',
+                        count: allLogs.where((l) => (l['action'] ?? '').toString().contains('login') || (l['target_table'] ?? '').toString().contains('user')).length,
+                        isSelected: _auditActionFilter == 'auth',
+                        onTap: () => setState(() {
+                          _auditActionFilter = 'auth';
+                          _auditPage = 0;
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFilterChipItem(
+                        label: 'Écoles',
+                        count: allLogs.where((l) => (l['target_table'] ?? '').toString().contains('school')).length,
+                        isSelected: _auditActionFilter == 'school',
+                        onTap: () => setState(() {
+                          _auditActionFilter = 'school';
+                          _auditPage = 0;
+                        }),
+                      ),
+                    ],
+                  ),
+                ],
               ),
+            ),
+            const Divider(height: 1, color: ConsoleColors.divider),
+
+            filteredLogs.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.history_toggle_off_rounded, size: 48, color: Colors.grey.shade300),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Aucun log d\'audit ne correspond à vos filtres.',
+                            style: TextStyle(fontSize: 14, color: ConsoleColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                      headingRowHeight: 46,
+                      dataRowMinHeight: 56,
+                      dataRowMaxHeight: 60,
+                      horizontalMargin: 24,
+                      columnSpacing: 28,
+                      columns: const [
+                        DataColumn(label: Text('HORODATAGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                        DataColumn(label: Text('ÉTABLISSEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                        DataColumn(label: Text('ACTEUR / RÔLE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                        DataColumn(label: Text('ACTION EFFECTUÉE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                        DataColumn(label: Text('TABLE CIBLE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                      ],
+                      rows: paginatedLogs.map((a) {
+                        final school = a['school'] as Map<String, dynamic>?;
+                        final date = a['created_at'] != null
+                            ? a['created_at'].toString().split('.')[0].replaceFirst('T', ' ')
+                            : '—';
+                        final role = a['actor_role'] ?? 'super_admin';
+                        final act = a['action'] ?? 'ACTION';
+                        final tbl = a['target_table'] ?? 'system';
+
+                        return DataRow(
+                          cells: [
+                            DataCell(Text(date, style: const TextStyle(fontSize: 12, color: ConsoleColors.textSecondary))),
+                            DataCell(Text(school?['name'] ?? 'Plateforme', style: const TextStyle(fontWeight: FontWeight.w600))),
+                            DataCell(
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEDE9FE),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  role.toString().toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF6D4CF6),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DataCell(Text(act, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                            DataCell(
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(tbl, style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+            _buildTablePaginationBar(
+              totalItems: filteredLogs.length,
+              currentPage: _auditPage,
+              pageSize: _auditPageSize,
+              onPageChanged: (newPage) => setState(() => _auditPage = newPage),
+              onPageSizeChanged: (newSize) => setState(() {
+                _auditPageSize = newSize;
+                _auditPage = 0;
+              }),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // ══════════════════════════════════════════════════════════════
-  // 6. BUG REPORTS PAGE
+  // 6. BUG REPORTS PAGE (MATCHING ANNOUNCEMENTS TABLE)
   // ══════════════════════════════════════════════════════════════
   Widget _buildBugReportsPage(PlatformState state, ConsoleStrings tr) {
-    final reports = state.bugReports.where((b) {
+    final allReports = state.bugReports;
+
+    final totalCount = allReports.length;
+    final openCount = allReports.where((b) => b['status'] == 'open' || b['status'] == 'sent').length;
+    final inProgressCount = allReports.where((b) => b['status'] == 'in_progress').length;
+    final resolvedCount = allReports.where((b) => b['status'] == 'resolved' || b['status'] == 'closed').length;
+
+    final filteredReports = allReports.where((b) {
+      final status = (b['status'] ?? 'open').toString().toLowerCase();
+      if (_bugStatusFilter == 'open' && (status != 'open' && status != 'sent')) return false;
+      if (_bugStatusFilter == 'in_progress' && status != 'in_progress') return false;
+      if (_bugStatusFilter == 'resolved' && (status != 'resolved' && status != 'closed')) return false;
+
       if (_searchQuery.isEmpty) return true;
       final t = (b['title'] ?? '').toString().toLowerCase();
       final d = (b['description'] ?? '').toString().toLowerCase();
       final s = (b['student_name'] ?? '').toString().toLowerCase();
-      return t.contains(_searchQuery) ||
-          d.contains(_searchQuery) ||
-          s.contains(_searchQuery);
+      final phone = (b['student_phone'] ?? '').toString().toLowerCase();
+      return t.contains(_searchQuery) || d.contains(_searchQuery) || s.contains(_searchQuery) || phone.contains(_searchQuery);
     }).toList();
 
-    final total = reports.length;
-    final openCount = reports
-        .where((b) => b['status'] == 'open' || b['status'] == 'sent')
-        .length;
-    final inProgressCount =
-        reports.where((b) => b['status'] == 'in_progress').length;
-    final resolvedCount = reports
-        .where((b) => b['status'] == 'resolved' || b['status'] == 'closed')
-        .length;
+    final pageStart = _bugsPage * _bugsPageSize;
+    final paginatedReports = filteredReports.skip(pageStart).take(_bugsPageSize).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── METRIC CARDS ──
           Row(
             children: [
               Expanded(
                 child: _buildMetricCard(
-                  tr.filterAllBugs,
-                  '$total',
-                  'Total incoming tickets',
+                  'Total Tickets',
+                  '$totalCount',
+                  'Signalements reçus',
                   Icons.bug_report_outlined,
                   ConsoleColors.primary,
                 ),
@@ -1244,9 +2352,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  tr.filterPendingBugs,
+                  'En Attente',
                   '$openCount',
-                  'Pending triage',
+                  'À analyser & qualifier',
                   Icons.error_outline,
                   ConsoleColors.error,
                 ),
@@ -1254,9 +2362,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  tr.filterInReviewBugs,
+                  'En Cours',
                   '$inProgressCount',
-                  'Under investigation',
+                  'En investigation active',
                   Icons.hourglass_top_rounded,
                   ConsoleColors.warning,
                 ),
@@ -1264,156 +2372,570 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  tr.filterResolvedBugs,
+                  'Résolus',
                   '$resolvedCount',
-                  'Fixed & verified',
+                  'Corrigés et validés',
                   Icons.check_circle_outline,
                   ConsoleColors.success,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 22),
-          _surfaceCard(
-            title: '${tr.headerBugsTitle} (${reports.length})',
-            child: reports.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
-                    child: Center(
-                      child: Text(
-                        'Aucun rapport de bug soumis pour l\'instant.',
-                        style: TextStyle(color: ConsoleColors.textSecondary),
-                      ),
-                    ),
-                  )
-                : ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: reports.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, idx) {
-                      final bug = reports[idx];
-                      final id = bug['id']?.toString() ?? '';
-                      final title = bug['title']?.toString() ?? 'Sans titre';
-                      final desc = bug['description']?.toString() ?? '';
-                      final status =
-                          bug['status']?.toString().toLowerCase() ?? 'open';
-                      final category = bug['category']?.toString() ?? 'Général';
-                      final studentName = bug['student_name']?.toString() ??
-                          'Étudiant anonyme';
-                      final studentCode = bug['student_code']?.toString();
-                      final schoolName = bug['schools']?['name']?.toString() ??
-                          bug['school_id']?.toString() ??
-                          'Non spécifié';
-                      final createdAt = bug['created_at']?.toString() ?? '';
-                      final isFallback = bug['_source'] == 'suggestions';
+          const SizedBox(height: 24),
 
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: ConsoleColors.surfaceSubtle,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: ConsoleColors.cardBorder),
-                        ),
+          // ── BUG REPORTS TABLE (MATCHING ANNOUNCEMENTS TABLE) ──
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: ConsoleColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  child: Row(
+                    children: [
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: ConsoleColors.brandSoft,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    category.toUpperCase(),
-                                    style: const TextStyle(
-                                      color: ConsoleColors.brand,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
+                            Text(
+                              'Signalements de Bugs & Retours Utilisateurs (${filteredReports.length})',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: ConsoleColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Consultez les détails, coordonnées directes de l\'étudiant et captures d\'écran associées.',
+                              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Filter tabs: Tous / En attente / En cours / Résolus
+                      Row(
+                        children: [
+                          _buildFilterChipItem(
+                            label: 'Tous',
+                            count: totalCount,
+                            isSelected: _bugStatusFilter == 'all',
+                            onTap: () => setState(() {
+                              _bugStatusFilter = 'all';
+                              _bugsPage = 0;
+                            }),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildFilterChipItem(
+                            label: 'En attente',
+                            count: openCount,
+                            isSelected: _bugStatusFilter == 'open',
+                            activeColor: ConsoleColors.error,
+                            onTap: () => setState(() {
+                              _bugStatusFilter = 'open';
+                              _bugsPage = 0;
+                            }),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildFilterChipItem(
+                            label: 'En cours',
+                            count: inProgressCount,
+                            isSelected: _bugStatusFilter == 'in_progress',
+                            activeColor: ConsoleColors.warning,
+                            onTap: () => setState(() {
+                              _bugStatusFilter = 'in_progress';
+                              _bugsPage = 0;
+                            }),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildFilterChipItem(
+                            label: 'Résolus',
+                            count: resolvedCount,
+                            isSelected: _bugStatusFilter == 'resolved',
+                            activeColor: ConsoleColors.success,
+                            onTap: () => setState(() {
+                              _bugStatusFilter = 'resolved';
+                              _bugsPage = 0;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: ConsoleColors.divider),
+
+                filteredReports.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_outline_rounded, size: 48, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Aucun ticket de bug dans cette catégorie.',
+                                style: TextStyle(fontSize: 14, color: ConsoleColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                          headingRowHeight: 46,
+                          dataRowMinHeight: 64,
+                          dataRowMaxHeight: 68,
+                          horizontalMargin: 24,
+                          columnSpacing: 28,
+                          columns: const [
+                            DataColumn(label: Text('ÉTABLISSEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('RAPPORTEUR & CONTACT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('TITRE DU SIGNALEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('STATUT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                            DataColumn(label: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF4B5563)))),
+                          ],
+                          rows: paginatedReports.map((bug) {
+                            final id = bug['id']?.toString() ?? '';
+                            final title = bug['title']?.toString() ?? 'Sans titre';
+                            final category = bug['category']?.toString() ?? 'Général';
+                            final status = bug['status']?.toString().toLowerCase() ?? 'open';
+                            final studentName = bug['student_name']?.toString() ?? 'Utilisateur anonyme';
+                            final studentPhone = bug['student_phone']?.toString();
+                            final schoolName = bug['schools']?['name']?.toString() ?? bug['school_id']?.toString() ?? 'École';
+                            final createdAt = bug['created_at'] != null ? bug['created_at'].toString().split('T')[0] : '—';
+                            final isFallback = bug['_source'] == 'suggestions';
+
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  Text(schoolName, style: const TextStyle(fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary)),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        title,
-                                        style: const TextStyle(
-                                          color: ConsoleColors.textPrimary,
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                                        studentName,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary),
                                       ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        '$studentName ${studentCode != null ? "($studentCode)" : ""} • $schoolName • ${createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt}',
-                                        style: const TextStyle(
-                                          color: ConsoleColors.textSecondary,
-                                          fontSize: 11.5,
+                                      if (studentPhone != null && studentPhone.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.phone_rounded, size: 12, color: Color(0xFF6D4CF6)),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              studentPhone,
+                                              style: const TextStyle(fontSize: 11.5, color: ConsoleColors.textSecondary),
+                                            ),
+                                          ],
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ),
-                                PopupMenuButton<String>(
-                                  initialValue: status,
-                                  onSelected: (val) => ref
-                                      .read(platformProvider.notifier)
-                                      .updateBugReportStatus(id, val,
-                                          isFallback: isFallback),
-                                  child: _buildBugStatusBadge(status),
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(
-                                        value: 'open',
-                                        child: Text('Marquer Ouvert')),
-                                    PopupMenuItem(
-                                        value: 'in_progress',
-                                        child: Text('Marquer En cours')),
-                                    PopupMenuItem(
-                                        value: 'resolved',
-                                        child: Text('Marquer Résolu')),
-                                    PopupMenuItem(
-                                        value: 'closed',
-                                        child: Text('Marquer Fermé')),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            if (desc.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: ConsoleColors.cardBorder),
-                                ),
-                                child: Text(
-                                  desc,
-                                  style: const TextStyle(
-                                    color: ConsoleColors.textSecondary,
-                                    fontSize: 13,
-                                    height: 1.4,
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: ConsoleColors.brandSoft,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      category.toUpperCase(),
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF6D4CF6)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ],
+                                DataCell(
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 240),
+                                    child: Text(
+                                      title,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  PopupMenuButton<String>(
+                                    initialValue: status,
+                                    tooltip: 'Changer le statut',
+                                    onSelected: (val) => ref.read(platformProvider.notifier).updateBugReportStatus(id, val, isFallback: isFallback),
+                                    child: _buildBugStatusBadge(status),
+                                    itemBuilder: (_) => const [
+                                      PopupMenuItem(value: 'open', child: Text('Marquer En attente')),
+                                      PopupMenuItem(value: 'in_progress', child: Text('Marquer En cours')),
+                                      PopupMenuItem(value: 'resolved', child: Text('Marquer Résolu')),
+                                      PopupMenuItem(value: 'closed', child: Text('Marquer Fermé')),
+                                    ],
+                                  ),
+                                ),
+                                DataCell(Text(createdAt, style: const TextStyle(fontSize: 12, color: ConsoleColors.textSecondary))),
+                                DataCell(
+                                  SizedBox(
+                                    height: 32,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _showBugDetailModal(context, bug),
+                                      icon: const Icon(Icons.visibility_outlined, size: 14),
+                                      label: const Text('Détails', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFF1F5F9),
+                                        foregroundColor: const Color(0xFF334155),
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+
+                _buildTablePaginationBar(
+                  totalItems: filteredReports.length,
+                  currentPage: _bugsPage,
+                  pageSize: _bugsPageSize,
+                  onPageChanged: (newPage) => setState(() => _bugsPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _bugsPageSize = newSize;
+                    _bugsPage = 0;
+                  }),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showBugDetailModal(BuildContext context, Map<String, dynamic> bug) {
+    final id = bug['id']?.toString() ?? '';
+    final title = bug['title']?.toString() ?? 'Sans titre';
+    final desc = bug['description']?.toString() ?? 'Aucune description fournie.';
+    final category = bug['category']?.toString() ?? 'Général';
+    final status = bug['status']?.toString().toLowerCase() ?? 'open';
+    final studentName = bug['student_name']?.toString() ?? 'Étudiant anonyme';
+    final studentCode = bug['student_code']?.toString();
+    final studentPhone = bug['student_phone']?.toString();
+    final studentEmail = bug['student_email']?.toString();
+    final schoolName = bug['schools']?['name']?.toString() ?? bug['school_id']?.toString() ?? 'Non spécifié';
+    final createdAt = bug['created_at']?.toString() ?? '—';
+    final isFallback = bug['_source'] == 'suggestions';
+    final screenshotUrl = (bug['screenshot_url'] ?? bug['attachment_url'])?.toString();
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.2),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Container(
+            width: 620,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.90,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: ConsoleColors.brandSoft,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          category.toUpperCase(),
+                          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF6D4CF6)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, color: ConsoleColors.textPrimary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18, color: ConsoleColors.textSecondary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionIndicator('Coordonnées du Rapporteur'),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.person_rounded, size: 17, color: Color(0xFF6D4CF6)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '$studentName ${studentCode != null ? "($studentCode)" : ""}',
+                                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: ConsoleColors.textPrimary),
+                                    ),
+                                  ),
+                                  Text(schoolName, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                ],
+                              ),
+                              const Divider(height: 20),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.phone_rounded, size: 16, color: ConsoleColors.success),
+                                        const SizedBox(width: 8),
+                                        SelectableText(
+                                          studentPhone ?? 'Téléphone non renseigné',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: studentPhone != null ? ConsoleColors.textPrimary : ConsoleColors.textTertiary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.email_outlined, size: 16, color: Color(0xFF2563EB)),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: SelectableText(
+                                            studentEmail ?? 'Email non renseigné',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              color: studentEmail != null ? ConsoleColors.textSecondary : ConsoleColors.textTertiary,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+
+                        _buildSectionIndicator('Description Détaillée du Problème'),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: SelectableText(
+                            desc,
+                            style: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF334155)),
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+
+                        if (screenshotUrl != null && screenshotUrl.isNotEmpty) ...[
+                          _buildSectionIndicator('Capture d\'écran Attachée'),
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) => Dialog(
+                                  backgroundColor: Colors.transparent,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(screenshotUrl, fit: BoxFit.contain),
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              height: 180,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Image.network(
+                                      screenshotUrl,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      errorBuilder: (_, _, _) => const Center(child: Text('Image indisponible')),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.6),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.zoom_in, color: Colors.white, size: 18),
+                                          SizedBox(width: 6),
+                                          Text('Cliquer pour agrandir', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                        ],
+
+                        _buildSectionIndicator('Statut Actuel & Prise en Charge'),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Text('Statut du ticket: ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 10),
+                            _buildBugStatusBadge(status),
+                            const Spacer(),
+                            Text('Date: ${createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt}',
+                                style: const TextStyle(fontSize: 12, color: ConsoleColors.textSecondary)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Footer
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                    border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    children: [
+                      PopupMenuButton<String>(
+                        initialValue: status,
+                        onSelected: (val) {
+                          ref.read(platformProvider.notifier).updateBugReportStatus(id, val, isFallback: isFallback);
+                          Navigator.pop(ctx);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF6D4CF6)),
+                              SizedBox(width: 8),
+                              Text('Changer le statut...', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                            ],
+                          ),
+                        ),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'open', child: Text('Marquer En attente')),
+                          PopupMenuItem(value: 'in_progress', child: Text('Marquer En cours')),
+                          PopupMenuItem(value: 'resolved', child: Text('Marquer Résolu')),
+                          PopupMenuItem(value: 'closed', child: Text('Marquer Fermé')),
+                        ],
+                      ),
+                      const Spacer(),
+                      SizedBox(
+                        height: 38,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6D4CF6),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Fermer'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1845,219 +3367,1146 @@ class _ConsoleDashboardScreenState
     List<Map<String, dynamic>> plans,
   ) {
     final nameCtrl = TextEditingController();
-    final codeCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final directorNameCtrl = TextEditingController();
+    final directorPhoneCtrl = TextEditingController();
     final directorEmailCtrl = TextEditingController();
     final directorPassCtrl = TextEditingController(text: 'Director2026!');
-    String selectedPlanId = plans.isNotEmpty ? plans[0]['id'] : '';
+    final aiBudgetCtrl = TextEditingController(text: '25.00');
+
+    String selectedPlanId = plans.isNotEmpty ? plans[0]['id'] as String : '';
     String? selectedLogoUrl;
     bool uploadingLogo = false;
+    bool creating = false;
+    bool showPassword = false;
+
+    int getPasswordStrength(String pwd) {
+      if (pwd.isEmpty) return 0;
+      int score = 0;
+      if (pwd.length >= 8) score++;
+      if (pwd.length >= 12) score++;
+      if (RegExp(r'[A-Z]').hasMatch(pwd) && RegExp(r'[a-z]').hasMatch(pwd)) score++;
+      if (RegExp(r'[0-9]').hasMatch(pwd)) score++;
+      if (RegExp(r'[!@#\$%&*]').hasMatch(pwd)) score++;
+      return score.clamp(0, 4);
+    }
+
+    void generatePassword(StateSetter setSbState) {
+      final now = DateTime.now().millisecondsSinceEpoch.toString();
+      final suffix = now.substring(now.length - 4);
+      setSbState(() {
+        directorPassCtrl.text = 'Director$suffix!';
+      });
+    }
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.12),
+      barrierColor: Colors.black.withValues(alpha: 0.2),
       builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: StatefulBuilder(
-          builder: (sbContext, setSbState) => AlertDialog(
-            title: const Text(
-              'Créer un Nouvel Établissement',
-              style: TextStyle(
-                color: ConsoleColors.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            content: SingleChildScrollView(
-              child: SizedBox(
-                width: 480,
+          builder: (sbContext, setSbState) {
+            final strength = getPasswordStrength(directorPassCtrl.text);
+            final strengthColor = strength <= 1
+                ? ConsoleColors.error
+                : strength == 2
+                    ? ConsoleColors.warning
+                    : strength == 3
+                        ? const Color(0xFF6D4CF6)
+                        : ConsoleColors.success;
+            final strengthLabel = strength <= 1
+                ? 'Faible'
+                : strength == 2
+                    ? 'Moyen'
+                    : strength == 3
+                        ? 'Fort'
+                        : 'Très fort';
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Container(
+                width: 660,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.90,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 40,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: ConsoleColors.surfaceSubtle,
-                            borderRadius: BorderRadius.circular(14),
-                            border:
-                                Border.all(color: ConsoleColors.cardBorder),
+                    // ── HEADER ──
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Ajouter un nouvel Établissement',
+                                  style: TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w700,
+                                    color: ConsoleColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Configurez l\'établissement SaaS, son accès directeur et son forfait.',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: uploadingLogo
-                              ? const Center(
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2))
-                              : _buildSchoolLogoThumb(
-                                  selectedLogoUrl,
-                                  size: 60,
-                                  radius: 14,
-                                ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: uploadingLogo
-                                    ? null
-                                    : () async {
-                                        setSbState(() => uploadingLogo = true);
-                                        try {
-                                          final url = await ref
-                                              .read(platformProvider.notifier)
-                                              .pickAndUploadSchoolLogo(
-                                                schoolId: codeCtrl.text
-                                                        .trim()
-                                                        .isNotEmpty
-                                                    ? codeCtrl.text.trim()
-                                                    : 'new_school',
-                                              );
-                                          if (!ctx.mounted) return;
-                                          if (url != null) {
-                                            setSbState(
-                                                () => selectedLogoUrl = url);
-                                          }
-                                        } catch (_) {} finally {
-                                          if (ctx.mounted) {
-                                            setSbState(
-                                                () => uploadingLogo = false);
-                                          }
-                                        }
-                                      },
-                                icon:
-                                    const Icon(Icons.image_outlined, size: 16),
-                                label:
-                                    const Text('Logo de l\'école (optionnel)'),
+                          InkWell(
+                            onTap: () => Navigator.pop(ctx),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFFF8FAFC),
                               ),
-                              if (selectedLogoUrl != null)
-                                TextButton(
-                                  onPressed: () =>
-                                      setSbState(() => selectedLogoUrl = null),
-                                  child: const Text('Par défaut'),
+                              child: const Icon(Icons.close, size: 18, color: ConsoleColors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ── FORM BODY ──
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ── SECTION 1: IDENTITÉ DE L'ÉTABLISSEMENT ──
+                            _buildSectionIndicator('Identité de l\'établissement'),
+                            const SizedBox(height: 16),
+
+                            // Logo Upload Row
+                            Row(
+                              children: [
+                                Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: uploadingLogo
+                                      ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                                      : _buildSchoolLogoThumb(selectedLogoUrl, size: 64, radius: 14),
                                 ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Logo de l\'école (recommandé)',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF334155),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      const Text(
+                                        'Format PNG, JPG ou WebP. Apparaît sur le portail et les factures.',
+                                        style: TextStyle(fontSize: 11.5, color: ConsoleColors.textSecondary),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          SizedBox(
+                                            height: 34,
+                                            child: OutlinedButton.icon(
+                                              onPressed: uploadingLogo
+                                                  ? null
+                                                  : () async {
+                                                      setSbState(() => uploadingLogo = true);
+                                                      try {
+                                                        final url = await ref
+                                                            .read(platformProvider.notifier)
+                                                            .pickAndUploadSchoolLogo(
+                                                              schoolId: nameCtrl.text.trim().isNotEmpty
+                                                                  ? nameCtrl.text.trim()
+                                                                  : 'new_school',
+                                                            );
+                                                        if (ctx.mounted && url != null) {
+                                                          setSbState(() => selectedLogoUrl = url);
+                                                        }
+                                                      } catch (_) {} finally {
+                                                        if (ctx.mounted) {
+                                                          setSbState(() => uploadingLogo = false);
+                                                        }
+                                                      }
+                                                    },
+                                              icon: const Icon(Icons.upload_file_rounded, size: 15),
+                                              label: const Text('Choisir un logo', style: TextStyle(fontSize: 12)),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: const Color(0xFF6D4CF6),
+                                                side: const BorderSide(color: Color(0xFF6D4CF6)),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                            ),
+                                          ),
+                                          if (selectedLogoUrl != null) ...[
+                                            const SizedBox(width: 8),
+                                            SizedBox(
+                                              height: 34,
+                                              child: TextButton(
+                                                onPressed: () => setSbState(() => selectedLogoUrl = null),
+                                                child: const Text('Par défaut', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+
+                            // School Name
+                            const Text('Nom complet de l\'établissement *',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: nameCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'Ex: ESPRIT, École Polytechnique, etc.',
+                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            // School Contact Email
+                            const Text('Email officiel de contact de l\'école *',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: emailCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'contact@etablissement.tn',
+                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                              ),
+                            ),
+                            const SizedBox(height: 26),
+
+                            // ── SECTION 2: DIRECTION & ACCÈS DIRECTEUR ──
+                            _buildSectionIndicator('Direction & Accès Directeur'),
+                            const SizedBox(height: 16),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Nom complet du Directeur *',
+                                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: directorNameCtrl,
+                                        decoration: InputDecoration(
+                                          hintText: 'Ex: Dr. Moncef Larbi',
+                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Téléphone du Directeur *',
+                                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: directorPhoneCtrl,
+                                        keyboardType: TextInputType.phone,
+                                        decoration: InputDecoration(
+                                          hintText: '+216 98 123 456',
+                                          prefixIcon: const Icon(Icons.phone_rounded, size: 16, color: Color(0xFF6D4CF6)),
+                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+
+                            const Text('Email connexion Directeur *',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: directorEmailCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'directeur@etablissement.tn',
+                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            const Text('Mot de passe temporaire *',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: directorPassCtrl,
+                                    obscureText: !showPassword,
+                                    onChanged: (_) => setSbState(() {}),
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: const Color(0xFFF8FAFC),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility, size: 18, color: Colors.grey),
+                                        onPressed: () => setSbState(() => showPassword = !showPassword),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                SizedBox(
+                                  height: 48,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => generatePassword(setSbState),
+                                    icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF6D4CF6)),
+                                    label: const Text('GÉNÉRER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF6D4CF6))),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                      backgroundColor: const Color(0xFFF8FAFC),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+
+                            // Password Strength Bar
+                            Row(
+                              children: List.generate(4, (i) {
+                                return Expanded(
+                                  child: Container(
+                                    height: 4,
+                                    margin: EdgeInsets.only(right: i < 3 ? 6 : 0),
+                                    decoration: BoxDecoration(
+                                      color: i < strength ? strengthColor : const Color(0xFFE2E8F0),
+                                      borderRadius: BorderRadius.circular(99),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('FORCE: ${strengthLabel.toUpperCase()}',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: strengthColor)),
+                                const Text('Recommandé: 8+ caractères avec chiffres & symboles',
+                                    style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: ConsoleColors.textTertiary)),
+                              ],
+                            ),
+                            const SizedBox(height: 26),
+
+                            // ── SECTION 3: ABONNEMENT & QUOTA IA INITIAL ──
+                            _buildSectionIndicator('Abonnement & Quota IA Initial'),
+                            const SizedBox(height: 16),
+
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Formule d\'abonnement SaaS *',
+                                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      DropdownButtonFormField<String>(
+                                        value: plans.any((p) => p['id'] == selectedPlanId)
+                                            ? selectedPlanId
+                                            : (plans.isNotEmpty ? plans[0]['id'] as String : null),
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                        ),
+                                        items: plans.map((p) {
+                                          return DropdownMenuItem<String>(
+                                            value: p['id'] as String,
+                                            child: Text('${p['name']} (${p['price_tnd_monthly']} TND/m)'),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) setSbState(() => selectedPlanId = val);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  flex: 2,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Budget IA initial (USD)',
+                                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: aiBudgetCtrl,
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        decoration: InputDecoration(
+                                          prefixText: '\$ ',
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // ── SUMMARY STRIP ──
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFAFAFB),
+                        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                      ),
+                      child: Row(
+                        children: [
+                          Row(
+                            children: [
+                              Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF6D4CF6), shape: BoxShape.circle)),
+                              const SizedBox(width: 8),
+                              const Text('TYPE: SAAS ÉTABLISSEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ConsoleColors.textSecondary)),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Nom de l\'établissement *'),
-                      onChanged: (val) {
-                        codeCtrl.text = val
-                            .toLowerCase()
-                            .replaceAll(RegExp(r'[^a-z0-9]'), '');
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: codeCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Code École (ex: esb, insat) *'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: emailCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Email Contact Établissement *'),
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: directorNameCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Nom complet du Directeur *'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: directorEmailCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Email connexion Directeur *'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: directorPassCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Mot de passe temporaire *'),
-                    ),
-                    const SizedBox(height: 16),
-                    if (plans.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                        value: selectedPlanId,
-                        decoration: const InputDecoration(
-                            labelText: 'Formule d\'abonnement'),
-                        items: plans.map((p) {
-                          return DropdownMenuItem<String>(
-                            value: p['id'] as String,
-                            child: Text(
-                                '${p['name']} (${p['price_tnd_monthly']} TND/m)'),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setSbState(() => selectedPlanId = val);
-                          }
-                        },
+                          const SizedBox(width: 20),
+                          Row(
+                            children: [
+                              Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF94A3B8), shape: BoxShape.circle)),
+                              const SizedBox(width: 8),
+                              const Text('CODE ÉCOLE: AUTO-GÉNÉRÉ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ConsoleColors.textSecondary)),
+                            ],
+                          ),
+                          const SizedBox(width: 20),
+                          Row(
+                            children: [
+                              Container(width: 7, height: 7, decoration: const BoxDecoration(color: ConsoleColors.success, shape: BoxShape.circle)),
+                              const SizedBox(width: 8),
+                              const Text('STATUT: ACTIF IMMÉDIAT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ConsoleColors.success)),
+                            ],
+                          ),
+                        ],
                       ),
+                    ),
+
+                    // ── FOOTER ACTIONS (EXACT 40PX BUTTONS) ──
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          SizedBox(
+                            height: 40,
+                            child: TextButton(
+                              onPressed: creating ? null : () => Navigator.pop(ctx),
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFF6B7280),
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                              ),
+                              child: const Text('Annuler', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              onPressed: creating || uploadingLogo
+                                  ? null
+                                  : () async {
+                                      final name = nameCtrl.text.trim();
+                                      final email = emailCtrl.text.trim();
+                                      final dName = directorNameCtrl.text.trim();
+                                      final dPhone = directorPhoneCtrl.text.trim();
+                                      final dEmail = directorEmailCtrl.text.trim();
+                                      final dPass = directorPassCtrl.text.trim();
+                                      final budget = double.tryParse(aiBudgetCtrl.text.trim()) ?? 25.0;
+
+                                      if (name.isEmpty || email.isEmpty || dEmail.isEmpty || dPass.isEmpty) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Veuillez remplir tous les champs obligatoires (*).'),
+                                            backgroundColor: ConsoleColors.error,
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      setSbState(() => creating = true);
+                                      final ok = await ref.read(platformProvider.notifier).createSchool(
+                                        name: name,
+                                        email: email,
+                                        directorPhone: dPhone,
+                                        logoUrl: selectedLogoUrl,
+                                        directorName: dName.isNotEmpty ? dName : 'Directeur $name',
+                                        directorEmail: dEmail,
+                                        directorPassword: dPass,
+                                        planId: selectedPlanId,
+                                        initialAiBudgetUsd: budget,
+                                      );
+
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(ok
+                                              ? 'Établissement "$name" créé avec succès !'
+                                              : (ref.read(platformProvider).errorMessage ?? 'Erreur lors de la création.')),
+                                          backgroundColor: ok ? ConsoleColors.success : ConsoleColors.error,
+                                        ),
+                                      );
+                                    },
+                              icon: creating
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.check_rounded, size: 17),
+                              label: const Text('Créer l\'Établissement', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6D4CF6),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 22),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Annuler')),
-              ElevatedButton(
-                onPressed: uploadingLogo
-                    ? null
-                    : () async {
-                        if (nameCtrl.text.trim().isEmpty ||
-                            codeCtrl.text.trim().isEmpty ||
-                            directorEmailCtrl.text.trim().isEmpty) {
-                          return;
-                        }
-                        Navigator.pop(ctx);
-                        final ok = await ref
-                            .read(platformProvider.notifier)
-                            .createSchool(
-                              name: nameCtrl.text.trim(),
-                              code: codeCtrl.text.trim(),
-                              email: emailCtrl.text.trim(),
-                              logoUrl: selectedLogoUrl,
-                              directorName: directorNameCtrl.text.trim(),
-                              directorEmail: directorEmailCtrl.text.trim(),
-                              directorPassword: directorPassCtrl.text.trim(),
-                              planId: selectedPlanId,
-                            );
+            );
+          },
+        ),
+      ),
+    );
+  }
 
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(ok
-                                ? 'Établissement créé avec succès !'
-                                : 'Erreur de création.'),
-                            backgroundColor: ok
-                                ? ConsoleColors.success
-                                : ConsoleColors.error,
-                          ),
-                        );
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ConsoleColors.brand,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
+  void _showInvoiceGeneratorModal(
+    BuildContext context,
+    List<Map<String, dynamic>> schools, {
+    String? preselectedSchoolId,
+  }) {
+    if (schools.isEmpty) return;
+
+    String selectedSchoolId = preselectedSchoolId ?? schools[0]['id'] as String;
+    final now = DateTime.now();
+    final invoiceNumberCtrl = TextEditingController(text: 'FAC-${now.year}-${schools.length.toString().padLeft(6, '0')}');
+    final designationCtrl = TextEditingController(text: 'application');
+    final quantityCtrl = TextEditingController(text: '1');
+    final unitPriceCtrl = TextEditingController(text: '3200.000');
+    final tvaRateCtrl = TextEditingController(text: '0');
+    final timbreFiscalCtrl = TextEditingController(text: '1.000');
+    final issuerNameCtrl = TextEditingController(text: 'Aziz Tounsi');
+    final matriculeCtrl = TextEditingController(text: '2007778S');
+
+    bool savingAndDownloading = false;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.2),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: StatefulBuilder(
+          builder: (sbContext, setSbState) {
+            final currentSchool = schools.firstWhere(
+              (s) => s['id'] == selectedSchoolId,
+              orElse: () => schools[0],
+            );
+            final clientName = (currentSchool['name'] ?? 'Client').toString();
+
+            final qty = int.tryParse(quantityCtrl.text.trim()) ?? 1;
+            final pu = double.tryParse(unitPriceCtrl.text.trim().replaceAll(',', '.')) ?? 3200.0;
+            final tvaRate = double.tryParse(tvaRateCtrl.text.trim()) ?? 0.0;
+            final timbre = double.tryParse(timbreFiscalCtrl.text.trim().replaceAll(',', '.')) ?? 1.0;
+
+            final totalHt = qty * pu;
+            final tvaAmount = totalHt * (tvaRate / 100.0);
+            final totalTtc = totalHt + tvaAmount;
+            final netToPay = totalTtc + timbre;
+            final legalSentence = FrenchNumberToWords.toLegalSentence(netToPay);
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Container(
+                width: 700,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.92,
                 ),
-                child: const Text('Créer l\'Établissement'),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 40,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: ConsoleColors.success.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.picture_as_pdf_rounded, color: ConsoleColors.success, size: 22),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Générateur de Facture Officielle (PDF)',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: ConsoleColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Format identique à FACTURE FAC-2026-000001 (Arrêté légal en toutes lettres & Timbre fiscal)',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18, color: ConsoleColors.textSecondary),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Scrollable Config Form
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionIndicator('Informations de la Facture'),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Établissement Client *',
+                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      DropdownButtonFormField<String>(
+                                        value: selectedSchoolId,
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        ),
+                                        items: schools.map((s) {
+                                          return DropdownMenuItem<String>(
+                                            value: s['id'] as String,
+                                            child: Text(s['name'] as String? ?? ''),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) setSbState(() => selectedSchoolId = val);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Numéro de Facture *',
+                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: invoiceNumberCtrl,
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Émetteur (Fournisseur)',
+                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: issuerNameCtrl,
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Matricule Fiscale',
+                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: matriculeCtrl,
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 22),
+
+                            _buildSectionIndicator('Lignes d\'articles & Tarification'),
+                            const SizedBox(height: 14),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Désignation *',
+                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: designationCtrl,
+                                        onChanged: (_) => setSbState(() {}),
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  flex: 1,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Qté',
+                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: quantityCtrl,
+                                        keyboardType: TextInputType.number,
+                                        onChanged: (_) => setSbState(() {}),
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  flex: 2,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('P.U HT (DT)',
+                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: unitPriceCtrl,
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        onChanged: (_) => setSbState(() {}),
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Live Summary & Calculations Card
+                            Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Total HT:', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
+                                      Text(InvoicePdfGenerator.formatTnd(totalHt),
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('TVA (0%):', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
+                                      Text(InvoicePdfGenerator.formatTnd(tvaAmount),
+                                          style: const TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Total TTC:', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
+                                      Text(InvoicePdfGenerator.formatTnd(totalTtc),
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Timbre fiscal:', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
+                                      Text(InvoicePdfGenerator.formatTnd(timbre),
+                                          style: const TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
+                                    ],
+                                  ),
+                                  const Divider(height: 18),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Net à payer:',
+                                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: ConsoleColors.textPrimary)),
+                                      Text(InvoicePdfGenerator.formatTnd(netToPay),
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF6D4CF6))),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: Text(
+                                      legalSentence,
+                                      style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Color(0xFF475569)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Footer Buttons
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          SizedBox(
+                            height: 40,
+                            child: TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              style: TextButton.styleFrom(foregroundColor: const Color(0xFF6B7280)),
+                              child: const Text('Fermer', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Direct Print/Download PDF without DB saving
+                          SizedBox(
+                            height: 40,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final invoiceData = InvoiceDataModel(
+                                  invoiceNumber: invoiceNumberCtrl.text.trim(),
+                                  date: now,
+                                  issuerName: issuerNameCtrl.text.trim(),
+                                  matriculeFiscale: matriculeCtrl.text.trim(),
+                                  clientName: clientName,
+                                  timbreFiscal: timbre,
+                                  items: [
+                                    InvoiceItemModel(
+                                      index: 1,
+                                      ref: 'P-0001',
+                                      designation: designationCtrl.text.trim(),
+                                      quantity: qty,
+                                      unitPriceHt: pu,
+                                      tvaPercent: tvaRate,
+                                    ),
+                                  ],
+                                );
+                                await InvoicePdfGenerator.downloadOrPrintInvoice(invoiceData);
+                              },
+                              icon: const Icon(Icons.print_rounded, size: 16),
+                              label: const Text('Imprimer / Aperçu PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF6D4CF6),
+                                side: const BorderSide(color: Color(0xFF6D4CF6)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Save to DB and download PDF
+                          SizedBox(
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              onPressed: savingAndDownloading
+                                  ? null
+                                  : () async {
+                                      setSbState(() => savingAndDownloading = true);
+                                      final item = InvoiceItemModel(
+                                        index: 1,
+                                        ref: 'P-0001',
+                                        designation: designationCtrl.text.trim(),
+                                        quantity: qty,
+                                        unitPriceHt: pu,
+                                        tvaPercent: tvaRate,
+                                      );
+                                      final invoiceData = InvoiceDataModel(
+                                        invoiceNumber: invoiceNumberCtrl.text.trim(),
+                                        date: now,
+                                        issuerName: issuerNameCtrl.text.trim(),
+                                        matriculeFiscale: matriculeCtrl.text.trim(),
+                                        clientName: clientName,
+                                        timbreFiscal: timbre,
+                                        items: [item],
+                                      );
+
+                                      final inserted = await ref.read(platformProvider.notifier).createDetailedInvoice(
+                                        schoolId: selectedSchoolId,
+                                        invoiceNumber: invoiceData.invoiceNumber,
+                                        issueDate: now.toIso8601String().split('T')[0],
+                                        dueDate: now.add(const Duration(days: 30)).toIso8601String().split('T')[0],
+                                        clientName: clientName,
+                                        issuerName: invoiceData.issuerName,
+                                        issuerCountry: 'TN',
+                                        matriculeFiscale: invoiceData.matriculeFiscale,
+                                        items: [item.toJson()],
+                                        totalHt: totalHt,
+                                        tvaRate: tvaRate,
+                                        tvaAmount: tvaAmount,
+                                        timbreFiscal: timbre,
+                                        totalTtc: totalTtc,
+                                        netToPay: netToPay,
+                                        amountInWords: legalSentence,
+                                      );
+
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                      if (inserted != null) {
+                                        await InvoicePdfGenerator.downloadOrPrintInvoice(invoiceData);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Facture enregistrée et PDF généré avec succès !'),
+                                              backgroundColor: ConsoleColors.success,
+                                            ),
+                                          );
+                                        }
+                                      } else {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Erreur lors de l\'enregistrement de la facture.'),
+                                              backgroundColor: ConsoleColors.error,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                              icon: savingAndDownloading
+                                  ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.download_rounded, size: 16),
+                              label: const Text('Enregistrer & Télécharger PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6D4CF6),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -2067,102 +4516,6 @@ class _ConsoleDashboardScreenState
     BuildContext context,
     List<Map<String, dynamic>> schools,
   ) {
-    if (schools.isEmpty) return;
-    String selectedSchoolId = schools[0]['id'];
-    final amountCtrl = TextEditingController(text: '850.00');
-    final dueDateCtrl = TextEditingController(
-      text: DateTime.now()
-          .add(const Duration(days: 14))
-          .toIso8601String()
-          .split('T')[0],
-    );
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.12),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-        child: StatefulBuilder(
-          builder: (sbContext, setSbState) => AlertDialog(
-            title: const Text(
-              'Émettre Facture Manuelle',
-              style: TextStyle(
-                color: ConsoleColors.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: selectedSchoolId,
-                    decoration:
-                        const InputDecoration(labelText: 'Établissement'),
-                    items: schools.map((s) {
-                      return DropdownMenuItem<String>(
-                        value: s['id'] as String,
-                        child: Text(s['name'] as String? ?? ''),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) setSbState(() => selectedSchoolId = val);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration:
-                        const InputDecoration(labelText: 'Montant (TND) *'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: dueDateCtrl,
-                    decoration: const InputDecoration(
-                        labelText: 'Date d\'échéance (YYYY-MM-DD) *'),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Annuler')),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
-                  final ok = await ref
-                      .read(platformProvider.notifier)
-                      .issueManualInvoice(
-                        schoolId: selectedSchoolId,
-                        amount: amount,
-                        dueDate: dueDateCtrl.text.trim(),
-                      );
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(ok
-                          ? 'Facture émise avec succès !'
-                          : 'Erreur lors de l\'émission.'),
-                      backgroundColor:
-                          ok ? ConsoleColors.success : ConsoleColors.error,
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ConsoleColors.brand,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                ),
-                child: const Text('Émettre'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    _showInvoiceGeneratorModal(context, schools);
   }
 }

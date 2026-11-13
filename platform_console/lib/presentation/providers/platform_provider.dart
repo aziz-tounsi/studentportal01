@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -177,47 +178,91 @@ class PlatformNotifier extends Notifier<PlatformState> {
         auditLogs = List<Map<String, dynamic>>.from(auditResp);
       } catch (_) {}
 
-      // 7. Bug Reports
+      // 7. Bug Reports (with rich reporter & school enrichment)
       List<Map<String, dynamic>> bugReports = [];
       try {
         final brResp = await _supabase
             .from('bug_reports')
-            .select('*')
+            .select('''
+              *,
+              schools:school_id(name, code, logo_url)
+            ''')
             .order('created_at', ascending: false);
         bugReports = List<Map<String, dynamic>>.from(brResp);
       } catch (_) {
         try {
-          final brFallback = await _supabase
-              .from('suggestions')
-              .select('id, student_id, subject, message, status, created_at')
-              .order('created_at', ascending: false)
-              .limit(50);
-
-          bugReports = List<Map<String, dynamic>>.from(brFallback).map((s) {
-            return {
-              'id': s['id'],
-              'user_id': s['student_id'],
-              'school_id': null,
-              'student_name': 'Élève',
-              'student_code': null,
-              'title': s['subject'] ?? 'Signalement',
-              'description': s['message'] ?? '',
-              'category': 'App',
-              'attachment_urls': <String>[],
-              'status': s['status'] ?? 'open',
-              'created_at': s['created_at'],
-              'schools': null,
-              '_source': 'suggestions',
-            };
-          }).toList();
+          final brRespSimple = await _supabase
+              .from('bug_reports')
+              .select('*')
+              .order('created_at', ascending: false);
+          bugReports = List<Map<String, dynamic>>.from(brRespSimple);
         } catch (_) {
-          bugReports = [];
+          try {
+            final brFallback = await _supabase
+                .from('suggestions')
+                .select('id, student_id, subject, message, status, created_at')
+                .order('created_at', ascending: false)
+                .limit(50);
+
+            bugReports = List<Map<String, dynamic>>.from(brFallback).map((s) {
+              return {
+                'id': s['id'],
+                'user_id': s['student_id'],
+                'school_id': null,
+                'student_name': 'Élève',
+                'student_code': null,
+                'title': s['subject'] ?? 'Signalement',
+                'description': s['message'] ?? '',
+                'category': 'App',
+                'attachment_urls': <String>[],
+                'status': s['status'] ?? 'open',
+                'created_at': s['created_at'],
+                'schools': null,
+                '_source': 'suggestions',
+              };
+            }).toList();
+          } catch (_) {
+            bugReports = [];
+          }
         }
       }
 
-      // 8. KPIs (using safe _extractMap helper)
+      // Enrich bug reports with reporter's phone, email, etc.
+      try {
+        final userIds = bugReports
+            .map((b) => b['user_id'])
+            .where((id) => id != null && id.toString().isNotEmpty)
+            .map((id) => id.toString())
+            .toSet()
+            .toList();
+
+        if (userIds.isNotEmpty) {
+          final usersData = await _supabase
+              .from('users')
+              .select('id, full_name, phone, email, student_code, school_id, schools:school_id(name)')
+              .inFilter('id', userIds);
+
+          final userMap = {for (final u in usersData) u['id'].toString(): u};
+          bugReports = bugReports.map((b) {
+            final uid = b['user_id']?.toString();
+            final u = uid != null ? userMap[uid] : null;
+            final schoolObj = _extractMap(b['schools']) ?? _extractMap(u?['schools']);
+            return {
+              ...b,
+              'reporter_phone': u?['phone'] ?? b['reporter_phone'],
+              'reporter_email': u?['email'] ?? b['reporter_email'],
+              'student_name': b['student_name'] ?? u?['full_name'] ?? 'Utilisateur',
+              'student_code': b['student_code'] ?? u?['student_code'],
+              'school_name': schoolObj?['name'] ?? b['school_name'] ?? 'Non spécifié',
+            };
+          }).toList();
+        }
+      } catch (_) {}
+
+      // 8. Real AI Spend & KPIs (using safe _extractMap helper)
       double mrr = 0.0;
-      double aiSpend = 0.0;
+      double quotasAiSpend = 0.0;
+      int quotasTokens = 0;
       for (final s in schools) {
         final sub = _extractMap(s['school_subscriptions']);
         if (sub != null) {
@@ -229,10 +274,22 @@ class PlatformNotifier extends Notifier<PlatformState> {
         }
         final quota = _extractMap(s['ai_school_quotas']);
         if (quota != null) {
-          aiSpend +=
+          quotasAiSpend +=
               (quota['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
+          quotasTokens +=
+              (quota['tokens_current_month'] as num?)?.toInt() ?? 0;
         }
       }
+
+      double logsSpend = 0.0;
+      int logsTokens = 0;
+      for (final log in aiLogs) {
+        logsSpend += (log['cost_usd'] as num?)?.toDouble() ?? 0.0;
+        logsTokens += (log['total_tokens'] as num?)?.toInt() ?? 0;
+      }
+
+      final realAiSpend = quotasAiSpend > logsSpend ? quotasAiSpend : logsSpend;
+      final realAiTokens = quotasTokens > logsTokens ? quotasTokens : logsTokens;
 
       _currentState = _currentState.copyWith(
         isLoading: false,
@@ -250,7 +307,8 @@ class PlatformNotifier extends Notifier<PlatformState> {
           'activeSchools':
               schools.where((s) => s['is_active'] == true).length,
           'mrrTnd': mrr,
-          'aiSpendUsd': aiSpend,
+          'aiSpendUsd': realAiSpend,
+          'aiTokensMonth': realAiTokens,
           'pendingCount': pendingPayments.length,
           'bugReportsCount': bugReports.length,
           'openBugsCount': bugReports
@@ -364,19 +422,30 @@ class PlatformNotifier extends Notifier<PlatformState> {
 
   Future<bool> createSchool({
     required String name,
-    required String code,
+    String? code,
     required String email,
+    String? directorPhone,
+    String? address,
     String? logoUrl,
     required String directorName,
     required String directorEmail,
     required String directorPassword,
     required String planId,
+    String billingCycle = 'monthly',
+    double initialAiBudgetUsd = 20.00,
+    int dailyAiMessages = 30,
   }) async {
     try {
+      final effectiveCode = (code != null && code.trim().isNotEmpty ? code : name)
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
       final school = await _supabase.from('schools').insert({
         'name': name,
-        'code': code.toLowerCase().trim(),
+        'code': effectiveCode,
         'email': email,
+        if (directorPhone != null && directorPhone.isNotEmpty) 'phone': directorPhone,
+        if (address != null && address.isNotEmpty) 'address': address,
         if (logoUrl != null && logoUrl.isNotEmpty) 'logo_url': logoUrl,
         'is_active': true,
       }).select().single();
@@ -385,9 +454,10 @@ class PlatformNotifier extends Notifier<PlatformState> {
 
       await _supabase.from('ai_school_quotas').upsert({
         'school_id': schoolId,
-        'monthly_budget_usd': 25.00,
+        'monthly_budget_usd': initialAiBudgetUsd,
         'spent_current_month_usd': 0.0,
         'tokens_current_month': 0,
+        'daily_messages_per_student': dailyAiMessages,
         'is_quota_exceeded': false,
         'kill_switch_enabled': false,
       });
@@ -396,15 +466,18 @@ class PlatformNotifier extends Notifier<PlatformState> {
         'school_id': schoolId,
         'plan_id': planId,
         'status': 'active',
-        'billing_cycle': 'monthly',
+        'billing_cycle': billingCycle,
         'current_period_start': DateTime.now().toIso8601String(),
-        'current_period_end': DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+        'current_period_end': billingCycle == 'yearly'
+            ? DateTime.now().add(const Duration(days: 365)).toIso8601String()
+            : DateTime.now().add(const Duration(days: 30)).toIso8601String(),
       });
 
       final userResult = await UserManagementService.createUser(
         email: directorEmail,
         password: directorPassword,
         fullName: directorName,
+        phone: directorPhone,
         role: 'owner',
         schoolId: schoolId,
         forcePasswordChange: true,
@@ -417,8 +490,165 @@ class PlatformNotifier extends Notifier<PlatformState> {
       await loadAll();
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: 'Échec création école: $e');
+      _currentState = _currentState.copyWith(errorMessage: 'Échec création école: $e');
+      try { state = _currentState; } catch (_) {}
       return false;
+    }
+  }
+
+  Future<bool> createSubscriptionPlan({
+    required String code,
+    required String name,
+    required String description,
+    required double priceTndMonthly,
+    required double priceTndYearly,
+    required double priceEurMonthly,
+    required int maxStudents,
+    double maxStorageGb = 20.0,
+    int dailyAiMessages = 30,
+    int monthlyAiTokenBudget = 5000000,
+    bool hasWhiteLabel = false,
+    bool hasPrioritySupport = false,
+    String pricingModel = 'monthly_fixed', // 'monthly_fixed' | 'per_student' | 'custom'
+  }) async {
+    try {
+      final cleanCode = (code.trim().isNotEmpty ? code : name)
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9_-]'), '');
+
+      await _supabase.from('subscription_plans').insert({
+        'code': cleanCode,
+        'name': name,
+        'description': '[$pricingModel] $description',
+        'price_tnd_monthly': priceTndMonthly,
+        'price_tnd_yearly': priceTndYearly,
+        'price_eur_monthly': priceEurMonthly,
+        'max_students': maxStudents,
+        'max_storage_gb': maxStorageGb,
+        'daily_ai_messages_per_student': dailyAiMessages,
+        'monthly_ai_token_budget_school': monthlyAiTokenBudget,
+        'has_white_label': hasWhiteLabel,
+        'has_priority_support': hasPrioritySupport,
+        'is_active': true,
+      });
+
+      await loadAll();
+      return true;
+    } catch (e) {
+      _currentState = _currentState.copyWith(errorMessage: 'Erreur création plan: $e');
+      try { state = _currentState; } catch (_) {}
+      return false;
+    }
+  }
+
+  Future<bool> updateSchoolAiQuota({
+    required String schoolId,
+    required double monthlyBudgetUsd,
+    int? dailyMessagesPerStudent,
+    bool? killSwitchEnabled,
+  }) async {
+    try {
+      final current = await _supabase
+          .from('ai_school_quotas')
+          .select('spent_current_month_usd')
+          .eq('school_id', schoolId)
+          .maybeSingle();
+      final spent = (current?['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
+      final isExceeded = spent >= monthlyBudgetUsd;
+
+      await _supabase.from('ai_school_quotas').upsert({
+        'school_id': schoolId,
+        'monthly_budget_usd': monthlyBudgetUsd,
+        if (dailyMessagesPerStudent != null)
+          'daily_messages_per_student': dailyMessagesPerStudent,
+        if (killSwitchEnabled != null)
+          'kill_switch_enabled': killSwitchEnabled,
+        'is_quota_exceeded': isExceeded,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      await loadAll();
+      return true;
+    } catch (e) {
+      _currentState = _currentState.copyWith(errorMessage: 'Erreur quota IA: $e');
+      try { state = _currentState; } catch (_) {}
+      return false;
+    }
+  }
+
+  Future<bool> updateSchoolSubscriptionPlan({
+    required String schoolId,
+    required String planId,
+    String? billingCycle,
+  }) async {
+    try {
+      await _supabase.from('school_subscriptions').update({
+        'plan_id': planId,
+        if (billingCycle != null) 'billing_cycle': billingCycle,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('school_id', schoolId);
+
+      await loadAll();
+      return true;
+    } catch (e) {
+      _currentState = _currentState.copyWith(errorMessage: 'Erreur plan: $e');
+      try { state = _currentState; } catch (_) {}
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> createDetailedInvoice({
+    required String schoolId,
+    required String invoiceNumber,
+    required String issueDate,
+    required String dueDate,
+    required String clientName,
+    required String issuerName,
+    required String issuerCountry,
+    required String matriculeFiscale,
+    required List<Map<String, dynamic>> items,
+    required double totalHt,
+    required double tvaRate,
+    required double tvaAmount,
+    required double timbreFiscal,
+    required double totalTtc,
+    required double netToPay,
+    required String amountInWords,
+  }) async {
+    try {
+      final notesData = {
+        'invoice_number': invoiceNumber,
+        'client_name': clientName,
+        'issuer_name': issuerName,
+        'issuer_country': issuerCountry,
+        'matricule_fiscale': matriculeFiscale,
+        'items': items,
+        'total_ht': totalHt,
+        'tva_rate': tvaRate,
+        'tva_amount': tvaAmount,
+        'timbre_fiscal': timbreFiscal,
+        'total_ttc': totalTtc,
+        'net_to_pay': netToPay,
+        'amount_in_words': amountInWords,
+      };
+
+      final inserted = await _supabase.from('invoices').insert({
+        'invoice_number': invoiceNumber,
+        'school_id': schoolId,
+        'amount': netToPay,
+        'currency': 'TND',
+        'status': 'issued',
+        'issue_date': issueDate,
+        'due_date': dueDate,
+        'notes': jsonEncode(notesData),
+      }).select().single();
+
+      await loadAll();
+      return inserted;
+    } catch (e) {
+      _currentState = _currentState.copyWith(errorMessage: 'Erreur facture: $e');
+      try { state = _currentState; } catch (_) {}
+      return null;
     }
   }
 
