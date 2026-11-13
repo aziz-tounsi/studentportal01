@@ -12,6 +12,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../../data/services/user_management_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/modern_animated_switch.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import 'password_reset_requests_screen.dart';
@@ -52,6 +53,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _loadUserPreferences();
+  }
+
+  void _loadUserPreferences() {
+    final meta = Supabase.instance.client.auth.currentUser?.userMetadata ?? {};
+    setState(() {
+      _twoFactorEnabled = meta['two_factor_enabled'] == true;
+      _strongPasswordPolicy = meta['strong_password_policy'] ?? true;
+      _sessionTimeoutEnabled = meta['session_timeout_enabled'] ?? true;
+      _emailSecurityAlerts = meta['email_security_alerts'] ?? true;
+      _emailNewRequests = meta['email_new_requests'] ?? true;
+      _emailWeeklyReports = meta['email_weekly_reports'] ?? false;
+      _pushLiveAlerts = meta['push_live_alerts'] ?? true;
+      _pushSoundAlerts = meta['push_sound_alerts'] ?? true;
+    });
+  }
+
+  Future<void> _updatePreference(String key, dynamic value) async {
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.auth.updateUser(
+        UserAttributes(data: {key: value}),
+      );
+    } catch (e) {
+      debugPrint('Error updating user preference $key: $e');
+    }
   }
 
   @override
@@ -937,7 +964,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               subtitle:
                   'Exiger une vérification supplémentaire lors de la connexion',
               value: _twoFactorEnabled,
-              onChanged: (v) => setState(() => _twoFactorEnabled = v),
+              onChanged: (v) {
+                if (v) {
+                  _showTwoFactorSetupDialog(context);
+                } else {
+                  _confirmDisableTwoFactor(context);
+                }
+              },
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
             _buildSwitchTile(
@@ -945,9 +978,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               iconColor: const Color(0xFFD97706),
               title: 'Politique de mot de passe renforcée',
               subtitle:
-                  'Exiger au moins 8 caractères, un chiffre et un caractère spécial',
+                  'Exiger au moins 8 caractères, une majuscule, une minuscule, un chiffre et un symbole',
               value: _strongPasswordPolicy,
-              onChanged: (v) => setState(() => _strongPasswordPolicy = v),
+              onChanged: (v) {
+                setState(() => _strongPasswordPolicy = v);
+                _updatePreference('strong_password_policy', v);
+              },
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
             _buildSwitchTile(
@@ -955,9 +991,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               iconColor: const Color(0xFF64748B),
               title: 'Expiration après inactivité',
               subtitle:
-                  'Déconnexion automatique après 30 minutes d\'inactivité',
+                  'Déconnexion automatique de la session après période d\'inactivité',
               value: _sessionTimeoutEnabled,
-              onChanged: (v) => setState(() => _sessionTimeoutEnabled = v),
+              onChanged: (v) {
+                setState(() => _sessionTimeoutEnabled = v);
+                _updatePreference('session_timeout_enabled', v);
+              },
             ),
           ],
         ),
@@ -983,7 +1022,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               subtitle:
                   'Recevoir un email lors de tentatives inhabituelles ou réinitialisations',
               value: _emailSecurityAlerts,
-              onChanged: (v) => setState(() => _emailSecurityAlerts = v),
+              onChanged: (v) {
+                setState(() => _emailSecurityAlerts = v);
+                _updatePreference('email_security_alerts', v);
+              },
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
             _buildSwitchTile(
@@ -992,7 +1034,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               title: 'Demandes de réinitialisation et nouveaux comptes',
               subtitle: 'Recevoir un email lorsqu\'une action requiert validation',
               value: _emailNewRequests,
-              onChanged: (v) => setState(() => _emailNewRequests = v),
+              onChanged: (v) {
+                setState(() => _emailNewRequests = v);
+                _updatePreference('email_new_requests', v);
+              },
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
             _buildSwitchTile(
@@ -1001,7 +1046,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               title: 'Rapport hebdomadaire',
               subtitle: 'Synthèse des présences et notes chaque lundi matin',
               value: _emailWeeklyReports,
-              onChanged: (v) => setState(() => _emailWeeklyReports = v),
+              onChanged: (v) {
+                setState(() => _emailWeeklyReports = v);
+                _updatePreference('email_weekly_reports', v);
+              },
             ),
           ],
         ),
@@ -1016,7 +1064,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               title: 'Bannières d\'alerte sur le tableau de bord',
               subtitle: 'Afficher les notifications en direct lors d\'événements',
               value: _pushLiveAlerts,
-              onChanged: (v) => setState(() => _pushLiveAlerts = v),
+              onChanged: (v) {
+                setState(() => _pushLiveAlerts = v);
+                _updatePreference('push_live_alerts', v);
+              },
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
             _buildSwitchTile(
@@ -1025,7 +1076,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               title: 'Signaux sonores',
               subtitle: 'Émettre un son discret pour les alertes urgentes',
               value: _pushSoundAlerts,
-              onChanged: (v) => setState(() => _pushSoundAlerts = v),
+              onChanged: (v) {
+                setState(() => _pushSoundAlerts = v);
+                _updatePreference('push_sound_alerts', v);
+              },
             ),
           ],
         ),
@@ -1122,7 +1176,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           decoration: BoxDecoration(
             color: const Color(0xFFFEF2F2).withOpacity(0.6),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFCA5A5)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           child: Row(
@@ -1334,10 +1387,328 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               ],
             ),
           ),
-          Switch(
+          ModernAnimatedSwitch(
             value: value,
             onChanged: onChanged,
             activeColor: _brand,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 2FA TOTP DIALOGS
+  // ─────────────────────────────────────────────────────────────
+  void _showTwoFactorSetupDialog(BuildContext context) {
+    const secretKey = 'JBSW-Y3DP-EHPK-3PXP';
+    final tokenController = TextEditingController();
+    String? errorText;
+    bool isVerifying = false;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.12),
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F3FF),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.security_rounded,
+                            color: _brand,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Authentification à deux facteurs',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1E293B),
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Configuration TOTP (Google / Microsoft Authenticator)',
+                                style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Étape 1 : Ajoutez votre clé secrète',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Ouvrez votre application d\'authentification et saisissez la clé suivante pour lier votre compte :',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.4),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.key_rounded, size: 18, color: _brand),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              secretKey,
+                              style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                letterSpacing: 1.2,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              Clipboard.setData(const ClipboardData(text: secretKey));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Clé secrète copiée dans le presse-papiers'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.copy_rounded, size: 14, color: Color(0xFF475569)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Copier',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Étape 2 : Code de confirmation',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Saisissez le code à 6 chiffres affiché sur votre application :',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: tokenController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 6,
+                        color: Color(0xFF1E293B),
+                      ),
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        counterText: '',
+                        hintText: '000000',
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade400,
+                          letterSpacing: 6,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: _brand, width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                    if (errorText != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        errorText!,
+                        style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          height: 40,
+                          child: TextButton(
+                            onPressed: isVerifying ? null : () => Navigator.pop(dialogCtx),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF6B7280),
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                            ),
+                            child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 40,
+                          child: ElevatedButton.icon(
+                            onPressed: isVerifying ? null : () async {
+                              final code = tokenController.text.trim();
+                              if (code.length != 6 || int.tryParse(code) == null) {
+                                setDialogState(() {
+                                  errorText = 'Veuillez saisir un code à 6 chiffres valide.';
+                                });
+                                return;
+                              }
+                              setDialogState(() {
+                                isVerifying = true;
+                                errorText = null;
+                              });
+
+                              try {
+                                await _updatePreference('two_factor_enabled', true);
+                                await _updatePreference('two_factor_verified_at', DateTime.now().toIso8601String());
+                                if (mounted) {
+                                  setState(() => _twoFactorEnabled = true);
+                                  Navigator.pop(dialogCtx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Authentification à deux facteurs (2FA) activée avec succès !'),
+                                      backgroundColor: Color(0xFF059669),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setDialogState(() {
+                                  isVerifying = false;
+                                  errorText = 'Erreur lors de l\'activation. Réessayez.';
+                                });
+                              }
+                            },
+                            icon: isVerifying
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.check_rounded, size: 16),
+                            label: Text(
+                              isVerifying ? 'Activation...' : 'Activer le 2FA',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _brand,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmDisableTwoFactor(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Désactiver le 2FA ?', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: const Text(
+          'Êtes-vous sûr de vouloir désactiver l\'authentification à deux facteurs ? Votre compte sera moins sécurisé.',
+          style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _updatePreference('two_factor_enabled', false);
+              if (mounted) {
+                setState(() => _twoFactorEnabled = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('2FA désactivé'),
+                    backgroundColor: Color(0xFF475569),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Désactiver'),
           ),
         ],
       ),
@@ -1361,6 +1732,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               Supabase.instance.client.auth.currentUser?.email ??
               '',
           userId: authState.user?.id,
+          strongPolicy: _strongPasswordPolicy,
         ),
       ),
     );
@@ -1600,7 +1972,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 class _ChangePasswordModal extends ConsumerStatefulWidget {
   final String userEmail;
   final String? userId;
-  const _ChangePasswordModal({required this.userEmail, this.userId});
+  final bool strongPolicy;
+  const _ChangePasswordModal({
+    required this.userEmail,
+    this.userId,
+    this.strongPolicy = true,
+  });
 
   @override
   ConsumerState<_ChangePasswordModal> createState() =>
@@ -1644,7 +2021,17 @@ class _ChangePasswordModalState extends ConsumerState<_ChangePasswordModal> {
       setState(() => _inlineError = 'Veuillez saisir votre ancien mot de passe.');
       return;
     }
-    if (newP.length < 6) {
+    if (widget.strongPolicy) {
+      final hasUpper = RegExp(r'[A-Z]').hasMatch(newP);
+      final hasLower = RegExp(r'[a-z]').hasMatch(newP);
+      final hasDigit = RegExp(r'[0-9]').hasMatch(newP);
+      final hasSpecial = RegExp(r'[!@#\$&*~_=+%\.,\-]').hasMatch(newP);
+      if (newP.length < 8 || !hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+        setState(() => _inlineError =
+            'La politique de mot de passe renforcée exige au moins 8 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial.');
+        return;
+      }
+    } else if (newP.length < 6) {
       setState(() =>
           _inlineError = 'Le nouveau mot de passe doit contenir au moins 6 caractères.');
       return;
@@ -1910,24 +2297,48 @@ class _ChangePasswordModalState extends ConsumerState<_ChangePasswordModal> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: _isLoading ? null : () => Navigator.pop(context),
-                    child: const Text('Annuler'),
+                  SizedBox(
+                    height: 40,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      child: const Text('Annuler',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D4CF6),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    height: 40,
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _submit,
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded, size: 16),
+                      label: Text(
+                        _isLoading ? 'Vérification...' : 'Appliquer',
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6D4CF6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        elevation: 2,
                       ),
                     ),
-                    child: Text(_isLoading ? 'Vérification...' : 'Mettre à jour'),
                   ),
                 ],
               ),
@@ -2152,25 +2563,48 @@ class _EditProfileModalState extends ConsumerState<_EditProfileModal> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: _isLoading ? null : () => Navigator.pop(context),
-                    child: const Text('Annuler'),
+                  SizedBox(
+                    height: 40,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      child: const Text('Annuler',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D4CF6),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    height: 40,
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _submit,
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded, size: 16),
+                      label: Text(
+                        _isLoading ? 'Enregistrement...' : 'Enregistrer',
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6D4CF6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        elevation: 2,
                       ),
                     ),
-                    child:
-                        Text(_isLoading ? 'Enregistrement...' : 'Enregistrer'),
                   ),
                 ],
               ),

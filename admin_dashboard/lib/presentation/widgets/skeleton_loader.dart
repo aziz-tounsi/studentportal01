@@ -3031,50 +3031,6 @@ class SemestersSkeletonLoader extends StatelessWidget {
                   ],
                 ),
               )),
-
-              const SizedBox(height: 14),
-
-              // Exam Period Section Header
-              const Row(
-                children: [
-                  SkeletonBox(width: 20, height: 20, borderRadius: 6),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 140, height: 16, borderRadius: 5),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 24, height: 18, borderRadius: 6),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Exam Period Cards
-              ...List.generate(2, (_) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFF1F5F9)),
-                ),
-                child: const Row(
-                  children: [
-                    SkeletonBox(width: 36, height: 36, borderRadius: 10),
-                    SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SkeletonBox(width: 130, height: 14, borderRadius: 4),
-                          SizedBox(height: 5),
-                          SkeletonBox(width: 160, height: 11, borderRadius: 3),
-                        ],
-                      ),
-                    ),
-                    SkeletonBox(width: 70, height: 24, borderRadius: 6),
-                    SizedBox(width: 10),
-                    SkeletonBox(width: 28, height: 28, borderRadius: 6),
-                  ],
-                ),
-              )),
             ],
           ),
         ),

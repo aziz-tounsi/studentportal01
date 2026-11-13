@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/modern_animated_switch.dart';
 
 class _DayScheduleState {
   final String key;
@@ -359,20 +360,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          const SizedBox(width: 16),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.contact_phone,
-              color: Color(0xFF3B82F6),
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -381,6 +369,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
                 ),
               ),
               Text(
@@ -393,40 +382,37 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
             ],
           ),
           const Spacer(),
-          if (_hasChanges)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.warningSoft,
-                borderRadius: BorderRadius.circular(20),
+          SizedBox(
+            height: 40,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _saveChanges,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.check, size: 18),
+              label: Text(
+                _isLoading ? 'Sauvegarde...' : 'Sauvegarder',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber, color: AppColors.warning, size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'Modifications non sauvegardées',
-                    style: TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                ],
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6D4CF6),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
-            ),
-          const SizedBox(width: 16),
-          ElevatedButton.icon(
-            onPressed: _isLoading ? null : _saveChanges,
-            icon: _isLoading 
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: IosLoader.small(color: AppColors.textOnPrimary),
-                  )
-                : const Icon(Icons.save),
-            label: Text(_isLoading ? 'Sauvegarde...' : 'Sauvegarder'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
-              foregroundColor: AppColors.textOnPrimary,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ],
@@ -575,9 +561,9 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Switch(
+                                ModernAnimatedSwitch(
                                   value: !day.isClosed,
-                                  activeThumbColor: const Color(0xFF10B981),
+                                  activeColor: const Color(0xFF6D4CF6),
                                   onChanged: (val) {
                                     setState(() {
                                       day.isClosed = !val;
@@ -585,12 +571,13 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                                     });
                                   },
                                 ),
+                                const SizedBox(width: 8),
                                 Text(
                                   day.isClosed ? 'Fermé' : 'Ouvert',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: day.isClosed ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                                    color: day.isClosed ? const Color(0xFF94A3B8) : const Color(0xFF10B981),
                                   ),
                                 ),
                               ],
@@ -722,7 +709,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
   Widget _buildSectionCard({
     required String title,
     required IconData icon,
-    required Color iconColor,
+    Color? iconColor,
     Widget? trailing,
     required List<Widget> children,
   }) {
@@ -744,20 +731,14 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(width: 12),
+              Icon(icon, color: const Color(0xFF4B5563), size: 18),
+              const SizedBox(width: 8),
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E293B),
                 ),
               ),
               if (trailing != null) ...[
@@ -766,7 +747,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
               ],
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           ...children,
         ],
       ),
@@ -788,7 +769,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
         Text(
           label,
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
             color: Color(0xFF374151),
           ),
@@ -798,29 +779,30 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
           controller: controller,
           maxLines: maxLines,
           validator: validator,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: AppColors.slate400),
-            prefixIcon: Icon(icon, color: iconColor ?? AppColors.slate500, size: 20),
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 18),
             filled: true,
             fillColor: const Color(0xFFF8FAFC),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.slate200),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.slate200),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: AppColors.error),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
       ],

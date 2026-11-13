@@ -312,21 +312,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          const SizedBox(width: 12),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.apartment_outlined,
-              color: Color(0xFF475569),
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -535,15 +521,6 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
         children: [
           Row(
             children: [
-              Container(
-                width: 3,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6D4CF6),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 10),
               Icon(icon, color: const Color(0xFF4B5563), size: 18),
               const SizedBox(width: 8),
               Text(

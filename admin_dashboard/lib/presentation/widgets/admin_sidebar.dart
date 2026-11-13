@@ -308,9 +308,6 @@ class AdminSidebar extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: AppColors.error.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: AppColors.error.withOpacity(0.12),
-                        ),
                       ),
                       child: Material(
                         color: Colors.transparent,
