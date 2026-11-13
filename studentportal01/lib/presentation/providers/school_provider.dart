@@ -16,11 +16,20 @@ Future<SchoolModel?> _fetchSchool(String schoolId) async {
   final cacheKey = 'school_$schoolId';
   try {
     final supabase = Supabase.instance.client;
-    final response = await supabase
-        .from('schools')
-        .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, created_at')
-        .eq('id', schoolId)
-        .maybeSingle();
+    Map<String, dynamic>? response;
+    try {
+      response = await supabase
+          .from('schools')
+          .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, bio, created_at')
+          .eq('id', schoolId)
+          .maybeSingle();
+    } catch (_) {
+      response = await supabase
+          .from('schools')
+          .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, created_at')
+          .eq('id', schoolId)
+          .maybeSingle();
+    }
     if (response != null) {
       final school = SchoolModel.fromJson(response);
       OfflineCacheService.instance.setJson(cacheKey, school.toJson());

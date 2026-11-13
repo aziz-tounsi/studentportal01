@@ -30,20 +30,29 @@ class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
     try {
       final schoolId = await _getSchoolId();
       if (schoolId == null) {
-        return {'id': null, 'name': '', 'logo_url': null};
+        return {'id': null, 'name': '', 'logo_url': null, 'bio': ''};
       }
       final supabase = Supabase.instance.client;
-      final response = await supabase
-          .from('schools')
-          .select('id, name, logo_url, address, phone, email')
-          .eq('id', schoolId)
-          .maybeSingle();
+      Map<String, dynamic>? response;
+      try {
+        response = await supabase
+            .from('schools')
+            .select('id, name, logo_url, address, phone, email, bio')
+            .eq('id', schoolId)
+            .maybeSingle();
+      } catch (_) {
+        response = await supabase
+            .from('schools')
+            .select('id, name, logo_url, address, phone, email')
+            .eq('id', schoolId)
+            .maybeSingle();
+      }
       if (response != null) {
         return Map<String, dynamic>.from(response);
       }
-      return {'id': schoolId, 'name': '', 'logo_url': null};
+      return {'id': schoolId, 'name': '', 'logo_url': null, 'bio': ''};
     } catch (e) {
-      return {'id': null, 'name': '', 'logo_url': null};
+      return {'id': null, 'name': '', 'logo_url': null, 'bio': ''};
     }
   }
 
@@ -67,25 +76,43 @@ class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
         'id': schoolId,
         'name': data['name'],
         'logo_url': data['logo_url'],
+        'bio': data['bio'],
+      };
+
+      final updatePayload = {
+        'name': data['name'],
+        'logo_url': data['logo_url'],
+        'bio': data['bio'],
+        'updated_at': DateTime.now().toIso8601String(),
       };
 
       if (existing != null) {
-        await supabase
-            .from('schools')
-            .update({
-              'name': data['name'],
-              'logo_url': data['logo_url'],
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', schoolId);
+        try {
+          await supabase.from('schools').update(updatePayload).eq('id', schoolId);
+        } catch (_) {
+          // If bio column is not yet added in Supabase schema
+          await supabase.from('schools').update({
+            'name': data['name'],
+            'logo_url': data['logo_url'],
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', schoolId);
+        }
       } else {
-        await supabase.from('schools').insert({
-          'id': schoolId,
-          'name': data['name'],
-          'logo_url': data['logo_url'],
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+        try {
+          await supabase.from('schools').insert({
+            'id': schoolId,
+            ...updatePayload,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {
+          await supabase.from('schools').insert({
+            'id': schoolId,
+            'name': data['name'],
+            'logo_url': data['logo_url'],
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+        }
       }
 
       state = AsyncValue.data(merged);
@@ -115,8 +142,8 @@ class SchoolInfoScreen extends ConsumerStatefulWidget {
 class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
+  late TextEditingController _bioController;
   bool _isLoading = false;
-  bool _hasChanges = false;
   String? _logoUrl;
   String? _schoolId;
   bool _populated = false;
@@ -126,11 +153,13 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+    _bioController = TextEditingController();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _bioController.dispose();
     super.dispose();
   }
 
@@ -138,6 +167,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
     if (_populated) return;
     _populated = true;
     _nameController.text = data['name'] ?? '';
+    _bioController.text = data['bio'] ?? '';
     setState(() {
       _schoolId = data['id'] as String?;
       _logoUrl = data['logo_url'] as String?;
@@ -153,7 +183,6 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
       if (publicUrl == null || !mounted) return;
       setState(() {
         _logoUrl = publicUrl;
-        _hasChanges = true;
       });
     } catch (e) {
       if (mounted) {
@@ -177,7 +206,6 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
   void _resetToDefaultLogo() {
     setState(() {
       _logoUrl = null;
-      _hasChanges = true;
     });
   }
 
@@ -189,6 +217,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
     final data = {
       'name': _nameController.text.trim(),
       'logo_url': _logoUrl,
+      'bio': _bioController.text.trim(),
     };
 
     final errorMessage =
@@ -198,7 +227,6 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
     if (!mounted) return;
     setState(() {
       _isLoading = false;
-      if (success) _hasChanges = false;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -284,26 +312,31 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
-              Icons.business,
-              color: Color(0xFF10B981),
-              size: 24,
+              Icons.apartment_outlined,
+              color: Color(0xFF475569),
+              size: 20,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'Informations de l\'école',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E293B),
+                ),
               ),
               Text(
                 'Nom, logo et paramètres de votre établissement',
@@ -315,45 +348,28 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
             ],
           ),
           const Spacer(),
-          if (_hasChanges)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.warningSoft,
-                borderRadius: BorderRadius.circular(20),
+          SizedBox(
+            height: 40,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _saveChanges,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: IosLoader.small(color: Colors.white),
+                    )
+                  : const Icon(Icons.check, size: 18),
+              label: Text(
+                _isLoading ? 'Sauvegarde...' : 'Sauvegarder',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber, color: AppColors.warning, size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'Modifications non sauvegardées',
-                    style: TextStyle(
-                      color: AppColors.warning,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(width: 16),
-          ElevatedButton.icon(
-            onPressed: _isLoading ? null : _saveChanges,
-            icon: _isLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: IosLoader.small(color: AppColors.textOnPrimary),
-                  )
-                : const Icon(Icons.save),
-            label: Text(_isLoading ? 'Sauvegarde...' : 'Sauvegarder'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              foregroundColor: AppColors.textOnPrimary,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6D4CF6),
+                foregroundColor: Colors.white,
+                elevation: 2,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
               ),
             ),
           ),
@@ -367,14 +383,12 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
       padding: const EdgeInsets.all(24),
       child: Form(
         key: _formKey,
-        onChanged: () => setState(() => _hasChanges = true),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildSectionCard(
               title: 'Identité de l\'établissement',
-              icon: Icons.business,
-              iconColor: const Color(0xFF10B981),
+              icon: Icons.apartment_outlined,
               children: [
                 _buildTextField(
                   controller: _nameController,
@@ -384,15 +398,24 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                   validator: (v) =>
                       v?.isEmpty ?? true ? 'Le nom est requis' : null,
                 ),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  controller: _bioController,
+                  label: 'Bio de l\'établissement (À propos)',
+                  hint: 'Présentez votre établissement, sa vision pédagogique et ses valeurs...',
+                  icon: Icons.info_outline,
+                  maxLines: 4,
+                  helperText: 'Affichée dans la section "À propos" de l\'application mobile',
+                ),
               ],
             ),
             const SizedBox(height: 24),
             _buildSectionCard(
               title: 'Logo de l\'école',
               icon: Icons.image_outlined,
-              iconColor: const Color(0xFF8B5CF6),
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     GestureDetector(
                       onTap: _uploadingLogo ? null : _pickLogo,
@@ -400,12 +423,11 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                         width: 120,
                         height: 120,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.05),
+                          color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF8B5CF6).withOpacity(0.25),
-                            width: 2,
-                            strokeAlign: BorderSide.strokeAlignInside,
+                            color: const Color(0xFFE2E8F0),
+                            width: 1.5,
                           ),
                         ),
                         child: _uploadingLogo
@@ -422,49 +444,23 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              const Text(
-                                'Logo de l\'établissement',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: (_logoUrl != null && _logoUrl!.isNotEmpty)
-                                      ? const Color(0xFF10B981).withOpacity(0.12)
-                                      : const Color(0xFF64748B).withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  (_logoUrl != null && _logoUrl!.isNotEmpty)
-                                      ? 'Personnalisé'
-                                      : 'Par défaut',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: (_logoUrl != null && _logoUrl!.isNotEmpty)
-                                        ? const Color(0xFF059669)
-                                        : const Color(0xFF475569),
-                                  ),
-                                ),
-                              ),
-                            ],
+                          const Text(
+                            'Logo de l\'établissement',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E293B),
+                            ),
                           ),
                           const SizedBox(height: 6),
-                          Text(
+                          const Text(
                             'Ce logo s\'affiche pour votre école dans l\'application mobile et l\'espace administration.',
                             style: TextStyle(
                               fontSize: 13,
-                              color: AppColors.textSecondary,
+                              color: Color(0xFF64748B),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Wrap(
                             spacing: 10,
                             runSpacing: 8,
@@ -474,13 +470,14 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                                 icon: const Icon(Icons.upload, size: 18),
                                 label: const Text('Changer le logo'),
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF8B5CF6),
+                                  foregroundColor: const Color(0xFF6D4CF6),
                                   side: const BorderSide(
-                                    color: Color(0xFF8B5CF6),
+                                    color: Color(0xFF6D4CF6),
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                                 ),
                               ),
                               if (_logoUrl != null && _logoUrl!.isNotEmpty)
@@ -491,12 +488,13 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                                   label: const Text('Logo par défaut'),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFF64748B),
-                                    side: BorderSide(
-                                      color: Colors.grey.shade300,
+                                    side: const BorderSide(
+                                      color: Color(0xFFCBD5E1),
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                                   ),
                                 ),
                             ],
@@ -517,7 +515,6 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
   Widget _buildSectionCard({
     required String title,
     required IconData icon,
-    required Color iconColor,
     required List<Widget> children,
   }) {
     return Container(
@@ -539,24 +536,27 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                width: 3,
+                height: 16,
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFF6D4CF6),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
+              Icon(icon, color: const Color(0xFF4B5563), size: 18),
+              const SizedBox(width: 8),
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E293B),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           ...children,
         ],
       ),
@@ -568,52 +568,78 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
     required String label,
     required String hint,
     required IconData icon,
-    Color? iconColor,
     int maxLines = 1,
+    String? helperText,
     String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF374151),
-          ),
+        Row(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
+              ),
+            ),
+            if (helperText != null) ...[
+              const SizedBox(width: 8),
+              Text(
+                '($helperText)',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF94A3B8),
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           maxLines: maxLines,
           validator: validator,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: AppColors.slate400),
-            prefixIcon:
-                Icon(icon, color: iconColor ?? AppColors.slate500, size: 20),
+            hintStyle: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 13.5,
+              fontWeight: FontWeight.w400,
+            ),
+            prefixIcon: maxLines == 1
+                ? Icon(icon, color: const Color(0xFF64748B), size: 18)
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 60),
+                    child: Icon(icon, color: const Color(0xFF64748B), size: 18),
+                  ),
             filled: true,
             fillColor: const Color(0xFFF8FAFC),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.slate200),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.slate200),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFF10B981), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.error),
-            ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: Color(0xFF6D4CF6),
+                width: 1.5,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.error),
+            ),
           ),
         ),
       ],

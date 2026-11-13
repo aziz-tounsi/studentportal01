@@ -8,6 +8,7 @@ class SchoolModel {
   final String? code;
   final String? primaryColor;
   final String? secondaryColor;
+  final String? bio;
   final DateTime createdAt;
 
   SchoolModel({
@@ -20,6 +21,7 @@ class SchoolModel {
     this.code,
     this.primaryColor,
     this.secondaryColor,
+    this.bio,
     required this.createdAt,
   });
 
@@ -34,6 +36,7 @@ class SchoolModel {
       code: json['code'] as String?,
       primaryColor: json['primary_color'] as String?,
       secondaryColor: json['secondary_color'] as String?,
+      bio: json['bio'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
@@ -51,6 +54,7 @@ class SchoolModel {
       'code': code,
       'primary_color': primaryColor,
       'secondary_color': secondaryColor,
+      'bio': bio,
       'created_at': createdAt.toIso8601String(),
     };
   }

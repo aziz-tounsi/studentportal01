@@ -68,7 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     try {
       final resp = await Supabase.instance.client
           .from('users')
-          .select('id, full_name, email, role, is_active, created_at')
+          .select('id, full_name, email, role, created_at')
           .eq('school_id', schoolId)
           .inFilter('role', ['owner', 'admin', 'staff', 'manager'])
           .order('created_at', ascending: true);
@@ -79,9 +79,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           _loadingAdmins = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error loading school admins: $e');
       if (mounted) {
-        setState(() => _loadingAdmins = false);
+        setState(() {
+          _loadedSchoolId = schoolId;
+          _loadingAdmins = false;
+        });
       }
     }
   }
@@ -190,27 +194,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Paramètres',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
-                  letterSpacing: -0.4,
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Paramètres',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                    letterSpacing: -0.4,
+                  ),
                 ),
-              ),
-              SizedBox(height: 3),
-              Text(
-                'Profil administrateur, accès équipe, établissement et sécurité',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-            ],
+                SizedBox(height: 3),
+                Text(
+                  'Profil administrateur, accès équipe, établissement et sécurité',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 16),
 
           // Exact Documents page Search Bar
           SizedBox(

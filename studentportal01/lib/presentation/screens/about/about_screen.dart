@@ -35,6 +35,7 @@ class AboutScreen extends ConsumerWidget {
     final schoolName = (school != null && school.name.trim().isNotEmpty)
         ? school.name.trim()
         : 'Student Portal';
+    final schoolBio = school?.bio?.trim();
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -210,7 +211,9 @@ class AboutScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            l10n.aboutDesc,
+                            (schoolBio != null && schoolBio.isNotEmpty)
+                                ? schoolBio
+                                : l10n.aboutDesc,
                             style: ArabicTypography.bodyStyle(
                               context,
                               fontSize: 14,
