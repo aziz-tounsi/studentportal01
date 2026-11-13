@@ -2,9 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/localization/console_translations.dart';
 import '../../core/theme/console_theme.dart';
 import '../providers/console_auth_provider.dart';
 import '../providers/platform_provider.dart';
+import '../widgets/console_settings_view.dart';
 import '../widgets/console_sidebar.dart';
 import '../widgets/console_skeleton_loader.dart';
 
@@ -51,6 +53,7 @@ class _ConsoleDashboardScreenState
 
   @override
   Widget build(BuildContext context) {
+    final tr = ref.watch(consoleTranslationsProvider);
     final authState = ref.watch(consoleAuthProvider);
     final platformState = ref.watch(platformProvider);
 
@@ -72,13 +75,13 @@ class _ConsoleDashboardScreenState
           Expanded(
             child: Column(
               children: [
-                _buildPageHeader(authState.user, platformState),
+                _buildPageHeader(authState.user, platformState, tr),
                 Expanded(
                   child: platformState.isLoading
                       ? _skeletonForRoute()
                       : platformState.errorMessage != null
-                          ? _buildErrorState(platformState.errorMessage!)
-                          : _pageForRoute(platformState),
+                          ? _buildErrorState(platformState.errorMessage!, tr)
+                          : _pageForRoute(platformState, tr, authState.user),
                 ),
               ],
             ),
@@ -90,6 +93,8 @@ class _ConsoleDashboardScreenState
 
   Widget _skeletonForRoute() {
     switch (widget.currentRoute) {
+      case '/settings':
+        return const ConsoleSettingsSkeleton();
       case '/schools':
         return const ConsoleSchoolsSkeleton();
       case '/billing':
@@ -107,64 +112,155 @@ class _ConsoleDashboardScreenState
     }
   }
 
-  Widget _pageForRoute(PlatformState state) {
+  Widget _pageForRoute(
+      PlatformState state, ConsoleStrings tr, Map<String, dynamic>? user) {
     switch (widget.currentRoute) {
+      case '/settings':
+        return ConsoleSettingsView(platformState: state, user: user);
       case '/schools':
-        return _buildSchoolsPage(state);
+        return _buildSchoolsPage(state, tr);
       case '/billing':
-        return _buildBillingPage(state);
+        return _buildBillingPage(state, tr);
       case '/ai-telemetry':
-        return _buildAiTelemetryPage(state);
+        return _buildAiTelemetryPage(state, tr);
       case '/audit':
-        return _buildAuditPage(state);
+        return _buildAuditPage(state, tr);
       case '/bugs':
-        return _buildBugReportsPage(state);
+        return _buildBugReportsPage(state, tr);
       case '/dashboard':
       case '/':
       default:
-        return _buildOverviewPage(state);
+        return _buildOverviewPage(state, tr);
     }
   }
 
-  (String, String) _headerMeta() {
+  (String, String) _headerMeta(ConsoleStrings tr) {
     switch (widget.currentRoute) {
+      case '/settings':
+        return (
+          tr.headerSettingsTitle,
+          tr.headerSettingsSubtitle,
+        );
       case '/schools':
         return (
-          'Écoles & Tenants',
-          'Création, logos, abonnements et suspension des établissements',
+          tr.headerSchoolsTitle,
+          tr.headerSchoolsSubtitle,
         );
       case '/billing':
         return (
-          'Facturation & Paiements',
-          'Validation des virements et suivi des factures SaaS',
+          tr.headerBillingTitle,
+          tr.headerBillingSubtitle,
         );
       case '/ai-telemetry':
         return (
-          'Télémétrie IA & Kill-Switch',
-          'Contrôle de la consommation et coupure d\'urgence plateforme',
+          tr.headerAiTitle,
+          tr.headerAiSubtitle,
         );
       case '/audit':
         return (
-          'Journaux d\'Audit',
-          'Traçabilité complète des actions sensibles multi-tenants',
+          tr.headerAuditTitle,
+          tr.headerAuditSubtitle,
         );
       case '/bugs':
         return (
-          'Signalements & Bugs',
-          'Suivi des incidents remontés depuis les applications',
+          tr.headerBugsTitle,
+          tr.headerBugsSubtitle,
         );
       case '/dashboard':
       case '/':
       default:
         return (
-          'Vue d\'ensemble',
-          'Pilotage global de la plateforme SaaS et des établissements',
+          tr.headerOverviewTitle,
+          tr.headerOverviewSubtitle,
         );
     }
   }
 
-  Widget _buildPageHeader(Map<String, dynamic>? user, PlatformState state) {
-    final (title, subtitle) = _headerMeta();
+  Widget _buildLanguagePill() {
+    final currentLang = ref.watch(consoleLocaleProvider);
+
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: ConsoleColors.cardBorder),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _langPillItem(
+            label: 'EN',
+            flag: '🇺🇸',
+            isActive: currentLang == ConsoleLanguage.en,
+            onTap: () => ref
+                .read(consoleLocaleProvider.notifier)
+                .setLanguage(ConsoleLanguage.en),
+          ),
+          const SizedBox(width: 3),
+          _langPillItem(
+            label: 'FR',
+            flag: '🇫🇷',
+            isActive: currentLang == ConsoleLanguage.fr,
+            onTap: () => ref
+                .read(consoleLocaleProvider.notifier)
+                .setLanguage(ConsoleLanguage.fr),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _langPillItem({
+    required String label,
+    required String flag,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(7),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(flag, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isActive ? ConsoleColors.brand : ConsoleColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageHeader(
+      Map<String, dynamic>? user, PlatformState state, ConsoleStrings tr) {
+    final (title, subtitle) = _headerMeta(tr);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
@@ -208,7 +304,7 @@ class _ConsoleDashboardScreenState
               onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'Rechercher...',
+                hintText: tr.searchPlaceholder,
                 hintStyle: const TextStyle(
                   color: ConsoleColors.textTertiary,
                   fontSize: 13,
@@ -272,7 +368,7 @@ class _ConsoleDashboardScreenState
           ),
           const SizedBox(width: 10),
           IconButton(
-            tooltip: 'Actualiser',
+            tooltip: tr.refreshTooltip,
             onPressed: () => ref.read(platformProvider.notifier).loadAll(),
             icon: const Icon(Icons.refresh_rounded, size: 20),
             color: ConsoleColors.textSecondary,
@@ -285,6 +381,8 @@ class _ConsoleDashboardScreenState
             ),
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
+          const SizedBox(width: 10),
+          _buildLanguagePill(),
           if (widget.currentRoute == '/schools' ||
               widget.currentRoute == '/dashboard' ||
               widget.currentRoute == '/') ...[
@@ -294,7 +392,7 @@ class _ConsoleDashboardScreenState
               child: ElevatedButton.icon(
                 onPressed: () => _showCreateSchoolModal(context, state.plans),
                 icon: const Icon(Icons.add_business_outlined, size: 17),
-                label: const Text('Nouvelle École'),
+                label: Text(tr.newSchoolBtn),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: ConsoleColors.brand,
                   foregroundColor: Colors.white,
@@ -315,7 +413,7 @@ class _ConsoleDashboardScreenState
                 onPressed: () =>
                     _showManualInvoiceModal(context, state.schools),
                 icon: const Icon(Icons.add_rounded, size: 17),
-                label: const Text('Facture Manuelle'),
+                label: Text(tr.manualInvoiceBtn),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: ConsoleColors.brand,
                   foregroundColor: Colors.white,
@@ -333,7 +431,7 @@ class _ConsoleDashboardScreenState
     );
   }
 
-  Widget _buildErrorState(String message) {
+  Widget _buildErrorState(String message, ConsoleStrings tr) {
     return Center(
       child: Container(
         padding: const EdgeInsets.all(28),
@@ -359,7 +457,7 @@ class _ConsoleDashboardScreenState
                 backgroundColor: ConsoleColors.brand,
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Réessayer'),
+              child: Text(tr.refreshTooltip),
             ),
           ],
         ),
@@ -370,7 +468,7 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   // 1. OVERVIEW PAGE
   // ══════════════════════════════════════════════════════════════
-  Widget _buildOverviewPage(PlatformState state) {
+  Widget _buildOverviewPage(PlatformState state, ConsoleStrings tr) {
     final kpis = state.kpis;
     final schools = state.schools.where((s) {
       if (_searchQuery.isEmpty) return true;
@@ -388,9 +486,9 @@ class _ConsoleDashboardScreenState
             children: [
               Expanded(
                 child: _buildMetricCard(
-                  'Écoles Inscrites',
-                  '${kpis['totalSchools'] ?? 0}',
-                  '${kpis['activeSchools'] ?? 0} actives sur la plateforme',
+                  tr.kpiActiveSchools,
+                  '${kpis['activeSchools'] ?? 0}',
+                  '${kpis['totalSchools'] ?? 0} total',
                   Icons.domain_rounded,
                   ConsoleColors.primary,
                 ),
@@ -398,9 +496,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  'Revenu Mensuel (MRR)',
+                  tr.kpiTotalMrr,
                   '${(kpis['mrrTnd'] as double? ?? 0.0).toStringAsFixed(0)} TND',
-                  'Abonnements actifs & essai',
+                  tr.mrrSubtitle,
                   Icons.trending_up_rounded,
                   ConsoleColors.success,
                 ),
@@ -408,9 +506,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  'Dépense IA (Mois)',
+                  tr.totalCostUsd,
                   '\$${(kpis['aiSpendUsd'] as double? ?? 0.0).toStringAsFixed(2)}',
-                  'Consommation OpenRouter',
+                  tr.aiUsageTitle,
                   Icons.auto_awesome_rounded,
                   ConsoleColors.brand,
                 ),
@@ -418,9 +516,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  'Virements en Attente',
+                  tr.pendingInvoicesCount,
                   '${kpis['pendingCount'] ?? 0}',
-                  'Paiements à vérifier',
+                  tr.statusPending,
                   Icons.pending_actions_rounded,
                   ConsoleColors.warning,
                 ),
@@ -434,18 +532,18 @@ class _ConsoleDashboardScreenState
               Expanded(
                 flex: 2,
                 child: _surfaceCard(
-                  title: 'Établissements récents',
+                  title: tr.recentSchoolsTitle,
                   trailing: TextButton(
                     onPressed: () => context.go('/schools'),
-                    child: const Text('Voir tout'),
+                    child: Text(tr.viewAll),
                   ),
                   child: schools.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 28),
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 28),
                           child: Center(
                             child: Text(
-                              'Aucun établissement enregistré.',
-                              style: TextStyle(
+                              tr.noSchoolsRegistered,
+                              style: const TextStyle(
                                   color: ConsoleColors.textSecondary),
                             ),
                           ),
@@ -508,14 +606,14 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 20),
               Expanded(
                 child: _surfaceCard(
-                  title: 'Accès rapide',
+                  title: tr.quickActionsTitle,
                   child: Column(
                     children: [
                       _quickActionRow(
                         icon: Icons.add_business_outlined,
                         color: ConsoleColors.brand,
-                        title: 'Créer une école',
-                        subtitle: 'Provisionner un workspace & directeur',
+                        title: tr.quickActionAddSchool,
+                        subtitle: tr.quickActionAddSchoolDesc,
                         onTap: () =>
                             _showCreateSchoolModal(context, state.plans),
                       ),
@@ -523,19 +621,18 @@ class _ConsoleDashboardScreenState
                       _quickActionRow(
                         icon: Icons.receipt_long_outlined,
                         color: ConsoleColors.success,
-                        title: 'Vérifier les paiements',
+                        title: tr.quickActionIssueInvoice,
                         subtitle:
-                            '${kpis['pendingCount'] ?? 0} virement(s) en attente',
+                            '${kpis['pendingCount'] ?? 0} ${tr.statusPending}',
                         onTap: () => context.go('/billing'),
                       ),
                       const SizedBox(height: 10),
                       _quickActionRow(
-                        icon: Icons.bug_report_outlined,
-                        color: ConsoleColors.error,
-                        title: 'Signalements bugs',
-                        subtitle:
-                            '${kpis['openBugsCount'] ?? 0} ticket(s) ouverts',
-                        onTap: () => context.go('/bugs'),
+                        icon: Icons.tune_rounded,
+                        color: const Color(0xFF2563EB),
+                        title: tr.quickActionSettings,
+                        subtitle: tr.quickActionSettingsDesc,
+                        onTap: () => context.go('/settings'),
                       ),
                     ],
                   ),
@@ -613,7 +710,7 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   // 2. SCHOOLS PAGE
   // ══════════════════════════════════════════════════════════════
-  Widget _buildSchoolsPage(PlatformState state) {
+  Widget _buildSchoolsPage(PlatformState state, ConsoleStrings tr) {
     final schools = state.schools.where((s) {
       if (_searchQuery.isEmpty) return true;
       final name = (s['name'] ?? '').toString().toLowerCase();
@@ -630,14 +727,14 @@ class _ConsoleDashboardScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _surfaceCard(
-            title: 'Établissements Clients (${schools.length})',
+            title: '${tr.headerSchoolsTitle} (${schools.length})',
             child: schools.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
                     child: Center(
                       child: Text(
-                        'Aucun établissement ne correspond à la recherche.',
-                        style: TextStyle(color: ConsoleColors.textSecondary),
+                        tr.noSchoolsRegistered,
+                        style: const TextStyle(color: ConsoleColors.textSecondary),
                       ),
                     ),
                   )
@@ -646,13 +743,13 @@ class _ConsoleDashboardScreenState
                     child: DataTable(
                       headingRowColor:
                           WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                      columns: const [
-                        DataColumn(label: Text('Établissement')),
-                        DataColumn(label: Text('Code / Slug')),
-                        DataColumn(label: Text('Formule')),
-                        DataColumn(label: Text('Statut SaaS')),
-                        DataColumn(label: Text('Conso IA')),
-                        DataColumn(label: Text('Actions')),
+                      columns: [
+                        DataColumn(label: Text(tr.colSchool)),
+                        DataColumn(label: Text(tr.colCode)),
+                        DataColumn(label: Text(tr.colPlan)),
+                        DataColumn(label: Text(tr.colStatus)),
+                        DataColumn(label: Text(tr.colAiUsage)),
+                        DataColumn(label: Text(tr.colActions)),
                       ],
                       rows: schools.map((s) {
                         final sub =
@@ -792,7 +889,7 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   // 3. BILLING PAGE
   // ══════════════════════════════════════════════════════════════
-  Widget _buildBillingPage(PlatformState state) {
+  Widget _buildBillingPage(PlatformState state, ConsoleStrings tr) {
     final pending = state.pendingPayments;
     final invoices = state.invoices.where((inv) {
       if (_searchQuery.isEmpty) return true;
@@ -808,14 +905,14 @@ class _ConsoleDashboardScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _surfaceCard(
-            title: 'Virements en Attente (${pending.length})',
+            title: '${tr.pendingInvoicesCount} (${pending.length})',
             child: pending.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Center(
                       child: Text(
-                        'Aucun virement en attente. Tout est à jour !',
-                        style: TextStyle(color: ConsoleColors.textSecondary),
+                        tr.noSchoolsRegistered,
+                        style: const TextStyle(color: ConsoleColors.textSecondary),
                       ),
                     ),
                   )
@@ -854,7 +951,7 @@ class _ConsoleDashboardScreenState
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${school?['name'] ?? "École"} — Facture ${inv?['invoice_number'] ?? ""}',
+                                    '${school?['name'] ?? "School"} — ${inv?['invoice_number'] ?? ""}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13.5,
@@ -863,7 +960,7 @@ class _ConsoleDashboardScreenState
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Réf: ${p['transaction_ref'] ?? "N/A"} • Montant: ${p['amount']} TND',
+                                    'Réf: ${p['transaction_ref'] ?? "N/A"} • Amount: ${p['amount']} TND',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       color: ConsoleColors.textSecondary,
@@ -881,8 +978,8 @@ class _ConsoleDashboardScreenState
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(ok
-                                        ? 'Paiement validé et abonnement prolongé !'
-                                        : 'Erreur validation.'),
+                                        ? tr.settingsSavedToast
+                                        : 'Error validating payment.'),
                                     backgroundColor: ok
                                         ? ConsoleColors.success
                                         : ConsoleColors.error,
@@ -890,7 +987,7 @@ class _ConsoleDashboardScreenState
                                 );
                               },
                               icon: const Icon(Icons.check_rounded, size: 16),
-                              label: const Text('Valider Virement'),
+                              label: Text(tr.actionMarkPaid),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: ConsoleColors.success,
                                 foregroundColor: Colors.white,
@@ -905,14 +1002,14 @@ class _ConsoleDashboardScreenState
           ),
           const SizedBox(height: 22),
           _surfaceCard(
-            title: 'Factures Émises (${invoices.length})',
+            title: '${tr.invoicesSectionTitle} (${invoices.length})',
             child: invoices.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 28),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 28),
                     child: Center(
                       child: Text(
-                        'Aucune facture trouvée.',
-                        style: TextStyle(color: ConsoleColors.textSecondary),
+                        tr.noSchoolsRegistered,
+                        style: const TextStyle(color: ConsoleColors.textSecondary),
                       ),
                     ),
                   )
@@ -921,12 +1018,12 @@ class _ConsoleDashboardScreenState
                     child: DataTable(
                       headingRowColor:
                           WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                      columns: const [
-                        DataColumn(label: Text('Numéro')),
-                        DataColumn(label: Text('Établissement')),
-                        DataColumn(label: Text('Montant')),
-                        DataColumn(label: Text('Échéance')),
-                        DataColumn(label: Text('Statut')),
+                      columns: [
+                        DataColumn(label: Text(tr.colInvoiceNumber)),
+                        DataColumn(label: Text(tr.colSchool)),
+                        DataColumn(label: Text(tr.colAmount)),
+                        DataColumn(label: Text(tr.colDueDate)),
+                        DataColumn(label: Text(tr.colStatus)),
                       ],
                       rows: invoices.map((inv) {
                         final school = inv['school'] as Map<String, dynamic>?;
@@ -972,7 +1069,7 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   // 4. AI TELEMETRY PAGE
   // ══════════════════════════════════════════════════════════════
-  Widget _buildAiTelemetryPage(PlatformState state) {
+  Widget _buildAiTelemetryPage(PlatformState state, ConsoleStrings tr) {
     final settings = state.platformSettings;
     final killSwitch = settings?['global_ai_kill_switch'] == true;
     final logs = state.recentAiLogs.where((l) {
@@ -1017,22 +1114,26 @@ class _ConsoleDashboardScreenState
                   ),
                 ),
                 const SizedBox(width: 16),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Interrupteur Général d\'Urgence IA (Global Kill-Switch)',
+                        killSwitch
+                            ? tr.killSwitchStatusBlocked
+                            : tr.killSwitchStatusActive,
                         style: TextStyle(
-                          color: ConsoleColors.textPrimary,
+                          color: killSwitch
+                              ? ConsoleColors.error
+                              : ConsoleColors.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 3),
+                      const SizedBox(height: 3),
                       Text(
-                        'Coupe instantanément tous les appels OpenRouter sur l\'ensemble des établissements.',
-                        style: TextStyle(
+                        tr.killSwitchWarning,
+                        style: const TextStyle(
                           color: ConsoleColors.textSecondary,
                           fontSize: 12.5,
                         ),
@@ -1051,14 +1152,14 @@ class _ConsoleDashboardScreenState
           ),
           const SizedBox(height: 22),
           _surfaceCard(
-            title: 'Inférences IA en Direct (${logs.length})',
+            title: '${tr.aiUsageTitle} (${logs.length})',
             child: logs.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 28),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 28),
                     child: Center(
                       child: Text(
-                        'Aucun log IA enregistré.',
-                        style: TextStyle(color: ConsoleColors.textSecondary),
+                        tr.noSchoolsRegistered,
+                        style: const TextStyle(color: ConsoleColors.textSecondary),
                       ),
                     ),
                   )
@@ -1067,13 +1168,13 @@ class _ConsoleDashboardScreenState
                     child: DataTable(
                       headingRowColor:
                           WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                      columns: const [
-                        DataColumn(label: Text('École')),
-                        DataColumn(label: Text('Modèle')),
-                        DataColumn(label: Text('Tokens Total')),
-                        DataColumn(label: Text('Coût USD')),
-                        DataColumn(label: Text('Latence')),
-                        DataColumn(label: Text('Statut')),
+                      columns: [
+                        DataColumn(label: Text(tr.colSchool)),
+                        DataColumn(label: Text(tr.fieldDefaultModel)),
+                        DataColumn(label: Text(tr.totalTokensUsed)),
+                        DataColumn(label: Text(tr.totalCostUsd)),
+                        const DataColumn(label: Text('Latency')),
+                        DataColumn(label: Text(tr.colStatus)),
                       ],
                       rows: logs.map((l) {
                         final school = l['school'] as Map<String, dynamic>?;
@@ -1114,7 +1215,7 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   // 5. AUDIT PAGE
   // ══════════════════════════════════════════════════════════════
-  Widget _buildAuditPage(PlatformState state) {
+  Widget _buildAuditPage(PlatformState state, ConsoleStrings tr) {
     final logs = state.auditLogs.where((a) {
       if (_searchQuery.isEmpty) return true;
       final act = (a['action'] ?? '').toString().toLowerCase();
@@ -1128,14 +1229,14 @@ class _ConsoleDashboardScreenState
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: _surfaceCard(
-        title: 'Journal d\'Audit Système (${logs.length})',
+        title: '${tr.headerAuditTitle} (${logs.length})',
         child: logs.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.symmetric(vertical: 28),
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 28),
                 child: Center(
                   child: Text(
-                    'Aucune entrée d\'audit trouvée.',
-                    style: TextStyle(color: ConsoleColors.textSecondary),
+                    tr.noAuditLogsFound,
+                    style: const TextStyle(color: ConsoleColors.textSecondary),
                   ),
                 ),
               )
@@ -1144,12 +1245,12 @@ class _ConsoleDashboardScreenState
                 child: DataTable(
                   headingRowColor:
                       WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                  columns: const [
-                    DataColumn(label: Text('Date')),
-                    DataColumn(label: Text('Établissement')),
-                    DataColumn(label: Text('Acteur')),
-                    DataColumn(label: Text('Action')),
-                    DataColumn(label: Text('Cible')),
+                  columns: [
+                    DataColumn(label: Text(tr.colTimestamp)),
+                    DataColumn(label: Text(tr.colSchool)),
+                    DataColumn(label: Text(tr.colActor)),
+                    DataColumn(label: Text(tr.colActionName)),
+                    DataColumn(label: Text(tr.colTargetSchool)),
                   ],
                   rows: logs.map((a) {
                     final school = a['school'] as Map<String, dynamic>?;
@@ -1162,7 +1263,7 @@ class _ConsoleDashboardScreenState
                             style: const TextStyle(
                                 fontSize: 12,
                                 color: ConsoleColors.textSecondary))),
-                        DataCell(Text(school?['name'] ?? 'Plateforme')),
+                        DataCell(Text(school?['name'] ?? 'Platform')),
                         DataCell(Text(
                           a['actor_role'] ?? 'system',
                           style: const TextStyle(
@@ -1187,7 +1288,7 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   // 6. BUG REPORTS PAGE
   // ══════════════════════════════════════════════════════════════
-  Widget _buildBugReportsPage(PlatformState state) {
+  Widget _buildBugReportsPage(PlatformState state, ConsoleStrings tr) {
     final reports = state.bugReports.where((b) {
       if (_searchQuery.isEmpty) return true;
       final t = (b['title'] ?? '').toString().toLowerCase();
@@ -1217,9 +1318,9 @@ class _ConsoleDashboardScreenState
             children: [
               Expanded(
                 child: _buildMetricCard(
-                  'Total Signalements',
+                  tr.filterAllBugs,
                   '$total',
-                  'Tous les rapports reçus',
+                  'Total incoming tickets',
                   Icons.bug_report_outlined,
                   ConsoleColors.primary,
                 ),
@@ -1227,9 +1328,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  'Bugs Ouverts',
+                  tr.filterPendingBugs,
                   '$openCount',
-                  'En attente d\'analyse',
+                  'Pending triage',
                   Icons.error_outline,
                   ConsoleColors.error,
                 ),
@@ -1237,9 +1338,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  'En Cours',
+                  tr.filterInReviewBugs,
                   '$inProgressCount',
-                  'Pris en charge',
+                  'Under investigation',
                   Icons.hourglass_top_rounded,
                   ConsoleColors.warning,
                 ),
@@ -1247,9 +1348,9 @@ class _ConsoleDashboardScreenState
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
-                  'Résolus / Fermés',
+                  tr.filterResolvedBugs,
                   '$resolvedCount',
-                  'Corrigés',
+                  'Fixed & verified',
                   Icons.check_circle_outline,
                   ConsoleColors.success,
                 ),
@@ -1258,7 +1359,7 @@ class _ConsoleDashboardScreenState
           ),
           const SizedBox(height: 22),
           _surfaceCard(
-            title: 'Rapports de Bugs des Utilisateurs',
+            title: '${tr.headerBugsTitle} (${reports.length})',
             child: reports.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 32),

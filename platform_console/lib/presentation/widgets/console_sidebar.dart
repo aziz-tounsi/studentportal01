@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/localization/console_translations.dart';
 import '../providers/console_auth_provider.dart';
 import '../providers/platform_provider.dart';
 
@@ -11,6 +12,7 @@ class ConsoleSidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tr = ref.watch(consoleTranslationsProvider);
     final platformState = ref.watch(platformProvider);
     final openBugs = (platformState.kpis['openBugsCount'] as int?) ?? 0;
     final pendingPayments = (platformState.kpis['pendingCount'] as int?) ?? 0;
@@ -99,13 +101,13 @@ class ConsoleSidebar extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'PythaOne',
-                            style: TextStyle(
+                            tr.navPlatformTitle,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -113,8 +115,8 @@ class ConsoleSidebar extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            'Super Admin SaaS',
-                            style: TextStyle(
+                            tr.navPlatformSubtitle,
+                            style: const TextStyle(
                               color: Color(0xFF94A3B8),
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -133,48 +135,54 @@ class ConsoleSidebar extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const _SectionTitle(title: 'PLATEFORME'),
+                      _SectionTitle(title: tr.navSectionPlatform),
                       _NavItem(
                         icon: Icons.dashboard_outlined,
-                        label: 'Vue d\'ensemble',
+                        label: tr.navOverview,
                         route: '/dashboard',
                         currentRoute: currentRoute,
                       ),
                       _NavItem(
                         icon: Icons.apartment_outlined,
-                        label: 'Écoles & Tenants',
+                        label: tr.navSchools,
                         route: '/schools',
                         currentRoute: currentRoute,
                       ),
                       const SizedBox(height: 16),
-                      const _SectionTitle(title: 'FACTURATION & IA'),
+                      _SectionTitle(title: tr.navSectionBilling),
                       _NavItem(
                         icon: Icons.receipt_long_outlined,
-                        label: 'Facturation',
+                        label: tr.navBilling,
                         route: '/billing',
                         currentRoute: currentRoute,
                         badgeCount: pendingPayments,
                       ),
                       _NavItem(
                         icon: Icons.auto_awesome_outlined,
-                        label: 'Télémétrie IA',
+                        label: tr.navAiTelemetry,
                         route: '/ai-telemetry',
                         currentRoute: currentRoute,
                       ),
                       const SizedBox(height: 16),
-                      const _SectionTitle(title: 'CONTRÔLE & SUPPORT'),
+                      _SectionTitle(title: tr.navSectionControl),
                       _NavItem(
                         icon: Icons.history_outlined,
-                        label: 'Journaux d\'Audit',
+                        label: tr.navAudit,
                         route: '/audit',
                         currentRoute: currentRoute,
                       ),
                       _NavItem(
                         icon: Icons.bug_report_outlined,
-                        label: 'Signalements',
+                        label: tr.navBugs,
                         route: '/bugs',
                         currentRoute: currentRoute,
                         badgeCount: openBugs,
+                      ),
+                      _NavItem(
+                        icon: Icons.settings_outlined,
+                        label: tr.navSettings,
+                        route: '/settings',
+                        currentRoute: currentRoute,
                       ),
                     ],
                   ),
@@ -224,10 +232,10 @@ class ConsoleSidebar extends ConsumerWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                const Expanded(
+                                Expanded(
                                   child: Text(
-                                    'Déconnexion',
-                                    style: TextStyle(
+                                    tr.navLogout,
+                                    style: const TextStyle(
                                       color: Color(0xFFFCA5A5),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,

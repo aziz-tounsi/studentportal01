@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/localization/console_translations.dart';
 import '../../core/theme/console_theme.dart';
 import '../providers/console_auth_provider.dart';
 
@@ -37,6 +38,8 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tr = ref.watch(consoleTranslationsProvider);
+    final currentLang = ref.watch(consoleLocaleProvider);
     final state = ref.watch(consoleAuthProvider);
 
     return Scaffold(
@@ -64,6 +67,45 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ConsoleColors.primary.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          // Language Switcher at Top Right
+          Positioned(
+            top: 24,
+            right: 24,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: ConsoleColors.cardBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _langButton(
+                    label: 'EN',
+                    isActive: currentLang == ConsoleLanguage.en,
+                    onTap: () => ref
+                        .read(consoleLocaleProvider.notifier)
+                        .setLanguage(ConsoleLanguage.en),
+                  ),
+                  const SizedBox(width: 4),
+                  _langButton(
+                    label: 'FR',
+                    isActive: currentLang == ConsoleLanguage.fr,
+                    onTap: () => ref
+                        .read(consoleLocaleProvider.notifier)
+                        .setLanguage(ConsoleLanguage.fr),
+                  ),
+                ],
               ),
             ),
           ),
@@ -103,12 +145,12 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'PythaOne Console',
-                            style: TextStyle(
+                            tr.loginTitle,
+                            style: const TextStyle(
                               color: ConsoleColors.textPrimary,
                               fontSize: 19,
                               fontWeight: FontWeight.w800,
@@ -116,8 +158,8 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                             ),
                           ),
                           Text(
-                            'Portail Propriétaire SaaS',
-                            style: TextStyle(
+                            tr.loginSubtitle,
+                            style: const TextStyle(
                               color: ConsoleColors.brand,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -128,18 +170,18 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 26),
-                  const Text(
-                    'Connexion Super Admin',
-                    style: TextStyle(
+                  Text(
+                    tr.loginCardHeading,
+                    style: const TextStyle(
                       color: ConsoleColors.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Accès réservé au contrôle global des établissements.',
-                    style: TextStyle(
+                  Text(
+                    tr.loginCardSubheading,
+                    style: const TextStyle(
                       color: ConsoleColors.textSecondary,
                       fontSize: 12.5,
                     ),
@@ -181,9 +223,10 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                   TextField(
                     controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email Super Admin',
-                      prefixIcon: Icon(
+                    decoration: InputDecoration(
+                      labelText: tr.emailLabel,
+                      hintText: tr.emailPlaceholder,
+                      prefixIcon: const Icon(
                         Icons.email_outlined,
                         color: ConsoleColors.textTertiary,
                         size: 18,
@@ -196,7 +239,7 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                     obscureText: _obscure,
                     onSubmitted: (_) => _login(),
                     decoration: InputDecoration(
-                      labelText: 'Mot de passe',
+                      labelText: tr.passwordLabel,
                       prefixIcon: const Icon(
                         Icons.lock_outline,
                         color: ConsoleColors.textTertiary,
@@ -237,9 +280,9 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text(
-                              'Accéder à la Console',
-                              style: TextStyle(
+                          : Text(
+                              tr.btnSignIn,
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -251,6 +294,32 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _langButton({
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(7),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isActive ? ConsoleColors.brand : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isActive ? Colors.white : ConsoleColors.textSecondary,
+          ),
+        ),
       ),
     );
   }

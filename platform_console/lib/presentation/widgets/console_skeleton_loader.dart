@@ -377,3 +377,137 @@ class ConsoleBugReportsSkeleton extends StatelessWidget {
     );
   }
 }
+
+// 7. Settings Page Skeleton
+class ConsoleSettingsSkeleton extends StatelessWidget {
+  const ConsoleSettingsSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Tabs row skeleton
+            Row(
+              children: List.generate(4, (i) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: ConsoleSkeletonBox(
+                    width: 140,
+                    height: 42,
+                    borderRadius: 10,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 24),
+            // First large card
+            _skeletonCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ConsoleSkeletonBox(width: 220, height: 22, borderRadius: 6),
+                  const SizedBox(height: 8),
+                  const ConsoleSkeletonBox(width: 380, height: 14, borderRadius: 6),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 72,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          padding: const EdgeInsets.all(16),
+                          child: const Row(
+                            children: [
+                              ConsoleSkeletonBox(width: 40, height: 40, borderRadius: 10),
+                              SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ConsoleSkeletonBox(width: 100, height: 16, borderRadius: 4),
+                                    SizedBox(height: 6),
+                                    ConsoleSkeletonBox(width: 160, height: 12, borderRadius: 4),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Container(
+                          height: 72,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          padding: const EdgeInsets.all(16),
+                          child: const Row(
+                            children: [
+                              ConsoleSkeletonBox(width: 40, height: 40, borderRadius: 10),
+                              SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ConsoleSkeletonBox(width: 100, height: 16, borderRadius: 4),
+                                    SizedBox(height: 6),
+                                    ConsoleSkeletonBox(width: 160, height: 12, borderRadius: 4),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            // Second settings card
+            _skeletonCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ConsoleSkeletonBox(width: 240, height: 22, borderRadius: 6),
+                  const SizedBox(height: 8),
+                  const ConsoleSkeletonBox(width: 420, height: 14, borderRadius: 6),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(child: ConsoleSkeletonBox(height: 48, borderRadius: 10)),
+                      const SizedBox(width: 16),
+                      Expanded(child: ConsoleSkeletonBox(height: 48, borderRadius: 10)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: ConsoleSkeletonBox(height: 48, borderRadius: 10)),
+                      const SizedBox(width: 16),
+                      Expanded(child: ConsoleSkeletonBox(height: 48, borderRadius: 10)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const ConsoleSkeletonBox(width: 180, height: 42, borderRadius: 10),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

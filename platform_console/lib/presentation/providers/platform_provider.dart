@@ -489,6 +489,31 @@ class PlatformNotifier extends Notifier<PlatformState> {
     }
   }
 
+  Future<bool> updatePlatformSettings({
+    required String defaultAiModel,
+    required String fallbackAiModel,
+    required String supportEmail,
+    required String platformFeeCurrency,
+  }) async {
+    try {
+      await _supabase.from('platform_settings').update({
+        'default_ai_model': defaultAiModel,
+        'fallback_ai_model': fallbackAiModel,
+        'support_email': supportEmail,
+        'platform_fee_currency': platformFeeCurrency,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', 1);
+      await loadAll();
+      return true;
+    } catch (e) {
+      _currentState = _currentState.copyWith(errorMessage: 'Settings update error: $e');
+      try {
+        state = _currentState;
+      } catch (_) {}
+      return false;
+    }
+  }
+
   Future<bool> issueManualInvoice({
     required String schoolId,
     required double amount,

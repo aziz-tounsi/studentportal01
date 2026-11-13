@@ -67,6 +67,12 @@ final _router = GoRouter(
         child: ConsoleDashboardScreen(currentRoute: '/bugs'),
       ),
     ),
+    GoRoute(
+      path: '/settings',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/settings'),
+      ),
+    ),
   ],
 );
 
