@@ -176,88 +176,6 @@ class _ConsoleDashboardScreenState
     }
   }
 
-  Widget _buildLanguagePill() {
-    final currentLang = ref.watch(consoleLocaleProvider);
-
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: ConsoleColors.cardBorder),
-      ),
-      padding: const EdgeInsets.all(3),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _langPillItem(
-            label: 'EN',
-            flag: '🇺🇸',
-            isActive: currentLang == ConsoleLanguage.en,
-            onTap: () => ref
-                .read(consoleLocaleProvider.notifier)
-                .setLanguage(ConsoleLanguage.en),
-          ),
-          const SizedBox(width: 3),
-          _langPillItem(
-            label: 'FR',
-            flag: '🇫🇷',
-            isActive: currentLang == ConsoleLanguage.fr,
-            onTap: () => ref
-                .read(consoleLocaleProvider.notifier)
-                .setLanguage(ConsoleLanguage.fr),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _langPillItem({
-    required String label,
-    required String flag,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(7),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: isActive ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(7),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(flag, style: const TextStyle(fontSize: 12)),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isActive ? ConsoleColors.brand : ConsoleColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPageHeader(
       Map<String, dynamic>? user, PlatformState state, ConsoleStrings tr) {
     final (title, subtitle) = _headerMeta(tr);
@@ -381,8 +299,6 @@ class _ConsoleDashboardScreenState
             ),
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
-          const SizedBox(width: 10),
-          _buildLanguagePill(),
           if (widget.currentRoute == '/schools' ||
               widget.currentRoute == '/dashboard' ||
               widget.currentRoute == '/') ...[

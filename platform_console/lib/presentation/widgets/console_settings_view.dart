@@ -55,7 +55,8 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
   @override
   void didUpdateWidget(covariant ConsoleSettingsView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.platformState.platformSettings != widget.platformState.platformSettings) {
+    if (oldWidget.platformState.platformSettings !=
+        widget.platformState.platformSettings) {
       final s = widget.platformState.platformSettings ?? {};
       if (!_isSaving) {
         _defaultModelCtrl.text = s['default_ai_model']?.toString() ??
@@ -287,7 +288,8 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
                         subtitle: 'Default developer console language',
                         badge: 'Default',
                         badgeColor: ConsoleColors.brand,
-                        flag: 'ðŸ‡ºðŸ‡¸',
+                        badgeLabel: 'EN',
+                        badgeGradient: const [Color(0xFF6D4CF6), Color(0xFF2563EB)],
                         isSelected: currentLang == ConsoleLanguage.en,
                         onTap: () {
                           ref
@@ -300,17 +302,18 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
                     const SizedBox(width: 18),
                     Expanded(
                       child: _buildLangCard(
-                        title: 'FranÃ§ais (French)',
-                        subtitle: 'Interface complÃ¨te en franÃ§ais',
-                        badge: 'FranÃ§ais',
+                        title: 'Français (French)',
+                        subtitle: 'Complete interface in French',
+                        badge: 'Français',
                         badgeColor: const Color(0xFF2563EB),
-                        flag: 'ðŸ‡«ðŸ‡·',
+                        badgeLabel: 'FR',
+                        badgeGradient: const [Color(0xFF2563EB), Color(0xFF0EA5E9)],
                         isSelected: currentLang == ConsoleLanguage.fr,
                         onTap: () {
                           ref
                               .read(consoleLocaleProvider.notifier)
                               .setLanguage(ConsoleLanguage.fr);
-                          _notifyLanguageSwitch('Langue changÃ©e en FranÃ§ais');
+                          _notifyLanguageSwitch('Langue changée en Français');
                         },
                       ),
                     ),
@@ -336,7 +339,7 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
                         child: Text(
                           currentLang == ConsoleLanguage.en
                               ? 'Preference is saved locally. English is loaded automatically whenever you sign in.'
-                              : 'Votre prÃ©fÃ©rence est sauvegardÃ©e localement. L\'anglais reste la langue par dÃ©faut.',
+                              : 'Votre préférence est sauvegardée localement. L\'anglais reste la langue par défaut.',
                           style: const TextStyle(
                             fontSize: 12.5,
                             color: ConsoleColors.textSecondary,
@@ -359,7 +362,8 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
     required String subtitle,
     required String badge,
     required Color badgeColor,
-    required String flag,
+    required String badgeLabel,
+    required List<Color> badgeGradient,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
@@ -392,7 +396,36 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(flag, style: const TextStyle(fontSize: 32)),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: badgeGradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: badgeGradient.first.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    badgeLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -442,7 +475,15 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
                   ],
                 ),
               ),
-              Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_off, color: isSelected ? ConsoleColors.brand : ConsoleColors.textTertiary, size: 22),
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: isSelected
+                    ? ConsoleColors.brand
+                    : ConsoleColors.textTertiary,
+                size: 22,
+              ),
             ],
           ),
         ),
@@ -722,7 +763,7 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
                               items: const [
                                 DropdownMenuItem(value: 'TND', child: Text('TND (Dinar Tunisien)')),
                                 DropdownMenuItem(value: 'USD', child: Text('USD (US Dollar \$)')),
-                                DropdownMenuItem(value: 'EUR', child: Text('EUR (Euro â‚¬)')),
+                                DropdownMenuItem(value: 'EUR', child: Text('EUR (Euro €)')),
                               ],
                               onChanged: (v) {
                                 if (v != null) {
@@ -1004,9 +1045,9 @@ class _ConsoleSettingsViewState extends ConsumerState<ConsoleSettingsView>
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
+                          const Text(
                             'Real-time multi-tenant runtime metrics and versions',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               color: ConsoleColors.textSecondary,
                             ),
