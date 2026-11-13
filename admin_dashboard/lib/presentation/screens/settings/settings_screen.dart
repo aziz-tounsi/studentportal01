@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../../core/utils/error_messages.dart';
@@ -353,19 +354,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Profil Administrateur',
-            style: TextStyle(
+            style: GoogleFonts.plusJakartaSans(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF111827),
+              color: const Color(0xFF111827),
               letterSpacing: -0.2,
             ),
           ),
           const SizedBox(height: 2),
-          const Text(
+          Text(
             'Informations personnelles et sécurité de connexion',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12.5,
+              color: const Color(0xFF64748B),
+            ),
           ),
           const SizedBox(height: 16),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
@@ -384,18 +388,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   children: [
                     Text(
                       user?.fullName ?? 'Administrateur',
-                      style: const TextStyle(
+                      style: GoogleFonts.plusJakartaSans(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E293B),
+                        color: const Color(0xFF1E293B),
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       user?.email ?? '',
-                      style: const TextStyle(
+                      style: GoogleFonts.plusJakartaSans(
                         fontSize: 13,
-                        color: Color(0xFF64748B),
+                        color: const Color(0xFF64748B),
                       ),
                     ),
                   ],
@@ -1408,10 +1412,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.12),
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return Dialog(
+      barrierColor: Colors.black.withOpacity(0.2),
+      builder: (dialogCtx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: ConstrainedBox(
@@ -1671,13 +1677,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           );
         },
       ),
+    ),
     );
   }
 
   void _confirmDisableTwoFactor(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      barrierColor: Colors.black.withOpacity(0.2),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text('Désactiver le 2FA ?', style: TextStyle(fontWeight: FontWeight.w700)),
         content: const Text(
@@ -1711,6 +1721,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             child: const Text('Désactiver'),
           ),
         ],
+      ),
       ),
     );
   }

@@ -3587,105 +3587,131 @@ class SettingsSkeletonLoader extends StatelessWidget {
     return Container(
       color: const Color(0xFFF8FAFC),
       child: ShimmerLoading(
-        child: Column(
-          children: [
-            // Subtabs skeleton
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
-              ),
-              child: Row(
-                children: const [
-                  SkeletonBox(width: 140, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 130, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 110, height: 32, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 130, height: 32, borderRadius: 8),
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(32, 20, 32, 36),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1060),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Section 1: Profil Administrateur Hero Card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SkeletonBox(width: 170, height: 16),
+                        const SizedBox(height: 6),
+                        const SkeletonBox(width: 260, height: 12),
+                        const SizedBox(height: 16),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            const SkeletonCircle(size: 56),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  SkeletonBox(width: 160, height: 16),
+                                  SizedBox(height: 6),
+                                  SkeletonBox(width: 200, height: 13),
+                                ],
+                              ),
+                            ),
+                            const SkeletonBox(width: 130, height: 38, borderRadius: 10),
+                            const SizedBox(width: 10),
+                            const SkeletonBox(width: 120, height: 38, borderRadius: 10),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Section 2: Établissement Card
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                          child: Row(
+                            children: const [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SkeletonBox(width: 180, height: 15),
+                                    SizedBox(height: 6),
+                                    SkeletonBox(width: 250, height: 12),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        _buildSkeletonTile(),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        _buildSkeletonTile(),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Section 3: Sécurité Card with Switches
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                          child: Row(
+                            children: const [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SkeletonBox(width: 150, height: 15),
+                                    SizedBox(height: 6),
+                                    SkeletonBox(width: 280, height: 12),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        _buildSkeletonSwitchTile(),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        _buildSkeletonSwitchTile(),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        _buildSkeletonSwitchTile(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // Content skeleton
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Section 1: Profil Card
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(
-                        children: [
-                          const SkeletonCircle(size: 60),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                SkeletonBox(width: 180, height: 16),
-                                SizedBox(height: 8),
-                                SkeletonBox(width: 220, height: 13),
-                                SizedBox(height: 8),
-                                SkeletonBox(width: 90, height: 20, borderRadius: 6),
-                              ],
-                            ),
-                          ),
-                          const SkeletonBox(width: 110, height: 36, borderRadius: 8),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Section 2: Cards
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildSkeletonTile(),
-                          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                          _buildSkeletonTile(),
-                          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                          _buildSkeletonTile(),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Section 3: Switches Card
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildSkeletonSwitchTile(),
-                          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                          _buildSkeletonSwitchTile(),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -3696,15 +3722,15 @@ class SettingsSkeletonLoader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: const [
-          SkeletonBox(width: 36, height: 36, borderRadius: 8),
-          SizedBox(width: 16),
+          SkeletonBox(width: 36, height: 36, borderRadius: 10),
+          SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SkeletonBox(width: 160, height: 14),
+                SkeletonBox(width: 180, height: 14),
                 SizedBox(height: 6),
-                SkeletonBox(width: 240, height: 12),
+                SkeletonBox(width: 260, height: 12),
               ],
             ),
           ),
@@ -3719,19 +3745,211 @@ class SettingsSkeletonLoader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: const [
-          SkeletonBox(width: 36, height: 36, borderRadius: 8),
-          SizedBox(width: 16),
+          SkeletonBox(width: 36, height: 36, borderRadius: 10),
+          SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SkeletonBox(width: 180, height: 14),
+                SkeletonBox(width: 190, height: 14),
                 SizedBox(height: 6),
-                SkeletonBox(width: 280, height: 12),
+                SkeletonBox(width: 300, height: 12),
               ],
             ),
           ),
-          SkeletonBox(width: 44, height: 24, borderRadius: 12),
+          SkeletonBox(width: 38, height: 22, borderRadius: 11),
+        ],
+      ),
+    );
+  }
+}
+
+/// Minimalist Instagram-style Skeleton Loader for School Info Subpage
+class SchoolInfoSkeletonLoader extends StatelessWidget {
+  const SchoolInfoSkeletonLoader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: ShimmerLoading(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Section 1: Identité
+              _buildSkeletonCard(
+                titleWidth: 190,
+                child: Column(
+                  children: const [
+                    SkeletonBox(width: double.infinity, height: 48, borderRadius: 10),
+                    SizedBox(height: 20),
+                    SkeletonBox(width: double.infinity, height: 110, borderRadius: 10),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Section 2: Logo
+              _buildSkeletonCard(
+                titleWidth: 140,
+                child: Row(
+                  children: const [
+                    SkeletonBox(width: 80, height: 80, borderRadius: 16),
+                    SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SkeletonBox(width: 180, height: 14),
+                          SizedBox(height: 8),
+                          SkeletonBox(width: 220, height: 12),
+                          SizedBox(height: 12),
+                          SkeletonBox(width: 150, height: 36, borderRadius: 10),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Section 3: Année scolaire
+              _buildSkeletonCard(
+                titleWidth: 210,
+                child: Column(
+                  children: const [
+                    SkeletonBox(width: double.infinity, height: 48, borderRadius: 10),
+                    SizedBox(height: 20),
+                    SkeletonBox(width: double.infinity, height: 70, borderRadius: 12),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildSkeletonCard({required double titleWidth, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Color(0x08060E1F), blurRadius: 20, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: titleWidth, height: 16, borderRadius: 6),
+          const SizedBox(height: 20),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Minimalist Instagram-style Skeleton Loader for Contact Info Subpage
+class ContactInfoSkeletonLoader extends StatelessWidget {
+  const ContactInfoSkeletonLoader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: ShimmerLoading(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Section 1: Contact
+              _buildSkeletonCard(
+                titleWidth: 180,
+                child: Row(
+                  children: const [
+                    Expanded(child: SkeletonBox(height: 48, borderRadius: 10)),
+                    SizedBox(width: 20),
+                    Expanded(child: SkeletonBox(height: 48, borderRadius: 10)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Section 2: Horaires
+              _buildSkeletonCard(
+                titleWidth: 220,
+                child: Column(
+                  children: [
+                    const SkeletonBox(width: double.infinity, height: 48, borderRadius: 10),
+                    const SizedBox(height: 16),
+                    ...List.generate(6, (i) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: const [
+                          SkeletonBox(width: 50, height: 28, borderRadius: 8),
+                          SizedBox(width: 14),
+                          SkeletonBox(width: 90, height: 14),
+                          SizedBox(width: 16),
+                          SkeletonBox(width: 38, height: 22, borderRadius: 11),
+                          Spacer(),
+                          SkeletonBox(width: 90, height: 36, borderRadius: 10),
+                          SizedBox(width: 12),
+                          SkeletonBox(width: 90, height: 36, borderRadius: 10),
+                        ],
+                      ),
+                    )),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Section 3: Réseaux Sociaux
+              _buildSkeletonCard(
+                titleWidth: 200,
+                child: Column(
+                  children: const [
+                    SkeletonBox(width: double.infinity, height: 48, borderRadius: 10),
+                    SizedBox(height: 14),
+                    SkeletonBox(width: double.infinity, height: 48, borderRadius: 10),
+                    SizedBox(height: 14),
+                    SkeletonBox(width: double.infinity, height: 48, borderRadius: 10),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildSkeletonCard({required double titleWidth, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Color(0x08060E1F), blurRadius: 20, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: titleWidth, height: 16, borderRadius: 6),
+          const SizedBox(height: 20),
+          child,
         ],
       ),
     );

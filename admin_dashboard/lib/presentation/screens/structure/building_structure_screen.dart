@@ -363,10 +363,8 @@ class _BuildingStructureScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isExpanded ? const Color(0xFF6D4CF6) : AppColors.border, width: isExpanded ? 1.5 : 1),
-        boxShadow: isExpanded ? [
-          BoxShadow(color: const Color(0xFF6D4CF6).withOpacity(0.08), blurRadius: 16, offset: const Offset(0, 4)),
-        ] : [
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
@@ -560,7 +558,7 @@ class _BuildingStructureScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isExpanded ? const Color(0xFF6D4CF6).withOpacity(0.3) : AppColors.border),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4, offset: const Offset(0, 2)),
         ],

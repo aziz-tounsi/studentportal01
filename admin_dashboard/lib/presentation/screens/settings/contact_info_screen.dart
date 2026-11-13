@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../widgets/admin_sidebar.dart';
-import '../../widgets/ios_loader.dart';
 import '../../widgets/modern_animated_switch.dart';
+import '../../widgets/skeleton_loader.dart';
 
 class _DayScheduleState {
   final String key;
@@ -222,21 +223,6 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
     }
   }
 
-  void _applyStandardHoursToAll() {
-    setState(() {
-      for (final day in _days) {
-        if (day.key != 'dim') {
-          day.openController.text = '08h00';
-          day.closeController.text = '17h00';
-          day.isClosed = false;
-        } else {
-          day.isClosed = true;
-        }
-      }
-      _hasChanges = true;
-    });
-  }
-
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -314,7 +300,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                 _buildTopBar(context),
                 Expanded(
                   child: contactInfoAsync.when(
-                    loading: () => const Center(child: IosLoader()),
+                    loading: () => const ContactInfoSkeletonLoader(),
                     error: (e, _) => Center(
                       child: Text(
                         UserFriendlyError.format(
@@ -442,7 +428,10 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                         controller: _phoneController,
                         label: 'Numéro de téléphone',
                         hint: '53 518 054',
-                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                        ],
                         validator: (v) => v?.isEmpty ?? true ? 'Requis' : null,
                       ),
                     ),
@@ -452,7 +441,7 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                         controller: _emailController,
                         label: 'Adresse email',
                         hint: 'contact@ecole.com',
-                        icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
                         validator: (v) {
                           if (v?.isEmpty ?? true) return 'Requis';
                           if (!v!.contains('@')) return 'Email invalide';
@@ -461,14 +450,6 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 20),
-                _buildTextField(
-                  controller: _addressController,
-                  label: 'Adresse physique (affichée sur la carte)',
-                  hint: 'Rue El Emir Faicel, Kairouan',
-                  icon: Icons.location_on_outlined,
-                  maxLines: 2,
                 ),
               ],
             ),
@@ -479,17 +460,6 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
               title: 'Tableau des Horaires d\'Ouverture (App Mobile)',
               icon: Icons.schedule_rounded,
               iconColor: const Color(0xFFF59E0B),
-              trailing: OutlinedButton.icon(
-                onPressed: _applyStandardHoursToAll,
-                icon: const Icon(Icons.restore, size: 16),
-                label: const Text('Rétablir 08h00 — 17h00 (Lun-Sam)'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFF59E0B),
-                  side: const BorderSide(color: Color(0xFFF59E0B)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
               children: [
                 _buildTextField(
                   controller: _scheduleBadgeController,
@@ -586,34 +556,18 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                             if (!day.isClosed) ...[
                               const Text('De : ', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
                               const SizedBox(width: 8),
-                              SizedBox(
-                                width: 110,
-                                child: TextFormField(
-                                  controller: day.openController,
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    hintText: '08h00',
-                                  ),
-                                  onChanged: (_) => setState(() => _hasChanges = true),
-                                ),
+                              _buildTimeButton(
+                                context: context,
+                                controller: day.openController,
+                                defaultHint: '08h00',
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               const Text('À : ', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
                               const SizedBox(width: 8),
-                              SizedBox(
-                                width: 110,
-                                child: TextFormField(
-                                  controller: day.closeController,
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    hintText: '17h00',
-                                  ),
-                                  onChanged: (_) => setState(() => _hasChanges = true),
-                                ),
+                              _buildTimeButton(
+                                context: context,
+                                controller: day.closeController,
+                                defaultHint: '17h00',
                               ),
                             ] else ...[
                               const Expanded(
@@ -696,10 +650,66 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Preview
-            _buildPreviewCard(),
+  Future<void> _pickTimeForDay(BuildContext context, TextEditingController controller) async {
+    int initialHour = 8;
+    int initialMinute = 0;
+    final text = controller.text.replaceAll('h', ':').trim();
+    if (text.contains(':')) {
+      final parts = text.split(':');
+      if (parts.length >= 2) {
+        initialHour = int.tryParse(parts[0]) ?? 8;
+        initialMinute = int.tryParse(parts[1]) ?? 0;
+      }
+    }
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: initialHour, minute: initialMinute),
+    );
+    if (picked != null) {
+      final formatted = '${picked.hour.toString().padLeft(2, '0')}h${picked.minute.toString().padLeft(2, '0')}';
+      setState(() {
+        controller.text = formatted;
+        _hasChanges = true;
+      });
+    }
+  }
+
+  Widget _buildTimeButton({
+    required BuildContext context,
+    required TextEditingController controller,
+    required String defaultHint,
+  }) {
+    final value = controller.text.isNotEmpty ? controller.text : defaultHint;
+    return InkWell(
+      onTap: () => _pickTimeForDay(context, controller),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.access_time_rounded, size: 15, color: Color(0xFF6D4CF6)),
+            const SizedBox(width: 8),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
+            ),
           ],
         ),
       ),
@@ -758,9 +768,11 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
     required TextEditingController controller,
     required String label,
     required String hint,
-    required IconData icon,
+    IconData? icon,
     Color? iconColor,
     int maxLines = 1,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -779,267 +791,38 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
           controller: controller,
           maxLines: maxLines,
           validator: validator,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-            prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 18),
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
+            prefixIcon: (icon != null && iconColor != null)
+                ? Icon(icon, color: iconColor, size: 18)
+                : null,
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: const Color(0xFFF9FAFB),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+              borderSide: BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
             ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.error),
+            errorBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+              borderSide: BorderSide(color: AppColors.error),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildPreviewCard() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF3B82F6).withValues(alpha: 0.05),
-            const Color(0xFF8B5CF6).withValues(alpha: 0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.visibility, color: Color(0xFF3B82F6), size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Aperçu Mobile des Coordonnées & Horaires',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.phone_iphone, color: Color(0xFF10B981), size: 14),
-                    SizedBox(width: 6),
-                    Text(
-                      'Rendu dans l\'application',
-                      style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          
-          Wrap(
-            spacing: 20,
-            runSpacing: 20,
-            children: [
-              // Contact Card Preview
-              Container(
-                width: 320,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 18,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Nos Coordonnées',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildPreviewRow(Icons.phone, const Color(0xFF10B981), 'Appelez-nous', _phoneController.text.isEmpty ? '---' : _phoneController.text),
-                    const Divider(height: 18, color: Color(0xFFF1F5F9)),
-                    _buildPreviewRow(Icons.email, const Color(0xFF3B82F6), 'Email', _emailController.text.isEmpty ? '---' : _emailController.text),
-                    const Divider(height: 18, color: Color(0xFFF1F5F9)),
-                    _buildPreviewRow(Icons.location_on, const Color(0xFFEF4444), 'Visitez-nous', _addressController.text.isEmpty ? '---' : _addressController.text),
-                  ],
-                ),
-              ),
-
-              // Horaires Preview
-              Container(
-                width: 340,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 18,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Horaires',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            _scheduleBadgeController.text.isEmpty ? 'Ouvert à tous' : _scheduleBadgeController.text,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                    const SizedBox(height: 6),
-                    ..._days.take(4).map((day) {
-                      final isOpen = !day.isClosed;
-                      final timeString = isOpen
-                          ? '${day.openController.text} — ${day.closeController.text}'
-                          : 'Fermé';
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 38,
-                              child: Text(
-                                day.label,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF334155),
-                                ),
-                              ),
-                            ),
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFFCBD5E1),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Text(
-                                timeString,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: isOpen ? const Color(0xFF1E293B) : const Color(0xFF94A3B8),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreviewRow(IconData icon, Color color, String title, String value) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 16, color: color),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
-              ),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }

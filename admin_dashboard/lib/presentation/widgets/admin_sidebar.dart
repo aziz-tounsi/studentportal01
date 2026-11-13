@@ -97,13 +97,6 @@ class AdminSidebar extends ConsumerWidget {
                       height: 42,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(13),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF2563EB).withOpacity(0.35),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
                       ),
                       child: SchoolLogoPreview(
                         logoUrl: schoolLogoUrl,

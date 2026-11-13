@@ -484,6 +484,104 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.xxl),
         ),
       ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFFF1F5F9)),
+        ),
+        headerBackgroundColor: Colors.white,
+        headerForegroundColor: const Color(0xFF1E293B),
+        headerHeadlineStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF1E293B),
+        ),
+        headerHelpStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: const Color(0xFF64748B),
+        ),
+        weekdayStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: const Color(0xFF64748B),
+        ),
+        dayStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: const Color(0xFF1E293B),
+        ),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          if (states.contains(WidgetState.disabled)) return const Color(0xFFCBD5E1);
+          return const Color(0xFF1E293B);
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return const Color(0xFF6D4CF6);
+          return Colors.transparent;
+        }),
+        todayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return const Color(0xFF6D4CF6);
+        }),
+        todayBorder: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
+        yearStyle: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600),
+        cancelButtonStyle: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF6B7280),
+          textStyle: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        confirmButtonStyle: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF6D4CF6),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFFF1F5F9)),
+        ),
+        hourMinuteColor: const Color(0xFFF5F3FF),
+        hourMinuteTextColor: const Color(0xFF6D4CF6),
+        hourMinuteTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 32,
+          fontWeight: FontWeight.w800,
+        ),
+        hourMinuteShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        dayPeriodColor: const Color(0xFFF5F3FF),
+        dayPeriodTextColor: const Color(0xFF6D4CF6),
+        dayPeriodShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        dialBackgroundColor: const Color(0xFFF8FAFC),
+        dialHandColor: const Color(0xFF6D4CF6),
+        dialTextColor: const Color(0xFF1E293B),
+        dialTextStyle: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
+        entryModeIconColor: const Color(0xFF6D4CF6),
+        cancelButtonStyle: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF6B7280),
+          textStyle: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        confirmButtonStyle: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF6D4CF6),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.slate900,
         contentTextStyle: GoogleFonts.plusJakartaSans(color: AppColors.surface),

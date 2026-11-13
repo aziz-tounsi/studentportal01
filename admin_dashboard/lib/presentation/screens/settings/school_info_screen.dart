@@ -7,6 +7,7 @@ import '../../../data/services/school_branding_service.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/school_logo_preview.dart';
+import '../../widgets/skeleton_loader.dart';
 
 class SchoolInfoNotifier extends AsyncNotifier<Map<String, dynamic>> {
   @override
@@ -269,7 +270,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
                 Expanded(
                   child: schoolAsync.when(
                     loading: () =>
-                        const Center(child: IosLoader()),
+                        const SchoolInfoSkeletonLoader(),
                     error: (e, _) => Center(
                       child: Text(
                         UserFriendlyError.format(
@@ -544,7 +545,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
     required TextEditingController controller,
     required String label,
     required String hint,
-    required IconData icon,
+    IconData? icon,
     int maxLines = 1,
     String? helperText,
     String? Function(String?)? validator,
@@ -557,7 +558,7 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
             Text(
               label,
               style: const TextStyle(
-                fontSize: 13.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF374151),
               ),
@@ -588,23 +589,17 @@ class _SchoolInfoScreenState extends ConsumerState<SchoolInfoScreen> {
               fontSize: 13.5,
               fontWeight: FontWeight.w400,
             ),
-            prefixIcon: maxLines == 1
-                ? Icon(icon, color: const Color(0xFF64748B), size: 18)
-                : Padding(
-                    padding: const EdgeInsets.only(bottom: 60),
-                    child: Icon(icon, color: const Color(0xFF64748B), size: 18),
-                  ),
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: const Color(0xFFF9FAFB),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),

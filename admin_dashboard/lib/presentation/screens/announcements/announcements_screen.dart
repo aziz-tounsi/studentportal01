@@ -963,19 +963,15 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
               ),
             ],
           ),
-          const SizedBox(width: 16),
-          // ── Toolbar: pinned far right & responsive ──
-          Flexible(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320, minWidth: 120),
-                    child: SizedBox(
-                      height: 40,
-                      child: TextField(
+          const Spacer(),
+          // ── Toolbar: pinned far right matching absences header ──
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 320,
+                height: 40,
+                child: TextField(
                         controller: _searchController,
                         onChanged: _onSearchChanged,
                         style: const TextStyle(fontSize: 13),
@@ -1024,8 +1020,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                         ),
                       ),
                     ),
-                  ),
-                ),
                 const SizedBox(width: 8),
                 _buildHeaderIconButton(
                   icon: Icons.filter_list_rounded,
@@ -1064,7 +1058,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                 ),
               ],
             ),
-          ),
         ],
       ),
     );
@@ -6295,9 +6288,7 @@ class _AnnouncementComposerDialogState
           elevation: 2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: _isPinned
-                ? BorderSide(color: AppColors.warning.withOpacity(0.5), width: 2)
-                : BorderSide.none,
+            side: BorderSide.none,
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
