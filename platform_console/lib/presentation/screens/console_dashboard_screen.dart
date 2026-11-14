@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/localization/console_translations.dart';
 import '../../core/services/invoice_pdf_generator.dart';
 import '../../core/theme/console_theme.dart';
@@ -35,6 +36,7 @@ class ConsoleDashboardScreen extends ConsumerStatefulWidget {
 class _ConsoleDashboardScreenState
     extends ConsumerState<ConsoleDashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final Set<String> _selectedSchoolIds = {};
   String _searchQuery = '';
   String _schoolsStatusFilter = 'all'; // 'all', 'active', 'suspended'
   int _schoolsPage = 0;
@@ -481,529 +483,729 @@ class _ConsoleDashboardScreenState
               ),
             ],
           ),
-          const SizedBox(height: 26), // Golden ratio spacing (Quick Actions REMOVED)
+          const SizedBox(height: 24),
 
-          // ── UNIFIED SCHOOLS TABLE (EXACT USERS TABLE DESIGN) ──
+          // ── FLOATING STATUS FILTER PILLS & ACTION BUTTON (EXACT USERS SCREEN LAYOUT) ──
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildStatusChip(
+                      'Tous',
+                      totalCount,
+                      _schoolsStatusFilter == 'all',
+                      () => setState(() {
+                        _schoolsStatusFilter = 'all';
+                        _schoolsPage = 0;
+                      }),
+                    ),
+                    _buildStatusChip(
+                      'Actifs',
+                      activeCount,
+                      _schoolsStatusFilter == 'active',
+                      () => setState(() {
+                        _schoolsStatusFilter = 'active';
+                        _schoolsPage = 0;
+                      }),
+                    ),
+                    _buildStatusChip(
+                      'Suspendus',
+                      suspendedCount,
+                      _schoolsStatusFilter == 'suspended',
+                      () => setState(() {
+                        _schoolsStatusFilter = 'suspended';
+                        _schoolsPage = 0;
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: () => _showCreateSchoolModal(context, state.plans),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nouvelle École', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6D4CF6),
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shadowColor: const Color(0xFF6D4CF6).withValues(alpha: 0.3),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── EXACT USERS PAGE TABLE CONTAINER (NO INNER CARD HEADER) ──
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: const Color(0xFFE2E8F0).withValues(alpha: 0.5)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Table header with title, status filter pills & create button
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
+                  filteredSchools.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text(
-                                  'Établissements Scolaires',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0F172A),
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '$totalCount',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF64748B),
-                                    ),
-                                  ),
+                                Icon(Icons.domain_disabled_rounded, size: 48, color: Colors.grey.shade300),
+                                const SizedBox(height: 12),
+                                Text(
+                                  tr.noSchoolsRegistered,
+                                  style: const TextStyle(fontSize: 14, color: ConsoleColors.textSecondary),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 3),
-                            const Text(
-                              'Gérez les écoles SaaS, forfaits, contacts directeurs et quotas IA en temps réel.',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: Color(0xFF64748B),
+                          ),
+                        )
+                      : _buildSchoolsDataTable(paginatedSchools, state),
+                  _buildPagination(filteredSchools.length),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // STATUS CHIP (EXACT USERS SCREEN SEGMENTED PILL)
+  // ═══════════════════════════════════════════════════
+  Widget _buildStatusChip(String label, int count, bool isActive, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isActive
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 1))]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                color: isActive ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: isActive ? const Color(0xFF64748B) : const Color(0xFF94A3B8).withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // SCHOOL AVATAR (EXACT USER AVATAR CLONE)
+  // ═══════════════════════════════════════════════════
+  Widget _buildSchoolAvatar(Map<String, dynamic> school) {
+    final logoUrl = (school['logo_url'] as String?)?.trim();
+    final name = (school['name'] as String?) ?? 'École';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'E';
+
+    const pastelBgs = [
+      Color(0xFFEDE9FE),
+      Color(0xFFE0E7FF),
+      Color(0xFFDCFCE7),
+      Color(0xFFFEF3C7),
+      Color(0xFFFCE7F3),
+      Color(0xFFE0F2FE),
+    ];
+    const textColors = [
+      Color(0xFF6D28D9),
+      Color(0xFF4338CA),
+      Color(0xFF15803D),
+      Color(0xFFB45309),
+      Color(0xFFBE185D),
+      Color(0xFF0369A1),
+    ];
+
+    final colorIndex = name.hashCode.abs() % pastelBgs.length;
+    final bg = pastelBgs[colorIndex];
+    final fg = textColors[colorIndex];
+
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          logoUrl,
+          width: 34,
+          height: 34,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => CircleAvatar(
+            radius: 17,
+            backgroundColor: bg,
+            child: Text(
+              initial,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: 17,
+      backgroundColor: bg,
+      child: Text(
+        initial,
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // SCHOOLS DATA TABLE (EXACT USERS SCREEN DATA TABLE)
+  // ═══════════════════════════════════════════════════
+  Widget _buildSchoolsDataTable(List<Map<String, dynamic>> paginatedSchools, PlatformState state) {
+    final allPageSelected = paginatedSchools.isNotEmpty &&
+        paginatedSchools.every((s) => _selectedSchoolIds.contains(s['id']?.toString()));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        const checkboxW = 44.0;
+        const contactW = 210.0;
+        const planW = 145.0;
+        const quotaW = 160.0;
+        const statusW = 90.0;
+        const createdW = 85.0;
+        const actionsW = 44.0;
+
+        final fixedW = checkboxW + contactW + planW + quotaW + statusW + createdW + actionsW;
+        final nameW = (availableWidth - fixedW).clamp(200.0, 380.0);
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: availableWidth),
+            child: DataTable(
+              columnSpacing: 0,
+              horizontalMargin: 0,
+              dataRowMinHeight: 60,
+              dataRowMaxHeight: 64,
+              headingRowHeight: 44,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+              headingTextStyle: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF94A3B8),
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
+              showCheckboxColumn: false,
+              columns: [
+                // Checkbox header
+                DataColumn(
+                  label: SizedBox(
+                    width: checkboxW,
+                    child: Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: Checkbox(
+                          value: allPageSelected && paginatedSchools.isNotEmpty,
+                          tristate: false,
+                          onChanged: (v) {
+                            setState(() {
+                              if (allPageSelected) {
+                                for (final s in paginatedSchools) {
+                                  _selectedSchoolIds.remove(s['id']?.toString());
+                                }
+                              } else {
+                                for (final s in paginatedSchools) {
+                                  final id = s['id']?.toString();
+                                  if (id != null) _selectedSchoolIds.add(id);
+                                }
+                              }
+                            });
+                          },
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                          side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
+                          activeColor: const Color(0xFF655DD5),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                DataColumn(label: SizedBox(width: nameW, child: _headerLabel('ÉTABLISSEMENT'))),
+                DataColumn(label: SizedBox(width: contactW, child: _headerLabel('CONTACT DIRECTEUR'))),
+                DataColumn(label: SizedBox(width: planW, child: _headerLabel('FORMULE & TARIF'))),
+                DataColumn(label: SizedBox(width: quotaW, child: _headerLabel('QUOTA IA MENSUEL'))),
+                DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT'))),
+                DataColumn(label: SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE'))),
+                DataColumn(label: SizedBox(width: actionsW, child: Container())),
+              ],
+              rows: paginatedSchools.map((s) {
+                final schoolId = s['id']?.toString() ?? '';
+                final isSelected = _selectedSchoolIds.contains(schoolId);
+                final sub = _extractRelationMap(s['school_subscriptions']);
+                final plan = _extractRelationMap(sub?['plan']);
+                final quota = _extractRelationMap(s['ai_school_quotas']);
+                final isActive = s['is_active'] == true;
+                final spent = (quota?['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
+                final budget = (quota?['monthly_budget_usd'] as num?)?.toDouble() ?? 25.0;
+                final isQuotaExceeded = quota?['is_quota_exceeded'] == true || spent >= budget;
+                final killSwitch = quota?['kill_switch_enabled'] == true;
+
+                final directorPhone = s['phone'] as String?;
+                final email = s['email'] as String? ?? '—';
+
+                String formattedCreated = '—';
+                if (s['created_at'] != null) {
+                  try {
+                    final dt = DateTime.parse(s['created_at'].toString());
+                    formattedCreated = DateFormat('dd/MM/yy').format(dt);
+                  } catch (_) {
+                    formattedCreated = s['created_at'].toString().split('T')[0];
+                  }
+                }
+
+                return DataRow(
+                  color: WidgetStateProperty.resolveWith<Color?>((states) {
+                    if (isSelected) return const Color(0xFFF5F3FF).withValues(alpha: 0.4);
+                    if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                    return null;
+                  }),
+                  cells: [
+                    // Checkbox
+                    DataCell(
+                      SizedBox(
+                        width: checkboxW,
+                        child: Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: Checkbox(
+                              value: isSelected,
+                              onChanged: (v) {
+                                setState(() {
+                                  if (v == true) {
+                                    _selectedSchoolIds.add(schoolId);
+                                  } else {
+                                    _selectedSchoolIds.remove(schoolId);
+                                  }
+                                });
+                              },
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
+                              activeColor: const Color(0xFF655DD5),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Établissement (Avatar + Name + Code)
+                    DataCell(
+                      SizedBox(
+                        width: nameW,
+                        child: Row(
+                          children: [
+                            _buildSchoolAvatar(s),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    s['name'] ?? '',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      (s['code'] ?? '—').toString().toUpperCase(),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF64748B),
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                      // Status tabs: Tous / Actifs / Suspendus (matching modern pill design)
-                      Row(
-                        children: [
-                          _buildFilterChipItem(
-                            label: 'Tous',
-                            count: totalCount,
-                            isSelected: _schoolsStatusFilter == 'all',
-                            onTap: () => setState(() {
-                              _schoolsStatusFilter = 'all';
-                              _schoolsPage = 0;
-                            }),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildFilterChipItem(
-                            label: 'Actifs',
-                            count: activeCount,
-                            isSelected: _schoolsStatusFilter == 'active',
-                            activeColor: ConsoleColors.success,
-                            onTap: () => setState(() {
-                              _schoolsStatusFilter = 'active';
-                              _schoolsPage = 0;
-                            }),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildFilterChipItem(
-                            label: 'Suspendus',
-                            count: suspendedCount,
-                            isSelected: _schoolsStatusFilter == 'suspended',
-                            activeColor: ConsoleColors.error,
-                            onTap: () => setState(() {
-                              _schoolsStatusFilter = 'suspended';
-                              _schoolsPage = 0;
-                            }),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
+                    ),
+                    // Contact Directeur
+                    DataCell(
                       SizedBox(
-                        height: 38,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _showCreateSchoolModal(context, state.plans),
-                          icon: const Icon(Icons.add_rounded, size: 16),
-                          label: const Text('Nouvelle École', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6D4CF6),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-                // Table content (matching Users page table exact layout)
-                filteredSchools.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 48),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.domain_disabled_rounded, size: 48, color: Colors.grey.shade300),
-                              const SizedBox(height: 12),
+                        width: contactW,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              email,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF334155),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (directorPhone != null && directorPhone.isNotEmpty) ...[
+                              const SizedBox(height: 2),
                               Text(
-                                tr.noSchoolsRegistered,
-                                style: const TextStyle(fontSize: 14, color: ConsoleColors.textSecondary),
+                                directorPhone,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: Color(0xFF94A3B8),
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
-                          ),
+                          ],
                         ),
-                      )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          const schoolW = 280.0;
-                          const contactW = 220.0;
-                          const planW = 160.0;
-                          const quotaW = 180.0;
-                          const statusW = 100.0;
-                          const createdW = 90.0;
-                          const actionsW = 50.0;
-
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                              child: DataTable(
-                                columnSpacing: 0,
-                                horizontalMargin: 0,
-                                headingRowHeight: 44,
-                                dataRowMinHeight: 60,
-                                dataRowMaxHeight: 64,
-                                headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
-                                headingTextStyle: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 11,
-                                  letterSpacing: 0.5,
+                      ),
+                    ),
+                    // Formule & Tarif
+                    DataCell(
+                      SizedBox(
+                        width: planW,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F3FF),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
-                                dividerThickness: 1,
-                                showCheckboxColumn: false,
-                                columns: [
-                                  DataColumn(label: SizedBox(width: schoolW, child: _headerLabel('ÉTABLISSEMENT'))),
-                                  DataColumn(label: SizedBox(width: contactW, child: _headerLabel('CONTACT DIRECTEUR'))),
-                                  DataColumn(label: SizedBox(width: planW, child: _headerLabel('FORMULE & TARIF'))),
-                                  DataColumn(label: SizedBox(width: quotaW, child: _headerLabel('QUOTA IA MENSUEL'))),
-                                  DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT'))),
-                                  DataColumn(label: SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE'))),
-                                  DataColumn(label: SizedBox(width: actionsW, child: Container())),
-                                ],
-                                rows: paginatedSchools.map((s) {
-                                  final sub = _extractRelationMap(s['school_subscriptions']);
-                                  final plan = _extractRelationMap(sub?['plan']);
-                                  final quota = _extractRelationMap(s['ai_school_quotas']);
-                                  final isActive = s['is_active'] == true;
-                                  final spent = (quota?['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
-                                  final budget = (quota?['monthly_budget_usd'] as num?)?.toDouble() ?? 25.0;
-                                  final isQuotaExceeded = quota?['is_quota_exceeded'] == true || spent >= budget;
-                                  final killSwitch = quota?['kill_switch_enabled'] == true;
-
-                                  final directorPhone = s['phone'] as String?;
-                                  final email = s['email'] as String? ?? '—';
-                                  final createdAt = s['created_at'] != null
-                                      ? s['created_at'].toString().split('T')[0]
-                                      : '—';
-
-                                  return DataRow(
-                                    color: WidgetStateProperty.resolveWith<Color?>((states) {
-                                      if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
-                                      return null;
-                                    }),
-                                    cells: [
-                                      // 1. School Info (Logo + Name + Code)
-                                      DataCell(
-                                        SizedBox(
-                                          width: schoolW,
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                                            child: Row(
-                                              children: [
-                                                _buildSchoolLogoThumb(
-                                                  s['logo_url'] as String?,
-                                                  size: 36,
-                                                  radius: 10,
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    children: [
-                                                      Text(
-                                                        s['name'] ?? '',
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.w600,
-                                                          fontSize: 13,
-                                                          color: Color(0xFF0F172A),
-                                                        ),
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                      const SizedBox(height: 2),
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                                        decoration: BoxDecoration(
-                                                          color: const Color(0xFFF1F5F9),
-                                                          borderRadius: BorderRadius.circular(4),
-                                                        ),
-                                                        child: Text(
-                                                          (s['code'] ?? '—').toString().toUpperCase(),
-                                                          style: const TextStyle(
-                                                            fontSize: 10,
-                                                            fontWeight: FontWeight.w600,
-                                                            color: Color(0xFF64748B),
-                                                            fontFamily: 'monospace',
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      // 2. Director Contact
-                                      DataCell(
-                                        SizedBox(
-                                          width: contactW,
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  email,
-                                                  style: const TextStyle(
-                                                    fontSize: 12.5,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Color(0xFF334155),
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                                if (directorPhone != null && directorPhone.isNotEmpty) ...[
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    directorPhone,
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      color: Color(0xFF94A3B8),
-                                                    ),
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      // 3. Plan & Pricing
-                                      DataCell(
-                                        SizedBox(
-                                          width: planW,
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFF5F3FF),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    plan?['name'] ?? 'Plan Pro',
-                                                    style: const TextStyle(
-                                                      fontSize: 10.5,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: Color(0xFF7C3AED),
-                                                    ),
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '${plan?['price_tnd_monthly'] ?? 850} TND / mois',
-                                                  style: const TextStyle(
-                                                    fontSize: 11,
-                                                    color: Color(0xFF64748B),
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      // 4. AI Quota & Budget
-                                      DataCell(
-                                        SizedBox(
-                                          width: quotaW,
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Text(
-                                                      '\$${spent.toStringAsFixed(2)}',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w700,
-                                                        color: isQuotaExceeded ? const Color(0xFFDC2626) : const Color(0xFF0F172A),
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      ' / \$${budget.toStringAsFixed(0)} USD',
-                                                      style: const TextStyle(
-                                                        fontSize: 10.5,
-                                                        color: Color(0xFF94A3B8),
-                                                      ),
-                                                    ),
-                                                    if (isQuotaExceeded || killSwitch) ...[
-                                                      const SizedBox(width: 4),
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                                        decoration: BoxDecoration(
-                                                          color: const Color(0xFFFEF2F2),
-                                                          borderRadius: BorderRadius.circular(4),
-                                                        ),
-                                                        child: Text(
-                                                          killSwitch ? 'KILL' : 'MAX',
-                                                          style: const TextStyle(
-                                                            fontSize: 9,
-                                                            fontWeight: FontWeight.w800,
-                                                            color: Color(0xFFDC2626),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 4),
-                                                SizedBox(
-                                                  width: 100,
-                                                  child: ClipRRect(
-                                                    borderRadius: BorderRadius.circular(4),
-                                                    child: LinearProgressIndicator(
-                                                      value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0.0,
-                                                      backgroundColor: const Color(0xFFF1F5F9),
-                                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                                        isQuotaExceeded ? const Color(0xFFDC2626) : const Color(0xFF6D4CF6),
-                                                      ),
-                                                      minHeight: 4,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      // 5. Status
-                                      DataCell(
-                                        SizedBox(
-                                          width: statusW,
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  isActive ? 'Actif' : 'Suspendu',
-                                                  style: TextStyle(
-                                                    fontSize: 10.5,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      // 6. Created Date
-                                      DataCell(
-                                        SizedBox(
-                                          width: createdW,
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                                            child: Text(
-                                              createdAt,
-                                              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      // 7. Actions (3 dots)
-                                      DataCell(
-                                        SizedBox(
-                                          width: actionsW,
-                                          child: PopupMenuButton<String>(
-                                            icon: const Icon(Icons.more_horiz, size: 18, color: Color(0xFF94A3B8)),
-                                            tooltip: 'Actions',
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            elevation: 8,
-                                            offset: const Offset(-160, 40),
-                                            onSelected: (val) async {
-                                              switch (val) {
-                                                case 'quota':
-                                                  _showEditAiQuotaModal(context, s);
-                                                  break;
-                                                case 'invoice':
-                                                  _showInvoiceGeneratorModal(
-                                                    context,
-                                                    state.schools,
-                                                    preselectedSchoolId: s['id'],
-                                                  );
-                                                  break;
-                                                case 'logo':
-                                                  _showSchoolLogoModal(context, s);
-                                                  break;
-                                                case 'plan':
-                                                  _showChangePlanModal(context, s, state.plans);
-                                                  break;
-                                                case 'toggle_status':
-                                                  final messenger = ScaffoldMessenger.of(context);
-                                                  final ok = await ref
-                                                      .read(platformProvider.notifier)
-                                                      .toggleSchoolStatus(s['id'], !isActive);
-                                                  if (!mounted) return;
-                                                  messenger.showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(ok
-                                                          ? (isActive
-                                                              ? 'Établissement suspendu.'
-                                                              : 'Établissement réactivé !')
-                                                          : 'Erreur lors du changement de statut.'),
-                                                      backgroundColor: ok
-                                                          ? (isActive ? ConsoleColors.warning : ConsoleColors.success)
-                                                          : ConsoleColors.error,
-                                                    ),
-                                                  );
-                                                  break;
-                                              }
-                                            },
-                                            itemBuilder: (_) => [
-                                              _buildPopupItem('quota', Icons.auto_awesome_rounded, 'Modifier Quota IA & Budget', const Color(0xFF6D4CF6)),
-                                              _buildPopupItem('invoice', Icons.picture_as_pdf_rounded, 'Générer Facture PDF', const Color(0xFF059669)),
-                                              _buildPopupItem('logo', Icons.image_outlined, 'Changer le Logo', const Color(0xFF2563EB)),
-                                              _buildPopupItem('plan', Icons.card_membership_rounded, 'Changer de Forfait', const Color(0xFF7C3AED)),
-                                              const PopupMenuDivider(),
-                                              _buildPopupItem(
-                                                'toggle_status',
-                                                isActive ? Icons.block_rounded : Icons.check_circle_outline_rounded,
-                                                isActive ? 'Suspendre l\'école' : 'Réactiver l\'école',
-                                                isActive ? const Color(0xFFDC2626) : const Color(0xFF059669),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
+                                child: Text(
+                                  plan?['name'] ?? 'Plan Pro',
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF7C3AED),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
-                          );
-                        },
+                            const SizedBox(height: 2),
+                            Text(
+                              '${plan?['price_tnd_monthly'] ?? 850} TND / mois',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
+                    ),
+                    // Quota IA Mensuel
+                    DataCell(
+                      SizedBox(
+                        width: quotaW,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '\$${spent.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isQuotaExceeded ? const Color(0xFFDC2626) : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                Text(
+                                  ' / \$${budget.toStringAsFixed(0)} USD',
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                                if (isQuotaExceeded || killSwitch) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF2F2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      killSwitch ? 'KILL' : 'MAX',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            SizedBox(
+                              width: 100,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0.0,
+                                  backgroundColor: const Color(0xFFF1F5F9),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    isQuotaExceeded ? const Color(0xFFDC2626) : const Color(0xFF655DD5),
+                                  ),
+                                  minHeight: 4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Statut (exact pill style as users page)
+                    DataCell(
+                      SizedBox(
+                        width: statusW,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              isActive ? 'Actif' : 'Suspendu',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Créé le
+                    DataCell(
+                      SizedBox(
+                        width: createdW,
+                        child: Text(
+                          formattedCreated,
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                      ),
+                    ),
+                    // Actions (3 dots)
+                    DataCell(
+                      SizedBox(
+                        width: actionsW,
+                        child: PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_horiz, size: 18, color: Color(0xFF94A3B8)),
+                          tooltip: 'Actions',
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 8,
+                          offset: const Offset(-160, 40),
+                          onSelected: (val) async {
+                            switch (val) {
+                              case 'quota':
+                                _showEditAiQuotaModal(context, s);
+                                break;
+                              case 'invoice':
+                                _showInvoiceGeneratorModal(
+                                  context,
+                                  state.schools,
+                                  preselectedSchoolId: s['id'],
+                                );
+                                break;
+                              case 'logo':
+                                _showSchoolLogoModal(context, s);
+                                break;
+                              case 'plan':
+                                _showChangePlanModal(context, s, state.plans);
+                                break;
+                              case 'toggle_status':
+                                final messenger = ScaffoldMessenger.of(context);
+                                final ok = await ref
+                                    .read(platformProvider.notifier)
+                                    .toggleSchoolStatus(s['id'], !isActive);
+                                if (!mounted) return;
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(ok
+                                        ? (isActive
+                                            ? 'Établissement suspendu.'
+                                            : 'Établissement réactivé !')
+                                        : 'Erreur lors du changement de statut.'),
+                                    backgroundColor: ok
+                                        ? (isActive ? ConsoleColors.warning : ConsoleColors.success)
+                                        : ConsoleColors.error,
+                                  ),
+                                );
+                                break;
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            _buildPopupItem('quota', Icons.auto_awesome_rounded, 'Modifier Quota IA & Budget', const Color(0xFF6D4CF6)),
+                            _buildPopupItem('invoice', Icons.picture_as_pdf_rounded, 'Générer Facture PDF', const Color(0xFF059669)),
+                            _buildPopupItem('logo', Icons.image_outlined, 'Changer le Logo', const Color(0xFF2563EB)),
+                            _buildPopupItem('plan', Icons.card_membership_rounded, 'Changer de Forfait', const Color(0xFF7C3AED)),
+                            const PopupMenuDivider(),
+                            _buildPopupItem(
+                              'toggle_status',
+                              isActive ? Icons.block_rounded : Icons.check_circle_outline_rounded,
+                              isActive ? 'Suspendre l\'école' : 'Réactiver l\'école',
+                              isActive ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-                // Table pagination bar
-                _buildTablePaginationBar(
-                  totalItems: filteredSchools.length,
-                  currentPage: _schoolsPage,
-                  pageSize: _schoolsPageSize,
-                  onPageChanged: (newPage) => setState(() => _schoolsPage = newPage),
-                  onPageSizeChanged: (newSize) => setState(() {
-                    _schoolsPageSize = newSize;
-                    _schoolsPage = 0;
-                  }),
+  // ═══════════════════════════════════════════════════
+  // PAGINATION (EXACT USERS SCREEN PAGINATION)
+  // ═══════════════════════════════════════════════════
+  Widget _buildPagination(int totalItems) {
+    final totalPages = _schoolsPageSize == -1 ? 1 : (totalItems / _schoolsPageSize).ceil();
+    final currentPageDisplay = _schoolsPage + 1;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        border: Border(top: BorderSide(color: const Color(0xFFE2E8F0).withValues(alpha: 0.5))),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Items per page
+          const Text('Afficher par ', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _schoolsPageSize,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                elevation: 4,
+                menuMaxHeight: 200,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: Color(0xFF94A3B8)),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                items: [5, 10, 20, 50].map((v) => DropdownMenuItem(
+                  value: v,
+                  child: Text('$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                )).toList(),
+                onChanged: (v) => setState(() {
+                  _schoolsPageSize = v!;
+                  _schoolsPage = 0;
+                }),
+              ),
+            ),
+          ),
+          const Spacer(),
+          // Page info
+          Text(
+            'Page $currentPageDisplay sur ${totalPages == 0 ? 1 : totalPages}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+          ),
+          const SizedBox(width: 12),
+          // Prev/Next
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: _schoolsPage > 0 ? () => setState(() => _schoolsPage--) : null,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_left, size: 18, color: _schoolsPage > 0 ? const Color(0xFF334155) : const Color(0xFF94A3B8)),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: const Color(0xFFE2E8F0)),
+                InkWell(
+                  onTap: (_schoolsPage + 1) < totalPages ? () => setState(() => _schoolsPage++) : null,
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_right, size: 18, color: (_schoolsPage + 1) < totalPages ? const Color(0xFF334155) : const Color(0xFF94A3B8)),
+                  ),
                 ),
               ],
             ),
