@@ -493,7 +493,7 @@ class _ConsoleDashboardScreenState
           ),
           const SizedBox(height: 24),
 
-          // ── FLOATING STATUS FILTER PILLS & ACTION BUTTON (EXACT USERS SCREEN LAYOUT) ──
+          // ── FLOATING STATUS FILTER PILLS (EXACT USERS SCREEN LAYOUT) ──
           Row(
             children: [
               Container(
@@ -533,20 +533,6 @@ class _ConsoleDashboardScreenState
                       }),
                     ),
                   ],
-                ),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: () => _showCreateSchoolModal(context, state.plans),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Nouvelle École', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6D4CF6),
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  shadowColor: const Color(0xFF6D4CF6).withValues(alpha: 0.3),
                 ),
               ),
             ],
@@ -734,6 +720,13 @@ class _ConsoleDashboardScreenState
                 fontSize: 11,
                 letterSpacing: 0.5,
               ),
+              border: TableBorder(
+                horizontalInside: BorderSide(
+                  color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+                  width: 1,
+                ),
+              ),
+              dividerThickness: 0.0001,
               showCheckboxColumn: false,
               columns: [
                 DataColumn(label: SizedBox(width: schoolW, child: _headerLabel('ÉTABLISSEMENT'))),
@@ -960,8 +953,12 @@ class _ConsoleDashboardScreenState
                         child: PopupMenuButton<String>(
                           icon: const Icon(Icons.more_horiz, size: 18, color: Color(0xFF94A3B8)),
                           tooltip: 'Actions',
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          elevation: 8,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: const Color(0xFFE2E8F0).withValues(alpha: 0.6)),
+                          ),
+                          elevation: 6,
+                          shadowColor: Colors.black.withValues(alpha: 0.08),
                           offset: const Offset(-160, 40),
                           onSelected: (val) async {
                             switch (val) {
@@ -1007,7 +1004,16 @@ class _ConsoleDashboardScreenState
                             _buildPopupItem('invoice', Icons.picture_as_pdf_rounded, 'Générer Facture PDF', const Color(0xFF059669)),
                             _buildPopupItem('logo', Icons.image_outlined, 'Changer le Logo', const Color(0xFF2563EB)),
                             _buildPopupItem('plan', Icons.card_membership_rounded, 'Changer de Forfait', const Color(0xFF7C3AED)),
-                            const PopupMenuDivider(),
+                            const PopupMenuItem<String>(
+                              enabled: false,
+                              height: 9,
+                              padding: EdgeInsets.zero,
+                              child: Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: Color(0xFFF1F5F9),
+                              ),
+                            ),
                             _buildPopupItem(
                               'toggle_status',
                               isActive ? Icons.block_rounded : Icons.check_circle_outline_rounded,

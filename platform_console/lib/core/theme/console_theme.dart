@@ -140,6 +140,26 @@ class ConsoleTheme {
         borderSide: const BorderSide(color: ConsoleColors.brand, width: 1.5),
       ),
     ),
+    dividerColor: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+    dividerTheme: DividerThemeData(
+      color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+      thickness: 1,
+      space: 1,
+    ),
+    dataTableTheme: DataTableThemeData(
+      headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+      dividerThickness: 1,
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: const Color(0xFFE2E8F0).withValues(alpha: 0.6)),
+      ),
+    ),
     dialogTheme: DialogThemeData(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
