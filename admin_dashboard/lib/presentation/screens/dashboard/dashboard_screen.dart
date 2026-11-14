@@ -557,7 +557,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final activeSpotIndex = _selectedChartIndex != null && _selectedChartIndex! < points.length
         ? _selectedChartIndex!
         : activeData.peakX.toInt().clamp(0, points.isEmpty ? 0 : points.length - 1);
-    final activePoint = points.isNotEmpty ? points[activeSpotIndex] : null;
 
     final lineBarData = LineChartBarData(
       spots: spots,
@@ -715,49 +714,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Active Tapped Spot Detail Pill
-          if (activePoint != null)
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F3FF),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.touch_app_rounded, size: 12, color: Color(0xFF6D4CF6)),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${activePoint.fullDate} : ',
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF6D4CF6),
-                        ),
-                      ),
-                      Text(
-                        currencyFormat.format(activePoint.amount),
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
 
           // Live Line Chart Area — CLICK ANY PIXEL TO SHOW DETAILS
           SizedBox(
-            height: 200,
+            height: 230,
             child: spots.isEmpty
                 ? const Center(
                     child: Text(
@@ -1334,21 +1295,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 for (int i = 0; i < days.length; i++) ...[
                   Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selectedDayIndex = i),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _selectedDayIndex == i ? const Color(0xFF6D4CF6) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(24), // Pill inside!
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${days[i]['day']} ${days[i]['num']}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: _selectedDayIndex == i ? FontWeight.w700 : FontWeight.w500,
-                              color: _selectedDayIndex == i ? Colors.white : const Color(0xFF64748B),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedDayIndex = i),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _selectedDayIndex == i ? const Color(0xFF6D4CF6) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(24), // Pill inside!
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${days[i]['day']} ${days[i]['num']}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: _selectedDayIndex == i ? FontWeight.w700 : FontWeight.w500,
+                                color: _selectedDayIndex == i ? Colors.white : const Color(0xFF64748B),
+                              ),
                             ),
                           ),
                         ),
@@ -1366,71 +1330,77 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Row(
             children: [
               Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedCalendarTab = 0),
-                  child: Container(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: _selectedCalendarTab == 0 ? const Color(0xFF6D4CF6) : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.science_outlined, // Science icon
-                          size: 15,
-                          color: _selectedCalendarTab == 0 ? const Color(0xFF6D4CF6) : const Color(0xFF94A3B8),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Séances',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _selectedCalendarTab == 0 ? const Color(0xFF6D4CF6) : const Color(0xFF64748B),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedCalendarTab = 0),
+                    child: Container(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: _selectedCalendarTab == 0 ? const Color(0xFF6D4CF6) : Colors.transparent,
+                            width: 2,
                           ),
                         ),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.science_outlined, // Science icon
+                            size: 15,
+                            color: _selectedCalendarTab == 0 ? const Color(0xFF6D4CF6) : const Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Séances',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _selectedCalendarTab == 0 ? const Color(0xFF6D4CF6) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
               Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedCalendarTab = 1),
-                  child: Container(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: _selectedCalendarTab == 1 ? const Color(0xFF6D4CF6) : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.assignment_outlined,
-                          size: 15,
-                          color: _selectedCalendarTab == 1 ? const Color(0xFF6D4CF6) : const Color(0xFF94A3B8),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Examens',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _selectedCalendarTab == 1 ? const Color(0xFF6D4CF6) : const Color(0xFF64748B),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedCalendarTab = 1),
+                    child: Container(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: _selectedCalendarTab == 1 ? const Color(0xFF6D4CF6) : Colors.transparent,
+                            width: 2,
                           ),
                         ),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.assignment_outlined,
+                            size: 15,
+                            color: _selectedCalendarTab == 1 ? const Color(0xFF6D4CF6) : const Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Examens',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _selectedCalendarTab == 1 ? const Color(0xFF6D4CF6) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1467,6 +1437,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   /// Event Card: BORDERLESS RECTANGLE, PILL ROOM BADGE
   Widget _buildEventCard(DashboardCalendarEvent event) {
     return InkWell(
+      mouseCursor: SystemMouseCursors.click,
       onTap: () {
         // Direct navigation to that class's timetable
         if (event.classId.isNotEmpty) {
