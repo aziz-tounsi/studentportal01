@@ -56,7 +56,71 @@ class ConsoleTheme {
       surface: ConsoleColors.card,
       error: ConsoleColors.error,
     ),
-    textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
+    textTheme: () {
+      final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme();
+      return baseTextTheme.copyWith(
+        displayLarge: baseTextTheme.displayLarge?.copyWith(
+          color: ConsoleColors.textPrimary,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -1.5,
+        ),
+        displayMedium: baseTextTheme.displayMedium?.copyWith(
+          color: ConsoleColors.textPrimary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -1.0,
+        ),
+        headlineLarge: baseTextTheme.headlineLarge?.copyWith(
+          color: ConsoleColors.textPrimary,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.8,
+        ),
+        headlineMedium: baseTextTheme.headlineMedium?.copyWith(
+          color: ConsoleColors.textPrimary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.5,
+        ),
+        titleLarge: baseTextTheme.titleLarge?.copyWith(
+          color: ConsoleColors.textPrimary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+        ),
+        titleMedium: baseTextTheme.titleMedium?.copyWith(
+          color: ConsoleColors.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        titleSmall: baseTextTheme.titleSmall?.copyWith(
+          color: ConsoleColors.textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyLarge: baseTextTheme.bodyLarge?.copyWith(
+          color: ConsoleColors.textPrimary,
+          height: 1.6,
+        ),
+        bodyMedium: baseTextTheme.bodyMedium?.copyWith(
+          color: ConsoleColors.textSecondary,
+          height: 1.5,
+        ),
+        bodySmall: baseTextTheme.bodySmall?.copyWith(
+          color: ConsoleColors.textTertiary,
+          height: 1.5,
+        ),
+        labelLarge: baseTextTheme.labelLarge?.copyWith(
+          color: ConsoleColors.textPrimary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+        labelMedium: baseTextTheme.labelMedium?.copyWith(
+          color: ConsoleColors.textSecondary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ),
+        labelSmall: baseTextTheme.labelSmall?.copyWith(
+          color: ConsoleColors.textTertiary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        ),
+      );
+    }(),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.white,
