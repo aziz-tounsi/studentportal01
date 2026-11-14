@@ -511,3 +511,125 @@ class ConsoleSettingsSkeleton extends StatelessWidget {
     );
   }
 }
+
+// 5. School Profile Page Skeleton
+class SchoolProfileSkeleton extends StatelessWidget {
+  const SchoolProfileSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleShimmerLoading(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Header Skeleton
+            Row(
+              children: [
+                const ConsoleSkeletonBox(width: 36, height: 36, borderRadius: 10),
+                const SizedBox(width: 16),
+                const ConsoleSkeletonBox(width: 52, height: 52, shape: BoxShape.circle),
+                const SizedBox(width: 16),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ConsoleSkeletonBox(width: 220, height: 22, borderRadius: 6),
+                    SizedBox(height: 6),
+                    ConsoleSkeletonBox(width: 140, height: 14, borderRadius: 4),
+                  ],
+                ),
+                const Spacer(),
+                const ConsoleSkeletonBox(width: 130, height: 38, borderRadius: 8),
+                const SizedBox(width: 12),
+                const ConsoleSkeletonBox(width: 140, height: 38, borderRadius: 8),
+              ],
+            ),
+            const SizedBox(height: 28),
+
+            // 2-Column Grid
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left Column (360px)
+                SizedBox(
+                  width: 360,
+                  child: Column(
+                    children: [
+                      // School Identity Card Skeleton
+                      _skeletonCard(
+                        child: Column(
+                          children: [
+                            const ConsoleSkeletonBox(width: 72, height: 72, shape: BoxShape.circle),
+                            const SizedBox(height: 14),
+                            const ConsoleSkeletonBox(width: 180, height: 20, borderRadius: 6),
+                            const SizedBox(height: 8),
+                            const ConsoleSkeletonBox(width: 80, height: 22, borderRadius: 11),
+                            const SizedBox(height: 20),
+                            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                            const SizedBox(height: 16),
+                            ...List.generate(4, (i) => const Padding(
+                              padding: EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  ConsoleSkeletonBox(width: 90, height: 14, borderRadius: 4),
+                                  ConsoleSkeletonBox(width: 120, height: 14, borderRadius: 4),
+                                ],
+                              ),
+                            )),
+                            const SizedBox(height: 8),
+                            const ConsoleSkeletonBox(height: 38, borderRadius: 8),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Subscription Card Skeleton
+                      _skeletonCard(
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                ConsoleSkeletonBox(width: 120, height: 16, borderRadius: 4),
+                                ConsoleSkeletonBox(width: 60, height: 22, borderRadius: 11),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+                            ConsoleSkeletonBox(width: 160, height: 22, borderRadius: 6),
+                            SizedBox(height: 8),
+                            ConsoleSkeletonBox(width: 200, height: 14, borderRadius: 4),
+                            SizedBox(height: 20),
+                            ConsoleSkeletonBox(height: 6, borderRadius: 3),
+                            SizedBox(height: 16),
+                            ConsoleSkeletonBox(height: 38, borderRadius: 8),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+
+                // Right Column (Expanded)
+                Expanded(
+                  child: Column(
+                    children: [
+                      // 4 KPIs
+                      _skeletonKpiRow(4),
+                      const SizedBox(height: 24),
+                      // Table Skeleton
+                      _skeletonTable(rows: 6, cols: 5),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -586,46 +587,53 @@ class _ConsoleDashboardScreenState
   }
 
   // ═══════════════════════════════════════════════════
-  // STATUS CHIP (EXACT USERS SCREEN SEGMENTED PILL)
+  // STATUS CHIP (EXACT USERS SCREEN SEGMENTED PILL WITH GUARANTEED FINGER CURSOR)
   // ═══════════════════════════════════════════════════
   Widget _buildStatusChip(String label, int count, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.transparent,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: isActive ? Colors.white : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        elevation: isActive ? 1 : 0,
+        shadowColor: Colors.black.withValues(alpha: 0.08),
+        child: InkWell(
+          onTap: onTap,
+          mouseCursor: SystemMouseCursors.click,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: isActive
-              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 1))]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
-              ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
             ),
-            const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: isActive ? const Color(0xFF64748B) : const Color(0xFF94A3B8).withValues(alpha: 0.6),
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                    color: isActive ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w400,
+                    color: isActive ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+
 
   // ═══════════════════════════════════════════════════
   // SCHOOL AVATAR (EXACT USER AVATAR CLONE)
@@ -692,12 +700,11 @@ class _ConsoleDashboardScreenState
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
-        const schoolW = 220.0;
-        const codeW = 110.0;
+        const schoolW = 280.0;
+        const codeW = 85.0;
         const emailW = 210.0;
         const phoneW = 120.0;
-        const planW = 110.0;
-        const priceW = 110.0;
+        const planPriceW = 165.0;
         const quotaW = 125.0;
         const statusW = 85.0;
         const createdW = 80.0;
@@ -729,12 +736,16 @@ class _ConsoleDashboardScreenState
               dividerThickness: 0.0001,
               showCheckboxColumn: false,
               columns: [
-                DataColumn(label: SizedBox(width: schoolW, child: _headerLabel('ÉTABLISSEMENT'))),
+                DataColumn(
+                  label: Padding(
+                    padding: const EdgeInsets.only(left: 24),
+                    child: SizedBox(width: schoolW, child: _headerLabel('ÉTABLISSEMENT')),
+                  ),
+                ),
                 DataColumn(label: SizedBox(width: codeW, child: _headerLabel('CODE'))),
                 DataColumn(label: SizedBox(width: emailW, child: _headerLabel('EMAIL DIRECTEUR'))),
                 DataColumn(label: SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE'))),
-                DataColumn(label: SizedBox(width: planW, child: _headerLabel('FORFAIT'))),
-                DataColumn(label: SizedBox(width: priceW, child: _headerLabel('TARIF'))),
+                DataColumn(label: SizedBox(width: planPriceW, child: _headerLabel('OFFRE & TARIF'))),
                 DataColumn(label: SizedBox(width: quotaW, child: _headerLabel('QUOTA IA'))),
                 DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT'))),
                 DataColumn(label: SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE'))),
@@ -752,6 +763,27 @@ class _ConsoleDashboardScreenState
                 final directorPhone = s['phone'] as String?;
                 final email = s['email'] as String? ?? '—';
 
+                // Code shortcut
+                final rawCode = (s['code'] ?? '—').toString().trim().toUpperCase();
+                final displayCode = rawCode.length > 6 ? rawCode.substring(0, 6) : rawCode;
+
+                // Short plan badge indicator
+                final planName = (plan?['name'] as String? ?? 'Plan Pro').trim();
+                String planBadge = 'PRO';
+                final lowerPlan = planName.toLowerCase();
+                if (lowerPlan.contains('standard') || lowerPlan.contains('basic')) {
+                  planBadge = 'STD';
+                } else if (lowerPlan.contains('entreprise') || lowerPlan.contains('enterprise')) {
+                  planBadge = 'ENT';
+                } else if (lowerPlan.contains('premium')) {
+                  planBadge = 'PREM';
+                } else if (lowerPlan.contains('pro')) {
+                  planBadge = 'PRO';
+                } else {
+                  planBadge = planName.length > 4 ? planName.substring(0, 4).toUpperCase() : planName.toUpperCase();
+                }
+                final monthlyPrice = plan?['price_tnd_monthly'] ?? 850;
+
                 String formattedCreated = '—';
                 if (s['created_at'] != null) {
                   try {
@@ -768,50 +800,61 @@ class _ConsoleDashboardScreenState
                     return null;
                   }),
                   cells: [
-                    // 1. Établissement (Avatar + Nom)
+                    // 1. Établissement (Avatar + Nom, clickable)
                     DataCell(
-                      SizedBox(
-                        width: schoolW,
-                        child: Row(
-                          children: [
-                            _buildSchoolAvatar(s),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                s['name'] ?? '',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Color(0xFF0F172A),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 24),
+                        child: SizedBox(
+                          width: schoolW,
+                          child: InkWell(
+                            onTap: () => context.go('/schools/${s['id']}'),
+                            mouseCursor: SystemMouseCursors.click,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Row(
+                              children: [
+                                _buildSchoolAvatar(s),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    s['name'] ?? '',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                    // 2. Code (Single Pill)
+                    // 2. Code (Clean Shortcut Pill)
                     DataCell(
                       SizedBox(
                         width: codeW,
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              (s['code'] ?? '—').toString().toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF64748B),
-                                fontFamily: 'monospace',
+                          child: Tooltip(
+                            message: rawCode,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
                               ),
-                              overflow: TextOverflow.ellipsis,
+                              child: Text(
+                                displayCode,
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF64748B),
+                                  fontFamily: 'monospace',
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                         ),
@@ -847,46 +890,45 @@ class _ConsoleDashboardScreenState
                         ),
                       ),
                     ),
-                    // 5. Forfait (Single Pill)
+                    // 5. Forfait & Tarif (Merged Single Column)
                     DataCell(
                       SizedBox(
-                        width: planW,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
-                              borderRadius: BorderRadius.circular(6),
+                        width: planPriceW,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF5F3FF),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFFDDD6FE)),
+                              ),
+                              child: Text(
+                                planBadge,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF7C3AED),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
-                            child: Text(
-                              plan?['name'] ?? 'Plan Pro',
+                            const SizedBox(width: 8),
+                            Text(
+                              '$monthlyPrice TND/m',
                               style: const TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF7C3AED),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF334155),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ),
-                    // 6. Tarif
-                    DataCell(
-                      SizedBox(
-                        width: priceW,
-                        child: Text(
-                          '${plan?['price_tnd_monthly'] ?? 850} TND / mois',
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            color: Color(0xFF64748B),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    // 7. Quota IA
+                    // 6. Quota IA
                     DataCell(
                       SizedBox(
                         width: quotaW,
@@ -912,7 +954,7 @@ class _ConsoleDashboardScreenState
                         ),
                       ),
                     ),
-                    // 8. Statut (Single Pill)
+                    // 7. Statut (Single Pill)
                     DataCell(
                       SizedBox(
                         width: statusW,
@@ -936,7 +978,7 @@ class _ConsoleDashboardScreenState
                         ),
                       ),
                     ),
-                    // 9. Créé le
+                    // 8. Créé le
                     DataCell(
                       SizedBox(
                         width: createdW,
@@ -946,7 +988,7 @@ class _ConsoleDashboardScreenState
                         ),
                       ),
                     ),
-                    // 10. Actions (3 dots)
+                    // 9. Actions (3 dots)
                     DataCell(
                       SizedBox(
                         width: actionsW,
@@ -962,6 +1004,9 @@ class _ConsoleDashboardScreenState
                           offset: const Offset(-160, 40),
                           onSelected: (val) async {
                             switch (val) {
+                              case 'profile':
+                                context.go('/schools/${s['id']}');
+                                break;
                               case 'quota':
                                 _showEditAiQuotaModal(context, s);
                                 break;
@@ -1000,6 +1045,7 @@ class _ConsoleDashboardScreenState
                             }
                           },
                           itemBuilder: (_) => [
+                            _buildPopupItem('profile', Icons.visibility_outlined, 'Voir le Profil École', const Color(0xFF2563EB)),
                             _buildPopupItem('quota', Icons.auto_awesome_rounded, 'Modifier Quota IA & Budget', const Color(0xFF6D4CF6)),
                             _buildPopupItem('invoice', Icons.picture_as_pdf_rounded, 'Générer Facture PDF', const Color(0xFF059669)),
                             _buildPopupItem('logo', Icons.image_outlined, 'Changer le Logo', const Color(0xFF2563EB)),
@@ -1120,16 +1166,13 @@ class _ConsoleDashboardScreenState
   }
 
   Widget _headerLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF94A3B8),
-          letterSpacing: 0.5,
-        ),
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF94A3B8),
+        letterSpacing: 0.5,
       ),
     );
   }
@@ -3528,23 +3571,13 @@ class _ConsoleDashboardScreenState
     final directorEmailCtrl = TextEditingController();
     final directorPassCtrl = TextEditingController(text: 'Director2026!');
     final aiBudgetCtrl = TextEditingController(text: '25.00');
+    final maxStudentsCtrl = TextEditingController(text: '500');
 
     String selectedPlanId = plans.isNotEmpty ? plans[0]['id'] as String : '';
     String? selectedLogoUrl;
     bool uploadingLogo = false;
     bool creating = false;
     bool showPassword = false;
-
-    int getPasswordStrength(String pwd) {
-      if (pwd.isEmpty) return 0;
-      int score = 0;
-      if (pwd.length >= 8) score++;
-      if (pwd.length >= 12) score++;
-      if (RegExp(r'[A-Z]').hasMatch(pwd) && RegExp(r'[a-z]').hasMatch(pwd)) score++;
-      if (RegExp(r'[0-9]').hasMatch(pwd)) score++;
-      if (RegExp(r'[!@#\$%&*]').hasMatch(pwd)) score++;
-      return score.clamp(0, 4);
-    }
 
     void generatePassword(StateSetter setSbState) {
       final now = DateTime.now().millisecondsSinceEpoch.toString();
@@ -3561,28 +3594,12 @@ class _ConsoleDashboardScreenState
         filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: StatefulBuilder(
           builder: (sbContext, setSbState) {
-            final strength = getPasswordStrength(directorPassCtrl.text);
-            final strengthColor = strength <= 1
-                ? ConsoleColors.error
-                : strength == 2
-                    ? ConsoleColors.warning
-                    : strength == 3
-                        ? const Color(0xFF6D4CF6)
-                        : ConsoleColors.success;
-            final strengthLabel = strength <= 1
-                ? 'Faible'
-                : strength == 2
-                    ? 'Moyen'
-                    : strength == 3
-                        ? 'Fort'
-                        : 'Très fort';
-
             return Dialog(
               backgroundColor: Colors.transparent,
               elevation: 0,
               insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               child: Container(
-                width: 660,
+                width: 680,
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.90,
                 ),
@@ -3649,36 +3666,34 @@ class _ConsoleDashboardScreenState
                       ),
                     ),
 
-                    // ── FORM BODY ──
+                    // ── FORM BODY (NO SECTION TITLES / VERTICAL LINES) ──
                     Flexible(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // ── SECTION 1: IDENTITÉ DE L'ÉTABLISSEMENT ──
-                            _buildSectionIndicator('Identité de l\'établissement'),
-                            const SizedBox(height: 16),
-
-                            // Logo Upload Row
+                            // Logo Upload Row — Logo container height matching the text and button vertically (76px)
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Container(
-                                  width: 64,
-                                  height: 64,
+                                  width: 76,
+                                  height: 76,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(14),
+                                    borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: const Color(0xFFE2E8F0)),
                                   ),
                                   child: uploadingLogo
                                       ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-                                      : _buildSchoolLogoThumb(selectedLogoUrl, size: 64, radius: 14),
+                                      : _buildSchoolLogoThumb(selectedLogoUrl, size: 76, radius: 12),
                                 ),
-                                const SizedBox(width: 14),
+                                const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       const Text(
                                         'Logo de l\'école (recommandé)',
@@ -3688,7 +3703,7 @@ class _ConsoleDashboardScreenState
                                           color: Color(0xFF334155),
                                         ),
                                       ),
-                                      const SizedBox(height: 3),
+                                      const SizedBox(height: 2),
                                       const Text(
                                         'Format PNG, JPG ou WebP. Apparaît sur le portail et les factures.',
                                         style: TextStyle(fontSize: 11.5, color: ConsoleColors.textSecondary),
@@ -3697,7 +3712,7 @@ class _ConsoleDashboardScreenState
                                       Row(
                                         children: [
                                           SizedBox(
-                                            height: 34,
+                                            height: 32,
                                             child: OutlinedButton.icon(
                                               onPressed: uploadingLogo
                                                   ? null
@@ -3720,11 +3735,13 @@ class _ConsoleDashboardScreenState
                                                         }
                                                       }
                                                     },
-                                              icon: const Icon(Icons.upload_file_rounded, size: 15),
+                                              icon: const Icon(Icons.upload_file_rounded, size: 14),
                                               label: const Text('Choisir un logo', style: TextStyle(fontSize: 12)),
                                               style: OutlinedButton.styleFrom(
-                                                foregroundColor: const Color(0xFF6D4CF6),
-                                                side: const BorderSide(color: Color(0xFF6D4CF6)),
+                                                foregroundColor: const Color(0xFF475569),
+                                                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                                backgroundColor: const Color(0xFFF8FAFC),
+                                                padding: const EdgeInsets.symmetric(horizontal: 12),
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               ),
                                             ),
@@ -3732,7 +3749,7 @@ class _ConsoleDashboardScreenState
                                           if (selectedLogoUrl != null) ...[
                                             const SizedBox(width: 8),
                                             SizedBox(
-                                              height: 34,
+                                              height: 32,
                                               child: TextButton(
                                                 onPressed: () => setSbState(() => selectedLogoUrl = null),
                                                 child: const Text('Par défaut', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -3754,15 +3771,16 @@ class _ConsoleDashboardScreenState
                             const SizedBox(height: 6),
                             TextField(
                               controller: nameCtrl,
+                              style: const TextStyle(fontSize: 13),
                               decoration: InputDecoration(
-                                hintText: 'Ex: ESPRIT, École Polytechnique, etc.',
-                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                hintText: 'Ex: Lycée Pilote Pythagore, ESPRIT, etc.',
+                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13),
                                 filled: true,
                                 fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                               ),
                             ),
                             const SizedBox(height: 14),
@@ -3773,23 +3791,25 @@ class _ConsoleDashboardScreenState
                             const SizedBox(height: 6),
                             TextField(
                               controller: emailCtrl,
+                              keyboardType: TextInputType.emailAddress,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                              ],
+                              style: const TextStyle(fontSize: 13),
                               decoration: InputDecoration(
                                 hintText: 'contact@etablissement.tn',
-                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13),
                                 filled: true,
                                 fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                               ),
                             ),
-                            const SizedBox(height: 26),
+                            const SizedBox(height: 14),
 
-                            // ── SECTION 2: DIRECTION & ACCÈS DIRECTEUR ──
-                            _buildSectionIndicator('Direction & Accès Directeur'),
-                            const SizedBox(height: 16),
-
+                            // Director Info: Nom & Téléphone
                             Row(
                               children: [
                                 Expanded(
@@ -3801,15 +3821,16 @@ class _ConsoleDashboardScreenState
                                       const SizedBox(height: 6),
                                       TextField(
                                         controller: directorNameCtrl,
+                                        style: const TextStyle(fontSize: 13),
                                         decoration: InputDecoration(
                                           hintText: 'Ex: Dr. Moncef Larbi',
-                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13),
                                           filled: true,
                                           fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                                         ),
                                       ),
                                     ],
@@ -3826,16 +3847,20 @@ class _ConsoleDashboardScreenState
                                       TextField(
                                         controller: directorPhoneCtrl,
                                         keyboardType: TextInputType.phone,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                                        ],
+                                        style: const TextStyle(fontSize: 13),
                                         decoration: InputDecoration(
                                           hintText: '+216 98 123 456',
-                                          prefixIcon: const Icon(Icons.phone_rounded, size: 16, color: Color(0xFF6D4CF6)),
-                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                          prefixIcon: const Icon(Icons.phone_rounded, size: 16, color: Color(0xFF64748B)),
+                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13),
                                           filled: true,
                                           fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                                         ),
                                       ),
                                     ],
@@ -3845,102 +3870,85 @@ class _ConsoleDashboardScreenState
                             ),
                             const SizedBox(height: 14),
 
+                            // Director Login Email
                             const Text('Email connexion Directeur *',
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
                             const SizedBox(height: 6),
                             TextField(
                               controller: directorEmailCtrl,
+                              keyboardType: TextInputType.emailAddress,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                              ],
+                              style: const TextStyle(fontSize: 13),
                               decoration: InputDecoration(
                                 hintText: 'directeur@etablissement.tn',
-                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13.5),
+                                hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 13),
                                 filled: true,
                                 fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                               ),
                             ),
                             const SizedBox(height: 14),
 
+                            // Password & Neutral Generate Button
                             const Text('Mot de passe temporaire *',
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
                             const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: directorPassCtrl,
-                                    obscureText: !showPassword,
-                                    onChanged: (_) => setSbState(() {}),
-                                    decoration: InputDecoration(
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8FAFC),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility, size: 18, color: Colors.grey),
-                                        onPressed: () => setSbState(() => showPassword = !showPassword),
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: directorPassCtrl,
+                                      obscureText: !showPassword,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                                      ],
+                                      onChanged: (_) => setSbState(() {}),
+                                      style: const TextStyle(fontSize: 13),
+                                      decoration: InputDecoration(
+                                        filled: true,
+                                        fillColor: const Color(0xFFF8FAFC),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                        suffixIcon: IconButton(
+                                          icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility, size: 18, color: Colors.grey),
+                                          onPressed: () => setSbState(() => showPassword = !showPassword),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 10),
-                                SizedBox(
-                                  height: 48,
-                                  child: OutlinedButton.icon(
+                                  const SizedBox(width: 10),
+                                  OutlinedButton.icon(
                                     onPressed: () => generatePassword(setSbState),
-                                    icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF6D4CF6)),
-                                    label: const Text('GÉNÉRER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF6D4CF6))),
+                                    icon: const Icon(Icons.refresh_rounded, size: 15, color: Color(0xFF64748B)),
+                                    label: const Text('GÉNÉRER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF475569))),
                                     style: OutlinedButton.styleFrom(
                                       side: const BorderSide(color: Color(0xFFE2E8F0)),
                                       backgroundColor: const Color(0xFFF8FAFC),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 18),
 
-                            // Password Strength Bar
-                            Row(
-                              children: List.generate(4, (i) {
-                                return Expanded(
-                                  child: Container(
-                                    height: 4,
-                                    margin: EdgeInsets.only(right: i < 3 ? 6 : 0),
-                                    decoration: BoxDecoration(
-                                      color: i < strength ? strengthColor : const Color(0xFFE2E8F0),
-                                      borderRadius: BorderRadius.circular(99),
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                            const SizedBox(height: 5),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('FORCE: ${strengthLabel.toUpperCase()}',
-                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: strengthColor)),
-                                const Text('Recommandé: 8+ caractères avec chiffres & symboles',
-                                    style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: ConsoleColors.textTertiary)),
-                              ],
-                            ),
-                            const SizedBox(height: 26),
-
-                            // ── SECTION 3: ABONNEMENT & QUOTA IA INITIAL ──
-                            _buildSectionIndicator('Abonnement & Quota IA Initial'),
-                            const SizedBox(height: 16),
-
+                            // Abonnement SaaS, Capacité Élèves & Budget IA (Equal width flex 1 each, No Overflow)
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // 1. Formule d'abonnement SaaS (flex 1)
                                 Expanded(
-                                  flex: 3,
+                                  flex: 1,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
@@ -3951,18 +3959,31 @@ class _ConsoleDashboardScreenState
                                         value: plans.any((p) => p['id'] == selectedPlanId)
                                             ? selectedPlanId
                                             : (plans.isNotEmpty ? plans[0]['id'] as String : null),
+                                        isDense: true,
+                                        isExpanded: true,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF1E293B),
+                                        ),
+                                        icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF64748B)),
                                         decoration: InputDecoration(
                                           filled: true,
                                           fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                                         ),
                                         items: plans.map((p) {
                                           return DropdownMenuItem<String>(
                                             value: p['id'] as String,
-                                            child: Text('${p['name']} (${p['price_tnd_monthly']} TND/m)'),
+                                            child: Text(
+                                              '${p['name']} (${p['price_tnd_monthly']} TND/m)',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF1E293B)),
+                                            ),
                                           );
                                         }).toList(),
                                         onChanged: (val) {
@@ -3972,26 +3993,65 @@ class _ConsoleDashboardScreenState
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 14),
+                                const SizedBox(width: 12),
+
+                                // 2. Capacité Élèves (flex 1)
                                 Expanded(
-                                  flex: 2,
+                                  flex: 1,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text('Budget IA initial (USD)',
+                                      const Text('Capacité élèves *',
+                                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: maxStudentsCtrl,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: Color(0xFF1E293B)),
+                                        decoration: InputDecoration(
+                                          hintText: '500',
+                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 12.5),
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+
+                                // 3. Budget IA initial (flex 1, accept ONLY digits)
+                                Expanded(
+                                  flex: 1,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Budget IA initial *',
                                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
                                       const SizedBox(height: 6),
                                       TextField(
                                         controller: aiBudgetCtrl,
-                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: Color(0xFF1E293B)),
                                         decoration: InputDecoration(
                                           prefixText: '\$ ',
+                                          prefixStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                                          hintText: '25',
+                                          hintStyle: const TextStyle(color: ConsoleColors.textTertiary, fontSize: 12.5),
                                           filled: true,
                                           fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                                         ),
                                       ),
                                     ],
@@ -4004,43 +4064,7 @@ class _ConsoleDashboardScreenState
                       ),
                     ),
 
-                    // ── SUMMARY STRIP ──
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFAFAFB),
-                        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
-                      ),
-                      child: Row(
-                        children: [
-                          Row(
-                            children: [
-                              Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF6D4CF6), shape: BoxShape.circle)),
-                              const SizedBox(width: 8),
-                              const Text('TYPE: SAAS ÉTABLISSEMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ConsoleColors.textSecondary)),
-                            ],
-                          ),
-                          const SizedBox(width: 20),
-                          Row(
-                            children: [
-                              Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF94A3B8), shape: BoxShape.circle)),
-                              const SizedBox(width: 8),
-                              const Text('CODE ÉCOLE: AUTO-GÉNÉRÉ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ConsoleColors.textSecondary)),
-                            ],
-                          ),
-                          const SizedBox(width: 20),
-                          Row(
-                            children: [
-                              Container(width: 7, height: 7, decoration: const BoxDecoration(color: ConsoleColors.success, shape: BoxShape.circle)),
-                              const SizedBox(width: 8),
-                              const Text('STATUT: ACTIF IMMÉDIAT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ConsoleColors.success)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // ── FOOTER ACTIONS (EXACT 40PX BUTTONS) ──
+                    // ── FOOTER ACTIONS (40PX BUTTONS) ──
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
                       decoration: const BoxDecoration(
@@ -4076,11 +4100,32 @@ class _ConsoleDashboardScreenState
                                       final dEmail = directorEmailCtrl.text.trim();
                                       final dPass = directorPassCtrl.text.trim();
                                       final budget = double.tryParse(aiBudgetCtrl.text.trim()) ?? 25.0;
+                                      final maxStudents = int.tryParse(maxStudentsCtrl.text.trim()) ?? 500;
 
                                       if (name.isEmpty || email.isEmpty || dEmail.isEmpty || dPass.isEmpty) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
                                             content: Text('Veuillez remplir tous les champs obligatoires (*).'),
+                                            backgroundColor: ConsoleColors.error,
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                      if (!emailRegex.hasMatch(email)) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Format de l\'email de l\'école invalide (ex: contact@ecole.tn).'),
+                                            backgroundColor: ConsoleColors.error,
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      if (!emailRegex.hasMatch(dEmail)) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Format de l\'email du directeur invalide (ex: directeur@ecole.tn).'),
                                             backgroundColor: ConsoleColors.error,
                                           ),
                                         );
@@ -4098,6 +4143,7 @@ class _ConsoleDashboardScreenState
                                         directorPassword: dPass,
                                         planId: selectedPlanId,
                                         initialAiBudgetUsd: budget,
+                                        maxStudents: maxStudents,
                                       );
 
                                       if (ctx.mounted) Navigator.pop(ctx);

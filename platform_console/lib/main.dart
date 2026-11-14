@@ -6,6 +6,7 @@ import 'core/config/supabase_config.dart';
 import 'core/theme/console_theme.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/console_dashboard_screen.dart';
+import 'presentation/screens/school_profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,17 @@ final _router = GoRouter(
     ),
     GoRoute(
       path: '/schools',
-      redirect: (_, _) => '/dashboard',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/schools'),
+      ),
+    ),
+    GoRoute(
+      path: '/schools/:schoolId',
+      pageBuilder: (context, state) => NoTransitionPage(
+        child: SchoolProfileScreen(
+          schoolId: state.pathParameters['schoolId']!,
+        ),
+      ),
     ),
     GoRoute(
       path: '/billing',

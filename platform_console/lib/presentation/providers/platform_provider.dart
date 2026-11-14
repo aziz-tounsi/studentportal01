@@ -480,6 +480,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
     String billingCycle = 'monthly',
     double initialAiBudgetUsd = 20.00,
     int dailyAiMessages = 30,
+    int? maxStudents,
   }) async {
     try {
       final effectiveCode = (code != null && code.trim().isNotEmpty ? code : name)
@@ -517,6 +518,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
         'current_period_end': billingCycle == 'yearly'
             ? DateTime.now().add(const Duration(days: 365)).toIso8601String()
             : DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+        if (maxStudents != null) 'notes': 'Capacité max élèves: $maxStudents',
       });
 
       final userResult = await UserManagementService.createUser(

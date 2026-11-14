@@ -259,6 +259,14 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                     inputFormatters: [
                       FilteringTextInputFormatter.deny(RegExp(r'\s')),
                     ],
+                    onChanged: (v) {
+                      if (v.contains(' ')) {
+                        _emailCtrl.value = _emailCtrl.value.copyWith(
+                          text: v.replaceAll(' ', ''),
+                          selection: TextSelection.collapsed(offset: v.replaceAll(' ', '').length),
+                        );
+                      }
+                    },
                     decoration: InputDecoration(
                       labelText: tr.emailLabel,
                       hintText: tr.emailPlaceholder,
@@ -276,6 +284,14 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                     inputFormatters: [
                       FilteringTextInputFormatter.deny(RegExp(r'\s')),
                     ],
+                    onChanged: (v) {
+                      if (v.contains(' ')) {
+                        _passCtrl.value = _passCtrl.value.copyWith(
+                          text: v.replaceAll(' ', ''),
+                          selection: TextSelection.collapsed(offset: v.replaceAll(' ', '').length),
+                        );
+                      }
+                    },
                     onSubmitted: (_) => _login(),
                     decoration: InputDecoration(
                       labelText: tr.passwordLabel,

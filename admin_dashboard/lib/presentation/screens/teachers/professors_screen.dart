@@ -1691,16 +1691,21 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         controller: emailCtrl,
                         style: const TextStyle(fontSize: 13),
                         keyboardType: TextInputType.emailAddress,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                        ],
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Champ requis';
-                          if (!v.contains('@')) return 'Email invalide';
+                          final trimmed = v?.trim() ?? '';
+                          if (trimmed.isEmpty) return 'Champ requis';
+                          final emailRegex = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$');
+                          if (!emailRegex.hasMatch(trimmed)) return 'Format email invalide';
                           return null;
                         },
                         decoration: _dialogInputDeco(hint: 'prof@ecole.tn', icon: Icons.email_outlined),
                       ),
                       const SizedBox(height: 14),
 
-                      // Phone — +216, 8 digits
+                      // Phone — Chiffres uniquement
                       _dialogFieldLabel('TÉLÉPHONE'),
                       const SizedBox(height: 6),
                       TextFormField(
@@ -1708,16 +1713,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         style: const TextStyle(fontSize: 13),
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[+\d ]')),
-                          LengthLimitingTextInputFormatter(13), // +216 (4) + space (1) + 8 digits
-                          _PhoneFormatter(),
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                          LengthLimitingTextInputFormatter(14),
                         ],
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty || v.trim() == '+216') return null; // optional
-                          final digits = v.replaceAll(RegExp(r'[^\d]'), '');
-                          if (!v.startsWith('+216')) return 'Doit commencer par +216';
-                          final localDigits = digits.length - 3; // minus 216
-                          if (localDigits != 8) return 'Numéro tunisien = 8 chiffres après +216';
+                          if (v == null || v.trim().isEmpty) return null; // optional
+                          final trimmed = v.trim();
+                          final digits = trimmed.replaceAll(RegExp(r'[^\d]'), '');
+                          if (digits.length < 8) return 'Numéro trop court (min 8 chiffres)';
                           return null;
                         },
                         decoration: _dialogInputDeco(hint: '+216 XX XXX XXX', icon: Icons.phone_outlined),

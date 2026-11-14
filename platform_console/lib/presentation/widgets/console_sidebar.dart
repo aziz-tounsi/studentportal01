@@ -173,6 +173,12 @@ class ConsoleSidebar extends ConsumerWidget {
                         route: '/dashboard',
                         currentRoute: currentRoute,
                       ),
+                      _NavItem(
+                        icon: Icons.domain_outlined,
+                        label: 'Établissements',
+                        route: '/schools',
+                        currentRoute: currentRoute,
+                      ),
                       const SizedBox(height: 8),
                       _SectionTitle(title: tr.navSectionBilling.toUpperCase()),
                       _NavItem(

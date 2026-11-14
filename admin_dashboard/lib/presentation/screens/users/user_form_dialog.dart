@@ -353,6 +353,10 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                         controller: _phoneController,
                         label: 'Téléphone',
                         placeholder: '+216 XX XXX XXX',
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                        ],
                       ),
                       const SizedBox(height: 32),
 
@@ -368,12 +372,17 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                             ? 'Laisser vide pour email établissement automatique'
                             : 'j.dupont@lycee.fr',
                         enabled: !isEditing,
+                        keyboardType: TextInputType.emailAddress,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                        ],
                         validator: (v) {
                           final trimmed = v?.trim() ?? '';
                           if (trimmed.isEmpty) {
                             return _selectedRole == 'student' ? null : 'Requis';
                           }
-                          if (!trimmed.contains('@')) return 'Email invalide';
+                          final emailRegex = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$');
+                          if (!emailRegex.hasMatch(trimmed)) return 'Format email invalide';
                           return null;
                         },
                       ),
@@ -484,6 +493,8 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
     required String label,
     String? placeholder,
     bool enabled = true,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -495,6 +506,8 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
           controller: controller,
           enabled: enabled,
           validator: validator,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
             hintText: placeholder,
