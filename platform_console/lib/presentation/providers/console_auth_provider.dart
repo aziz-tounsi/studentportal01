@@ -6,12 +6,14 @@ final consoleAuthProvider =
 
 class ConsoleAuthState {
   final bool isLoading;
+  final bool isInitialized;
   final bool isAuthenticated;
   final Map<String, dynamic>? user;
   final String? errorMessage;
 
   ConsoleAuthState({
     this.isLoading = false,
+    this.isInitialized = false,
     this.isAuthenticated = false,
     this.user,
     this.errorMessage,
@@ -19,12 +21,14 @@ class ConsoleAuthState {
 
   ConsoleAuthState copyWith({
     bool? isLoading,
+    bool? isInitialized,
     bool? isAuthenticated,
     Map<String, dynamic>? user,
     String? errorMessage,
   }) {
     return ConsoleAuthState(
       isLoading: isLoading ?? this.isLoading,
+      isInitialized: isInitialized ?? this.isInitialized,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       user: user ?? this.user,
       errorMessage: errorMessage,
@@ -45,7 +49,12 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
 
   @override
   ConsoleAuthState build() {
-    _currentState = ConsoleAuthState();
+    final hasSession = _supabase.auth.currentSession != null;
+    _currentState = ConsoleAuthState(
+      isLoading: hasSession,
+      isInitialized: false,
+      isAuthenticated: false,
+    );
     Future.microtask(_init);
     return _currentState;
   }
@@ -55,18 +64,23 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
       if (data.event == AuthChangeEvent.signedIn) {
         _loadUserData();
       } else if (data.event == AuthChangeEvent.signedOut) {
-        _setState(ConsoleAuthState());
+        _setState(ConsoleAuthState(isInitialized: true, isAuthenticated: false));
       }
     });
 
     if (_supabase.auth.currentSession != null) {
       _loadUserData();
+    } else {
+      _setState(ConsoleAuthState(isInitialized: true, isAuthenticated: false));
     }
   }
 
   Future<void> _loadUserData() async {
     final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      _setState(ConsoleAuthState(isInitialized: true, isAuthenticated: false));
+      return;
+    }
     _setState(_currentState.copyWith(isLoading: true));
     try {
       final resp = await _supabase
@@ -79,6 +93,7 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
       if (role != 'super_admin') {
         await _supabase.auth.signOut();
         _setState(ConsoleAuthState(
+          isInitialized: true,
           isAuthenticated: false,
           errorMessage:
               'Accès refusé. Cette console est strictement réservée au super_admin de la plateforme.',
@@ -88,13 +103,17 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
 
       _setState(_currentState.copyWith(
         isLoading: false,
+        isInitialized: true,
         isAuthenticated: true,
         user: resp,
         errorMessage: null,
       ));
     } catch (e) {
       _setState(_currentState.copyWith(
-          isLoading: false, errorMessage: e.toString()));
+        isLoading: false,
+        isInitialized: true,
+        errorMessage: e.toString(),
+      ));
     }
   }
 
@@ -106,17 +125,17 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
       return _currentState.isAuthenticated;
     } on AuthException catch (e) {
       _setState(
-          _currentState.copyWith(isLoading: false, errorMessage: e.message));
+          _currentState.copyWith(isLoading: false, isInitialized: true, errorMessage: e.message));
       return false;
     } catch (e) {
       _setState(_currentState.copyWith(
-          isLoading: false, errorMessage: e.toString()));
+          isLoading: false, isInitialized: true, errorMessage: e.toString()));
       return false;
     }
   }
 
   Future<void> signOut() async {
     await _supabase.auth.signOut();
-    _setState(ConsoleAuthState());
+    _setState(ConsoleAuthState(isInitialized: true, isAuthenticated: false));
   }
 }

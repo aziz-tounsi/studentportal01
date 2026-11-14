@@ -42,6 +42,34 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
     final currentLang = ref.watch(consoleLocaleProvider);
     final state = ref.watch(consoleAuthProvider);
 
+    // If session is already active or restored from local storage on reload, auto-redirect to dashboard
+    if (state.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go('/dashboard');
+      });
+      return const Scaffold(
+        backgroundColor: ConsoleColors.background,
+        body: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: ConsoleColors.brand,
+          ),
+        ),
+      );
+    }
+
+    if (!state.isInitialized || state.isLoading) {
+      return const Scaffold(
+        backgroundColor: ConsoleColors.background,
+        body: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: ConsoleColors.brand,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: ConsoleColors.background,
       body: Stack(

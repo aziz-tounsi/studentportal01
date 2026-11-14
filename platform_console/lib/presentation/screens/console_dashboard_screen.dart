@@ -70,6 +70,15 @@ class _ConsoleDashboardScreenState
     final authState = ref.watch(consoleAuthProvider);
     final platformState = ref.watch(platformProvider);
 
+    // While checking/restoring Supabase session on page reload, show skeleton (do NOT kick to login!)
+    if (!authState.isInitialized || authState.isLoading) {
+      return const Scaffold(
+        backgroundColor: ConsoleColors.background,
+        body: ConsoleOverviewSkeleton(),
+      );
+    }
+
+    // Only redirect to /login once initialization is done and user is genuinely not authenticated
     if (!authState.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.go('/login');
