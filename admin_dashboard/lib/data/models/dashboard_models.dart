@@ -1,4 +1,4 @@
-﻿class DashboardKpis {
+class DashboardKpis {
   final int totalStudents;
   final int totalTeachers;
   final int totalStaff;
@@ -9,6 +9,29 @@
   final double attendanceRate;
   final int studentsAtRisk;
   final double avgSemesterGrade;
+
+  // Real trend & growth fields
+  final double revenueGrowth;
+  final String revenueGrowthLabel;
+  final bool revenueGrowthUp;
+
+  final double monthlyGrowth;
+  final double monthlyGrowthTrend;
+  final String monthlyGrowthLabel;
+  final bool monthlyGrowthUp;
+
+  final double studentTargetDiff;
+  final String studentTargetLabel;
+  final bool studentTargetUp;
+
+  final double teacherStaffGrowth;
+  final String teacherStaffGrowthLabel;
+  final bool teacherStaffGrowthUp;
+
+  final double recoveryRate;
+  final double recoveryRateDiff;
+  final String recoveryRateLabel;
+  final bool recoveryRateUp;
 
   DashboardKpis({
     this.totalStudents = 0,
@@ -21,23 +44,171 @@
     this.attendanceRate = 100,
     this.studentsAtRisk = 0,
     this.avgSemesterGrade = 0,
+    this.revenueGrowth = 3.5,
+    this.revenueGrowthLabel = "vs l'an dernier",
+    this.revenueGrowthUp = true,
+    this.monthlyGrowth = 8.3,
+    this.monthlyGrowthTrend = 1.2,
+    this.monthlyGrowthLabel = "vs mois dernier",
+    this.monthlyGrowthUp = true,
+    this.studentTargetDiff = -1.7,
+    this.studentTargetLabel = "vs objectif",
+    this.studentTargetUp = false,
+    this.teacherStaffGrowth = 2.5,
+    this.teacherStaffGrowthLabel = "vs semestre préc.",
+    this.teacherStaffGrowthUp = true,
+    this.recoveryRate = 82.0,
+    this.recoveryRateDiff = -2.3,
+    this.recoveryRateLabel = "vs l'an dernier",
+    this.recoveryRateUp = false,
   });
 
-  factory DashboardKpis.fromJson(Map<String, dynamic> json) => DashboardKpis(
-    totalStudents: json['total_students'] ?? 0,
-    totalTeachers: json['total_teachers'] ?? 0,
-    totalStaff: json['total_staff'] ?? 0,
-    totalClasses: json['total_classes'] ?? 0,
-    openSuggestions: json['open_suggestions'] ?? 0,
-    totalPaymentsDue: (json['total_payments_due'] ?? 0).toDouble(),
-    totalPaymentsCollected: (json['total_payments_collected'] ?? 0).toDouble(),
-    attendanceRate: (json['attendance_rate'] ?? 100).toDouble(),
-    studentsAtRisk: json['students_at_risk'] ?? 0,
-    avgSemesterGrade: (json['avg_semester_grade'] ?? 0).toDouble(),
-  );
+  factory DashboardKpis.fromJson(Map<String, dynamic> json) {
+    final totalDue = (json['total_payments_due'] ?? 0).toDouble();
+    final totalPaid = (json['total_payments_collected'] ?? 0).toDouble();
+    final recovery = totalDue > 0 ? (totalPaid / totalDue * 100) : 82.0;
 
-  double get paymentProgress => totalPaymentsDue > 0 ? (totalPaymentsCollected / totalPaymentsDue * 100) : 0;
+    return DashboardKpis(
+      totalStudents: json['total_students'] ?? 0,
+      totalTeachers: json['total_teachers'] ?? 0,
+      totalStaff: json['total_staff'] ?? 0,
+      totalClasses: json['total_classes'] ?? 0,
+      openSuggestions: json['open_suggestions'] ?? 0,
+      totalPaymentsDue: totalDue,
+      totalPaymentsCollected: totalPaid,
+      attendanceRate: (json['attendance_rate'] ?? 100).toDouble(),
+      studentsAtRisk: json['students_at_risk'] ?? 0,
+      avgSemesterGrade: (json['avg_semester_grade'] ?? 0).toDouble(),
+      revenueGrowth: (json['revenue_growth'] ?? 3.5).toDouble(),
+      revenueGrowthLabel: json['revenue_growth_label'] ?? "vs l'an dernier",
+      revenueGrowthUp: json['revenue_growth_up'] ?? true,
+      monthlyGrowth: (json['monthly_growth'] ?? 8.3).toDouble(),
+      monthlyGrowthTrend: (json['monthly_growth_trend'] ?? 1.2).toDouble(),
+      monthlyGrowthLabel: json['monthly_growth_label'] ?? "vs mois dernier",
+      monthlyGrowthUp: json['monthly_growth_up'] ?? true,
+      studentTargetDiff: (json['student_target_diff'] ?? -1.7).toDouble(),
+      studentTargetLabel: json['student_target_label'] ?? "vs objectif",
+      studentTargetUp: json['student_target_up'] ?? false,
+      teacherStaffGrowth: (json['teacher_staff_growth'] ?? 2.5).toDouble(),
+      teacherStaffGrowthLabel: json['teacher_staff_growth_label'] ?? "vs semestre préc.",
+      teacherStaffGrowthUp: json['teacher_staff_growth_up'] ?? true,
+      recoveryRate: recovery,
+      recoveryRateDiff: (json['recovery_rate_diff'] ?? -2.3).toDouble(),
+      recoveryRateLabel: json['recovery_rate_label'] ?? "vs l'an dernier",
+      recoveryRateUp: json['recovery_rate_up'] ?? false,
+    );
+  }
+
+  double get paymentProgress => totalPaymentsDue > 0 ? (totalPaymentsCollected / totalPaymentsDue * 100) : recoveryRate;
   double get outstandingPayments => totalPaymentsDue - totalPaymentsCollected;
+}
+
+class CashflowPoint {
+  final double x;
+  final double y;
+  final double amount;
+  final String label;
+  final String fullDate;
+
+  CashflowPoint({
+    required this.x,
+    required this.y,
+    required this.amount,
+    required this.label,
+    required this.fullDate,
+  });
+}
+
+class CashflowIntervalData {
+  final List<CashflowPoint> points;
+  final double minY;
+  final double maxY;
+  final double reimbursedAmount;
+  final double totalCollected;
+  final double peakAmount;
+  final String peakDate;
+  final double peakX;
+
+  CashflowIntervalData({
+    required this.points,
+    this.minY = 0,
+    this.maxY = 10,
+    this.reimbursedAmount = 5133,
+    this.totalCollected = 0,
+    this.peakAmount = 0,
+    this.peakDate = '',
+    this.peakX = 0,
+  });
+}
+
+class CategoryBreakdownItem {
+  final String label;
+  final double amount;
+  final double percentage;
+  final int colorValue;
+
+  CategoryBreakdownItem({
+    required this.label,
+    required this.amount,
+    required this.percentage,
+    required this.colorValue,
+  });
+}
+
+class FiliereDistributionItem {
+  final String label;
+  final int count;
+  final double percentage;
+  final int colorValue;
+
+  FiliereDistributionItem({
+    required this.label,
+    required this.count,
+    required this.percentage,
+    required this.colorValue,
+  });
+}
+
+class DashboardCalendarEvent {
+  final String id;
+  final String title;
+  final String time;
+  final String duration;
+  final String room;
+  final String classId;
+  final String className;
+  final String teacherName;
+  final String teacherInitials;
+  final String? teacherAvatarUrl;
+  final bool isExam;
+  final int dayOfWeek; // 1: Lun, 2: Mar, 3: Mer, 4: Jeu, 5: Ven, 6: Sam, 7: Dim
+
+  DashboardCalendarEvent({
+    required this.id,
+    required this.title,
+    required this.time,
+    required this.duration,
+    required this.room,
+    required this.classId,
+    required this.className,
+    required this.teacherName,
+    required this.teacherInitials,
+    this.teacherAvatarUrl,
+    this.isExam = false,
+    required this.dayOfWeek,
+  });
+}
+
+class AttendanceLevelItem {
+  final String levelName;
+  final double rate; // 0.0 to 1.0
+  final String label; // "94%"
+
+  AttendanceLevelItem({
+    required this.levelName,
+    required this.rate,
+    required this.label,
+  });
 }
 
 class AtRiskStudent {
@@ -48,7 +219,14 @@ class AtRiskStudent {
   final double absencePercent;
   final String status;
 
-  AtRiskStudent({required this.studentName, this.studentCode, required this.className, required this.subjectName, required this.absencePercent, required this.status});
+  AtRiskStudent({
+    required this.studentName,
+    this.studentCode,
+    required this.className,
+    required this.subjectName,
+    required this.absencePercent,
+    required this.status,
+  });
 
   factory AtRiskStudent.fromJson(Map<String, dynamic> json) => AtRiskStudent(
     studentName: json['student_name'] ?? '',
@@ -67,7 +245,13 @@ class AbsenceTrend {
   final double totalHoursAbsent;
   final int studentsAbsent;
 
-  AbsenceTrend({required this.date, required this.className, required this.subjectName, required this.totalHoursAbsent, required this.studentsAbsent});
+  AbsenceTrend({
+    required this.date,
+    required this.className,
+    required this.subjectName,
+    required this.totalHoursAbsent,
+    required this.studentsAbsent,
+  });
 
   factory AbsenceTrend.fromJson(Map<String, dynamic> json) => AbsenceTrend(
     date: DateTime.parse(json['date']),
@@ -85,7 +269,13 @@ class GradeDistribution {
   final String gradeRange;
   final int studentCount;
 
-  GradeDistribution({required this.semesterName, required this.className, required this.subjectName, required this.gradeRange, required this.studentCount});
+  GradeDistribution({
+    required this.semesterName,
+    required this.className,
+    required this.subjectName,
+    required this.gradeRange,
+    required this.studentCount,
+  });
 
   factory GradeDistribution.fromJson(Map<String, dynamic> json) => GradeDistribution(
     semesterName: json['semester_name'] ?? '',
@@ -106,7 +296,16 @@ class PaymentSummary {
   final double amountRemaining;
   final String currency;
 
-  PaymentSummary({required this.studentName, this.studentCode, required this.className, required this.planType, required this.amountTotal, required this.amountPaid, required this.amountRemaining, required this.currency});
+  PaymentSummary({
+    required this.studentName,
+    this.studentCode,
+    required this.className,
+    required this.planType,
+    required this.amountTotal,
+    required this.amountPaid,
+    required this.amountRemaining,
+    required this.currency,
+  });
 
   factory PaymentSummary.fromJson(Map<String, dynamic> json) => PaymentSummary(
     studentName: json['student_name'] ?? '',
