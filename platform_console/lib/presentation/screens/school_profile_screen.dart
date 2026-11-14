@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/services/invoice_pdf_generator.dart';
 import '../../core/theme/console_theme.dart';
 import '../providers/platform_provider.dart';
+import '../widgets/console_invoice_modal.dart';
 import '../widgets/console_sidebar.dart';
 import '../widgets/console_skeleton_loader.dart';
 
@@ -298,6 +301,28 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
   int _activeTabIndex = 0; // 0: Facturation, 1: Consommation IA, 2: Utilisateurs, 3: Journal
   bool _isUploadingLogo = false;
 
+  // Pagination states for all 4 section tables (limited view per page like Users table)
+  int _invoicesPage = 0;
+  int _invoicesPageSize = 5;
+
+  int _aiLogsPage = 0;
+  int _aiLogsPageSize = 5;
+
+  int _usersPage = 0;
+  int _usersPageSize = 5;
+
+  int _auditPage = 0;
+  int _auditPageSize = 5;
+
+  String _formatTokens(int count) {
+    if (count >= 1000000) {
+      return "${(count / 1000000).toStringAsFixed(1)}M";
+    } else if (count >= 1000) {
+      return "${(count / 1000).toStringAsFixed(1)}k";
+    }
+    return count.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(schoolProfileDataProvider(widget.schoolId));
@@ -308,13 +333,26 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
         children: [
           const ConsoleSidebar(currentRoute: '/schools'),
           Expanded(
-            child: profileAsync.when(
-              loading: () => const SchoolProfileSkeleton(),
-              error: (err, _) => _buildErrorView(err),
-              data: (data) {
-                if (data == null) return _buildNotFoundView();
-                return _buildProfileBody(context, data);
-              },
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── TOP HEADER (ALWAYS STATIC, NEVER SKELETON SHIMMER) ──
+                  _buildHeader(profileAsync.asData?.value),
+                  const SizedBox(height: 28),
+
+                  // ── 2-COLUMN BODY ──
+                  profileAsync.when(
+                    loading: () => const SchoolProfileSkeleton(),
+                    error: (err, _) => _buildErrorView(err),
+                    data: (data) {
+                      if (data == null) return _buildNotFoundView();
+                      return _buildTwoColumnsLayout(context, data);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -323,69 +361,91 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
   }
 
   // ═══════════════════════════════════════════════════
-  // MAIN BODY (GOLDEN RATIO 2-COLUMN LAYOUT)
+  // TWO COLUMNS LAYOUT
   // ═══════════════════════════════════════════════════
-  Widget _buildProfileBody(BuildContext context, SchoolProfileData data) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── TOP HEADER ──
-          _buildHeader(data),
-          const SizedBox(height: 28),
-
-          // ── 2-COLUMN GRID (LEFT: 360px, RIGHT: EXPANDED) ──
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildTwoColumnsLayout(BuildContext context, SchoolProfileData data) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // LEFT COLUMN (360px)
+        SizedBox(
+          width: 360,
+          child: Column(
             children: [
-              // LEFT COLUMN
-              SizedBox(
-                width: 360,
-                child: Column(
-                  children: [
-                    _buildSchoolIdentityCard(data),
-                    const SizedBox(height: 24),
-                    _buildSubscriptionCard(data),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 28),
-
-              // RIGHT COLUMN
-              Expanded(
-                child: Column(
-                  children: [
-                    // 4 Golden Ratio KPI cards
-                    _buildStatsGrid(data),
-                    const SizedBox(height: 28),
-
-                    // Tab bar + Tab content
-                    _buildTabbedSection(data),
-                  ],
-                ),
-              ),
+              _buildSchoolIdentityCard(data),
+              const SizedBox(height: 24),
+              _buildSubscriptionCard(data),
             ],
           ),
-        ],
+        ),
+        const SizedBox(width: 28),
+
+        // RIGHT COLUMN (EXPANDED)
+        Expanded(
+          child: Column(
+            children: [
+              // 4 Golden Ratio KPI cards (NO badges, NO overflow)
+              _buildStatsGrid(data),
+              const SizedBox(height: 28),
+
+              // Tab bar + Tab content matching Users screen
+              _buildTabbedSection(data),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // UNIFIED HEADER BUTTON (EXACT SAME HEIGHT, PADDING, SHAPE)
+  // ═══════════════════════════════════════════════════
+  Widget _buildHeaderActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? backgroundColor,
+    Color? foregroundColor,
+    BorderSide? side,
+  }) {
+    final isFilled = backgroundColor != null;
+    return SizedBox(
+      height: 38,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 16, color: foregroundColor ?? (isFilled ? Colors.white : const Color(0xFF475569))),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: foregroundColor ?? (isFilled ? Colors.white : const Color(0xFF334155)),
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor ?? Colors.white,
+          foregroundColor: foregroundColor ?? const Color(0xFF334155),
+          elevation: 0,
+          side: side ?? (isFilled ? BorderSide.none : const BorderSide(color: Color(0xFFE2E8F0))),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+          minimumSize: const Size(0, 38),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
       ),
     );
   }
 
   // ═══════════════════════════════════════════════════
-  // TOP HEADER
+  // TOP HEADER (NO ACTIVE PILL, NO CODE PILL, NO ACTUALISER BTN)
   // ═══════════════════════════════════════════════════
-  Widget _buildHeader(SchoolProfileData data) {
-    final school = data.school;
-    final name = (school['name'] as String?) ?? 'Établissement';
-    final isActive = school['is_active'] == true;
-    final rawCode = (school['code'] ?? '—').toString().toUpperCase();
-    final shortCode = rawCode.length > 6 ? rawCode.substring(0, 6) : rawCode;
+  Widget _buildHeader(SchoolProfileData? data) {
+    final school = data?.school;
+    final name = (school?['name'] as String?) ?? 'Établissement';
 
     String formattedCreated = '—';
-    if (school['created_at'] != null) {
+    if (school?['created_at'] != null) {
       try {
-        final dt = DateTime.parse(school['created_at'].toString());
+        final dt = DateTime.parse(school!['created_at'].toString());
         formattedCreated = DateFormat('dd/MM/yyyy').format(dt);
       } catch (_) {}
     }
@@ -397,7 +457,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
       ),
       child: Row(
         children: [
-          // Back button
+          // Back button (Always interactive)
           _buildIconButton(
             icon: Icons.arrow_back_rounded,
             tooltip: 'Retour aux établissements',
@@ -406,88 +466,32 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
           const SizedBox(width: 16),
 
           // Avatar
-          _buildSchoolAvatar(school, size: 48),
+          if (school != null)
+            _buildSchoolAvatar(school, size: 48)
+          else
+            _fallbackAvatar('E', 48),
           const SizedBox(width: 16),
 
-          // Title & Subtitle
+          // Title & Subtitle (Clean, NO pills)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        name,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.3,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Status Pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isActive ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            isActive ? 'Actif' : 'Suspendu',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Code Pill
-                    Tooltip(
-                      message: rawCode,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          shortCode,
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF64748B),
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.3,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Établissement SaaS • Inscrit le $formattedCreated',
+                  data != null
+                      ? 'Établissement SaaS • Inscrit le $formattedCreated'
+                      : 'Chargement du profil...',
                   style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                 ),
               ],
@@ -495,44 +499,44 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
           ),
           const SizedBox(width: 16),
 
-          // Actions
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildOutlineButton(
-                icon: Icons.refresh_rounded,
-                label: 'Actualiser',
-                onTap: () {
-                  ref.invalidate(schoolProfileDataProvider(widget.schoolId));
-                  ref.read(platformProvider.notifier).loadAll();
-                },
-              ),
-              _buildOutlineButton(
-                icon: Icons.auto_awesome_rounded,
-                label: 'Quota IA',
-                onTap: () => _openQuotaDialog(data),
-              ),
-              _buildOutlineButton(
-                icon: Icons.card_membership_rounded,
-                label: 'Changer Forfait',
-                onTap: () => _openPlanDialog(data),
-              ),
-              _buildOutlineButton(
-                icon: Icons.picture_as_pdf_rounded,
-                label: 'Facture PDF',
-                onTap: () => _openInvoiceDialog(data),
-              ),
-              _buildStatusToggleButton(data),
-            ],
-          ),
+          // Action Buttons: EXACT SAME SIZE, HEIGHT, AND PROPORTIONS
+          if (data != null)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // 1. Primary Action Button: Générer Facture
+                _buildHeaderActionButton(
+                  icon: Icons.picture_as_pdf_rounded,
+                  label: 'Générer Facture',
+                  onTap: () => _openInvoiceModal(data),
+                  backgroundColor: const Color(0xFF6D4CF6),
+                  foregroundColor: Colors.white,
+                ),
+                // 2. Quota IA Button
+                _buildHeaderActionButton(
+                  icon: Icons.tune_rounded,
+                  label: 'Quota IA',
+                  onTap: () => _openQuotaDialog(data),
+                ),
+                // 3. Changer Forfait Button
+                _buildHeaderActionButton(
+                  icon: Icons.card_membership_rounded,
+                  label: 'Changer Forfait',
+                  onTap: () => _openPlanDialog(data),
+                ),
+                // 4. Suspendre / Réactiver Button
+                _buildStatusToggleButton(data),
+              ],
+            ),
         ],
       ),
     );
   }
 
   // ═══════════════════════════════════════════════════
-  // LEFT COLUMN: IDENTITY CARD
+  // LEFT COLUMN: IDENTITY CARD (CONTAINS STATUS & CODE DATA ROWS)
   // ═══════════════════════════════════════════════════
   Widget _buildSchoolIdentityCard(SchoolProfileData data) {
     final school = data.school;
@@ -541,6 +545,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
     final phone = (school['phone'] as String?) ?? '—';
     final address = (school['address'] as String?) ?? 'Non renseignée';
     final rawCode = (school['code'] ?? '—').toString().toUpperCase();
+    final isActive = school['is_active'] == true;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -598,23 +603,49 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
             ),
           ),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              'Code: $rawCode',
-              style: const TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF64748B),
-              ),
-            ),
-          ),
           const SizedBox(height: 20),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 20),
 
-          // Fields
+          // Statut Row
+          _buildInfoRow(
+            Icons.shield_outlined,
+            'Statut',
+            isActive ? 'Actif' : 'Suspendu',
+            customValueWidget: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isActive ? 'Actif' : 'Suspendu',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Code Établissement Row
+          _buildInfoRow(
+            Icons.tag_rounded,
+            'Code Établissement',
+            rawCode,
+            copyable: rawCode != '—',
+          ),
+          const SizedBox(height: 14),
+
+          // Email Directeur
           _buildInfoRow(
             Icons.email_outlined,
             'Email Directeur',
@@ -622,6 +653,8 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             copyable: email != '—',
           ),
           const SizedBox(height: 14),
+
+          // Téléphone
           _buildInfoRow(
             Icons.phone_outlined,
             'Téléphone',
@@ -629,16 +662,20 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             copyable: phone != '—',
           ),
           const SizedBox(height: 14),
+
+          // Adresse
           _buildInfoRow(
             Icons.location_on_outlined,
             'Adresse',
             address,
           ),
           const SizedBox(height: 14),
+
+          // Capacité Élèves
           _buildInfoRow(
             Icons.groups_outlined,
             'Capacité Élèves',
-            '${data.studentCount} / ${data.maxCapacity} inscrits',
+            "${data.studentCount} / ${data.maxCapacity} inscrits",
           ),
         ],
       ),
@@ -730,10 +767,10 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          _buildCheckItem('Quota IA: \$${data.aiBudgetUsd.toStringAsFixed(0)} USD inclus / mois'),
-          _buildCheckItem('Capacité maximale: ${data.maxCapacity} élèves'),
-          _buildCheckItem('Accès Espace Direction & Enseignants'),
-          _buildCheckItem('Télémétrie IA et Facturation automatisée'),
+          _buildCheckItem("Quota IA: \$${data.aiBudgetUsd.toStringAsFixed(0)} USD inclus / mois"),
+          _buildCheckItem("Capacité maximale: ${data.maxCapacity} élèves"),
+          _buildCheckItem("Accès Espace Direction & Enseignants"),
+          _buildCheckItem("Télémétrie IA et Facturation automatisée"),
           const SizedBox(height: 18),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 14),
@@ -770,7 +807,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
   }
 
   // ═══════════════════════════════════════════════════
-  // RIGHT COLUMN: 4 GOLDEN-RATIO METRIC CARDS
+  // RIGHT COLUMN: 4 GOLDEN-RATIO METRIC CARDS (NO BADGES, NO OVERFLOW)
   // ═══════════════════════════════════════════════════
   Widget _buildStatsGrid(SchoolProfileData data) {
     return Row(
@@ -783,9 +820,6 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             subtitle: 'Facturation active',
             icon: Icons.trending_up_rounded,
             iconColor: ConsoleColors.success,
-            badge: 'À JOUR',
-            badgeColor: const Color(0xFFECFDF5),
-            badgeTextColor: const Color(0xFF059669),
           ),
         ),
         const SizedBox(width: 16),
@@ -794,13 +828,10 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'DÉPENSES IA',
-            value: '\$${data.aiSpentUsd.toStringAsFixed(2)}',
-            subtitle: '${data.aiTokensMonth} tokens • Quota \$${data.aiBudgetUsd.toStringAsFixed(0)}',
+            value: "\$${data.aiSpentUsd.toStringAsFixed(2)}",
+            subtitle: "${_formatTokens(data.aiTokensMonth)} tokens • Quota \$${data.aiBudgetUsd.toStringAsFixed(0)}",
             icon: Icons.auto_awesome_rounded,
             iconColor: ConsoleColors.brand,
-            badge: '${((data.aiSpentUsd / max(1.0, data.aiBudgetUsd)) * 100).toInt()}%',
-            badgeColor: const Color(0xFFF5F3FF),
-            badgeTextColor: const Color(0xFF7C3AED),
           ),
         ),
         const SizedBox(width: 16),
@@ -810,12 +841,9 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
           child: _buildMetricCard(
             title: 'ÉLÈVES INSCRITS',
             value: '${data.studentCount}',
-            subtitle: 'Max ${data.maxCapacity} • ${data.teacherCount} professeurs',
+            subtitle: "Max ${data.maxCapacity} • ${data.teacherCount} profs",
             icon: Icons.school_rounded,
             iconColor: ConsoleColors.primary,
-            badge: '${((data.studentCount / max(1, data.maxCapacity)) * 100).toInt()}% cap.',
-            badgeColor: const Color(0xFFEFF6FF),
-            badgeTextColor: const Color(0xFF2563EB),
           ),
         ),
         const SizedBox(width: 16),
@@ -825,12 +853,9 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
           child: _buildMetricCard(
             title: 'TOTAL RECOUVRÉ',
             value: '${data.totalPaidTnd.toStringAsFixed(0)} TND',
-            subtitle: '${data.pendingInvoicesCount} impayée(s) • ${data.pendingAmountTnd.toStringAsFixed(0)} TND',
+            subtitle: "${data.pendingInvoicesCount} impayée(s) • ${data.pendingAmountTnd.toStringAsFixed(0)} TND",
             icon: Icons.receipt_long_rounded,
             iconColor: ConsoleColors.warning,
-            badge: data.pendingInvoicesCount == 0 ? 'RÉGLÉ' : 'RELANCE',
-            badgeColor: data.pendingInvoicesCount == 0 ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
-            badgeTextColor: data.pendingInvoicesCount == 0 ? const Color(0xFF059669) : const Color(0xFFD97706),
           ),
         ),
       ],
@@ -843,9 +868,6 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
     required String subtitle,
     required IconData icon,
     required Color iconColor,
-    required String badge,
-    required Color badgeColor,
-    required Color badgeTextColor,
   }) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -864,34 +886,14 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
-                  color: Color(0xFF94A3B8),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: badgeColor,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  badge,
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: badgeTextColor,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: Color(0xFF94A3B8),
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -932,7 +934,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
   }
 
   // ═══════════════════════════════════════════════════
-  // RIGHT COLUMN: TABBED SECTIONS
+  // RIGHT COLUMN: TABBED SECTIONS (MATCHING USERS SCREEN)
   // ═══════════════════════════════════════════════════
   Widget _buildTabbedSection(SchoolProfileData data) {
     return Container(
@@ -949,20 +951,28 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Segmented Tab Bar
+          // Segmented Tab Bar matching Users screen
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                _buildTabButton(0, 'Facturation (${data.invoices.length})', Icons.receipt_long_outlined),
-                const SizedBox(width: 8),
-                _buildTabButton(1, 'Consommation IA', Icons.auto_awesome_outlined),
-                const SizedBox(width: 8),
-                _buildTabButton(2, 'Utilisateurs (${data.users.length})', Icons.people_outline_rounded),
-                const SizedBox(width: 8),
-                _buildTabButton(3, 'Journal d\'Activité', Icons.history_rounded),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildTabPill(0, 'Facturation', data.invoices.length, Icons.receipt_long_outlined),
+                      _buildTabPill(1, 'Consommation IA', null, Icons.auto_awesome_outlined),
+                      _buildTabPill(2, 'Utilisateurs', data.users.length, Icons.people_outline_rounded),
+                      _buildTabPill(3, "Journal d'Activité", data.auditLogs.length, Icons.history_rounded),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -983,424 +993,1088 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
     );
   }
 
-  Widget _buildTabButton(int index, String label, IconData icon) {
+  Widget _buildTabPill(int index, String label, int? count, IconData icon) {
     final isActive = _activeTabIndex == index;
-    return InkWell(
-      onTap: () => setState(() => _activeTabIndex = index),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFF1F5F9) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isActive ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => setState(() => _activeTabIndex = index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
                 color: isActive ? const Color(0xFF0F172A) : const Color(0xFF64748B),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                ),
+              ),
+              if (count != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isActive ? const Color(0xFFEDE9FE) : const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: isActive ? const Color(0xFF6D4CF6) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ── TAB 1: FACTURATION ──
-  Widget _buildInvoicesTab(SchoolProfileData data) {
-    if (data.invoices.isEmpty) {
-      return _buildEmptyState(
-        Icons.receipt_long_outlined,
-        'Aucune facture émise pour cet établissement.',
-        actionLabel: 'Générer une facture',
-        onAction: () => _openInvoiceDialog(data),
-      );
-    }
+  // ═══════════════════════════════════════════════════
+  // REUSABLE TABLE PAGINATION BAR (MATCHING USERS TABLE EXACTLY)
+  // ═══════════════════════════════════════════════════
+  Widget _buildTablePaginationBar({
+    required int totalItems,
+    required int currentPage,
+    required int pageSize,
+    required ValueChanged<int> onPageChanged,
+    required ValueChanged<int> onPageSizeChanged,
+  }) {
+    final totalPages = (totalItems / pageSize).ceil();
+    final startIdx = totalItems == 0 ? 0 : currentPage * pageSize + 1;
+    final endIdx = ((currentPage + 1) * pageSize).clamp(0, totalItems);
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 24,
-        horizontalMargin: 20,
-        headingRowHeight: 42,
-        dataRowMinHeight: 52,
-        dataRowMaxHeight: 56,
-        headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
-        headingTextStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF94A3B8),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
         ),
-        columns: const [
-          DataColumn(label: Text('FACTURE N°')),
-          DataColumn(label: Text('DATE ÉMISSION')),
-          DataColumn(label: Text('ÉCHÉANCE')),
-          DataColumn(label: Text('MONTANT')),
-          DataColumn(label: Text('STATUT')),
-        ],
-        rows: data.invoices.map((inv) {
-          final number = inv['invoice_number'] ?? '—';
-          final amount = (inv['amount'] as num?)?.toDouble() ?? 0.0;
-          final status = (inv['status'] as String? ?? 'pending').toLowerCase();
-          final isPaid = status == 'paid';
-
-          return DataRow(
-            cells: [
-              DataCell(
-                Text(
-                  number,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
+      ),
+      child: Row(
+        children: [
+          const Text('Afficher par ', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: pageSize,
+                isDense: true,
+                borderRadius: BorderRadius.circular(10),
+                dropdownColor: Colors.white,
+                items: const [
+                  DropdownMenuItem(value: 5, child: Text('5', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)))),
+                  DropdownMenuItem(value: 10, child: Text('10', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)))),
+                  DropdownMenuItem(value: 20, child: Text('20', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)))),
+                  DropdownMenuItem(value: 50, child: Text('50', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)))),
+                ],
+                onChanged: (v) {
+                  if (v != null) onPageSizeChanged(v);
+                },
               ),
-              DataCell(Text(inv['issue_date'] ?? '—', style: const TextStyle(fontSize: 12))),
-              DataCell(Text(inv['due_date'] ?? '—', style: const TextStyle(fontSize: 12))),
-              DataCell(
-                Text(
-                  '${amount.toStringAsFixed(2)} TND',
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                ),
-              ),
-              DataCell(
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    isPaid ? 'Payée' : 'En attente',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: isPaid ? const Color(0xFF059669) : const Color(0xFFD97706),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text(
+            totalItems == 0 ? '0 résultat' : '$startIdx–$endIdx sur $totalItems',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const Spacer(),
+          Text(
+            'Page ${totalPages == 0 ? 1 : currentPage + 1} sur ${totalPages == 0 ? 1 : totalPages}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: currentPage > 0 ? () => onPageChanged(currentPage - 1) : null,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Icon(
+                      Icons.chevron_left_rounded,
+                      size: 18,
+                      color: currentPage > 0 ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
                     ),
+                  ),
+                ),
+                Container(width: 1, height: 22, color: const Color(0xFFE2E8F0)),
+                InkWell(
+                  onTap: (currentPage + 1) < totalPages ? () => onPageChanged(currentPage + 1) : null,
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: (currentPage + 1) < totalPages ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── TAB 1: FACTURATION (FULL BLOCK WIDTH, PERFECTLY CENTERED & PAGINATED) ──
+  Widget _buildInvoicesTab(SchoolProfileData data) {
+    final totalItems = data.invoices.length;
+    if (_invoicesPage * _invoicesPageSize >= totalItems && totalItems > 0) {
+      _invoicesPage = max(0, (totalItems - 1) ~/ _invoicesPageSize);
+    }
+    final startIdx = _invoicesPage * _invoicesPageSize;
+    final endIdx = (startIdx + _invoicesPageSize).clamp(0, totalItems);
+    final pageInvoices = totalItems == 0 ? <Map<String, dynamic>>[] : data.invoices.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Factures de l'établissement ($totalItems)",
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+              ),
+              SizedBox(
+                height: 36,
+                child: ElevatedButton.icon(
+                  onPressed: () => _openInvoiceModal(data),
+                  icon: const Icon(Icons.add_rounded, size: 16),
+                  label: const Text('Générer une facture', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6D4CF6),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ),
             ],
-          );
-        }).toList(),
-      ),
+          ),
+        ),
+        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+
+        if (totalItems == 0)
+          _buildEmptyState(
+            Icons.receipt_long_outlined,
+            'Aucune facture émise pour cet établissement.',
+            actionLabel: 'Générer une facture',
+            onAction: () => _openInvoiceModal(data),
+          )
+        else ...[
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final availableWidth = constraints.maxWidth;
+              final tableWidth = max(availableWidth, 760.0);
+
+              final invoiceNumW = tableWidth * 0.22;
+              final issueDateW = tableWidth * 0.16;
+              final dueDateW = tableWidth * 0.16;
+              final amountW = tableWidth * 0.18;
+              final statusW = tableWidth * 0.15;
+              final actionW = tableWidth - (invoiceNumW + issueDateW + dueDateW + amountW + statusW);
+
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: availableWidth),
+                  child: DataTable(
+                    columnSpacing: 0,
+                    horizontalMargin: 0,
+                    headingRowHeight: 44,
+                    dataRowMinHeight: 56,
+                    dataRowMaxHeight: 60,
+                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                    headingTextStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF64748B),
+                      letterSpacing: 0.5,
+                    ),
+                    border: TableBorder(
+                      horizontalInside: BorderSide(
+                        color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+                        width: 1,
+                      ),
+                    ),
+                    dividerThickness: 0.0001,
+                    columns: [
+                      DataColumn(
+                        label: SizedBox(
+                          width: invoiceNumW,
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 24),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('FACTURE N°'),
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: issueDateW,
+                          child: const Center(child: Text('DATE ÉMISSION')),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: dueDateW,
+                          child: const Center(child: Text('ÉCHÉANCE')),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: amountW,
+                          child: const Center(child: Text('MONTANT NET')),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: statusW,
+                          child: const Center(child: Text('STATUT')),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: actionW,
+                          child: const Padding(
+                            padding: EdgeInsets.only(right: 24),
+                            child: Center(child: Text('ACTION')),
+                          ),
+                        ),
+                      ),
+                    ],
+                    rows: pageInvoices.map((inv) {
+                      final number = (inv['invoice_number'] ?? '—').toString();
+                      final amount = (inv['amount'] as num?)?.toDouble() ?? 0.0;
+                      final status = (inv['status'] as String? ?? 'pending').toLowerCase();
+                      final isPaid = status == 'paid';
+                      final issueDate = inv['issue_date'] ?? '—';
+                      final dueDate = inv['due_date'] ?? '—';
+
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            SizedBox(
+                              width: invoiceNumW,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 24),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    number,
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontFamily: 'monospace',
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: issueDateW,
+                              child: Center(
+                                child: Text(issueDate, style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: dueDateW,
+                              child: Center(
+                                child: Text(dueDate, style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: amountW,
+                              child: Center(
+                                child: Text(
+                                  "${amount.toStringAsFixed(2)} TND",
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: statusW,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isPaid ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    isPaid ? 'Payée' : 'En attente',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: isPaid ? const Color(0xFF059669) : const Color(0xFFD97706),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: actionW,
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 24),
+                                child: Center(
+                                  child: IconButton(
+                                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18, color: Color(0xFF6D4CF6)),
+                                    tooltip: 'Télécharger / Imprimer la facture',
+                                    splashRadius: 18,
+                                    onPressed: () async {
+                                      final invData = InvoiceDataModel(
+                                        invoiceNumber: number,
+                                        date: DateTime.tryParse(issueDate) ?? DateTime.now(),
+                                        issuerName: inv['issuer_name'] ?? 'PythaOne SaaS Technologies',
+                                        matriculeFiscale: inv['matricule_fiscale'] ?? '2007778S/A/M/000',
+                                        clientName: data.school['name'] ?? 'Établissement',
+                                        timbreFiscal: (inv['timbre_fiscal'] as num?)?.toDouble() ?? 1.0,
+                                        items: [
+                                          InvoiceItemModel(
+                                            index: 1,
+                                            ref: 'P-0001',
+                                            designation: 'Abonnement SaaS PythaOne',
+                                            quantity: 1,
+                                            unitPriceHt: amount,
+                                            tvaPercent: 0.0,
+                                          ),
+                                        ],
+                                      );
+                                      await InvoicePdfGenerator.downloadOrPrintInvoice(invData);
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
+          ),
+          _buildTablePaginationBar(
+            totalItems: totalItems,
+            currentPage: _invoicesPage,
+            pageSize: _invoicesPageSize,
+            onPageChanged: (p) => setState(() => _invoicesPage = p),
+            onPageSizeChanged: (s) => setState(() {
+              _invoicesPageSize = s;
+              _invoicesPage = 0;
+            }),
+          ),
+        ],
+      ],
     );
   }
 
-  // ── TAB 2: CONSOMMATION IA ──
+  // ── TAB 2: CONSOMMATION IA (FULL BLOCK WIDTH, PERFECTLY CENTERED & PAGINATED) ──
   Widget _buildAiTelemetryTab(SchoolProfileData data) {
     final spent = data.aiSpentUsd;
     final budget = max(1.0, data.aiBudgetUsd);
     final ratio = (spent / budget).clamp(0.0, 1.0);
-    final isHardLocked = data.aiQuota?['kill_switch_enabled'] == true;
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final totalItems = data.aiLogs.length;
+    if (_aiLogsPage * _aiLogsPageSize >= totalItems && totalItems > 0) {
+      _aiLogsPage = max(0, (totalItems - 1) ~/ _aiLogsPageSize);
+    }
+    final startIdx = _aiLogsPage * _aiLogsPageSize;
+    final endIdx = (startIdx + _aiLogsPageSize).clamp(0, totalItems);
+    final pageLogs = totalItems == 0 ? <Map<String, dynamic>>[] : data.aiLogs.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Budget & Quota Mensuel',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Budget & Quota Mensuel',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "\$${spent.toStringAsFixed(2)} consommés sur un budget de \$${budget.toStringAsFixed(0)} USD (${_formatTokens(data.aiTokensMonth)} tokens)",
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '\$${spent.toStringAsFixed(2)} consommés sur un budget de \$${budget.toStringAsFixed(0)} USD',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  SizedBox(
+                    height: 36,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openQuotaDialog(data),
+                      icon: const Icon(Icons.tune_rounded, size: 15),
+                      label: const Text('Ajuster le quota', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF6D4CF6),
+                        side: const BorderSide(color: Color(0xFFDDD6FE)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              OutlinedButton.icon(
-                onPressed: () => _openQuotaDialog(data),
-                icon: const Icon(Icons.tune_rounded, size: 16),
-                label: const Text('Ajuster le quota'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF6D4CF6),
-                  side: const BorderSide(color: Color(0xFFDDD6FE)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 10,
-              backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: AlwaysStoppedAnimation(
-                ratio >= 0.9 ? const Color(0xFFDC2626) : const Color(0xFF6D4CF6),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isHardLocked ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  isHardLocked ? 'Kill Switch: ACTIF (Requêtes bloquées)' : 'Kill Switch: INACTIF',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isHardLocked ? const Color(0xFFDC2626) : const Color(0xFF059669),
+              const SizedBox(height: 16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 10,
+                  backgroundColor: const Color(0xFFF1F5F9),
+                  valueColor: AlwaysStoppedAnimation(
+                    ratio >= 0.9 ? const Color(0xFFDC2626) : const Color(0xFF6D4CF6),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                '${data.aiTokensMonth} tokens consommés',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-              ),
             ],
           ),
-          const SizedBox(height: 28),
-          const Text(
-            'Dernières requêtes IA enregistrées',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-          ),
-          const SizedBox(height: 12),
-          if (data.aiLogs.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text('Aucune requête IA enregistrée pour le moment.', style: TextStyle(color: Color(0xFF94A3B8))),
-              ),
-            )
-          else
-            Column(
-              children: data.aiLogs.take(8).map((log) {
-                final model = log['model'] ?? 'gemini-1.5-flash';
-                final tokens = log['total_tokens'] ?? 0;
-                final cost = (log['cost_usd'] as num?)?.toDouble() ?? 0.0;
-                final dt = log['created_at']?.toString().split('.')[0] ?? '—';
+        ),
+        const Divider(height: 1, color: Color(0xFFF1F5F9)),
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFAFAFB),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFF1F5F9)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF6D4CF6)),
-                      const SizedBox(width: 10),
-                      Text(
-                        model,
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
-                      ),
-                      const Spacer(),
-                      Text('$tokens tokens', style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-                      const SizedBox(width: 16),
-                      Text(
-                        '\$${cost.toStringAsFixed(4)}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(dt, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                    ],
-                  ),
-                );
-              }).toList(),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          child: Text(
+            'Dernières requêtes IA enregistrées ($totalItems)',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+          ),
+        ),
+
+        if (totalItems == 0)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 36),
+            child: Center(
+              child: Text('Aucune requête IA enregistrée pour le moment.', style: TextStyle(color: Color(0xFF94A3B8))),
             ),
+          )
+        else ...[
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final availableWidth = constraints.maxWidth;
+              final tableWidth = max(availableWidth, 680.0);
+
+              final modelW = tableWidth * 0.38;
+              final tokensW = tableWidth * 0.18;
+              final costW = tableWidth * 0.22;
+              final dateW = tableWidth - (modelW + tokensW + costW);
+
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: availableWidth),
+                  child: DataTable(
+                    columnSpacing: 0,
+                    horizontalMargin: 0,
+                    headingRowHeight: 44,
+                    dataRowMinHeight: 52,
+                    dataRowMaxHeight: 56,
+                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                    headingTextStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF64748B),
+                      letterSpacing: 0.5,
+                    ),
+                    border: TableBorder(
+                      horizontalInside: BorderSide(
+                        color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+                        width: 1,
+                      ),
+                    ),
+                    dividerThickness: 0.0001,
+                    columns: [
+                      DataColumn(
+                        label: SizedBox(
+                          width: modelW,
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 24),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('MODÈLE'),
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: tokensW,
+                          child: const Center(child: Text('TOKENS')),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: costW,
+                          child: const Center(child: Text('COÛT ESTIMÉ (USD)')),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: dateW,
+                          child: const Padding(
+                            padding: EdgeInsets.only(right: 24),
+                            child: Center(child: Text('DATE')),
+                          ),
+                        ),
+                      ),
+                    ],
+                    rows: pageLogs.map((log) {
+                      final model = log['model'] ?? 'gemini-1.5-flash';
+                      final tokens = (log['total_tokens'] as num?)?.toInt() ?? 0;
+                      final cost = (log['cost_usd'] as num?)?.toDouble() ?? 0.0;
+                      final dt = log['created_at']?.toString().split('.')[0] ?? '—';
+
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            SizedBox(
+                              width: modelW,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 24),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.auto_awesome_rounded, size: 15, color: Color(0xFF6D4CF6)),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        model,
+                                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: tokensW,
+                              child: Center(
+                                child: Text(
+                                  _formatTokens(tokens),
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: costW,
+                              child: Center(
+                                child: Text(
+                                  "\$${cost.toStringAsFixed(4)}",
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: dateW,
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 24),
+                                child: Center(
+                                  child: Text(dt, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
+          ),
+          _buildTablePaginationBar(
+            totalItems: totalItems,
+            currentPage: _aiLogsPage,
+            pageSize: _aiLogsPageSize,
+            onPageChanged: (p) => setState(() => _aiLogsPage = p),
+            onPageSizeChanged: (s) => setState(() {
+              _aiLogsPageSize = s;
+              _aiLogsPage = 0;
+            }),
+          ),
         ],
-      ),
+      ],
     );
   }
 
-  // ── TAB 3: UTILISATEURS ──
+  // ── TAB 3: UTILISATEURS (FULL BLOCK WIDTH, PERFECTLY CENTERED & PAGINATED) ──
   Widget _buildUsersTab(SchoolProfileData data) {
-    if (data.users.isEmpty) {
+    final totalItems = data.users.length;
+    if (_usersPage * _usersPageSize >= totalItems && totalItems > 0) {
+      _usersPage = max(0, (totalItems - 1) ~/ _usersPageSize);
+    }
+    final startIdx = _usersPage * _usersPageSize;
+    final endIdx = (startIdx + _usersPageSize).clamp(0, totalItems);
+    final pageUsers = totalItems == 0 ? <Map<String, dynamic>>[] : data.users.sublist(startIdx, endIdx);
+
+    if (totalItems == 0) {
       return _buildEmptyState(
         Icons.group_off_outlined,
         'Aucun utilisateur rattaché à cet établissement.',
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 24,
-        horizontalMargin: 20,
-        headingRowHeight: 42,
-        dataRowMinHeight: 52,
-        dataRowMaxHeight: 56,
-        headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
-        headingTextStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF94A3B8),
-        ),
-        columns: const [
-          DataColumn(label: Text('UTILISATEUR')),
-          DataColumn(label: Text('RÔLE')),
-          DataColumn(label: Text('EMAIL')),
-          DataColumn(label: Text('TÉLÉPHONE')),
-          DataColumn(label: Text('STATUT')),
-        ],
-        rows: data.users.map((u) {
-          final fullName = u['full_name'] ?? 'Utilisateur';
-          final email = u['email'] ?? '—';
-          final phone = u['phone'] ?? '—';
-          final role = (u['role'] as String? ?? 'student').toLowerCase();
-          final isActive = u['is_active'] == true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final availableWidth = constraints.maxWidth;
+            final tableWidth = max(availableWidth, 750.0);
 
-          String roleLabel = 'Élève';
-          Color roleColor = const Color(0xFF2563EB);
-          Color roleBg = const Color(0xFFEFF6FF);
-          if (role == 'teacher') {
-            roleLabel = 'Professeur';
-            roleColor = const Color(0xFF7C3AED);
-            roleBg = const Color(0xFFF5F3FF);
-          } else if (role == 'admin' || role == 'director') {
-            roleLabel = 'Direction';
-            roleColor = const Color(0xFF059669);
-            roleBg = const Color(0xFFECFDF5);
-          } else if (role == 'staff') {
-            roleLabel = 'Manager';
-            roleColor = const Color(0xFFD97706);
-            roleBg = const Color(0xFFFFFBEB);
-          }
+            final userW = tableWidth * 0.28;
+            final roleW = tableWidth * 0.16;
+            final emailW = tableWidth * 0.24;
+            final phoneW = tableWidth * 0.18;
+            final statusW = tableWidth - (userW + roleW + emailW + phoneW);
 
-          return DataRow(
-            cells: [
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 14,
-                      backgroundColor: roleBg,
-                      child: Text(
-                        fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: roleColor),
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: availableWidth),
+                child: DataTable(
+                  columnSpacing: 0,
+                  horizontalMargin: 0,
+                  headingRowHeight: 44,
+                  dataRowMinHeight: 56,
+                  dataRowMaxHeight: 60,
+                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                  headingTextStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF64748B),
+                    letterSpacing: 0.5,
+                  ),
+                  border: TableBorder(
+                    horizontalInside: BorderSide(
+                      color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+                      width: 1,
+                    ),
+                  ),
+                  dividerThickness: 0.0001,
+                  columns: [
+                    DataColumn(
+                      label: SizedBox(
+                        width: userW,
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 24),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('UTILISATEUR'),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      fullName,
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                    DataColumn(
+                      label: SizedBox(
+                        width: roleW,
+                        child: const Center(child: Text('RÔLE')),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: emailW,
+                        child: const Center(child: Text('EMAIL')),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: phoneW,
+                        child: const Center(child: Text('TÉLÉPHONE')),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: statusW,
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 24),
+                          child: Center(child: Text('STATUT')),
+                        ),
+                      ),
                     ),
                   ],
+                  rows: pageUsers.map((u) {
+                    final fullName = u['full_name'] ?? 'Utilisateur';
+                    final email = u['email'] ?? '—';
+                    final phone = u['phone'] ?? '—';
+                    final role = (u['role'] as String? ?? 'student').toLowerCase();
+                    final isActive = u['is_active'] == true;
+
+                    String roleLabel = 'Élève';
+                    Color roleColor = const Color(0xFF2563EB);
+                    Color roleBg = const Color(0xFFEFF6FF);
+                    if (role == 'teacher') {
+                      roleLabel = 'Professeur';
+                      roleColor = const Color(0xFF7C3AED);
+                      roleBg = const Color(0xFFF5F3FF);
+                    } else if (role == 'admin' || role == 'director') {
+                      roleLabel = 'Direction';
+                      roleColor = const Color(0xFF059669);
+                      roleBg = const Color(0xFFECFDF5);
+                    } else if (role == 'staff') {
+                      roleLabel = 'Manager';
+                      roleColor = const Color(0xFFD97706);
+                      roleBg = const Color(0xFFFFFBEB);
+                    }
+
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          SizedBox(
+                            width: userW,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 24),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: roleBg,
+                                    child: Text(
+                                      fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: roleColor),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Flexible(
+                                    child: Text(
+                                      fullName,
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: roleW,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(color: roleBg, borderRadius: BorderRadius.circular(6)),
+                                child: Text(
+                                  roleLabel,
+                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: roleColor),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: emailW,
+                            child: Center(
+                              child: Text(
+                                email,
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: phoneW,
+                            child: Center(
+                              child: Text(phone, style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: Color(0xFF64748B))),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: statusW,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 24),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    isActive ? 'Actif' : 'Bloqué',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ),
-              DataCell(
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: roleBg, borderRadius: BorderRadius.circular(6)),
-                  child: Text(
-                    roleLabel,
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: roleColor),
-                  ),
-                ),
-              ),
-              DataCell(Text(email, style: const TextStyle(fontSize: 12, color: Color(0xFF334155)))),
-              DataCell(Text(phone, style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: Color(0xFF64748B)))),
-              DataCell(
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    isActive ? 'Actif' : 'Bloqué',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        }).toList(),
-      ),
+            );
+          },
+        ),
+        _buildTablePaginationBar(
+          totalItems: totalItems,
+          currentPage: _usersPage,
+          pageSize: _usersPageSize,
+          onPageChanged: (p) => setState(() => _usersPage = p),
+          onPageSizeChanged: (s) => setState(() {
+            _usersPageSize = s;
+            _usersPage = 0;
+          }),
+        ),
+      ],
     );
   }
 
-  // ── TAB 4: AUDIT ──
+  // ── TAB 4: JOURNAL D'ACTIVITÉ (FULL BLOCK WIDTH, PERFECTLY CENTERED & PAGINATED) ──
   Widget _buildAuditTab(SchoolProfileData data) {
-    if (data.auditLogs.isEmpty) {
+    final totalItems = data.auditLogs.length;
+    if (_auditPage * _auditPageSize >= totalItems && totalItems > 0) {
+      _auditPage = max(0, (totalItems - 1) ~/ _auditPageSize);
+    }
+    final startIdx = _auditPage * _auditPageSize;
+    final endIdx = (startIdx + _auditPageSize).clamp(0, totalItems);
+    final pageLogs = totalItems == 0 ? <Map<String, dynamic>>[] : data.auditLogs.sublist(startIdx, endIdx);
+
+    if (totalItems == 0) {
       return _buildEmptyState(
         Icons.history_rounded,
-        'Aucun événement d\'audit enregistré pour cet établissement.',
+        "Aucun événement d'audit enregistré pour cet établissement.",
       );
     }
 
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(20),
-      itemCount: data.auditLogs.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
-      itemBuilder: (context, i) {
-        final log = data.auditLogs[i];
-        final action = log['action'] ?? 'ACTION';
-        final details = log['details']?.toString() ?? '';
-        final dt = log['created_at']?.toString().split('.')[0] ?? '—';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final availableWidth = constraints.maxWidth;
+            final tableWidth = max(availableWidth, 700.0);
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.history_rounded, size: 16, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      action.toString().toUpperCase(),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+            final actionW = tableWidth * 0.28;
+            final dateW = tableWidth * 0.22;
+            final detailsW = tableWidth - (actionW + dateW);
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: availableWidth),
+                child: DataTable(
+                  columnSpacing: 0,
+                  horizontalMargin: 0,
+                  headingRowHeight: 44,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 56,
+                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                  headingTextStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF64748B),
+                    letterSpacing: 0.5,
+                  ),
+                  border: TableBorder(
+                    horizontalInside: BorderSide(
+                      color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+                      width: 1,
                     ),
-                    if (details.isNotEmpty)
-                      Text(details, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                  ),
+                  dividerThickness: 0.0001,
+                  columns: [
+                    DataColumn(
+                      label: SizedBox(
+                        width: actionW,
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 24),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('ACTION'),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: detailsW,
+                        child: const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('DÉTAILS'),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: dateW,
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 24),
+                          child: Center(child: Text('DATE')),
+                        ),
+                      ),
+                    ),
                   ],
+                  rows: pageLogs.map((log) {
+                    final action = (log['action'] ?? 'ACTION').toString().toUpperCase();
+                    final details = log['details']?.toString() ?? '—';
+                    final dt = log['created_at']?.toString().split('.')[0] ?? '—';
+
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          SizedBox(
+                            width: actionW,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 24),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(Icons.history_rounded, size: 14, color: Color(0xFF64748B)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      action,
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: detailsW,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                details,
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: dateW,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 24),
+                              child: Center(
+                                child: Text(dt, style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ),
-              Text(dt, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-            ],
-          ),
-        );
-      },
+            );
+          },
+        ),
+        _buildTablePaginationBar(
+          totalItems: totalItems,
+          currentPage: _auditPage,
+          pageSize: _auditPageSize,
+          onPageChanged: (p) => setState(() => _auditPage = p),
+          onPageSizeChanged: (s) => setState(() {
+            _auditPageSize = s;
+            _auditPage = 0;
+          }),
+        ),
+      ],
     );
   }
-
   // ═══════════════════════════════════════════════════
   // REUSABLE ATOMS & DIALOGS
   // ═══════════════════════════════════════════════════
@@ -1461,24 +2135,14 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
     );
   }
 
-  Widget _buildOutlineButton({required IconData icon, required String label, required VoidCallback onTap}) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 15, color: const Color(0xFF475569)),
-      label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-      style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        backgroundColor: Colors.white,
-      ),
-    );
-  }
-
   Widget _buildStatusToggleButton(SchoolProfileData data) {
     final isActive = data.school['is_active'] == true;
-    return ElevatedButton.icon(
-      onPressed: () async {
+    return _buildHeaderActionButton(
+      icon: isActive ? Icons.block_rounded : Icons.check_circle_outline_rounded,
+      label: isActive ? 'Suspendre' : 'Réactiver',
+      backgroundColor: isActive ? const Color(0xFFDC2626) : const Color(0xFF059669),
+      foregroundColor: Colors.white,
+      onTap: () async {
         final messenger = ScaffoldMessenger.of(context);
         final ok = await ref.read(platformProvider.notifier).toggleSchoolStatus(data.school['id'], !isActive);
         if (!mounted) return;
@@ -1492,22 +2156,10 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
           );
         }
       },
-      icon: Icon(isActive ? Icons.block_rounded : Icons.check_circle_outline_rounded, size: 15),
-      label: Text(
-        isActive ? 'Suspendre' : 'Réactiver',
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isActive ? const Color(0xFFDC2626) : const Color(0xFF059669),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value, {bool copyable = false}) {
+  Widget _buildInfoRow(IconData icon, String label, String value, {bool copyable = false, Widget? customValueWidget}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1519,10 +2171,13 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             children: [
               Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
-              ),
+              if (customValueWidget != null)
+                customValueWidget
+              else
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                ),
             ],
           ),
         ),
@@ -1576,6 +2231,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF6D4CF6),
                   side: const BorderSide(color: Color(0xFFDDD6FE)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: Text(actionLabel),
               ),
@@ -1629,7 +2285,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Cet établissement a peut-être été supprimé ou l\'identifiant est invalide.',
+              "Cet établissement a peut-être été supprimé ou l'identifiant est invalide.",
               style: TextStyle(color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 20),
@@ -1665,6 +2321,16 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
     }
   }
 
+  void _openInvoiceModal(SchoolProfileData data) {
+    showConsoleInvoiceGeneratorModal(
+      context: context,
+      ref: ref,
+      schools: [data.school],
+      preselectedSchoolId: data.school['id'],
+      onSaved: () => ref.invalidate(schoolProfileDataProvider(widget.schoolId)),
+    );
+  }
+
   void _openQuotaDialog(SchoolProfileData data) {
     final budgetCtrl = TextEditingController(text: data.aiBudgetUsd.toStringAsFixed(0));
     final formKey = GlobalKey<FormState>();
@@ -1672,62 +2338,89 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlgState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Modifier Quota IA & Budget', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Budget mensuel USD alloué aux requêtes IA de l\'école:'),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: budgetCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
-                  decoration: InputDecoration(
-                    prefixText: '\$ ',
-                    suffixText: 'USD / mois',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: StatefulBuilder(
+          builder: (ctx, setDlgState) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Modifier Quota IA & Budget', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Budget mensuel USD alloué aux requêtes IA de l'école :", style: TextStyle(fontSize: 13, color: Color(0xFF334155))),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: budgetCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                    decoration: InputDecoration(
+                      prefixText: '\$ ',
+                      suffixText: 'USD / mois',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            actions: [
+              SizedBox(
+                height: 40,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: isSaving ? null : () async {
+                    if (!formKey.currentState!.validate()) return;
+                    setDlgState(() => isSaving = true);
+                    final budgetVal = double.tryParse(budgetCtrl.text.trim()) ?? 25.0;
+                    final ok = await ref.read(platformProvider.notifier).updateSchoolAiQuota(
+                      schoolId: data.school['id'],
+                      monthlyBudgetUsd: budgetVal,
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted && ok) {
+                      ref.invalidate(schoolProfileDataProvider(widget.schoolId));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Quota IA mis à jour !'), backgroundColor: ConsoleColors.success),
+                      );
+                    }
+                  },
+                  icon: isSaving
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_rounded, size: 16),
+                  label: const Text('Enregistrer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6D4CF6),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler', style: TextStyle(color: Color(0xFF64748B))),
-            ),
-            ElevatedButton(
-              onPressed: isSaving ? null : () async {
-                if (!formKey.currentState!.validate()) return;
-                setDlgState(() => isSaving = true);
-                final budgetVal = double.tryParse(budgetCtrl.text.trim()) ?? 25.0;
-                final ok = await ref.read(platformProvider.notifier).updateSchoolAiQuota(
-                  schoolId: data.school['id'],
-                  monthlyBudgetUsd: budgetVal,
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted && ok) {
-                  ref.invalidate(schoolProfileDataProvider(widget.schoolId));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Quota IA mis à jour !'), backgroundColor: ConsoleColors.success),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6D4CF6), foregroundColor: Colors.white),
-              child: isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Enregistrer'),
-            ),
-          ],
         ),
       ),
     );
@@ -1741,167 +2434,90 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlgState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Changer de Forfait', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Sélectionnez la formule d\'abonnement :'),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: selectedPlanId,
-                isExpanded: true,
-                items: plans.map((p) {
-                  return DropdownMenuItem<String>(
-                    value: p['id'] as String,
-                    child: Text('${p['name']} — ${p['price_tnd_monthly']} TND/m'),
-                  );
-                }).toList(),
-                onChanged: (v) {
-                  if (v != null) setDlgState(() => selectedPlanId = v);
-                },
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler', style: TextStyle(color: Color(0xFF64748B))),
-            ),
-            ElevatedButton(
-              onPressed: isSaving ? null : () async {
-                setDlgState(() => isSaving = true);
-                final ok = await ref.read(platformProvider.notifier).updateSchoolSubscriptionPlan(
-                  schoolId: data.school['id'],
-                  planId: selectedPlanId,
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted && ok) {
-                  ref.invalidate(schoolProfileDataProvider(widget.schoolId));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Forfait modifié avec succès !'), backgroundColor: ConsoleColors.success),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), foregroundColor: Colors.white),
-              child: isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Appliquer'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openInvoiceDialog(SchoolProfileData data) {
-    final invNumCtrl = TextEditingController(text: 'FAC-${DateTime.now().year}-${Random().nextInt(9000) + 1000}');
-    final amountCtrl = TextEditingController(text: data.mrrTnd.toStringAsFixed(0));
-    final formKey = GlobalKey<FormState>();
-    bool isSaving = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlgState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Générer Facture PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: Form(
-            key: formKey,
-            child: Column(
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: StatefulBuilder(
+          builder: (ctx, setDlgState) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Changer de Forfait', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Numéro de facture :'),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: invNumCtrl,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
+                const Text("Sélectionnez la formule d'abonnement :", style: TextStyle(fontSize: 13, color: Color(0xFF334155))),
                 const SizedBox(height: 12),
-                const Text('Montant net (TND) :'),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: amountCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                DropdownButtonFormField<String>(
+                  initialValue: selectedPlanId,
+                  isExpanded: true,
+                  borderRadius: BorderRadius.circular(10),
+                  items: plans.map((p) {
+                    return DropdownMenuItem<String>(
+                      value: p['id'] as String,
+                      child: Text("${p['name']} — ${p['price_tnd_monthly']} TND/m"),
+                    );
+                  }).toList(),
+                  onChanged: (v) {
+                    if (v != null) setDlgState(() => selectedPlanId = v);
+                  },
                   decoration: InputDecoration(
-                    suffixText: 'TND',
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                   ),
                 ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler', style: TextStyle(color: Color(0xFF64748B))),
-            ),
-            ElevatedButton(
-              onPressed: isSaving ? null : () async {
-                if (!formKey.currentState!.validate()) return;
-                setDlgState(() => isSaving = true);
-                final amt = double.tryParse(amountCtrl.text.trim()) ?? data.mrrTnd;
-                final now = DateTime.now();
-                final due = now.add(const Duration(days: 30));
-
-                final res = await ref.read(platformProvider.notifier).createDetailedInvoice(
-                  schoolId: data.school['id'],
-                  invoiceNumber: invNumCtrl.text.trim(),
-                  issueDate: DateFormat('yyyy-MM-dd').format(now),
-                  dueDate: DateFormat('yyyy-MM-dd').format(due),
-                  clientName: data.school['name'] ?? 'Établissement',
-                  issuerName: 'PythaOne SaaS Technologies',
-                  issuerCountry: 'Tunisie',
-                  matriculeFiscale: '1234567/A/M/000',
-                  items: [
-                    {
-                      'description': 'Abonnement SaaS PythaOne - ${data.plan?['name'] ?? 'Plan Pro'}',
-                      'quantity': 1,
-                      'unit_price': amt,
-                      'total': amt,
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            actions: [
+              SizedBox(
+                height: 40,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: isSaving ? null : () async {
+                    setDlgState(() => isSaving = true);
+                    final ok = await ref.read(platformProvider.notifier).updateSchoolSubscriptionPlan(
+                      schoolId: data.school['id'],
+                      planId: selectedPlanId,
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted && ok) {
+                      ref.invalidate(schoolProfileDataProvider(widget.schoolId));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Forfait modifié avec succès !'), backgroundColor: ConsoleColors.success),
+                      );
                     }
-                  ],
-                  totalHt: amt,
-                  tvaRate: 19.0,
-                  tvaAmount: amt * 0.19,
-                  timbreFiscal: 1.0,
-                  totalTtc: amt * 1.19 + 1.0,
-                  netToPay: amt * 1.19 + 1.0,
-                  amountInWords: '${amt.toStringAsFixed(0)} dinars tunisiens',
-                );
-
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted && res != null) {
-                  ref.invalidate(schoolProfileDataProvider(widget.schoolId));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Facture générée avec succès !'), backgroundColor: ConsoleColors.success),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669), foregroundColor: Colors.white),
-              child: isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Émettre la facture'),
-            ),
-          ],
+                  },
+                  icon: isSaving
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_rounded, size: 16),
+                  label: const Text('Appliquer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6D4CF6),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

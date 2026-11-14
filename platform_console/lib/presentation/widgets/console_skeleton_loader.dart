@@ -519,35 +519,10 @@ class SchoolProfileSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ConsoleShimmerLoading(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Header Skeleton
-            Row(
-              children: [
-                const ConsoleSkeletonBox(width: 36, height: 36, borderRadius: 10),
-                const SizedBox(width: 16),
-                const ConsoleSkeletonBox(width: 52, height: 52, shape: BoxShape.circle),
-                const SizedBox(width: 16),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ConsoleSkeletonBox(width: 220, height: 22, borderRadius: 6),
-                    SizedBox(height: 6),
-                    ConsoleSkeletonBox(width: 140, height: 14, borderRadius: 4),
-                  ],
-                ),
-                const Spacer(),
-                const ConsoleSkeletonBox(width: 130, height: 38, borderRadius: 8),
-                const SizedBox(width: 12),
-                const ConsoleSkeletonBox(width: 140, height: 38, borderRadius: 8),
-              ],
-            ),
-            const SizedBox(height: 28),
-
-            // 2-Column Grid
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+            // 2-Column Grid (Body only, no skeleton header)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -628,7 +603,6 @@ class SchoolProfileSkeleton extends StatelessWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }

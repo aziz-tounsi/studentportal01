@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -482,6 +483,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                     TextFormField(
                                       controller: _emailController,
+                                      inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
                                       focusNode: _emailFocusNode,
                                       keyboardType: TextInputType.emailAddress,
                                       textInputAction: TextInputAction.next,
@@ -568,6 +570,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                     TextFormField(
                                       controller: _passwordController,
+                                      inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
                                       focusNode: _passwordFocusNode,
                                       obscureText: _obscurePassword,
                                       textInputAction: TextInputAction.done,

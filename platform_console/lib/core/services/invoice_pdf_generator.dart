@@ -187,38 +187,14 @@ class InvoicePdfGenerator {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  // Logo / Brand
-                  pw.Row(
-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
-                    children: [
-                      // Arrow stylized triangle icon
-                      pw.Container(
-                        width: 32,
-                        height: 32,
-                        child: pw.CustomPaint(
-                          painter: (canvas, size) {
-                            canvas.moveTo(0, size.y);
-                            canvas.lineTo(size.x / 2, 0);
-                            canvas.lineTo(size.x, size.y);
-                            canvas.lineTo(size.x * 0.7, size.y * 0.7);
-                            canvas.lineTo(size.x / 2, size.y * 0.4);
-                            canvas.lineTo(size.x * 0.3, size.y * 0.7);
-                            canvas.closePath();
-                            canvas.setColor(PdfColor.fromHex('#2563EB'));
-                            canvas.fillPath();
-                          },
-                        ),
-                      ),
-                      pw.SizedBox(width: 8),
-                      pw.Text(
-                        'arrow',
-                        style: pw.TextStyle(
-                          fontSize: 22,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColor.fromHex('#111827'),
-                        ),
-                      ),
-                    ],
+                  // Brand title (No left logo)
+                  pw.Text(
+                    invoice.issuerName.isNotEmpty ? invoice.issuerName : 'PythaOne SaaS',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColor.fromHex('#111827'),
+                    ),
                   ),
                   // FACTURE title block
                   pw.Column(

@@ -260,10 +260,11 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                       FilteringTextInputFormatter.deny(RegExp(r'\s')),
                     ],
                     onChanged: (v) {
-                      if (v.contains(' ')) {
+                      if (v.contains(RegExp(r'\s'))) {
+                        final clean = v.replaceAll(RegExp(r'\s'), '');
                         _emailCtrl.value = _emailCtrl.value.copyWith(
-                          text: v.replaceAll(' ', ''),
-                          selection: TextSelection.collapsed(offset: v.replaceAll(' ', '').length),
+                          text: clean,
+                          selection: TextSelection.collapsed(offset: clean.length),
                         );
                       }
                     },
@@ -285,10 +286,11 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                       FilteringTextInputFormatter.deny(RegExp(r'\s')),
                     ],
                     onChanged: (v) {
-                      if (v.contains(' ')) {
+                      if (v.contains(RegExp(r'\s'))) {
+                        final clean = v.replaceAll(RegExp(r'\s'), '');
                         _passCtrl.value = _passCtrl.value.copyWith(
-                          text: v.replaceAll(' ', ''),
-                          selection: TextSelection.collapsed(offset: v.replaceAll(' ', '').length),
+                          text: clean,
+                          selection: TextSelection.collapsed(offset: clean.length),
                         );
                       }
                     },

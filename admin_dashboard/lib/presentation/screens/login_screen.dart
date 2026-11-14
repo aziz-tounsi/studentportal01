@@ -60,7 +60,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     final success = await ref.read(authProvider.notifier).signIn(
           _emailController.text.trim(),
-          _passwordController.text,
+          _passwordController.text.trim(),
         );
 
     if (success && mounted) {
@@ -686,7 +686,6 @@ class _AuroraTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final String? Function(String?)? validator;
   final void Function(String)? onFieldSubmitted;
-
   const _AuroraTextField({
     required this.controller,
     required this.label,
@@ -722,6 +721,18 @@ class _AuroraTextField extends StatelessWidget {
           textInputAction: textInputAction,
           validator: validator,
           onFieldSubmitted: onFieldSubmitted,
+          inputFormatters: [
+            FilteringTextInputFormatter.deny(RegExp(r'\s')),
+          ],
+          onChanged: (v) {
+            if (v.contains(RegExp(r'\s'))) {
+              final clean = v.replaceAll(RegExp(r'\s'), '');
+              controller.value = controller.value.copyWith(
+                text: clean,
+                selection: TextSelection.collapsed(offset: clean.length),
+              );
+            }
+          },
           style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,

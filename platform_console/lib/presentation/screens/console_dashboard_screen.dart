@@ -9,6 +9,7 @@ import '../../core/services/invoice_pdf_generator.dart';
 import '../../core/theme/console_theme.dart';
 import '../providers/console_auth_provider.dart';
 import '../providers/platform_provider.dart';
+import '../widgets/console_invoice_modal.dart';
 import '../widgets/console_settings_view.dart';
 import '../widgets/console_sidebar.dart';
 import '../widgets/console_skeleton_loader.dart';
@@ -141,7 +142,7 @@ class _ConsoleDashboardScreenState
       case '/settings':
         return ConsoleSettingsView(platformState: state, user: user);
       case '/schools':
-        return _buildOverviewPage(state, tr);
+        return _buildOverviewPage(state, tr, showKpis: false);
       case '/billing':
         return _buildBillingPage(state, tr);
       case '/ai-telemetry':
@@ -153,7 +154,7 @@ class _ConsoleDashboardScreenState
       case '/dashboard':
       case '/':
       default:
-        return _buildOverviewPage(state, tr);
+        return _buildOverviewPage(state, tr, showKpis: true);
     }
   }
 
@@ -392,7 +393,7 @@ class _ConsoleDashboardScreenState
   // ══════════════════════════════════════════════════════════════
   // 1. OVERVIEW PAGE & UNIFIED SCHOOLS TABLE
   // ══════════════════════════════════════════════════════════════
-  Widget _buildOverviewPage(PlatformState state, ConsoleStrings tr) {
+  Widget _buildOverviewPage(PlatformState state, ConsoleStrings tr, {bool showKpis = true}) {
     final kpis = state.kpis;
     final allSchools = state.schools;
 
@@ -433,66 +434,68 @@ class _ConsoleDashboardScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── KPI METRICS ROW (GOLDEN RATIO SPACING & TYPOGRAPHY) ──
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  tr.kpiActiveSchools,
-                  '${kpis['activeSchools'] ?? 0}',
-                  '${kpis['totalSchools'] ?? 0} total enregistrées',
-                  Icons.domain_rounded,
-                  ConsoleColors.primary,
-                  trend: '+${kpis['activeSchools'] ?? 0}',
-                  trendLabel: 'sur ${kpis['totalSchools'] ?? 0} total',
-                  trendUp: true,
+          if (showKpis) ...[
+            // ── KPI METRICS ROW (GOLDEN RATIO SPACING & TYPOGRAPHY) ──
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricCard(
+                    tr.kpiActiveSchools,
+                    '${kpis['activeSchools'] ?? 0}',
+                    '${kpis['totalSchools'] ?? 0} total enregistrées',
+                    Icons.domain_rounded,
+                    ConsoleColors.primary,
+                    trend: '+${kpis['activeSchools'] ?? 0}',
+                    trendLabel: 'sur ${kpis['totalSchools'] ?? 0} total',
+                    trendUp: true,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  tr.kpiTotalMrr,
-                  '${(kpis['mrrTnd'] as double? ?? 0.0).toStringAsFixed(0)} TND',
-                  tr.mrrSubtitle,
-                  Icons.trending_up_rounded,
-                  ConsoleColors.success,
-                  trend: '+8.3%',
-                  trendLabel: 'vs mois dernier',
-                  trendUp: true,
-                  onTap: () => context.go('/billing'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildMetricCard(
+                    tr.kpiTotalMrr,
+                    '${(kpis['mrrTnd'] as double? ?? 0.0).toStringAsFixed(0)} TND',
+                    tr.mrrSubtitle,
+                    Icons.trending_up_rounded,
+                    ConsoleColors.success,
+                    trend: '+8.3%',
+                    trendLabel: 'vs mois dernier',
+                    trendUp: true,
+                    onTap: () => context.go('/billing'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  tr.totalCostUsd,
-                  '\$${realAiSpend.toStringAsFixed(4)}',
-                  '$realAiTokens tokens • Dépenses réelles API',
-                  Icons.auto_awesome_rounded,
-                  ConsoleColors.brand,
-                  trend: '$realAiTokens',
-                  trendLabel: 'tokens ce mois',
-                  trendUp: true,
-                  onTap: () => context.go('/ai-telemetry'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildMetricCard(
+                    tr.totalCostUsd,
+                    '\$${realAiSpend.toStringAsFixed(4)}',
+                    '$realAiTokens tokens • Dépenses réelles API',
+                    Icons.auto_awesome_rounded,
+                    ConsoleColors.brand,
+                    trend: '$realAiTokens',
+                    trendLabel: 'tokens ce mois',
+                    trendUp: true,
+                    onTap: () => context.go('/ai-telemetry'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  tr.pendingInvoicesCount,
-                  '${kpis['pendingCount'] ?? 0}',
-                  tr.statusPending,
-                  Icons.receipt_long_rounded,
-                  ConsoleColors.warning,
-                  trend: '0%',
-                  trendLabel: 'impayés nécessitant relance',
-                  trendUp: false,
-                  onTap: () => context.go('/billing'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildMetricCard(
+                    tr.pendingInvoicesCount,
+                    '${kpis['pendingCount'] ?? 0}',
+                    tr.statusPending,
+                    Icons.receipt_long_rounded,
+                    ConsoleColors.warning,
+                    trend: '0%',
+                    trendLabel: 'impayés nécessitant relance',
+                    trendUp: false,
+                    onTap: () => context.go('/billing'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
 
           // ── FLOATING STATUS FILTER PILLS (EXACT USERS SCREEN LAYOUT) ──
           Row(
@@ -1620,6 +1623,7 @@ class _ConsoleDashboardScreenState
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     value: plans.any((p) => p['id'] == selectedPlanId) ? selectedPlanId : plans.first['id'],
+                    borderRadius: BorderRadius.circular(10),
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
@@ -3955,10 +3959,11 @@ class _ConsoleDashboardScreenState
                                       const Text('Formule d\'abonnement SaaS *',
                                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
                                       const SizedBox(height: 6),
-                                      DropdownButtonFormField<String>(
+                                       DropdownButtonFormField<String>(
                                         value: plans.any((p) => p['id'] == selectedPlanId)
                                             ? selectedPlanId
                                             : (plans.isNotEmpty ? plans[0]['id'] as String : null),
+                                        borderRadius: BorderRadius.circular(10),
                                         isDense: true,
                                         isExpanded: true,
                                         style: const TextStyle(
@@ -3972,9 +3977,9 @@ class _ConsoleDashboardScreenState
                                           fillColor: const Color(0xFFF8FAFC),
                                           isDense: true,
                                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                                         ),
                                         items: plans.map((p) {
                                           return DropdownMenuItem<String>(
@@ -4188,528 +4193,12 @@ class _ConsoleDashboardScreenState
     List<Map<String, dynamic>> schools, {
     String? preselectedSchoolId,
   }) {
-    if (schools.isEmpty) return;
-
-    String selectedSchoolId = preselectedSchoolId ?? schools[0]['id'] as String;
-    final now = DateTime.now();
-    final invoiceNumberCtrl = TextEditingController(text: 'FAC-${now.year}-${schools.length.toString().padLeft(6, '0')}');
-    final designationCtrl = TextEditingController(text: 'application');
-    final quantityCtrl = TextEditingController(text: '1');
-    final unitPriceCtrl = TextEditingController(text: '3200.000');
-    final tvaRateCtrl = TextEditingController(text: '0');
-    final timbreFiscalCtrl = TextEditingController(text: '1.000');
-    final issuerNameCtrl = TextEditingController(text: 'Aziz Tounsi');
-    final matriculeCtrl = TextEditingController(text: '2007778S');
-
-    bool savingAndDownloading = false;
-
-    showDialog(
+    showConsoleInvoiceGeneratorModal(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.2),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: StatefulBuilder(
-          builder: (sbContext, setSbState) {
-            final currentSchool = schools.firstWhere(
-              (s) => s['id'] == selectedSchoolId,
-              orElse: () => schools[0],
-            );
-            final clientName = (currentSchool['name'] ?? 'Client').toString();
-
-            final qty = int.tryParse(quantityCtrl.text.trim()) ?? 1;
-            final pu = double.tryParse(unitPriceCtrl.text.trim().replaceAll(',', '.')) ?? 3200.0;
-            final tvaRate = double.tryParse(tvaRateCtrl.text.trim()) ?? 0.0;
-            final timbre = double.tryParse(timbreFiscalCtrl.text.trim().replaceAll(',', '.')) ?? 1.0;
-
-            final totalHt = qty * pu;
-            final tvaAmount = totalHt * (tvaRate / 100.0);
-            final totalTtc = totalHt + tvaAmount;
-            final netToPay = totalTtc + timbre;
-            final legalSentence = FrenchNumberToWords.toLegalSentence(netToPay);
-
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-              child: Container(
-                width: 700,
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.92,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 40,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: ConsoleColors.success.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(Icons.picture_as_pdf_rounded, color: ConsoleColors.success, size: 22),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Générateur de Facture Officielle (PDF)',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: ConsoleColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Format identique à FACTURE FAC-2026-000001 (Arrêté légal en toutes lettres & Timbre fiscal)',
-                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18, color: ConsoleColors.textSecondary),
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Scrollable Config Form
-                    Flexible(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildSectionIndicator('Informations de la Facture'),
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Établissement Client *',
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                                      const SizedBox(height: 6),
-                                      DropdownButtonFormField<String>(
-                                        value: selectedSchoolId,
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                        ),
-                                        items: schools.map((s) {
-                                          return DropdownMenuItem<String>(
-                                            value: s['id'] as String,
-                                            child: Text(s['name'] as String? ?? ''),
-                                          );
-                                        }).toList(),
-                                        onChanged: (val) {
-                                          if (val != null) setSbState(() => selectedSchoolId = val);
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Numéro de Facture *',
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                                      const SizedBox(height: 6),
-                                      TextField(
-                                        controller: invoiceNumberCtrl,
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Émetteur (Fournisseur)',
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                                      const SizedBox(height: 6),
-                                      TextField(
-                                        controller: issuerNameCtrl,
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Matricule Fiscale',
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                                      const SizedBox(height: 6),
-                                      TextField(
-                                        controller: matriculeCtrl,
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 22),
-
-                            _buildSectionIndicator('Lignes d\'articles & Tarification'),
-                            const SizedBox(height: 14),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Désignation *',
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                                      const SizedBox(height: 6),
-                                      TextField(
-                                        controller: designationCtrl,
-                                        onChanged: (_) => setSbState(() {}),
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  flex: 1,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Qté',
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                                      const SizedBox(height: 6),
-                                      TextField(
-                                        controller: quantityCtrl,
-                                        keyboardType: TextInputType.number,
-                                        onChanged: (_) => setSbState(() {}),
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  flex: 2,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('P.U HT (DT)',
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                                      const SizedBox(height: 6),
-                                      TextField(
-                                        controller: unitPriceCtrl,
-                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                        onChanged: (_) => setSbState(() {}),
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Live Summary & Calculations Card
-                            Container(
-                              padding: const EdgeInsets.all(18),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('Total HT:', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
-                                      Text(InvoicePdfGenerator.formatTnd(totalHt),
-                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('TVA (0%):', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
-                                      Text(InvoicePdfGenerator.formatTnd(tvaAmount),
-                                          style: const TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('Total TTC:', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
-                                      Text(InvoicePdfGenerator.formatTnd(totalTtc),
-                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ConsoleColors.textPrimary)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('Timbre fiscal:', style: TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
-                                      Text(InvoicePdfGenerator.formatTnd(timbre),
-                                          style: const TextStyle(fontSize: 13, color: ConsoleColors.textSecondary)),
-                                    ],
-                                  ),
-                                  const Divider(height: 18),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('Net à payer:',
-                                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: ConsoleColors.textPrimary)),
-                                      Text(InvoicePdfGenerator.formatTnd(netToPay),
-                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF6D4CF6))),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                                    ),
-                                    child: Text(
-                                      legalSentence,
-                                      style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Color(0xFF475569)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Footer Buttons
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
-                        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          SizedBox(
-                            height: 40,
-                            child: TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              style: TextButton.styleFrom(foregroundColor: const Color(0xFF6B7280)),
-                              child: const Text('Fermer', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          // Direct Print/Download PDF without DB saving
-                          SizedBox(
-                            height: 40,
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                final invoiceData = InvoiceDataModel(
-                                  invoiceNumber: invoiceNumberCtrl.text.trim(),
-                                  date: now,
-                                  issuerName: issuerNameCtrl.text.trim(),
-                                  matriculeFiscale: matriculeCtrl.text.trim(),
-                                  clientName: clientName,
-                                  timbreFiscal: timbre,
-                                  items: [
-                                    InvoiceItemModel(
-                                      index: 1,
-                                      ref: 'P-0001',
-                                      designation: designationCtrl.text.trim(),
-                                      quantity: qty,
-                                      unitPriceHt: pu,
-                                      tvaPercent: tvaRate,
-                                    ),
-                                  ],
-                                );
-                                await InvoicePdfGenerator.downloadOrPrintInvoice(invoiceData);
-                              },
-                              icon: const Icon(Icons.print_rounded, size: 16),
-                              label: const Text('Imprimer / Aperçu PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF6D4CF6),
-                                side: const BorderSide(color: Color(0xFF6D4CF6)),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          // Save to DB and download PDF
-                          SizedBox(
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              onPressed: savingAndDownloading
-                                  ? null
-                                  : () async {
-                                      setSbState(() => savingAndDownloading = true);
-                                      final item = InvoiceItemModel(
-                                        index: 1,
-                                        ref: 'P-0001',
-                                        designation: designationCtrl.text.trim(),
-                                        quantity: qty,
-                                        unitPriceHt: pu,
-                                        tvaPercent: tvaRate,
-                                      );
-                                      final invoiceData = InvoiceDataModel(
-                                        invoiceNumber: invoiceNumberCtrl.text.trim(),
-                                        date: now,
-                                        issuerName: issuerNameCtrl.text.trim(),
-                                        matriculeFiscale: matriculeCtrl.text.trim(),
-                                        clientName: clientName,
-                                        timbreFiscal: timbre,
-                                        items: [item],
-                                      );
-
-                                      final inserted = await ref.read(platformProvider.notifier).createDetailedInvoice(
-                                        schoolId: selectedSchoolId,
-                                        invoiceNumber: invoiceData.invoiceNumber,
-                                        issueDate: now.toIso8601String().split('T')[0],
-                                        dueDate: now.add(const Duration(days: 30)).toIso8601String().split('T')[0],
-                                        clientName: clientName,
-                                        issuerName: invoiceData.issuerName,
-                                        issuerCountry: 'TN',
-                                        matriculeFiscale: invoiceData.matriculeFiscale,
-                                        items: [item.toJson()],
-                                        totalHt: totalHt,
-                                        tvaRate: tvaRate,
-                                        tvaAmount: tvaAmount,
-                                        timbreFiscal: timbre,
-                                        totalTtc: totalTtc,
-                                        netToPay: netToPay,
-                                        amountInWords: legalSentence,
-                                      );
-
-                                      if (ctx.mounted) Navigator.pop(ctx);
-                                      if (inserted != null) {
-                                        await InvoicePdfGenerator.downloadOrPrintInvoice(invoiceData);
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Facture enregistrée et PDF généré avec succès !'),
-                                              backgroundColor: ConsoleColors.success,
-                                            ),
-                                          );
-                                        }
-                                      } else {
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Erreur lors de l\'enregistrement de la facture.'),
-                                              backgroundColor: ConsoleColors.error,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    },
-                              icon: savingAndDownloading
-                                  ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Icon(Icons.download_rounded, size: 16),
-                              label: const Text('Enregistrer & Télécharger PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF6D4CF6),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                elevation: 1,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+      ref: ref,
+      schools: schools,
+      preselectedSchoolId: preselectedSchoolId,
+      onSaved: () => ref.read(platformProvider.notifier).loadAll(),
     );
   }
 
