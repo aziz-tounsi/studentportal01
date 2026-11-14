@@ -36,7 +36,6 @@ class ConsoleDashboardScreen extends ConsumerStatefulWidget {
 class _ConsoleDashboardScreenState
     extends ConsumerState<ConsoleDashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final Set<String> _selectedSchoolIds = {};
   String _searchQuery = '';
   String _schoolsStatusFilter = 'all'; // 'all', 'active', 'suspended'
   int _schoolsPage = 0;
@@ -692,25 +691,22 @@ class _ConsoleDashboardScreenState
   }
 
   // ═══════════════════════════════════════════════════
-  // SCHOOLS DATA TABLE (EXACT USERS SCREEN DATA TABLE)
+  // SCHOOLS DATA TABLE (EACH INFO IN ITS OWN COLUMN)
   // ═══════════════════════════════════════════════════
   Widget _buildSchoolsDataTable(List<Map<String, dynamic>> paginatedSchools, PlatformState state) {
-    final allPageSelected = paginatedSchools.isNotEmpty &&
-        paginatedSchools.every((s) => _selectedSchoolIds.contains(s['id']?.toString()));
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
-        const checkboxW = 44.0;
-        const contactW = 210.0;
-        const planW = 145.0;
-        const quotaW = 160.0;
-        const statusW = 90.0;
-        const createdW = 85.0;
+        const schoolW = 220.0;
+        const codeW = 110.0;
+        const emailW = 210.0;
+        const phoneW = 120.0;
+        const planW = 110.0;
+        const priceW = 110.0;
+        const quotaW = 125.0;
+        const statusW = 85.0;
+        const createdW = 80.0;
         const actionsW = 44.0;
-
-        final fixedW = checkboxW + contactW + planW + quotaW + statusW + createdW + actionsW;
-        final nameW = (availableWidth - fixedW).clamp(200.0, 380.0);
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -719,8 +715,8 @@ class _ConsoleDashboardScreenState
             child: DataTable(
               columnSpacing: 0,
               horizontalMargin: 0,
-              dataRowMinHeight: 60,
-              dataRowMaxHeight: 64,
+              dataRowMinHeight: 56,
+              dataRowMaxHeight: 60,
               headingRowHeight: 44,
               headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
               headingTextStyle: const TextStyle(
@@ -731,51 +727,18 @@ class _ConsoleDashboardScreenState
               ),
               showCheckboxColumn: false,
               columns: [
-                // Checkbox header
-                DataColumn(
-                  label: SizedBox(
-                    width: checkboxW,
-                    child: Center(
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: Checkbox(
-                          value: allPageSelected && paginatedSchools.isNotEmpty,
-                          tristate: false,
-                          onChanged: (v) {
-                            setState(() {
-                              if (allPageSelected) {
-                                for (final s in paginatedSchools) {
-                                  _selectedSchoolIds.remove(s['id']?.toString());
-                                }
-                              } else {
-                                for (final s in paginatedSchools) {
-                                  final id = s['id']?.toString();
-                                  if (id != null) _selectedSchoolIds.add(id);
-                                }
-                              }
-                            });
-                          },
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-                          side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
-                          activeColor: const Color(0xFF655DD5),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                DataColumn(label: SizedBox(width: nameW, child: _headerLabel('ÉTABLISSEMENT'))),
-                DataColumn(label: SizedBox(width: contactW, child: _headerLabel('CONTACT DIRECTEUR'))),
-                DataColumn(label: SizedBox(width: planW, child: _headerLabel('FORMULE & TARIF'))),
-                DataColumn(label: SizedBox(width: quotaW, child: _headerLabel('QUOTA IA MENSUEL'))),
+                DataColumn(label: SizedBox(width: schoolW, child: _headerLabel('ÉTABLISSEMENT'))),
+                DataColumn(label: SizedBox(width: codeW, child: _headerLabel('CODE'))),
+                DataColumn(label: SizedBox(width: emailW, child: _headerLabel('EMAIL DIRECTEUR'))),
+                DataColumn(label: SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE'))),
+                DataColumn(label: SizedBox(width: planW, child: _headerLabel('FORFAIT'))),
+                DataColumn(label: SizedBox(width: priceW, child: _headerLabel('TARIF'))),
+                DataColumn(label: SizedBox(width: quotaW, child: _headerLabel('QUOTA IA'))),
                 DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT'))),
                 DataColumn(label: SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE'))),
                 DataColumn(label: SizedBox(width: actionsW, child: Container())),
               ],
               rows: paginatedSchools.map((s) {
-                final schoolId = s['id']?.toString() ?? '';
-                final isSelected = _selectedSchoolIds.contains(schoolId);
                 final sub = _extractRelationMap(s['school_subscriptions']);
                 final plan = _extractRelationMap(sub?['plan']);
                 final quota = _extractRelationMap(s['ai_school_quotas']);
@@ -783,7 +746,6 @@ class _ConsoleDashboardScreenState
                 final spent = (quota?['spent_current_month_usd'] as num?)?.toDouble() ?? 0.0;
                 final budget = (quota?['monthly_budget_usd'] as num?)?.toDouble() ?? 25.0;
                 final isQuotaExceeded = quota?['is_quota_exceeded'] == true || spent >= budget;
-                final killSwitch = quota?['kill_switch_enabled'] == true;
 
                 final directorPhone = s['phone'] as String?;
                 final email = s['email'] as String? ?? '—';
@@ -800,224 +762,155 @@ class _ConsoleDashboardScreenState
 
                 return DataRow(
                   color: WidgetStateProperty.resolveWith<Color?>((states) {
-                    if (isSelected) return const Color(0xFFF5F3FF).withValues(alpha: 0.4);
                     if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
                     return null;
                   }),
                   cells: [
-                    // Checkbox
+                    // 1. Établissement (Avatar + Nom)
                     DataCell(
                       SizedBox(
-                        width: checkboxW,
-                        child: Center(
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: Checkbox(
-                              value: isSelected,
-                              onChanged: (v) {
-                                setState(() {
-                                  if (v == true) {
-                                    _selectedSchoolIds.add(schoolId);
-                                  } else {
-                                    _selectedSchoolIds.remove(schoolId);
-                                  }
-                                });
-                              },
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-                              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
-                              activeColor: const Color(0xFF655DD5),
+                        width: schoolW,
+                        child: Row(
+                          children: [
+                            _buildSchoolAvatar(s),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                s['name'] ?? '',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Color(0xFF0F172A),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // 2. Code (Single Pill)
+                    DataCell(
+                      SizedBox(
+                        width: codeW,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              (s['code'] ?? '—').toString().toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                                fontFamily: 'monospace',
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
                       ),
                     ),
-                    // Établissement (Avatar + Name + Code)
+                    // 3. Email Directeur
                     DataCell(
                       SizedBox(
-                        width: nameW,
-                        child: Row(
-                          children: [
-                            _buildSchoolAvatar(s),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    s['name'] ?? '',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                      color: Color(0xFF0F172A),
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF1F5F9),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      (s['code'] ?? '—').toString().toUpperCase(),
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF64748B),
-                                        fontFamily: 'monospace',
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        width: emailW,
+                        child: Text(
+                          email,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF334155),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
-                    // Contact Directeur
+                    // 4. Téléphone
                     DataCell(
                       SizedBox(
-                        width: contactW,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              email,
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF334155),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (directorPhone != null && directorPhone.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                directorPhone,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                  color: Color(0xFF94A3B8),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
+                        width: phoneW,
+                        child: Text(
+                          (directorPhone != null && directorPhone.isNotEmpty) ? directorPhone : '—',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            color: Color(0xFF64748B),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
-                    // Formule & Tarif
+                    // 5. Forfait (Single Pill)
                     DataCell(
                       SizedBox(
                         width: planW,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF5F3FF),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  plan?['name'] ?? 'Plan Pro',
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF7C3AED),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F3FF),
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${plan?['price_tnd_monthly'] ?? 850} TND / mois',
+                            child: Text(
+                              plan?['name'] ?? 'Plan Pro',
                               style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF64748B),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF7C3AED),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                    // Quota IA Mensuel
+                    // 6. Tarif
+                    DataCell(
+                      SizedBox(
+                        width: priceW,
+                        child: Text(
+                          '${plan?['price_tnd_monthly'] ?? 850} TND / mois',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFF64748B),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    // 7. Quota IA
                     DataCell(
                       SizedBox(
                         width: quotaW,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '\$${spent.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: isQuotaExceeded ? const Color(0xFFDC2626) : const Color(0xFF0F172A),
-                                  ),
-                                ),
-                                Text(
-                                  ' / \$${budget.toStringAsFixed(0)} USD',
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    color: Color(0xFF94A3B8),
-                                  ),
-                                ),
-                                if (isQuotaExceeded || killSwitch) ...[
-                                  const SizedBox(width: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFEF2F2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      killSwitch ? 'KILL' : 'MAX',
-                                      style: const TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFFDC2626),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                            Text(
+                              '\$${spent.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isQuotaExceeded ? const Color(0xFFDC2626) : const Color(0xFF0F172A),
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            SizedBox(
-                              width: 100,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                  value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0.0,
-                                  backgroundColor: const Color(0xFFF1F5F9),
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    isQuotaExceeded ? const Color(0xFFDC2626) : const Color(0xFF655DD5),
-                                  ),
-                                  minHeight: 4,
-                                ),
+                            Text(
+                              ' / \$${budget.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF94A3B8),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                    // Statut (exact pill style as users page)
+                    // 8. Statut (Single Pill)
                     DataCell(
                       SizedBox(
                         width: statusW,
@@ -1041,7 +934,7 @@ class _ConsoleDashboardScreenState
                         ),
                       ),
                     ),
-                    // Créé le
+                    // 9. Créé le
                     DataCell(
                       SizedBox(
                         width: createdW,
@@ -1051,7 +944,7 @@ class _ConsoleDashboardScreenState
                         ),
                       ),
                     ),
-                    // Actions (3 dots)
+                    // 10. Actions (3 dots)
                     DataCell(
                       SizedBox(
                         width: actionsW,
@@ -1127,7 +1020,7 @@ class _ConsoleDashboardScreenState
   }
 
   // ═══════════════════════════════════════════════════
-  // PAGINATION (EXACT USERS SCREEN PAGINATION)
+  // PAGINATION (CLEAN BORDERLESS ARROWS)
   // ═══════════════════════════════════════════════════
   Widget _buildPagination(int totalItems) {
     final totalPages = _schoolsPageSize == -1 ? 1 : (totalItems / _schoolsPageSize).ceil();
@@ -1181,34 +1074,30 @@ class _ConsoleDashboardScreenState
             'Page $currentPageDisplay sur ${totalPages == 0 ? 1 : totalPages}',
             style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
           ),
-          const SizedBox(width: 12),
-          // Prev/Next
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Row(
-              children: [
-                InkWell(
-                  onTap: _schoolsPage > 0 ? () => setState(() => _schoolsPage--) : null,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.chevron_left, size: 18, color: _schoolsPage > 0 ? const Color(0xFF334155) : const Color(0xFF94A3B8)),
-                  ),
-                ),
-                Container(width: 1, height: 24, color: const Color(0xFFE2E8F0)),
-                InkWell(
-                  onTap: (_schoolsPage + 1) < totalPages ? () => setState(() => _schoolsPage++) : null,
-                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.chevron_right, size: 18, color: (_schoolsPage + 1) < totalPages ? const Color(0xFF334155) : const Color(0xFF94A3B8)),
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(width: 8),
+          // Prev/Next (Clean borderless arrow buttons)
+          Row(
+            children: [
+              IconButton(
+                onPressed: _schoolsPage > 0 ? () => setState(() => _schoolsPage--) : null,
+                icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                color: const Color(0xFF334155),
+                disabledColor: const Color(0xFFCBD5E1),
+                splashRadius: 18,
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+              const SizedBox(width: 2),
+              IconButton(
+                onPressed: (_schoolsPage + 1) < totalPages ? () => setState(() => _schoolsPage++) : null,
+                icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                color: const Color(0xFF334155),
+                disabledColor: const Color(0xFFCBD5E1),
+                splashRadius: 18,
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ],
           ),
         ],
       ),
