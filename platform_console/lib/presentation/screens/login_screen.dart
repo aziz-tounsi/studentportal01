@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/localization/console_translations.dart';
 import '../../core/theme/console_theme.dart';
 import '../providers/console_auth_provider.dart';
+import '../providers/platform_provider.dart';
 
 class ConsoleLoginScreen extends ConsumerStatefulWidget {
   const ConsoleLoginScreen({super.key});
@@ -26,13 +28,16 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
 
   Future<void> _login() async {
     final email = _emailCtrl.text.trim();
-    final pass = _passCtrl.text;
+    final pass = _passCtrl.text.trim();
     if (email.isEmpty || pass.isEmpty) return;
 
     final success =
         await ref.read(consoleAuthProvider.notifier).signIn(email, pass);
     if (success && mounted) {
-      context.go('/dashboard');
+      await ref.read(platformProvider.notifier).loadAll();
+      if (mounted) {
+        context.go('/dashboard');
+      }
     }
   }
 
@@ -251,6 +256,9 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                   TextField(
                     controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                    ],
                     decoration: InputDecoration(
                       labelText: tr.emailLabel,
                       hintText: tr.emailPlaceholder,
@@ -265,6 +273,9 @@ class _ConsoleLoginScreenState extends ConsumerState<ConsoleLoginScreen> {
                   TextField(
                     controller: _passCtrl,
                     obscureText: _obscure,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                    ],
                     onSubmitted: (_) => _login(),
                     decoration: InputDecoration(
                       labelText: tr.passwordLabel,

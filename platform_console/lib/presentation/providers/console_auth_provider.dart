@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'platform_provider.dart';
 
 final consoleAuthProvider =
     NotifierProvider<ConsoleAuthNotifier, ConsoleAuthState>(ConsoleAuthNotifier.new);
@@ -69,8 +70,10 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
 
   void _init() {
     _supabase.auth.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.signedIn) {
+      if (data.event == AuthChangeEvent.signedIn ||
+          data.event == AuthChangeEvent.initialSession) {
         _loadUserData();
+        ref.read(platformProvider.notifier).loadAll();
       } else if (data.event == AuthChangeEvent.signedOut) {
         _setState(ConsoleAuthState(isInitialized: true, isAuthenticated: false));
       }
@@ -78,6 +81,7 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
 
     if (_supabase.auth.currentSession != null) {
       _loadUserData();
+      ref.read(platformProvider.notifier).loadAll();
     }
   }
 
@@ -126,6 +130,9 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
       await _loadUserData();
+      if (_currentState.isAuthenticated) {
+        ref.read(platformProvider.notifier).loadAll();
+      }
       return _currentState.isAuthenticated;
     } on AuthException catch (e) {
       _setState(

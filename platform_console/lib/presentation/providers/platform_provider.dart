@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -87,6 +88,35 @@ class PlatformNotifier extends Notifier<PlatformState> {
   }
 
   Future<void> loadAll() async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      debugPrint('PlatformNotifier.loadAll: No authenticated user session, aborting fetch.');
+      _currentState = _currentState.copyWith(
+        isLoading: false,
+        schools: [],
+        plans: [],
+        invoices: [],
+        pendingPayments: [],
+        recentAiLogs: [],
+        auditLogs: [],
+        bugReports: [],
+        kpis: {
+          'totalSchools': 0,
+          'activeSchools': 0,
+          'mrrTnd': 0.0,
+          'aiSpendUsd': 0.0,
+          'aiTokensMonth': 0,
+          'pendingCount': 0,
+          'bugReportsCount': 0,
+          'openBugsCount': 0,
+        },
+      );
+      try {
+        state = _currentState;
+      } catch (_) {}
+      return;
+    }
+
     _currentState = _currentState.copyWith(isLoading: true, errorMessage: null);
     try {
       state = _currentState;
@@ -101,7 +131,9 @@ class PlatformNotifier extends Notifier<PlatformState> {
             .select()
             .eq('id', 1)
             .maybeSingle();
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: settings error: $e');
+      }
 
       // 2. Plans
       List<Map<String, dynamic>> plans = [];
@@ -111,7 +143,9 @@ class PlatformNotifier extends Notifier<PlatformState> {
             .select()
             .order('price_tnd_monthly');
         plans = List<Map<String, dynamic>>.from(plansResp);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: plans error: $e');
+      }
 
       // 3. Schools
       List<Map<String, dynamic>> schools = [];
@@ -127,14 +161,18 @@ class PlatformNotifier extends Notifier<PlatformState> {
           )
         ''').order('created_at', ascending: false);
         schools = List<Map<String, dynamic>>.from(schoolsResp);
-      } catch (_) {
+        debugPrint('PlatformNotifier.loadAll: successfully fetched ${schools.length} schools.');
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: primary schools query error: $e');
         try {
           final fallbackSchools = await _supabase
               .from('schools')
               .select('id, name, code, logo_url, email, phone, address, is_active, created_at')
               .order('created_at', ascending: false);
           schools = List<Map<String, dynamic>>.from(fallbackSchools);
-        } catch (_) {
+          debugPrint('PlatformNotifier.loadAll: fallback schools query fetched ${schools.length} schools.');
+        } catch (e2) {
+          debugPrint('PlatformNotifier.loadAll: fallback schools query error: $e2');
           schools = [];
         }
       }
@@ -147,7 +185,9 @@ class PlatformNotifier extends Notifier<PlatformState> {
           school:schools(id, name, code)
         ''').order('issue_date', ascending: false);
         invoices = List<Map<String, dynamic>>.from(invoicesResp);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: invoices error: $e');
+      }
 
       List<Map<String, dynamic>> pendingPayments = [];
       try {
@@ -156,7 +196,9 @@ class PlatformNotifier extends Notifier<PlatformState> {
           invoice:invoices(id, invoice_number, amount, school:schools(id, name, code))
         ''').eq('is_verified', false).order('created_at', ascending: false);
         pendingPayments = List<Map<String, dynamic>>.from(paymentsResp);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: pendingPayments error: $e');
+      }
 
       // 5. AI Telemetry Logs
       List<Map<String, dynamic>> aiLogs = [];
@@ -166,7 +208,9 @@ class PlatformNotifier extends Notifier<PlatformState> {
           school:schools(name)
         ''').order('created_at', ascending: false).limit(100);
         aiLogs = List<Map<String, dynamic>>.from(aiLogsResp);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: aiLogs error: $e');
+      }
 
       // 6. Audit Logs
       List<Map<String, dynamic>> auditLogs = [];
@@ -176,7 +220,9 @@ class PlatformNotifier extends Notifier<PlatformState> {
           school:schools(name)
         ''').order('created_at', ascending: false).limit(100);
         auditLogs = List<Map<String, dynamic>>.from(auditResp);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: auditLogs error: $e');
+      }
 
       // 7. Bug Reports (with rich reporter & school enrichment)
       List<Map<String, dynamic>> bugReports = [];

@@ -70,6 +70,25 @@ class _ConsoleDashboardScreenState
     final authState = ref.watch(consoleAuthProvider);
     final platformState = ref.watch(platformProvider);
 
+    // If auth state is still initializing or checking session on reload, display skeleton
+    if (!authState.isInitialized || authState.isLoading) {
+      return Scaffold(
+        backgroundColor: ConsoleColors.background,
+        body: _skeletonForRoute(),
+      );
+    }
+
+    // When fully initialized, if user is not authenticated, redirect to /login
+    if (!authState.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go('/login');
+      });
+      return Scaffold(
+        backgroundColor: ConsoleColors.background,
+        body: _skeletonForRoute(),
+      );
+    }
+
     return Scaffold(
       backgroundColor: ConsoleColors.background,
       body: Row(
