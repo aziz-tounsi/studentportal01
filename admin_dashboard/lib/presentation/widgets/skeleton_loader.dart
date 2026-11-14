@@ -3971,23 +3971,6 @@ class DashboardSkeletonLoader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Bar Skeleton
-              Row(
-                children: const [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SkeletonBox(width: 200, height: 24, borderRadius: 6),
-                      SizedBox(height: 6),
-                      SkeletonBox(width: 140, height: 13, borderRadius: 4),
-                    ],
-                  ),
-                  Spacer(),
-                  SkeletonBox(width: 220, height: 38, borderRadius: 20),
-                ],
-              ),
-              const SizedBox(height: 24),
-
               // 5 KPI Metric Cards
               Row(
                 children: List.generate(5, (index) => Expanded(
