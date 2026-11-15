@@ -1,4 +1,4 @@
-// ignore_for_file: unused_element
+// ignore_for_file: unused_element, unused_local_variable, depend_on_referenced_packages, deprecated_member_use, unnecessary_underscores
 
 import 'dart:async';
 import 'dart:ui';
@@ -9,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/suggestions_provider.dart';
+import '../../providers/classes_provider.dart';
+import '../../../data/models/class_model.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
@@ -116,6 +118,48 @@ String _getSearchableFields(Suggestion s) {
   ];
 
   return fields.join(' ');
+}
+
+/// Format relative time for suggestions (e.g. "Reçu il y a 5 min")
+String _getRelativeTime(DateTime dt) {
+  final now = DateTime.now();
+  final diff = now.difference(dt);
+  if (diff.inSeconds < 60) return "Reçu à l'instant";
+  if (diff.inMinutes < 60) return "Reçu il y a ${diff.inMinutes} min";
+  if (diff.inHours < 24) return "Reçu il y a ${diff.inHours}h";
+  if (diff.inDays == 1) return "Reçu hier";
+  if (diff.inDays < 7) return "Reçu il y a ${diff.inDays} j";
+  if (diff.inDays < 30) return "Reçu il y a ${(diff.inDays / 7).floor()} sem";
+  return "Reçu le ${DateFormat('dd/MM/yyyy').format(dt)}";
+}
+
+/// Convert abbreviated level code (e.g. 9B, 7B) to full French name
+String _getFullNiveauName(String raw) {
+  final clean = raw.trim();
+  if (clean.isEmpty) return '';
+  final upper = clean.toUpperCase();
+  if (upper == '7B' || upper == '7' || upper.startsWith('7EME') || upper.startsWith('7È') || upper.startsWith('7E')) {
+    return '7ème année de base';
+  }
+  if (upper == '8B' || upper == '8' || upper.startsWith('8EME') || upper.startsWith('8È') || upper.startsWith('8E')) {
+    return '8ème année de base';
+  }
+  if (upper == '9B' || upper == '9' || upper.startsWith('9EME') || upper.startsWith('9È') || upper.startsWith('9E')) {
+    return '9ème année de base';
+  }
+  if (upper == '1S' || upper.startsWith('1ERE') || upper.startsWith('1È') || upper.startsWith('1ER')) {
+    return '1ère année secondaire';
+  }
+  if (upper == '2S' || upper.startsWith('2EME') || upper.startsWith('2È') || upper.startsWith('2E')) {
+    return '2ème année secondaire';
+  }
+  if (upper == '3S' || upper.startsWith('3EME') || upper.startsWith('3È') || upper.startsWith('3E')) {
+    return '3ème année secondaire';
+  }
+  if (upper == '4S' || upper == 'BAC' || upper.startsWith('4EME') || upper.startsWith('4È') || upper.startsWith('4E')) {
+    return '4ème année (Bac)';
+  }
+  return clean;
 }
 
 /// Highlight matching text in a string
@@ -1480,210 +1524,208 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Section 1
-                      Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 15,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6D4CF6),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '1. INFORMATIONS DE L\'ÉTUDIANT',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF4B5563),
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: const Color(0xFFEEF2FF),
-                            child: Text(
-                              s.studentName?.isNotEmpty == true ? s.studentName![0].toUpperCase() : '?',
-                              style: const TextStyle(
-                                color: Color(0xFF6D4CF6),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  s.studentName ?? 'Étudiant inconnu',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                if (s.className != null || s.studentCode != null)
-                                  const SizedBox(height: 4),
-                                if (s.className != null || s.studentCode != null)
-                                  Text(
-                                    [if (s.studentCode != null) s.studentCode, if (s.className != null) s.className].join(' • '),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.slate500,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => UserProfileScreen(
-                                    userId: s.studentId,
-                                    userName: s.studentName,
-                                  ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.person_outline, size: 16),
-                            label: const Text('Voir le profil'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF6D4CF6),
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 32),
-                      
-                      // Section 2
-                      Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 15,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6D4CF6),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '2. MESSAGE',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF4B5563),
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.slate200),
+                      // Big Type Suggestion in Black placed above student
+                      Text(
+                        s.typeLabel.isNotEmpty ? s.typeLabel : 'Suggestion',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                _TypeBadge(type: s.suggestionType),
-                                const SizedBox(width: 8),
-                                Tooltip(
-                                  message: s.status == 'replied' ? 'Répondu' : s.status == 'pending' ? 'En attente' : s.status == 'in_review' ? 'En cours' : 'Fermé',
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: (s.status == 'replied' ? AppColors.success : s.status == 'pending' ? AppColors.warning : AppColors.primary).withOpacity(0.15),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      s.status == 'replied' ? Icons.check_circle : s.status == 'pending' ? Icons.access_time_rounded : Icons.sync_rounded,
-                                      size: 13,
-                                      color: s.status == 'replied' ? AppColors.success : s.status == 'pending' ? AppColors.warning : AppColors.primary,
-                                    ),
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  DateFormat('dd MMM yyyy HH:mm', 'fr_FR').format(s.createdAt),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.slate500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              s.subject,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Student Header: Avatar, Name, Pills & Profile Link
+                      Builder(
+                        builder: (context) {
+                          final classesList = ref.read(classesProvider).value?.classes ?? [];
+                          ClassModel? matchedClass;
+                          try {
+                            matchedClass = classesList.firstWhere(
+                              (c) => (s.classId != null && c.id == s.classId) || (s.className != null && c.name.toLowerCase() == s.className!.toLowerCase()),
+                            );
+                          } catch (_) {}
+
+                          final effectiveClass = (s.className?.isNotEmpty == true) ? s.className! : (matchedClass?.name ?? '');
+                          final rawLevel = (s.studentLevel?.isNotEmpty == true) ? s.studentLevel! : (matchedClass?.gradeLevelName ?? matchedClass?.level ?? '');
+                          final effectiveLevel = _getFullNiveauName(rawLevel);
+                          final effectiveField = (s.studentField?.isNotEmpty == true) ? s.studentField! : (matchedClass?.sectionName ?? matchedClass?.section ?? '');
+
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              UserAvatar(
+                                name: (s.studentName?.isNotEmpty == true)
+                                    ? s.studentName!
+                                    : 'Étudiant',
+                                photoUrl: s.studentPhotoUrl,
+                                gender: s.studentGender,
+                                radius: 22,
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            SelectableText(
-                              s.content.isNotEmpty ? s.content : '(Aucun contenu)',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                height: 1.5,
-                                color: AppColors.textSecondary,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      s.studentName ?? 'Étudiant inconnu',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    if (effectiveClass.isNotEmpty || effectiveLevel.isNotEmpty || effectiveField.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 4,
+                                        children: [
+                                          if (effectiveClass.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFEDE9FE),
+                                                borderRadius: BorderRadius.circular(100),
+                                              ),
+                                              child: Text(
+                                                effectiveClass,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF6D28D9),
+                                                ),
+                                              ),
+                                            ),
+                                          if (effectiveLevel.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF1F5F9),
+                                                borderRadius: BorderRadius.circular(100),
+                                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                              ),
+                                              child: Text(
+                                                effectiveLevel,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF475569),
+                                                ),
+                                              ),
+                                            ),
+                                          if (effectiveField.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF1F5F9),
+                                                borderRadius: BorderRadius.circular(100),
+                                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                              ),
+                                              child: Text(
+                                                effectiveField,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF475569),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                              TextButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => UserProfileScreen(
+                                        userId: s.studentId,
+                                        userName: s.studentName,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.person_outline, size: 16),
+                                label: const Text('Voir le profil'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF6D4CF6),
+                                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      const Divider(color: AppColors.slate100, height: 1),
+                      const SizedBox(height: 20),
+                      
+                      // Message Content: Subject & Body
+                      if (s.subject.isNotEmpty && s.subject.trim().toLowerCase() != s.typeLabel.trim().toLowerCase()) ...[
+                        Text(
+                          s.subject,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      SelectableText(
+                        s.content.isNotEmpty ? s.content : '(Aucun contenu)',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.6,
+                          color: Color(0xFF334155),
                         ),
                       ),
                       
                       if (s.attachments.isNotEmpty) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
                         _AttachmentsGrid(attachments: s.attachments),
                       ],
+
+                      // Bottom Sent Date (Neutral color, no duplicate, no Fermé pill)
+                      const SizedBox(height: 24),
+                      const Divider(color: AppColors.slate100, height: 1),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Icon(Icons.schedule, size: 14, color: AppColors.slate400),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Envoyé ${_getRelativeTime(s.createdAt).replaceFirst('Reçu ', '')} • ${DateFormat('dd MMM yyyy à HH:mm', 'fr_FR').format(s.createdAt)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.slate500,
+                            ),
+                          ),
+                        ],
+                      ),
                       
-                      // Section 3
+                      // Replies Section
                       if (s.replies.isNotEmpty) ...[
-                        const SizedBox(height: 32),
-                        Row(
-                          children: [
-                            Container(
-                              width: 3,
-                              height: 15,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF6D4CF6),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              '3. RÉPONSES',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF4B5563),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
+                        const SizedBox(height: 24),
+                        const Divider(color: AppColors.slate100, height: 1),
                         const SizedBox(height: 16),
+                        Text(
+                          'RÉPONSES (${s.replies.length})',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF64748B),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
                         ...s.replies.map((reply) => Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
@@ -1995,7 +2037,6 @@ class _SuggestionCard extends StatelessWidget {
     final s = suggestion;
     final typeColor = _getTypeColor(s.suggestionType);
     final typeLabel = _getTypeLabel(s.suggestionType);
-    final typeIcon = _getTypeIcon(s.suggestionType);
 
     final dateStr = dateFormat.format(s.createdAt);
 
@@ -2044,7 +2085,9 @@ class _SuggestionCard extends StatelessWidget {
                 name: (s.studentName != null && s.studentName!.isNotEmpty)
                     ? s.studentName!
                     : 'Étudiant',
-                radius: 14,
+                photoUrl: s.studentPhotoUrl,
+                gender: s.studentGender,
+                radius: 16,
               ),
               const SizedBox(width: 14),
               // Content
@@ -2092,7 +2135,7 @@ class _SuggestionCard extends StatelessWidget {
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFFECFDF5),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               s.className!,
@@ -2109,8 +2152,8 @@ class _SuggestionCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: typeColor.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(8),
+                            color: typeColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             typeLabel,
@@ -2120,6 +2163,34 @@ class _SuggestionCard extends StatelessWidget {
                                 color: typeColor),
                           ),
                         ),
+                        // Pièce jointe badge
+                        if (s.hasAttachment || s.attachments.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E8FF),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.attach_file_rounded,
+                                    size: 12, color: Color(0xFF9333EA)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Pièce jointe',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF9333EA),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -2228,12 +2299,18 @@ class _SuggestionCard extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: AppColors.slate400),
+                      Icon(Icons.access_time_rounded,
+                          size: 13, color: AppColors.slate400),
                       const SizedBox(width: 4),
-                      Text(dateStr,
+                      Text(_getRelativeTime(s.createdAt),
                           style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.slate600)),
+                      const SizedBox(width: 6),
+                      Text('($dateStr)',
+                          style: TextStyle(
+                              fontSize: 11,
                               color: AppColors.slate400)),
                       const SizedBox(width: 8),
                       if (s.status == 'replied')
@@ -2438,15 +2515,14 @@ class _TypeBadge extends StatelessWidget {
         label = 'Général';
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: bg.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: bg.withValues(alpha: 0.3)),
+        color: bg.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
-        style: TextStyle(color: bg, fontSize: 10, fontWeight: FontWeight.w700),
+        style: TextStyle(color: bg, fontSize: 11, fontWeight: FontWeight.w700),
       ),
     );
   }

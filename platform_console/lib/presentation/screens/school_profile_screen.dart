@@ -439,13 +439,93 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
   // TOP HEADER (NO ACTIVE PILL, NO CODE PILL, NO ACTUALISER BTN)
   // ═══════════════════════════════════════════════════
   Widget _buildHeader(SchoolProfileData? data) {
-    final school = data?.school;
-    final name = (school?['name'] as String?) ?? 'Établissement';
+    if (data == null) {
+      return Container(
+        padding: const EdgeInsets.only(bottom: 20),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+        ),
+        child: Row(
+          children: [
+            // Back button (Always interactive)
+            _buildIconButton(
+              icon: Icons.arrow_back_rounded,
+              tooltip: 'Retour aux établissements',
+              onTap: () => context.go('/schools'),
+            ),
+            const SizedBox(width: 16),
+
+            // Shimmer title & static subtitle (like TeacherProfileSkeletonLoader)
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ConsoleShimmerLoading(
+                    child: ConsoleSkeletonBox(
+                      width: 220,
+                      height: 22,
+                      borderRadius: 6,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Profil établissement',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            // Header Action Buttons placeholder wrapped in IgnorePointer
+            IgnorePointer(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _buildHeaderActionButton(
+                    icon: Icons.picture_as_pdf_rounded,
+                    label: 'Générer Facture',
+                    onTap: () {},
+                    backgroundColor: const Color(0xFF6D4CF6),
+                    foregroundColor: Colors.white,
+                  ),
+                  _buildHeaderActionButton(
+                    icon: Icons.tune_rounded,
+                    label: 'Quota IA',
+                    onTap: () {},
+                  ),
+                  _buildHeaderActionButton(
+                    icon: Icons.card_membership_rounded,
+                    label: 'Changer Forfait',
+                    onTap: () {},
+                  ),
+                  _buildHeaderActionButton(
+                    icon: Icons.toggle_on_rounded,
+                    label: 'Désactiver',
+                    onTap: () {},
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    foregroundColor: const Color(0xFF64748B),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final school = data.school;
+    final name = (school['name'] as String?) ?? 'Établissement';
 
     String formattedCreated = '—';
-    if (school?['created_at'] != null) {
+    if (school['created_at'] != null) {
       try {
-        final dt = DateTime.parse(school!['created_at'].toString());
+        final dt = DateTime.parse(school['created_at'].toString());
         formattedCreated = DateFormat('dd/MM/yyyy').format(dt);
       } catch (_) {}
     }
@@ -466,10 +546,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
           const SizedBox(width: 16),
 
           // Avatar
-          if (school != null)
-            _buildSchoolAvatar(school, size: 48)
-          else
-            _fallbackAvatar('E', 48),
+          _buildSchoolAvatar(school, size: 48),
           const SizedBox(width: 16),
 
           // Title & Subtitle (Clean, NO pills)
@@ -489,9 +566,7 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  data != null
-                      ? 'Établissement SaaS • Inscrit le $formattedCreated'
-                      : 'Chargement du profil...',
+                  'Établissement SaaS • Inscrit le $formattedCreated',
                   style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                 ),
               ],
@@ -500,36 +575,35 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
           const SizedBox(width: 16),
 
           // Action Buttons: EXACT SAME SIZE, HEIGHT, AND PROPORTIONS
-          if (data != null)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                // 1. Primary Action Button: Générer Facture
-                _buildHeaderActionButton(
-                  icon: Icons.picture_as_pdf_rounded,
-                  label: 'Générer Facture',
-                  onTap: () => _openInvoiceModal(data),
-                  backgroundColor: const Color(0xFF6D4CF6),
-                  foregroundColor: Colors.white,
-                ),
-                // 2. Quota IA Button
-                _buildHeaderActionButton(
-                  icon: Icons.tune_rounded,
-                  label: 'Quota IA',
-                  onTap: () => _openQuotaDialog(data),
-                ),
-                // 3. Changer Forfait Button
-                _buildHeaderActionButton(
-                  icon: Icons.card_membership_rounded,
-                  label: 'Changer Forfait',
-                  onTap: () => _openPlanDialog(data),
-                ),
-                // 4. Suspendre / Réactiver Button
-                _buildStatusToggleButton(data),
-              ],
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // 1. Primary Action Button: Générer Facture
+              _buildHeaderActionButton(
+                icon: Icons.picture_as_pdf_rounded,
+                label: 'Générer Facture',
+                onTap: () => _openInvoiceModal(data),
+                backgroundColor: const Color(0xFF6D4CF6),
+                foregroundColor: Colors.white,
+              ),
+              // 2. Quota IA Button
+              _buildHeaderActionButton(
+                icon: Icons.tune_rounded,
+                label: 'Quota IA',
+                onTap: () => _openQuotaDialog(data),
+              ),
+              // 3. Changer Forfait Button
+              _buildHeaderActionButton(
+                icon: Icons.card_membership_rounded,
+                label: 'Changer Forfait',
+                onTap: () => _openPlanDialog(data),
+              ),
+              // 4. Suspendre / Réactiver Button
+              _buildStatusToggleButton(data),
+            ],
+          ),
         ],
       ),
     );

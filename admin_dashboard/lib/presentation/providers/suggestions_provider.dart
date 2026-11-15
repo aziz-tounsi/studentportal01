@@ -36,6 +36,10 @@ class Suggestion {
   final String? studentCode;
   final String? className;
   final String? classId;
+  final String? studentLevel;
+  final String? studentField;
+  final String? studentPhotoUrl;
+  final String? studentGender;
   final String subject;
   final String content;
   final String status;
@@ -54,6 +58,10 @@ class Suggestion {
     this.studentCode,
     this.className,
     this.classId,
+    this.studentLevel,
+    this.studentField,
+    this.studentPhotoUrl,
+    this.studentGender,
     required this.subject,
     required this.content,
     required this.status,
@@ -91,6 +99,25 @@ class Suggestion {
       className = '$level $name'.trim();
     }
 
+    String? studentLevel = json['student_level']?.toString() ??
+        classes?['level']?.toString() ??
+        classes?['grade_level_name']?.toString() ??
+        users?['niveau_code']?.toString() ??
+        users?['niveau']?.toString();
+    String? studentField = json['student_field']?.toString() ??
+        classes?['section']?.toString() ??
+        classes?['section_name']?.toString() ??
+        users?['section_code']?.toString();
+
+    String? studentPhotoUrl =
+        json['photo_url']?.toString() ??
+        users?['photo_url']?.toString() ??
+        studentInfo?['photo_url']?.toString();
+    String? studentGender =
+        json['gender']?.toString() ??
+        users?['gender']?.toString() ??
+        studentInfo?['gender']?.toString();
+
     // Content can be in 'body', 'content', or 'message' fields
     String content =
         json['body']?.toString() ??
@@ -106,6 +133,10 @@ class Suggestion {
       className: className,
       classId:
           json['class_id']?.toString() ?? enrollment?['class_id']?.toString(),
+      studentLevel: studentLevel,
+      studentField: studentField,
+      studentPhotoUrl: studentPhotoUrl,
+      studentGender: studentGender,
       subject: json['subject']?.toString() ?? '',
       content: content,
       status: json['status']?.toString() ?? 'sent',
@@ -391,7 +422,7 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
     // Fetch suggestions with user join and replies
     final data = await supabase
         .from('suggestions')
-        .select('*, users!suggestions_student_id_fkey(full_name, school_id), suggestion_replies(*)')
+        .select('*, users!suggestions_student_id_fkey(full_name, school_id, photo_url, gender, niveau_code, section_code, niveau), suggestion_replies(*)')
         .order('created_at', ascending: false);
 
     final suggestionsData = (data as List).where((e) {
@@ -421,7 +452,7 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
       try {
         final enrollments = await supabase
             .from('enrollments')
-            .select('student_id, student_code, class_id, classes(name, level)')
+            .select('student_id, student_code, class_id, classes(name, level, section)')
             .inFilter('student_id', studentIds)
             .eq('is_active', true);
 

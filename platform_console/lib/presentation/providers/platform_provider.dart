@@ -18,6 +18,8 @@ class PlatformState {
   final List<Map<String, dynamic>> recentAiLogs;
   final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> bugReports;
+  final List<Map<String, dynamic>> securityEvents;
+  final Map<String, dynamic>? sloMetrics;
   final Map<String, dynamic>? platformSettings;
   final Map<String, dynamic> kpis;
 
@@ -31,6 +33,8 @@ class PlatformState {
     this.recentAiLogs = const [],
     this.auditLogs = const [],
     this.bugReports = const [],
+    this.securityEvents = const [],
+    this.sloMetrics,
     this.platformSettings,
     this.kpis = const {},
   });
@@ -45,6 +49,8 @@ class PlatformState {
     List<Map<String, dynamic>>? recentAiLogs,
     List<Map<String, dynamic>>? auditLogs,
     List<Map<String, dynamic>>? bugReports,
+    List<Map<String, dynamic>>? securityEvents,
+    Map<String, dynamic>? sloMetrics,
     Map<String, dynamic>? platformSettings,
     Map<String, dynamic>? kpis,
   }) {
@@ -58,6 +64,8 @@ class PlatformState {
       recentAiLogs: recentAiLogs ?? this.recentAiLogs,
       auditLogs: auditLogs ?? this.auditLogs,
       bugReports: bugReports ?? this.bugReports,
+      securityEvents: securityEvents ?? this.securityEvents,
+      sloMetrics: sloMetrics ?? this.sloMetrics,
       platformSettings: platformSettings ?? this.platformSettings,
       kpis: kpis ?? this.kpis,
     );
@@ -337,6 +345,29 @@ class PlatformNotifier extends Notifier<PlatformState> {
       final realAiSpend = quotasAiSpend > logsSpend ? quotasAiSpend : logsSpend;
       final realAiTokens = quotasTokens > logsTokens ? quotasTokens : logsTokens;
 
+      // 9. Zero Trust Security Events & Observability SLOs
+      List<Map<String, dynamic>> securityEvents = [];
+      try {
+        final secResp = await _supabase
+            .from('security_events')
+            .select('*')
+            .order('created_at', ascending: false)
+            .limit(100);
+        securityEvents = List<Map<String, dynamic>>.from(secResp);
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: security_events error: $e');
+      }
+
+      Map<String, dynamic>? sloMetrics;
+      try {
+        final rpcSlo = await _supabase.rpc('get_system_slo_and_security_metrics');
+        if (rpcSlo != null) {
+          sloMetrics = Map<String, dynamic>.from(rpcSlo as Map);
+        }
+      } catch (e) {
+        debugPrint('PlatformNotifier.loadAll: get_system_slo_and_security_metrics error: $e');
+      }
+
       _currentState = _currentState.copyWith(
         isLoading: false,
         errorMessage: null,
@@ -347,6 +378,8 @@ class PlatformNotifier extends Notifier<PlatformState> {
         recentAiLogs: aiLogs,
         auditLogs: auditLogs,
         bugReports: bugReports,
+        securityEvents: securityEvents,
+        sloMetrics: sloMetrics,
         platformSettings: settings,
         kpis: {
           'totalSchools': schools.length,
@@ -374,6 +407,21 @@ class PlatformNotifier extends Notifier<PlatformState> {
       try {
         state = _currentState;
       } catch (_) {}
+    }
+  }
+
+  /// Pillar 4: 1-click action to terminate session context and lock account
+  Future<bool> killSessionOrLockAccount(String userId, {String? reason}) async {
+    try {
+      await _supabase.rpc('kill_session_or_lock_account', params: {
+        'p_user_id': userId,
+        'p_reason': reason ?? 'Security mitigation initiated from Console',
+      });
+      await loadAll();
+      return true;
+    } catch (e) {
+      debugPrint('killSessionOrLockAccount error: $e');
+      return false;
     }
   }
 

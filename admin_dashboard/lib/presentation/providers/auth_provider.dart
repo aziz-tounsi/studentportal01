@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/utils/error_messages.dart';
 import '../../data/models/user_model.dart';
@@ -72,7 +73,7 @@ class AuthNotifier extends Notifier<AdminAuthState> {
       final resp = await _supabase.from('users').select().eq('id', userId).single();
       final user = UserModel.fromJson(resp);
       if (!['admin', 'staff', 'owner', 'manager', 'super_admin'].contains(user.role)) {
-        await _supabase.auth.signOut();
+        await _supabase.auth.signOut(scope: SignOutScope.local);
         final message = 'Access denied. This dashboard is for school administrators only.';
         state = AdminAuthState(accessDenied: true, errorMessage: message);
         return;
@@ -99,7 +100,7 @@ class AuthNotifier extends Notifier<AdminAuthState> {
       }
 
       if (!schoolIsActive || subStatus == 'suspended') {
-        await _supabase.auth.signOut();
+        await _supabase.auth.signOut(scope: SignOutScope.local);
         state = AdminAuthState(
           accessDenied: true,
           schoolSubscriptionStatus: subStatus ?? 'suspended',
@@ -181,8 +182,16 @@ class AuthNotifier extends Notifier<AdminAuthState> {
     }
   }
 
-  Future<void> signOut() async {
-    await _supabase.auth.signOut();
+  Future<void> signOut({bool global = false}) async {
+    try {
+      await _supabase.auth.signOut(
+        scope: global ? SignOutScope.global : SignOutScope.local,
+      );
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (_) {}
     state = AdminAuthState();
   }
 

@@ -1,0 +1,49 @@
+# ==============================================================================
+# SUPABASE PLATFORM CONFIGURATION & SECURITY HARDENING
+# ==============================================================================
+# Multi-tenant B2B2C School Management Platform
+# Production Auth, Token Rotation, and PostgREST Security Policies
+
+project_id = "cazuauxivrboygehrkij"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+
+[auth]
+enabled = true
+# Pillar 1.2: Enforce short-lived JWT expiry (1800s = 30 minutes)
+jwt_exp = 1800
+
+# Pillar 1.2: Refresh token rotation - single use refresh tokens
+enable_refresh_token_rotation = true
+
+# Pillar 1.2: Strict reuse interval (10 seconds grace period for concurrent requests)
+security_refresh_token_reuse_interval = 10
+
+# Disable insecure signups (all users created by school admin or super admin via Edge Functions)
+enable_signup = false
+
+# Password minimum length and character requirements
+minimum_password_length = 8
+
+# Rate limits for authentication endpoints
+rate_limit_token_refresh = 30
+rate_limit_verify = 30
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[analytics]
+enabled = true

@@ -7,7 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'dart:ui';
 import 'core/config/supabase_config.dart';
+import 'core/network/security_trace_http_client.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/l10n/app_localizations.dart';
@@ -25,18 +27,42 @@ void main() {
       WidgetsFlutterBinding.ensureInitialized();
       await initializeDateFormatting();
 
-      // Catch all unhandled Flutter framework errors (prevent crashes)
+      // Catch all unhandled Flutter framework errors (prevent crashes and correlate telemetry)
       FlutterError.onError = (details) {
-        debugPrint('FlutterError caught: ${details.exceptionAsString()}');
+        debugPrint('[STUDENT PORTAL] FlutterError caught: ${details.exceptionAsString()}');
+        SecurityTraceHttpClient.logTelemetry(
+          eventName: 'flutter_framework_error',
+          severity: 'error',
+          metadata: {
+            'exception': details.exceptionAsString(),
+            'library': details.library,
+          },
+        );
+      };
+
+      PlatformDispatcher.instance.onError = (error, stack) {
+        debugPrint('[STUDENT PORTAL] PlatformDispatcher error: $error');
+        SecurityTraceHttpClient.logTelemetry(
+          eventName: 'platform_dispatcher_error',
+          severity: 'critical',
+          metadata: {'error': error.toString()},
+        );
+        return true;
       };
 
       // Initialize persistent offline cache
       await OfflineCacheService.instance.init();
 
-      // Initialize Supabase
+      // Initialize Supabase with correlated security & tracing client
       await Supabase.initialize(
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
+        httpClient: SecurityTraceHttpClient(
+          appSurface: 'student_portal',
+          onForceDisconnect: (reason) {
+            debugPrint('[SECURITY] Student Portal forced disconnect: $reason');
+          },
+        ),
       );
 
       // Initialize native local notifications for system alerts

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/services/connectivity_service.dart';
@@ -20,6 +19,7 @@ import '../../widgets/detail_modal_sheet.dart';
 import '../../widgets/documents_skeleton.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../providers/nav_bar_provider.dart';
+import '../../../core/utils/file_download_helper.dart';
 
 // Semester state provider for this screen
 final docsSemesterProvider = StateProvider<int>((ref) => 1);
@@ -141,7 +141,12 @@ final documentsProvider =
 });
 
 class DocumentsScreen extends ConsumerStatefulWidget {
-  const DocumentsScreen({super.key});
+  final String? initialDocumentId;
+
+  const DocumentsScreen({
+    super.key,
+    this.initialDocumentId,
+  });
 
   @override
   ConsumerState<DocumentsScreen> createState() => _DocumentsScreenState();
@@ -153,6 +158,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
   String? _selectedCategory;
   bool _hasUserPickedSemester = false;
   DateTime? _lastResumeRefresh;
+  bool _hasHandledInitialDocument = false;
 
   // Search state
   bool _isSearching = false;
@@ -168,6 +174,31 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     Color(0xFFF4F8FC),
     Color(0xFFFAFCFD),
   ];
+
+  void _checkAutoOpenInitial(List<DocumentModel> list) {
+    if (_hasHandledInitialDocument || widget.initialDocumentId == null) return;
+    final match = list.where((d) => d.id == widget.initialDocumentId).firstOrNull;
+    if (match != null) {
+      _hasHandledInitialDocument = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _DocumentCard._showDocumentDetails(context, match, list);
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(DocumentsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialDocumentId != oldWidget.initialDocumentId &&
+        widget.initialDocumentId != null) {
+      _hasHandledInitialDocument = false;
+      ref.read(allStudentDocumentsProvider).whenData((list) {
+        _checkAutoOpenInitial(list);
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -262,6 +293,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     final l10n = AppLocalizations.of(context);
     final selectedSemester = ref.watch(docsSemesterProvider);
     final documentsAsync = ref.watch(documentsProvider(selectedSemester));
+
+    ref.watch(allStudentDocumentsProvider).whenData((list) {
+      _checkAutoOpenInitial(list);
+    });
 
     return Material(
       color: Colors.transparent,
@@ -404,7 +439,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                       padding: EdgeInsets.fromLTRB(context.horizontalPadding, 4, context.horizontalPadding, 140),
                       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       itemCount: filteredDocs.length,
-                      itemBuilder: (context, index) => _DocumentCard(document: filteredDocs[index]),
+                      itemBuilder: (context, index) => _DocumentCard(document: filteredDocs[index], allDocuments: filteredDocs),
                     ),
             ),
           ),
@@ -583,6 +618,54 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     }
   }
 
+  static String formatRelativeTime(BuildContext context, DateTime time) {
+    final localTime = time.toLocal();
+    final now = DateTime.now();
+    final difference = now.difference(localTime);
+    String lang = 'fr';
+    try {
+      lang = Localizations.localeOf(context).languageCode;
+    } catch (_) {}
+
+    if (difference.isNegative || difference.inSeconds < 60) {
+      if (lang == 'ar') return 'الآن';
+      if (lang == 'en') return 'Just now';
+      return "À l'instant";
+    }
+
+    if (lang == 'ar') {
+      if (difference.inMinutes < 60) {
+        return 'منذ ${difference.inMinutes} د';
+      } else if (difference.inHours < 24) {
+        return 'منذ ${difference.inHours} س';
+      } else if (difference.inDays < 7) {
+        return 'منذ ${difference.inDays} يوم';
+      } else {
+        return ArabicTypography.toLatinDigits(DateFormat('d MMM', 'ar').format(localTime));
+      }
+    } else if (lang == 'en') {
+      if (difference.inMinutes < 60) {
+        return '${difference.inMinutes}m ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours}h ago';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
+      } else {
+        return DateFormat('d MMM', 'en').format(localTime);
+      }
+    }
+
+    if (difference.inMinutes < 60) {
+      return 'Il y a ${difference.inMinutes} min';
+    } else if (difference.inHours < 24) {
+      return 'Il y a ${difference.inHours}h';
+    } else if (difference.inDays < 7) {
+      return 'Il y a ${difference.inDays}j';
+    } else {
+      return DateFormat('d MMM', 'fr_FR').format(localTime);
+    }
+  }
+
   Widget _buildEmptySemesterState(int semester, AppLocalizations l10n) {
     return Center(
       child: Column(
@@ -730,15 +813,15 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
 // Document card widget - iOS 26 premium style without entry hover animation
 class _DocumentCard extends StatelessWidget {
   final DocumentModel document;
+  final List<DocumentModel>? allDocuments;
 
   const _DocumentCard({
     required this.document,
+    this.allDocuments,
   });
 
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final dateFormat = DateFormat('dd MMM yyyy', lang);
     final categoryColor = _DocumentsScreenState.getCategoryColor(document.category);
     final categoryIcon = _DocumentsScreenState.getCategoryIcon(document.category);
 
@@ -751,7 +834,7 @@ class _DocumentCard extends StatelessWidget {
         shrinkScale: 0.93,
         overshootScale: 1.055,
         delayNavigation: false,
-        onTap: () => _showDocumentDetails(context, document),
+        onTap: () => _showDocumentDetails(context, document, allDocuments),
         child: Container(
           padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 16.0)),
           decoration: BoxDecoration(
@@ -840,7 +923,7 @@ class _DocumentCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            ArabicTypography.toLatinDigits(dateFormat.format(document.createdAt)),
+                            _DocumentsScreenState.formatRelativeTime(context, document.createdAt),
                             style: ArabicTypography.bodyStyle(
                               context,
                               fontSize: 11,
@@ -848,6 +931,27 @@ class _DocumentCard extends StatelessWidget {
                               fontWeight: FontWeight.w400,
                             ),
                           ),
+                          if (document.batchInfo != null) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 3,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${document.batchInfo!['index']}/${document.batchInfo!['total']}',
+                              style: ArabicTypography.bodyStyle(
+                                context,
+                                fontSize: 11,
+                                color: const Color(0xFF6D4CF6),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                           if (document.fileSize != null) ...[
                             const SizedBox(width: 8),
                             Container(
@@ -894,83 +998,382 @@ class _DocumentCard extends StatelessWidget {
       );
   }
 
-  void _showDocumentDetails(BuildContext context, DocumentModel document) {
+  static void _showImageViewer(BuildContext context, String imageUrl, String fileName) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.9),
+      builder: (ctx) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.grey[900],
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                        SizedBox(height: 16),
+                        Text(
+                          'Image non disponible',
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      ],
+                    ),
+                  ),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            // Download button
+            Positioned(
+              top: 50,
+              right: 76,
+              child: BouncingWrapper(
+                shrinkScale: 0.85,
+                overshootScale: 1.15,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  FileDownloadHelper.downloadFile(
+                    context: context,
+                    url: imageUrl,
+                    fileName: fileName,
+                  );
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 24),
+                ),
+              ),
+            ),
+            // Close button
+            Positioned(
+              top: 50,
+              right: 20,
+              child: BouncingWrapper(
+                shrinkScale: 0.85,
+                overshootScale: 1.15,
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 24),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildImageDocCard(BuildContext context, DocumentModel doc) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          // Small image thumbnail with bounce
+          BouncingWrapper(
+            shrinkScale: 0.90,
+            overshootScale: 1.08,
+            onTap: () => _showImageViewer(context, doc.fileUrl, doc.fileName),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      doc.fileUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.broken_image, size: 22, color: Colors.grey),
+                      ),
+                    ),
+                    Container(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      child: const Center(
+                        child: Icon(Icons.zoom_in_rounded, size: 20, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: BouncingWrapper(
+              behavior: HitTestBehavior.opaque,
+              shrinkScale: 0.96,
+              overshootScale: 1.04,
+              onTap: () => _showImageViewer(context, doc.fileUrl, doc.fileName),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    doc.fileName.isNotEmpty ? doc.fileName : doc.displayTitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.purple[800],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    doc.fileSize != null ? '${doc.fileExtension} • ${doc.displayFileSize}' : doc.fileExtension,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.purple[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          BouncingWrapper(
+            shrinkScale: 0.82,
+            overshootScale: 1.18,
+            onTap: () {
+              Navigator.of(context, rootNavigator: true).pop();
+              FileDownloadHelper.downloadFile(
+                context: context,
+                url: doc.fileUrl,
+                fileName: doc.fileName,
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.download_rounded,
+                size: 20,
+                color: Colors.purple[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildFileDocCard(BuildContext context, DocumentModel doc) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: BouncingWrapper(
+              behavior: HitTestBehavior.opaque,
+              shrinkScale: 0.96,
+              overshootScale: 1.04,
+              onTap: () => FileDownloadHelper.viewFile(
+                context: context,
+                url: doc.fileUrl,
+                fileName: doc.fileName,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      doc.isPdf ? Icons.picture_as_pdf_rounded : Icons.description_rounded,
+                      size: 22,
+                      color: Colors.purple[700],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          doc.fileName.isNotEmpty ? doc.fileName : doc.displayTitle,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.purple[800],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          doc.fileSize != null ? '${doc.fileExtension} • ${doc.displayFileSize}' : doc.fileExtension,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.purple[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          BouncingWrapper(
+            shrinkScale: 0.82,
+            overshootScale: 1.18,
+            onTap: () {
+              Navigator.of(context, rootNavigator: true).pop();
+              FileDownloadHelper.downloadFile(
+                context: context,
+                url: doc.fileUrl,
+                fileName: doc.fileName,
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.download_rounded,
+                size: 20,
+                color: Colors.purple[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static void _showDocumentDetails(
+    BuildContext context,
+    DocumentModel document, [
+    List<DocumentModel>? allDocs,
+  ]) {
     final l10n = AppLocalizations.of(context);
-    final lang = Localizations.localeOf(context).languageCode;
-    final dateFormat = DateFormat('dd MMMM yyyy', lang);
     final categoryColor = _DocumentsScreenState.getCategoryColor(document.category);
     final categoryIcon = _DocumentsScreenState.getCategoryIcon(document.category);
 
+    final batch = document.batchInfo;
+    final displayTitle = document.displayTitle;
+    final double titleFontSize = displayTitle.length > 40
+        ? 14.0
+        : (displayTitle.length > 24 ? 15.5 : 18.0);
+
+    List<DocumentModel> batchFiles = [];
+    if (batch != null && allDocs != null) {
+      batchFiles = allDocs.where((d) =>
+        d.displayTitle == document.displayTitle &&
+        d.category == document.category
+      ).toList();
+      batchFiles.sort((a, b) => (a.batchInfo?['index'] ?? 0).compareTo(b.batchInfo?['index'] ?? 0));
+    }
+    if (batchFiles.isEmpty) {
+      batchFiles = [document];
+    }
+    final bool isMultiFile = batchFiles.length > 1;
+
     DetailModalSheet.show(
       context: context,
-      initialChildSize: 0.58,
-      bottomAction: BouncingWrapper(
-        behavior: HitTestBehavior.opaque,
-        shrinkScale: 0.94,
-        overshootScale: 1.05,
-        delayNavigation: true,
-        onTap: () async {
-          Navigator.of(context, rootNavigator: true).pop();
-          final url = document.fileUrl.trim();
-          if (url.isEmpty) return;
-          try {
-            final uri = Uri.parse(url);
-            final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-            if (!launched) {
-              await launchUrl(uri, mode: LaunchMode.platformDefault);
-            }
-          } catch (_) {
-            try {
-              final uri = Uri.parse(url);
-              await launchUrl(uri, mode: LaunchMode.platformDefault);
-            } catch (_) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(l10n.cannotOpenFile),
-                    backgroundColor: Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+      initialChildSize: 0.65,
+      bottomAction: isMultiFile
+          ? null
+          : BouncingWrapper(
+              behavior: HitTestBehavior.opaque,
+              shrinkScale: 0.94,
+              overshootScale: 1.05,
+              delayNavigation: true,
+              onTap: () async {
+                Navigator.of(context, rootNavigator: true).pop();
+                FileDownloadHelper.downloadFile(
+                  context: context,
+                  url: document.fileUrl,
+                  fileName: document.fileName,
                 );
-              }
-            }
-          }
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [categoryColor, categoryColor.withValues(alpha: 0.85)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: categoryColor.withValues(alpha: 0.35),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.download_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                l10n.translate('download'),
-                style: ArabicTypography.buttonStyle(
-                  context,
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [categoryColor, categoryColor.withValues(alpha: 0.85)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: categoryColor.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.download_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.translate('download'),
+                      style: ArabicTypography.buttonStyle(
+                        context,
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1007,30 +1410,65 @@ class _DocumentCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      document.title,
+                      displayTitle,
                       style: ArabicTypography.headerStyle(
                         context,
-                        fontSize: 18,
+                        fontSize: titleFontSize,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF1F2937),
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: categoryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        document.displayCategory(l10n),
-                        style: ArabicTypography.subtitleStyle(
-                          context,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: categoryColor,
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: categoryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            document.displayCategory(l10n),
+                            style: ArabicTypography.subtitleStyle(
+                              context,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: categoryColor,
+                            ),
+                          ),
                         ),
-                      ),
+                        if (isMultiFile)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6D4CF6).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.layers_outlined,
+                                  size: 13,
+                                  color: Color(0xFF6D4CF6),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${batchFiles.length} fichiers',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF6D4CF6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -1039,98 +1477,25 @@ class _DocumentCard extends StatelessWidget {
           ),
           
           if ((document.cleanDescription ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             Text(
               document.cleanDescription!.trim(),
               style: ArabicTypography.bodyStyle(
                 context,
-                fontSize: 14,
+                fontSize: 13.5,
                 fontWeight: FontWeight.w400,
                 color: Colors.grey[700],
-                height: 1.5,
+                height: 1.45,
               ),
             ),
           ],
           
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           
-          // Info rows (Date, Size, File name) with ROUND circular icons
-          _DetailRow(
-            icon: Icons.calendar_today_outlined,
-            label: l10n.dateLabel,
-            value: ArabicTypography.toLatinDigits(dateFormat.format(document.createdAt)),
-          ),
-          if (document.fileSize != null)
-            _DetailRow(
-              icon: Icons.storage_outlined,
-              label: l10n.translate('size_label'),
-              value: document.displayFileSize,
-            ),
-          _DetailRow(
-            icon: Icons.insert_drive_file_outlined,
-            label: l10n.translate('file_label'),
-            value: document.fileName,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 18, color: Colors.grey[600]),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: ArabicTypography.bodyStyle(
-                    context,
-                    fontSize: 11,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: ArabicTypography.bodyStyle(
-                    context,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1F2937),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
+          // Files list matching announcement attachment design
+          ...batchFiles.map((doc) => doc.isImage
+              ? _buildImageDocCard(context, doc)
+              : _buildFileDocCard(context, doc)),
         ],
       ),
     );

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../network/security_trace_http_client.dart';
 
 /// Supabase configuration for Admin Dashboard
 /// Uses the same Supabase project as the student app
@@ -40,8 +42,17 @@ class SupabaseConfig {
   }
 
   static Future<void> initialize() async {
-    // Use anon key for normal auth operations
-    await Supabase.initialize(url: url, anonKey: anonKey);
+    // Use anon key for normal auth operations and attach security/observability client
+    await Supabase.initialize(
+      url: url,
+      anonKey: anonKey,
+      httpClient: SecurityTraceHttpClient(
+        appSurface: 'school_admin',
+        onForceDisconnect: (reason) {
+          debugPrint('[SECURITY] School Admin forced disconnect: $reason');
+        },
+      ),
+    );
   }
 
   /// Check if a storage bucket exists

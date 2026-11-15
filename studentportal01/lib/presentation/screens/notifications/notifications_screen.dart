@@ -15,9 +15,15 @@ import '../../widgets/bouncing_wrapper.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/notifications_screen_skeleton.dart';
+import '../../../core/utils/file_download_helper.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({super.key});
+  final String? initialNotificationId;
+
+  const NotificationsScreen({
+    super.key,
+    this.initialNotificationId,
+  });
 
   @override
   ConsumerState<NotificationsScreen> createState() =>
@@ -33,6 +39,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   late AnimationController _animationController;
   late Animation<double> _searchWidthAnimation;
   late Animation<double> _iconSizeAnimation;
+  bool _hasHandledInitialNotification = false;
 
   static const Color _accentColor = Color(0xFFEC4899);
 
@@ -49,6 +56,31 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     _iconSizeAnimation = Tween<double>(begin: 22, end: 18).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
+  }
+
+  void _checkAutoOpenInitial(List<StudentAnnouncement> list) {
+    if (_hasHandledInitialNotification || widget.initialNotificationId == null) return;
+    final match = list.where((a) => a.id == widget.initialNotificationId).firstOrNull;
+    if (match != null) {
+      _hasHandledInitialNotification = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showAnnouncementDetail(match);
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(NotificationsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialNotificationId != oldWidget.initialNotificationId &&
+        widget.initialNotificationId != null) {
+      _hasHandledInitialNotification = false;
+      ref.read(globalAnnouncementsProvider).whenData((list) {
+        _checkAutoOpenInitial(list);
+      });
+    }
   }
 
   @override
@@ -568,6 +600,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     final announcementsAsync = ref.watch(globalAnnouncementsProvider);
     final isRefreshing = ref.watch(notificationsRefreshingProvider);
 
+    announcementsAsync.whenData((list) {
+      _checkAutoOpenInitial(list);
+    });
+
     // Show loading if auth is still loading
     final isAuthLoading = authState.isLoading;
 
@@ -804,6 +840,238 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     );
   }
 
+  /// Formats markdown-like text, rendering **bold** sections with strong weight and contrast.
+  Widget _buildFormattedText(
+    String text, {
+    required TextStyle baseStyle,
+    TextStyle? boldStyle,
+    int? maxLines,
+    TextOverflow? overflow,
+    TextAlign textAlign = TextAlign.start,
+  }) {
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    final isAr = ArabicTypography.isArabic(context) ||
+        RegExp(r'[\u0600-\u06FF]').hasMatch(text);
+
+    final effectiveBase = isAr
+        ? ArabicTypography.bodyStyle(
+            context,
+            fontSize: baseStyle.fontSize ?? 13.5,
+            fontWeight: baseStyle.fontWeight ?? FontWeight.w500,
+            color: baseStyle.color,
+            height: baseStyle.height ?? 1.45,
+          )
+        : baseStyle;
+
+    final effectiveBold = boldStyle ??
+        (isAr
+            ? ArabicTypography.bodyStyle(
+                context,
+                fontSize: baseStyle.fontSize ?? 13.5,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF111827),
+                height: baseStyle.height ?? 1.45,
+              )
+            : effectiveBase.copyWith(
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF111827),
+              ));
+
+    if (!text.contains('**')) {
+      return Text(
+        text,
+        style: effectiveBase,
+        maxLines: maxLines,
+        overflow: overflow,
+        textAlign: textAlign,
+      );
+    }
+
+    final spans = <InlineSpan>[];
+    final regex = RegExp(r'\*\*(.*?)\*\*');
+    int lastIndex = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastIndex) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastIndex, match.start),
+            style: effectiveBase,
+          ),
+        );
+      }
+      final boldText = match.group(1) ?? '';
+      if (boldText.isNotEmpty) {
+        spans.add(
+          TextSpan(
+            text: boldText,
+            style: effectiveBold,
+          ),
+        );
+      }
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(lastIndex),
+          style: effectiveBase,
+        ),
+      );
+    }
+
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: overflow,
+      textAlign: textAlign,
+    );
+  }
+
+  /// Dedicated picture preview card for notifications with attached image(s)
+  Widget _buildImageCardPreview(dynamic announcement) {
+    final imageAttachments = (announcement.attachments as List)
+        .where((att) => _isImageFile(att.fileUrl))
+        .toList();
+    if (imageAttachments.isEmpty) return const SizedBox.shrink();
+
+    final imageUrls =
+        imageAttachments.map((att) => att.fileUrl as String).toList();
+    final firstImageUrl = imageUrls.first;
+    final count = imageUrls.length;
+
+    return BouncingWrapper(
+      shrinkScale: 0.95,
+      overshootScale: 1.05,
+      onTap: () => _showImageViewer(imageUrls, 0),
+      child: Container(
+        height: 160,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.black.withValues(alpha: 0.08),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.network(
+                firstImageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: 160,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.grey[100],
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image_rounded,
+                          size: 32, color: Colors.grey[400]),
+                      const SizedBox(height: 6),
+                      Text(
+                        AppLocalizations.of(context).imageUnavailable,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      ),
+                    ],
+                  ),
+                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    color: Colors.grey[100],
+                    child: const Center(child: IosLoader(size: 24)),
+                  );
+                },
+              ),
+              // Gradient overlay at bottom
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 48,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.4),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Fullscreen zoom indicator on top right
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.fullscreen_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              // Multiple images badge
+              if (count > 1)
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.photo_library_rounded,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$count',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNotificationCard(dynamic announcement) {
     final l10n = AppLocalizations.of(context);
     final isImportant = announcement.isImportant;
@@ -830,6 +1098,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     final hasDocumentAttachment = announcement.attachments.any(
       (att) => !_isImageFile(att.fileUrl),
     );
+    final isRead = ref.watch(readAnnouncementsProvider).contains(announcement.id);
     // Count images and documents separately
     final imageCount = announcement.attachments.where(
       (att) => _isImageFile(att.fileUrl),
@@ -844,7 +1113,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         shrinkScale: 0.93,
         overshootScale: 1.055,
         delayNavigation: false,
-        onTap: () => _showAnnouncementDetail(announcement),
+        onTap: () {
+          ref.read(readAnnouncementsProvider.notifier).markAsRead(announcement.id);
+          _showAnnouncementDetail(announcement);
+        },
         child: ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
@@ -896,44 +1168,72 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                         child: Icon(icon, color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 12),
-                      // Type label, Title, and Key info subtitle
+                      // Type label, date sent, and Title
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Row(
+                              children: [
+                                Text(
+                                  typeLabel,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: color,
+                                  ),
+                                ),
+                                if (!isRead) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEF4444),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFEF4444).withValues(alpha: 0.5),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 3),
                             Text(
-                              typeLabel,
+                              l10n.formatAnnouncementDateTime(announcement.publishedAt),
                               style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: color,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[500],
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             if (localizedTitle.isNotEmpty &&
                                 localizedTitle.toLowerCase() != typeLabel.toLowerCase()) ...[
-                              const SizedBox(height: 2),
-                              Text(
+                              const SizedBox(height: 3),
+                              _buildFormattedText(
                                 localizedTitle,
-                                style: TextStyle(
-                                  fontSize: announcement.announcementType == 'general' ? 12 : 16,
-                                  fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF1F2937),
+                                baseStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1F2937),
                                   letterSpacing: -0.3,
+                                  height: 1.25,
+                                ),
+                                boldStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF111827),
+                                  letterSpacing: -0.3,
+                                  height: 1.25,
                                 ),
                                 maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                            if (keyInfo.isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                keyInfo,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF6B7280),
-                                ),
-                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
@@ -969,106 +1269,51 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       ],
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  // Body content with small image thumbnail at end
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          localizedBody,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[700],
-                            height: 1.4,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  // Key info summary if available (structured with boldness in content)
+                  if (keyInfo.isNotEmpty && !localizedBody.contains(keyInfo)) ...[
+                    const SizedBox(height: 10),
+                    _buildFormattedText(
+                      '**$keyInfo**',
+                      baseStyle: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey[800],
+                        height: 1.4,
                       ),
-                      // Small image thumbnail at end of body
-                      if (imageCount > 0) ...[
-                        const SizedBox(width: 10),
-                        GestureDetector(
-                          onTap: () => _showImageViewer(
-                            announcement.attachments
-                                .where((att) => _isImageFile(att.fileUrl))
-                                .map((att) => att.fileUrl)
-                                .toList(),
-                            0,
-                          ),
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  Image.network(
-                                    announcement.attachments
-                                        .firstWhere((att) => _isImageFile(att.fileUrl))
-                                        .fileUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) =>
-                                        Container(
-                                          color: Colors.grey[200],
-                                          child: Icon(
-                                            Icons.image_outlined,
-                                            size: 18,
-                                            color: Colors.grey[400],
-                                          ),
-                                        ),
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Container(
-                                        color: Colors.grey[100],
-                                        child: const Center(
-                                          child: IosLoader(size: 14),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  // Show image count badge if multiple
-                                  if (imageCount > 1)
-                                    Positioned(
-                                      bottom: 2,
-                                      right: 2,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.7),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          '+${imageCount - 1}',
-                                          style: const TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                      boldStyle: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                  // Body content formatted with markdown bold support
+                  if (localizedBody.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _buildFormattedText(
+                      localizedBody,
+                      baseStyle: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                        height: 1.45,
+                      ),
+                      boldStyle: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                        height: 1.45,
+                      ),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  // Prominent image preview when picture is attached
+                  if (imageCount > 0) ...[
+                    const SizedBox(height: 12),
+                    _buildImageCardPreview(announcement),
+                  ],
                   const SizedBox(height: 12),
                   // Footer with time
                   Row(
@@ -1287,120 +1532,155 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   Widget _buildDetailAttachment(String url, String? name) {
     final l10n = AppLocalizations.of(context);
     final isImage = _isImageFile(url);
+    final fileName = _getCleanFileName(name, url);
 
-    return BouncingWrapper(
-      behavior: HitTestBehavior.opaque,
-      shrinkScale: 0.94,
-      overshootScale: 1.05,
-      delayNavigation: false,
-      onTap: () => _openAttachment(url),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isImage) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                url,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[100],
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image, color: Colors.grey[400]),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.imageUnavailable,
-                        style: TextStyle(color: Colors.grey[500]),
-                      ),
-                    ],
+    if (isImage) {
+      return BouncingWrapper(
+        behavior: HitTestBehavior.opaque,
+        shrinkScale: 0.94,
+        overshootScale: 1.05,
+        delayNavigation: false,
+        onTap: () => _showImageViewer([url], 0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                height: 200,
+                color: Colors.grey[100],
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                        : null,
                   ),
                 ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) => Container(
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.broken_image, color: Colors.grey[400]),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.imageUnavailable,
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                ],
               ),
             ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.purple.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: BouncingWrapper(
+              behavior: HitTestBehavior.opaque,
+              shrinkScale: 0.96,
+              overshootScale: 1.04,
+              onTap: () => FileDownloadHelper.viewFile(
+                context: context,
+                url: url,
+                fileName: fileName,
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: Colors.purple.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       _getAttachmentIcon(url),
-                      size: 24,
+                      size: 22,
                       color: Colors.purple[700],
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _getCleanFileName(name, url),
+                          fileName,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Colors.purple[800],
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
                           l10n.tapToDownload,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             color: Colors.purple[600],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Icon(
-                    Icons.download_rounded,
-                    size: 24,
-                    color: Colors.purple[700],
-                  ),
                 ],
               ),
             ),
-          ],
+          ),
+          const SizedBox(width: 8),
+          BouncingWrapper(
+            shrinkScale: 0.82,
+            overshootScale: 1.18,
+            onTap: () {
+              Navigator.of(context, rootNavigator: true).pop();
+              FileDownloadHelper.downloadFile(
+                context: context,
+                url: url,
+                fileName: fileName,
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.download_rounded,
+                size: 20,
+                color: Colors.purple[700],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
   void _showAnnouncementDetail(dynamic announcement) {
+    ref.read(readAnnouncementsProvider.notifier).markAsRead(announcement.id);
     final l10n = AppLocalizations.of(context);
     final color = _getTypeColor(announcement.announcementType);
     final icon = _getTypeIcon(announcement.announcementType);
@@ -1425,145 +1705,159 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-                          // Header with icon
-                          Row(
-                            children: [
-                              Container(
-                                width: 56,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [color, color.withValues(alpha: 0.7)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: color.withValues(alpha: 0.3),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(icon, color: Colors.white, size: 28),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: color.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        typeLabel,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: color,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      l10n.formatAnnouncementDateTime(
-                                        announcement.publishedAt,
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          // Badges
-                          if (announcement.isPinned || announcement.isImportant || announcement.attachments.any((att) => !_isImageFile(att.fileUrl)))
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                if (announcement.isPinned)
-                                  _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
-                                if (announcement.isImportant)
-                                  _buildBadge(
-                                    l10n.importantLabel,
-                                    Colors.red,
-                                    Icons.priority_high,
-                                  ),
-                                if (announcement.attachments.any((att) => !_isImageFile(att.fileUrl)))
-                                  _buildBadge(
-                                    l10n.attachment,
-                                    Colors.purple,
-                                    Icons.attach_file,
-                                  ),
-                              ],
-                            ),
-                          const SizedBox(height: 24),
-                          // Key info summary if available
-                          if (keyInfo.isNotEmpty) ...[
-                            Text(
-                              keyInfo,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey[500],
-                                height: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                          // Body content
-                          Text(
-                            localizedBody,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey[700],
-                              height: 1.6,
-                            ),
-                          ),
-                          // Attachments - show all from attachments list
-                          if (announcement.attachments.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            ...announcement.attachments.map(
-                              (att) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _buildDetailAttachment(
-                                  att.fileUrl,
-                                  att.effectiveName,
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          // Title
-                          Text(
-                            localizedTitle,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1F2937),
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
+          // Header with icon
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [color, color.withValues(alpha: 0.7)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 28),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
                       ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        typeLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.formatAnnouncementDateTime(
+                        announcement.publishedAt,
+                      ),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Badges (Attachment pill only shown outside)
+          if (announcement.isPinned || announcement.isImportant) ...[
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (announcement.isPinned)
+                  _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
+                if (announcement.isImportant)
+                  _buildBadge(
+                    l10n.importantLabel,
+                    Colors.red,
+                    Icons.priority_high,
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 20),
+          // Title
+          _buildFormattedText(
+            localizedTitle,
+            baseStyle: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1F2937),
+              letterSpacing: -0.5,
+            ),
+            boldStyle: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Key info summary if available (Omit if it just repeats the date, which is already in header)
+          if (keyInfo.isNotEmpty && !_isDateOnlyKeyInfo(keyInfo)) ...[
+            _buildFormattedText(
+              keyInfo,
+              baseStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[500],
+                height: 1.2,
+              ),
+              boldStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF374151),
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          // Body content with markdown bold formatting
+          if (localizedBody.isNotEmpty) ...[
+            _buildFormattedText(
+              localizedBody,
+              baseStyle: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+                height: 1.6,
+              ),
+              boldStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+                height: 1.6,
+              ),
+            ),
+          ],
+          // Attachments - show all from attachments list
+          if (announcement.attachments.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            ...announcement.attachments.map(
+              (att) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _buildDetailAttachment(
+                  att.fileUrl,
+                  att.effectiveName,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  Future<void> _openAttachment(String url) async {
+    Future<void> _openAttachment(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1626,11 +1920,40 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   ),
                 ),
               ),
+              // Download button
+              Positioned(
+                top: 50,
+                right: 76,
+                child: BouncingWrapper(
+                  shrinkScale: 0.85,
+                  overshootScale: 1.15,
+                  onTap: () {
+                    Navigator.pop(context);
+                    final url = imageUrls[initialIndex];
+                    FileDownloadHelper.downloadFile(
+                      context: context,
+                      url: url,
+                      fileName: _getAttachmentName(url),
+                    );
+                  },
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.download_rounded, color: Colors.white, size: 24),
+                  ),
+                ),
+              ),
               // Close button
               Positioned(
                 top: 50,
                 right: 20,
-                child: GestureDetector(
+                child: BouncingWrapper(
+                  shrinkScale: 0.85,
+                  overshootScale: 1.15,
                   onTap: () => Navigator.pop(context),
                   child: Container(
                     width: 44,
@@ -1718,7 +2041,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   }
 
   Color _getTypeColor(String? type) {
-    switch (type) {
+    final norm = AppLocalizations.normalizeAnnouncementType(type);
+    switch (norm) {
       case 'teacher_absent':
         return const Color(0xFFEF4444);
       case 'room_change':
@@ -1728,20 +2052,36 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case 'reminder':
         return const Color(0xFF8B5CF6);
       case 'closure':
-        return const Color(0xFFEC4899);
+        return const Color(0xFF64748B);
       case 'trip':
         return const Color(0xFF10B981);
       case 'party':
         return const Color(0xFFF97316);
       case 'payment':
         return const Color(0xFF06B6D4);
+      case 'avertissement':
+        return const Color(0xFFEAB308);
+      case 'retenue':
+        return const Color(0xFFDC2626);
+      case 'exclusion_classe':
+        return const Color(0xFFEA580C);
+      case 'exclusion_etablissement':
+        return const Color(0xFFB91C1C);
+      case 'convocation_parents':
+        return const Color(0xFF7C3AED);
+      case 'conseil_discipline':
+        return const Color(0xFF4F46E5);
+      case 'exclusion_definitive':
+        return const Color(0xFF111827);
+      case 'general':
       default:
-        return const Color(0xFF8B5CF6);
+        return const Color(0xFF6366F1);
     }
   }
 
   IconData _getTypeIcon(String? type) {
-    switch (type) {
+    final norm = AppLocalizations.normalizeAnnouncementType(type);
+    switch (norm) {
       case 'teacher_absent':
         return Icons.person_off_rounded;
       case 'room_change':
@@ -1758,6 +2098,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         return Icons.celebration_rounded;
       case 'payment':
         return Icons.payment_rounded;
+      case 'avertissement':
+        return Icons.warning_amber_rounded;
+      case 'retenue':
+        return Icons.access_time_rounded;
+      case 'exclusion_classe':
+        return Icons.no_meeting_room_rounded;
+      case 'exclusion_etablissement':
+        return Icons.block_rounded;
+      case 'convocation_parents':
+        return Icons.family_restroom_rounded;
+      case 'conseil_discipline':
+        return Icons.gavel_rounded;
+      case 'exclusion_definitive':
+        return Icons.cancel_rounded;
+      case 'general':
       default:
         return Icons.campaign_rounded;
     }
@@ -1770,6 +2125,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       payload,
       body,
     );
+  }
+
+  bool _isDateOnlyKeyInfo(String info) {
+    final trimmed = info.trim();
+    return RegExp(
+      r'^(?:Le|On|يوم|À partir du|From|Avant le|Before|قبل)?\s*\d{1,2}/\d{1,2}/\d{2,4}(?:\s*(?:•|→|-)\s*(?:\d{1,2}/\d{1,2}/\d{2,4}|\d{1,2}:\d{2}))?$',
+      caseSensitive: false,
+    ).hasMatch(trimmed);
   }
 
   String _formatTime(DateTime time) {

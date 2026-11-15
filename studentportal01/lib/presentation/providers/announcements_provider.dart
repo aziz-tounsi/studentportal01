@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -100,14 +101,36 @@ class StudentAnnouncement {
       attachmentName ??= effectiveAttachments.first.fileName;
     }
 
+    Map<String, dynamic> payload = const {};
+    if (json['payload'] is Map) {
+      payload = Map<String, dynamic>.from(json['payload'] as Map);
+    } else if (json['payload'] is String && (json['payload'] as String).isNotEmpty) {
+      try {
+        final decoded = jsonDecode(json['payload'] as String);
+        if (decoded is Map) {
+          payload = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+
+    final rawType = json['announcement_type']?.toString() ??
+        json['type']?.toString() ??
+        payload['announcement_type']?.toString() ??
+        payload['type']?.toString() ??
+        'general';
+
+    final hasAtt = (json['has_attachment'] as bool? ?? false) ||
+        effectiveAttachments.isNotEmpty ||
+        (attachmentUrl != null && attachmentUrl.isNotEmpty);
+
     return StudentAnnouncement(
       id: json['id'] as String,
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',
-      announcementType: json['announcement_type'] as String?,
+      announcementType: rawType,
       isImportant: json['is_important'] as bool? ?? false,
       isPinned: json['is_pinned'] as bool? ?? false,
-      hasAttachment: json['has_attachment'] as bool? ?? false,
+      hasAttachment: hasAtt,
       attachmentUrl: attachmentUrl,
       attachmentName: attachmentName,
       attachments: effectiveAttachments,
@@ -117,7 +140,7 @@ class StudentAnnouncement {
         json['published_at'] as String? ?? json['created_at'] as String,
       ).toLocal(),
       createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
-      payload: (json['payload'] as Map<String, dynamic>?) ?? const {},
+      payload: payload,
     );
   }
 
@@ -145,15 +168,14 @@ class StudentAnnouncement {
 /// Helper to fetch attachments for announcements
 Future<Map<String, List<AnnouncementAttachment>>> _fetchAttachments(
   SupabaseClient supabase,
-  List<String> announcementIds,
-  String scope,
-) async {
+  List<String> announcementIds, [
+  String? scope,
+]) async {
   if (announcementIds.isEmpty) return {};
 
   final response = await supabase
       .from('announcement_attachments')
       .select()
-      .eq('scope', scope)
       .inFilter('announcement_id', announcementIds);
 
   final Map<String, List<AnnouncementAttachment>> attachmentsMap = {};
@@ -409,9 +431,37 @@ final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((
         .limit(50);
 
     final announcements = response as List;
-    debugPrint('classMessagesProvider: Fetched ${announcements.length} class messages');
+    final currentUserId = authState.user?.id ?? session?.user.id;
+    final List<dynamic> allRows = [...announcements];
+
+    if (currentUserId != null) {
+      try {
+        final targetedRes = await supabase
+            .from('announcements_class')
+            .select()
+            .contains('payload', {'target_student_id': currentUserId})
+            .isFilter('deleted_at', null)
+            .limit(30);
+        for (final t in targetedRes as List) {
+          if (!allRows.any((a) => a['id'] == t['id'])) {
+            allRows.add(t);
+          }
+        }
+      } catch (_) {}
+    }
+
+    final visibleRows = allRows.where((a) {
+      final payload = a['payload'] is Map ? (a['payload'] as Map) : null;
+      final targetStudentId = payload?['target_student_id']?.toString() ?? a['target_student_id']?.toString();
+      if (targetStudentId != null && targetStudentId.isNotEmpty) {
+        return currentUserId != null && targetStudentId == currentUserId;
+      }
+      return true;
+    }).toList();
+
+    debugPrint('classMessagesProvider: Fetched ${visibleRows.length} visible class/student messages');
     
-    final announcementIds = announcements.map((a) => a['id'] as String).toList();
+    final announcementIds = visibleRows.map((a) => a['id'] as String).toList();
 
     // Fetch attachments for all announcements
     Map<String, List<AnnouncementAttachment>> attachmentsMap = {};
@@ -427,7 +477,7 @@ final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((
       }
     }
 
-    final list = announcements
+    final list = visibleRows
         .map(
           (json) => StudentAnnouncement.fromJson(
             json,
@@ -435,6 +485,11 @@ final classMessagesProvider = FutureProvider<List<StudentAnnouncement>>((
           ),
         )
         .toList();
+
+    list.sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      return b.publishedAt.compareTo(a.publishedAt);
+    });
 
     // Realtime subscription for class messages
     RealtimeChannel? channel;
@@ -491,21 +546,68 @@ final allAnnouncementsProvider = FutureProvider<List<StudentAnnouncement>>((
   return all;
 });
 
-/// Provider for global announcements count (Notifications badge)
+/// Set of announcement IDs that have been opened/read by the current user
+final readAnnouncementsProvider =
+    StateNotifierProvider<ReadAnnouncementsNotifier, Set<String>>((ref) {
+  final authState = ref.watch(authProvider);
+  final userId = authState.user?.id ?? 'default_user';
+  return ReadAnnouncementsNotifier(userId);
+});
+
+class ReadAnnouncementsNotifier extends StateNotifier<Set<String>> {
+  final String userId;
+  static const _storagePrefix = 'read_announcements_ids_';
+
+  ReadAnnouncementsNotifier(this.userId) : super({}) {
+    _loadFromCache();
+  }
+
+  void _loadFromCache() {
+    try {
+      final cachedList = OfflineCacheService.instance.getList('$_storagePrefix$userId');
+      if (cachedList != null) {
+        state = cachedList.map((e) => e.toString()).toSet();
+      }
+    } catch (e) {
+      debugPrint('ReadAnnouncementsNotifier load error: $e');
+    }
+  }
+
+  Future<void> markAsRead(String id) async {
+    if (state.contains(id)) return;
+    final updated = Set<String>.from(state)..add(id);
+    state = updated;
+    await OfflineCacheService.instance.setJson('$_storagePrefix$userId', updated.toList());
+  }
+
+  Future<void> markAllAsRead(List<String> ids) async {
+    final updated = Set<String>.from(state)..addAll(ids);
+    state = updated;
+    await OfflineCacheService.instance.setJson('$_storagePrefix$userId', updated.toList());
+  }
+
+  bool isRead(String id) => state.contains(id);
+}
+
+/// Provider for global announcements unread count (Notifications badge)
 final globalAnnouncementsCountProvider = Provider<int>((ref) {
   final announcements = ref.watch(globalAnnouncementsProvider);
+  final readIds = ref.watch(readAnnouncementsProvider);
+
   return announcements.when(
-    data: (list) => list.length,
+    data: (list) => list.where((a) => !readIds.contains(a.id)).length,
     loading: () => 0,
     error: (_, _) => 0,
   );
 });
 
-/// Provider for class messages count (Messages badge)
+/// Provider for class messages unread count (Messages badge)
 final classMessagesCountProvider = Provider<int>((ref) {
   final messages = ref.watch(classMessagesProvider);
+  final readIds = ref.watch(readAnnouncementsProvider);
+
   return messages.when(
-    data: (list) => list.length,
+    data: (list) => list.where((a) => !readIds.contains(a.id)).length,
     loading: () => 0,
     error: (_, _) => 0,
   );

@@ -29,6 +29,56 @@ class LocalNotificationService {
 
   static int stableNotificationId(String key) => key.hashCode & 0x7fffffff;
 
+  /// Safely resolves the target in-app route, including specific item ID
+  static String? buildTargetRoute({
+    String? route,
+    String? table,
+    String? recordId,
+  }) {
+    if (route != null && route.isNotEmpty) {
+      if (recordId != null && recordId.isNotEmpty && !route.contains('id=')) {
+        return route.contains('?') ? '$route&id=$recordId' : '$route?id=$recordId';
+      }
+      return route;
+    }
+    if (table != null && table.isNotEmpty) {
+      final suffix = (recordId != null && recordId.isNotEmpty) ? '?id=$recordId' : '';
+      switch (table) {
+        case 'announcements_global':
+          return '/notifications$suffix';
+        case 'announcements_class':
+        case 'announcements':
+          return '/messages$suffix';
+        case 'documents':
+          return '/documents$suffix';
+        case 'suggestions':
+        case 'suggestion_replies':
+          return '/suggestions$suffix';
+        case 'absences':
+          return '/absences$suffix';
+        case 'grades':
+          return '/resultats';
+        default:
+          break;
+      }
+    }
+    return null;
+  }
+
+  /// Cleanly navigates using GoRouter to properly switch the ShellRoute and highlight the tab
+  static void navigateToRoute(String? targetRoute) {
+    if (targetRoute == null || targetRoute.isEmpty) return;
+    try {
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx != null) {
+        dismissAllOverlaysAndPopups();
+        GoRouter.of(ctx).go(targetRoute);
+      }
+    } catch (e) {
+      debugPrint('Error navigating from notification to $targetRoute: $e');
+    }
+  }
+
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'student_portal_alerts_v2',
     'Student Portal Notifications',
@@ -74,14 +124,7 @@ class LocalNotificationService {
         onDidReceiveNotificationResponse: (NotificationResponse response) {
           final payload = response.payload;
           if (payload != null && payload.isNotEmpty) {
-            try {
-              final ctx = rootNavigatorKey.currentContext;
-              if (ctx != null && payload.startsWith('/')) {
-                ctx.push(payload);
-              }
-            } catch (e) {
-              debugPrint('Error navigating from notification: $e');
-            }
+            navigateToRoute(payload);
           }
         },
       );
@@ -115,6 +158,11 @@ class LocalNotificationService {
           final route = message.data['route']?.toString();
           final table = message.data['table']?.toString();
           final recordId = message.data['record_id']?.toString();
+          final resolvedRoute = buildTargetRoute(
+            route: route,
+            table: table,
+            recordId: recordId,
+          );
           final dedupKey = (table != null &&
                   table.isNotEmpty &&
                   recordId != null &&
@@ -123,10 +171,10 @@ class LocalNotificationService {
               : null;
 
           showNotification(
-            id: stableNotificationId(dedupKey ?? '$title|$body|${route ?? ''}'),
+            id: stableNotificationId(dedupKey ?? '$title|$body|${resolvedRoute ?? ''}'),
             title: title,
             body: body.isNotEmpty ? body : 'Nouvelle notification disponible',
-            routePayload: route,
+            routePayload: resolvedRoute,
             dedupKey: dedupKey,
           );
         });
@@ -134,8 +182,15 @@ class LocalNotificationService {
         // App opened from background via notification tap
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
           final route = message.data['route']?.toString();
-          if (route != null && route.isNotEmpty) {
-            rootNavigatorKey.currentContext?.push(route);
+          final table = message.data['table']?.toString();
+          final recordId = message.data['record_id']?.toString();
+          final resolvedRoute = buildTargetRoute(
+            route: route,
+            table: table,
+            recordId: recordId,
+          );
+          if (resolvedRoute != null && resolvedRoute.isNotEmpty) {
+            navigateToRoute(resolvedRoute);
           }
         });
 
@@ -144,9 +199,16 @@ class LocalNotificationService {
             await FirebaseMessaging.instance.getInitialMessage();
         if (initialMessage != null) {
           final route = initialMessage.data['route']?.toString();
-          if (route != null && route.isNotEmpty) {
+          final table = initialMessage.data['table']?.toString();
+          final recordId = initialMessage.data['record_id']?.toString();
+          final resolvedRoute = buildTargetRoute(
+            route: route,
+            table: table,
+            recordId: recordId,
+          );
+          if (resolvedRoute != null && resolvedRoute.isNotEmpty) {
             Future.delayed(const Duration(milliseconds: 600), () {
-              rootNavigatorKey.currentContext?.push(route);
+              navigateToRoute(resolvedRoute);
             });
           }
         }

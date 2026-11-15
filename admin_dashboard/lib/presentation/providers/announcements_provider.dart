@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
@@ -45,35 +46,56 @@ class AnnouncementModel {
     this.payload = const {},
   });
 
-  factory AnnouncementModel.fromJson(Map<String, dynamic> json) =>
-      AnnouncementModel(
-        id: json['id']?.toString() ?? '',
-        title: json['title']?.toString() ?? '',
-        content: (json['body'] ?? json['content'] ?? '').toString(),
-        targetRole: json['target_role']?.toString(),
-        targetClassId:
-            json['class_id']?.toString() ?? json['target_class_id']?.toString(),
-        isPinned: json['is_pinned'] == true,
-        isImportant: json['is_important'] == true,
-        scope: json['scope']?.toString() ?? 'global',
-        createdAt:
-            DateTime.tryParse(
-              json['created_at']?.toString() ??
-                  json['published_at']?.toString() ??
-                  '',
-            ) ??
-            DateTime.now(),
-        authorName:
-            json['users']?['full_name']?.toString() ??
-            json['sender_label']?.toString(),
-        announcementType: json['announcement_type']?.toString() ?? 'general',
-        senderType: json['sender_type']?.toString() ?? 'administration',
-        senderLabel: json['sender_label']?.toString(),
-        senderAvatarText: json['sender_avatar_text']?.toString(),
-        hasAttachment: json['has_attachment'] == true,
-        className: json['class_name']?.toString(),
-        payload: (json['payload'] as Map<String, dynamic>?) ?? const {},
-      );
+  factory AnnouncementModel.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic> payload = const {};
+    if (json['payload'] is Map) {
+      payload = Map<String, dynamic>.from(json['payload'] as Map);
+    } else if (json['payload'] is String && (json['payload'] as String).isNotEmpty) {
+      try {
+        final decoded = jsonDecode(json['payload'] as String);
+        if (decoded is Map) {
+          payload = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+
+    final bodyStr = (json['body'] ?? json['content'] ?? '').toString();
+    final isStudent = json['scope']?.toString() == 'student' ||
+        payload['scope']?.toString() == 'student' ||
+        payload['target_student_id'] != null ||
+        json['target_student_id'] != null ||
+        bodyStr.startsWith('**@');
+    final resolvedScope = isStudent ? 'student' : (json['scope']?.toString() ?? 'global');
+
+    return AnnouncementModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      content: (json['body'] ?? json['content'] ?? '').toString(),
+      targetRole: json['target_role']?.toString(),
+      targetClassId:
+          json['class_id']?.toString() ?? json['target_class_id']?.toString(),
+      isPinned: json['is_pinned'] == true,
+      isImportant: json['is_important'] == true,
+      scope: resolvedScope,
+      createdAt:
+          DateTime.tryParse(
+            json['created_at']?.toString() ??
+                json['published_at']?.toString() ??
+                '',
+          ) ??
+          DateTime.now(),
+      authorName:
+          json['users']?['full_name']?.toString() ??
+          json['sender_label']?.toString(),
+      announcementType: json['announcement_type']?.toString() ?? 'general',
+      senderType: json['sender_type']?.toString() ?? 'administration',
+      senderLabel: json['sender_label']?.toString(),
+      senderAvatarText: json['sender_avatar_text']?.toString(),
+      hasAttachment: json['has_attachment'] == true,
+      className: json['class_name']?.toString(),
+      payload: payload,
+    );
+  }
 
   Announcement toAnnouncement() => Announcement(
     id: id,
@@ -163,7 +185,17 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
             (e) => AnnouncementModel.fromJson({...e, 'scope': 'global'}),
           ),
           ...(classData as List).map(
-            (e) => AnnouncementModel.fromJson({...e, 'scope': 'class'}),
+            (e) {
+              final rawPayload = e['payload'];
+              bool isStudent = false;
+              if (rawPayload is Map && rawPayload['target_student_id'] != null) isStudent = true;
+              if (rawPayload is String && rawPayload.contains('target_student_id')) isStudent = true;
+              if ((e['body']?.toString() ?? '').startsWith('**@')) isStudent = true;
+              return AnnouncementModel.fromJson({
+                ...e,
+                'scope': isStudent ? 'student' : 'class',
+              });
+            },
           ),
         ];
 
@@ -299,49 +331,84 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
     String? insertedId;
 
     if (scope == 'student' && targetStudentId != null) {
-      // Get student's name and class to highlight in content
-      final studentProfile = await supabase
-          .from('users')
-          .select('full_name')
-          .eq('id', targetStudentId)
-          .single();
-      final studentName = studentProfile['full_name'] as String? ?? 'Étudiant';
+      // Get student's name safely
+      String studentName = 'Étudiant';
+      try {
+        final studentProfile = await supabase
+            .from('users')
+            .select('full_name')
+            .eq('id', targetStudentId)
+            .maybeSingle();
+        if (studentProfile != null && studentProfile['full_name'] != null) {
+          studentName = studentProfile['full_name'] as String;
+        }
+      } catch (_) {}
 
-      // Get student's current enrollment to find their class
-      final enrollment = await supabase
-          .from('enrollments')
-          .select('class_id')
-          .eq('user_id', targetStudentId)
-          .eq('is_active', true)
-          .maybeSingle();
+      // Get student's class safely
+      String? studentClassId;
+      try {
+        final enrollment = await supabase
+            .from('enrollments')
+            .select('class_id')
+            .eq('user_id', targetStudentId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        studentClassId = enrollment?['class_id'] as String?;
+      } catch (_) {}
 
-      final studentClassId = enrollment?['class_id'] as String?;
+      if (studentClassId == null) {
+        try {
+          final u = await supabase
+              .from('users')
+              .select('class_id')
+              .eq('id', targetStudentId)
+              .maybeSingle();
+          studentClassId = u?['class_id'] as String?;
+        } catch (_) {}
+      }
+
+      if (studentClassId == null && schoolId != null) {
+        try {
+          final anyClass = await supabase
+              .from('classes')
+              .select('id')
+              .eq('school_id', schoolId)
+              .limit(1)
+              .maybeSingle();
+          studentClassId = anyClass?['id'] as String?;
+        } catch (_) {}
+      }
 
       // Prepend student name to content with special marker for highlighting
       final highlightedContent = '**@$studentName** $content';
 
+      final insertData = <String, dynamic>{
+        'title': title,
+        'body': highlightedContent,
+        if (studentClassId != null) 'class_id': studentClassId,
+        if (schoolId != null) 'school_id': schoolId,
+        'is_pinned': isPinned,
+        'is_important': isImportant,
+        'created_by': user.id,
+        'published_at': DateTime.now().toUtc().toIso8601String(),
+        'announcement_type': announcementType,
+        'sender_type': senderType,
+        'sender_label': senderLabel ?? adminName,
+        'sender_avatar_text': senderLabel != null && senderLabel.isNotEmpty
+            ? senderLabel[0].toUpperCase()
+            : adminName[0].toUpperCase(),
+        'payload': {
+          ...?payload,
+          'target_student_id': targetStudentId,
+          'target_student_name': studentName,
+          'scope': 'student',
+        },
+      };
+
       final result = await supabase
           .from('announcements_class')
-          .insert({
-            'title': title,
-            'body': highlightedContent,
-            'class_id': studentClassId,
-            'is_pinned': isPinned,
-            'is_important': isImportant,
-            'created_by': user.id,
-            'published_at': DateTime.now().toUtc().toIso8601String(),
-            'announcement_type': announcementType,
-            'sender_type': senderType,
-            'sender_label': senderLabel ?? adminName,
-            'sender_avatar_text': senderLabel != null && senderLabel.isNotEmpty
-                ? senderLabel[0].toUpperCase()
-                : adminName[0].toUpperCase(),
-            'payload': {
-              ...?payload,
-              'target_student_id': targetStudentId,
-              'target_student_name': studentName,
-            },
-          })
+          .insert(insertData)
           .select('id')
           .single();
       insertedId = result['id'];
@@ -426,7 +493,10 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .uploadBinary(
             storagePath,
             fileBytes,
-            fileOptions: FileOptions(contentType: mimeType),
+            fileOptions: FileOptions(
+              contentType: mimeType,
+              upsert: true,
+            ),
           );
     } catch (e) {
       throw Exception(
@@ -444,7 +514,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
     try {
       final insertData = <String, dynamic>{
         'announcement_id': announcementId,
-        'scope': scope,
+        'scope': (scope == 'student') ? 'class' : scope,
         'file_name': fileName,
         'file_url': publicUrl,
         'file_type': mimeType,
@@ -468,7 +538,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
     }
 
     try {
-      final table = scope == 'class'
+      final table = (scope == 'class' || scope == 'student')
           ? 'announcements_class'
           : 'announcements_global';
       await supabase
@@ -517,11 +587,10 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
     final remaining = await supabase
         .from('announcement_attachments')
         .select('id')
-        .eq('announcement_id', announcementId)
-        .eq('scope', scope);
+        .eq('announcement_id', announcementId);
 
     if ((remaining as List).isEmpty) {
-      final table = scope == 'class'
+      final table = (scope == 'class' || scope == 'student')
           ? 'announcements_class'
           : 'announcements_global';
       await supabase
@@ -546,7 +615,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
   }) async {
     final supabase = SupabaseConfig.client;
 
-    final updateData = {
+    final updateData = <String, dynamic>{
       'title': title,
       'body': content,
       'is_pinned': isPinned,
@@ -560,16 +629,39 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
       'payload': payload ?? {},
     };
 
-    if (scope == 'class') {
-      await supabase
-          .from('announcements_class')
+    if (targetClassId != null && targetClassId.isNotEmpty && scope != 'global') {
+      updateData['class_id'] = targetClassId;
+    }
+
+    final targetTable = (scope == 'class' || scope == 'student')
+        ? 'announcements_class'
+        : 'announcements_global';
+    final fallbackTable = (targetTable == 'announcements_class')
+        ? 'announcements_global'
+        : 'announcements_class';
+
+    try {
+      final res = await supabase
+          .from(targetTable)
           .update(updateData)
-          .eq('id', id);
-    } else {
-      await supabase
-          .from('announcements_global')
-          .update(updateData)
-          .eq('id', id);
+          .eq('id', id)
+          .select('id');
+      if ((res as List).isEmpty) {
+        await supabase
+            .from(fallbackTable)
+            .update(updateData)
+            .eq('id', id);
+      }
+    } catch (_) {
+      try {
+        await supabase
+            .from(fallbackTable)
+            .update(updateData)
+            .eq('id', id);
+      } catch (e) {
+        debugPrint('Error updating announcement: $e');
+        rethrow;
+      }
     }
     ref.invalidateSelf();
   }
@@ -579,7 +671,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
 
     final updateData = {'deleted_at': DateTime.now().toIso8601String()};
 
-    if (scope == 'class') {
+    if (scope == 'class' || scope == 'student') {
       await supabase
           .from('announcements_class')
           .update(updateData)
@@ -601,8 +693,8 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
         .where((a) => a.scope == 'global')
         .map((a) => a.id)
         .toList();
-    final classIds = announcements
-        .where((a) => a.scope == 'class')
+    final classOrStudentIds = announcements
+        .where((a) => a.scope == 'class' || a.scope == 'student')
         .map((a) => a.id)
         .toList();
 
@@ -612,11 +704,11 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .update({'deleted_at': now})
           .inFilter('id', globalIds);
     }
-    if (classIds.isNotEmpty) {
+    if (classOrStudentIds.isNotEmpty) {
       await supabase
           .from('announcements_class')
           .update({'deleted_at': now})
-          .inFilter('id', classIds);
+          .inFilter('id', classOrStudentIds);
     }
     ref.invalidateSelf();
   }
@@ -631,8 +723,8 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
         .where((a) => a.scope == 'global')
         .map((a) => a.id)
         .toList();
-    final classIds = announcements
-        .where((a) => a.scope == 'class')
+    final classOrStudentIds = announcements
+        .where((a) => a.scope == 'class' || a.scope == 'student')
         .map((a) => a.id)
         .toList();
 
@@ -642,11 +734,11 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .update({'is_pinned': pinned})
           .inFilter('id', globalIds);
     }
-    if (classIds.isNotEmpty) {
+    if (classOrStudentIds.isNotEmpty) {
       await supabase
           .from('announcements_class')
           .update({'is_pinned': pinned})
-          .inFilter('id', classIds);
+          .inFilter('id', classOrStudentIds);
     }
     ref.invalidateSelf();
   }
@@ -661,8 +753,8 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
         .where((a) => a.scope == 'global')
         .map((a) => a.id)
         .toList();
-    final classIds = announcements
-        .where((a) => a.scope == 'class')
+    final classOrStudentIds = announcements
+        .where((a) => a.scope == 'class' || a.scope == 'student')
         .map((a) => a.id)
         .toList();
 
@@ -672,11 +764,11 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
           .update({'is_important': important})
           .inFilter('id', globalIds);
     }
-    if (classIds.isNotEmpty) {
+    if (classOrStudentIds.isNotEmpty) {
       await supabase
           .from('announcements_class')
           .update({'is_important': important})
-          .inFilter('id', classIds);
+          .inFilter('id', classOrStudentIds);
     }
     ref.invalidateSelf();
   }
@@ -688,7 +780,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
   }) async {
     final supabase = SupabaseConfig.client;
 
-    if (scope == 'class') {
+    if (scope == 'class' || scope == 'student') {
       await supabase
           .from('announcements_class')
           .update({'is_pinned': !pinned})

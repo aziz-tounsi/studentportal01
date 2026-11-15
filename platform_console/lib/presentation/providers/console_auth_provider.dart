@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'platform_provider.dart';
 
@@ -145,8 +146,16 @@ class ConsoleAuthNotifier extends Notifier<ConsoleAuthState> {
     }
   }
 
-  Future<void> signOut() async {
-    await _supabase.auth.signOut();
+  Future<void> signOut({bool global = false}) async {
+    try {
+      await _supabase.auth.signOut(
+        scope: global ? SignOutScope.global : SignOutScope.local,
+      );
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (_) {}
     _setState(ConsoleAuthState(isInitialized: true, isAuthenticated: false));
   }
 }

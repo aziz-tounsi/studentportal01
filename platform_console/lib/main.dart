@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:ui';
 import 'core/config/supabase_config.dart';
+import 'core/network/security_trace_http_client.dart';
 import 'core/theme/console_theme.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/console_dashboard_screen.dart';
@@ -11,9 +13,38 @@ import 'presentation/screens/school_profile_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Intercept uncaught framework & platform dispatch errors for correlated telemetry
+  FlutterError.onError = (details) {
+    debugPrint('[CONSOLE] FlutterError: ${details.exceptionAsString()}');
+    SecurityTraceHttpClient.logTelemetry(
+      eventName: 'flutter_framework_error',
+      severity: 'error',
+      metadata: {
+        'exception': details.exceptionAsString(),
+        'library': details.library,
+      },
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[CONSOLE] PlatformDispatcher error: $error');
+    SecurityTraceHttpClient.logTelemetry(
+      eventName: 'platform_dispatcher_error',
+      severity: 'critical',
+      metadata: {'error': error.toString()},
+    );
+    return true;
+  };
+
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
+    httpClient: SecurityTraceHttpClient(
+      appSurface: 'console_admin',
+      onForceDisconnect: (reason) {
+        debugPrint('[SECURITY] Console forced disconnect: $reason');
+      },
+    ),
   );
 
   runApp(const ProviderScope(child: PlatformConsoleApp()));
@@ -74,6 +105,12 @@ final _router = GoRouter(
       path: '/bugs',
       pageBuilder: (_, _) => const NoTransitionPage(
         child: ConsoleDashboardScreen(currentRoute: '/bugs'),
+      ),
+    ),
+    GoRoute(
+      path: '/security',
+      pageBuilder: (_, _) => const NoTransitionPage(
+        child: ConsoleDashboardScreen(currentRoute: '/security'),
       ),
     ),
     GoRoute(

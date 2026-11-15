@@ -218,6 +218,106 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           } catch (_) {}
         }
 
+        // Test data injection for teacher gcvygvc@hcv
+        final emailLower = (_user?['email'] as String? ?? '').toLowerCase();
+        final nameLower = teacherName.toLowerCase();
+        if (emailLower.contains('gcvygvc') || emailLower.contains('hcv') || nameLower.contains('gcvygvc')) {
+          final todayDow = now.weekday; // 1 = Monday, 7 = Sunday
+          final testSlots = <Map<String, dynamic>>[
+            // Today's sessions
+            {
+              'id': 'demo-today-1',
+              'day_of_week': todayDow,
+              'start_time': '08:30:00',
+              'end_time': '10:30:00',
+              'room': 'Salle C3',
+              'subject_offerings': {
+                'subject_id': 'demo-sub-1',
+                'class_id': 'demo-cls-1',
+                'subjects': {'name': 'Bases de Données', 'code': 'BD'},
+                'classes': {'name': '7B-2'},
+              },
+            },
+            {
+              'id': 'demo-today-2',
+              'day_of_week': todayDow,
+              'start_time': '10:45:00',
+              'end_time': '12:45:00',
+              'room': 'Lab Info 1',
+              'subject_offerings': {
+                'subject_id': 'demo-sub-2',
+                'class_id': 'demo-cls-2',
+                'subjects': {'name': 'Algorithmique', 'code': 'ALGO'},
+                'classes': {'name': '9B-2'},
+              },
+            },
+            {
+              'id': 'demo-today-3',
+              'day_of_week': todayDow,
+              'start_time': '14:00:00',
+              'end_time': '16:00:00',
+              'room': 'Salle B12',
+              'subject_offerings': {
+                'subject_id': 'demo-sub-3',
+                'class_id': 'demo-cls-3',
+                'subjects': {'name': 'Systèmes & Réseaux', 'code': 'SYS'},
+                'classes': {'name': '8B-1'},
+              },
+            },
+            // Other days across the week
+            for (int day = 1; day <= 6; day++)
+              if (day != todayDow) ...[
+                {
+                  'id': 'demo-day-$day-1',
+                  'day_of_week': day,
+                  'start_time': '08:30:00',
+                  'end_time': '10:30:00',
+                  'room': day % 2 == 0 ? 'Lab Info 2' : 'Salle C3',
+                  'subject_offerings': {
+                    'subject_id': 'demo-sub-$day-1',
+                    'class_id': 'demo-cls-$day-1',
+                    'subjects': {'name': day % 2 == 0 ? 'Programmation Python' : 'Bases de Données', 'code': 'INF'},
+                    'classes': {'name': day % 2 == 0 ? '9B-2' : '7B-2'},
+                  },
+                },
+                {
+                  'id': 'demo-day-$day-2',
+                  'day_of_week': day,
+                  'start_time': '10:45:00',
+                  'end_time': '12:45:00',
+                  'room': 'Lab Info 1',
+                  'subject_offerings': {
+                    'subject_id': 'demo-sub-$day-2',
+                    'class_id': 'demo-cls-$day-2',
+                    'subjects': {'name': 'Algorithmique', 'code': 'ALGO'},
+                    'classes': {'name': '8B-1'},
+                  },
+                },
+                if (day == 2 || day == 4)
+                  {
+                    'id': 'demo-day-$day-3',
+                    'day_of_week': day,
+                    'start_time': '14:00:00',
+                    'end_time': '16:00:00',
+                    'room': 'Salle 204',
+                    'subject_offerings': {
+                      'subject_id': 'demo-sub-$day-3',
+                      'class_id': 'demo-cls-$day-3',
+                      'subjects': {'name': 'Technologies Web', 'code': 'WEB'},
+                      'classes': {'name': '9B-2'},
+                    },
+                  },
+              ],
+          ];
+          for (final slot in testSlots) {
+            final id = slot['id']?.toString();
+            if (id == null || seenSlotIds.add(id)) {
+              rawSlots.add(slot);
+            }
+          }
+          _subjects.addAll(['Bases de Données', 'Algorithmique', 'Systèmes & Réseaux', 'Programmation Python']);
+        }
+
         final enriched = rawSlots.map((slot) {
           final startStr = _formatShortTime(slot['start_time']?.toString());
           final endStr = _formatShortTime(slot['end_time']?.toString());

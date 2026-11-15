@@ -260,6 +260,66 @@ class DocumentsNotifier extends AsyncNotifier<DocumentsState> {
     state = AsyncData(await _load());
   }
 
+  Future<void> createMultiple({
+    required List<({
+      String title,
+      String fileUrl,
+      String? fileName,
+      int? fileSize,
+      String? mimeType,
+    })> files,
+    String? description,
+    String? classId,
+    String category = 'administrative',
+    int semester = 1,
+    String? studentId,
+    String? studentName,
+    String? studentCode,
+  }) async {
+    if (files.isEmpty) return;
+    final supabase = SupabaseConfig.client;
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception('Non connecté');
+
+    final profile = await supabase
+        .from('users')
+        .select('school_id')
+        .eq('id', user.id)
+        .single();
+    final dbCategory = AcademicDocumentType.toDbCategory(category);
+    final formattedDesc = formatDescription(
+      userDescription: description,
+      semester: semester,
+      uiType: category,
+      studentId: studentId,
+      studentName: studentName,
+      studentCode: studentCode,
+    );
+
+    final rows = files.map((f) => {
+      'school_id': profile['school_id'],
+      'class_id': classId,
+      'title': f.title,
+      'description': formattedDesc,
+      'file_url': f.fileUrl,
+      'file_name': f.fileName ?? f.title,
+      'file_size': f.fileSize,
+      'mime_type': f.mimeType ?? 'application/pdf',
+      'category': dbCategory,
+      'uploaded_by': user.id,
+    }).toList();
+
+    final inserted = await supabase
+        .from('documents')
+        .insert(rows)
+        .select('id');
+
+    if ((inserted as List).isEmpty) {
+      throw Exception('You do not have permission to create this document.');
+    }
+    state = AsyncData(await _load());
+  }
+
   Future<void> updateDocument({
     required String id,
     required String title,

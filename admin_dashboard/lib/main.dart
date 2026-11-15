@@ -1,14 +1,39 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/config/supabase_config.dart';
+import 'core/network/security_trace_http_client.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/auth_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    debugPrint('[ADMIN DASHBOARD] FlutterError: ${details.exceptionAsString()}');
+    SecurityTraceHttpClient.logTelemetry(
+      eventName: 'flutter_framework_error',
+      severity: 'error',
+      metadata: {
+        'exception': details.exceptionAsString(),
+        'library': details.library,
+      },
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[ADMIN DASHBOARD] PlatformDispatcher error: $error');
+    SecurityTraceHttpClient.logTelemetry(
+      eventName: 'platform_dispatcher_error',
+      severity: 'critical',
+      metadata: {'error': error.toString()},
+    );
+    return true;
+  };
+
   await initializeDateFormatting('fr_FR', null);
   await SupabaseConfig.initialize();
   runApp(const ProviderScope(child: AdminApp()));

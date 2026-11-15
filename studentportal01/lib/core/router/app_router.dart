@@ -329,13 +329,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/messages',
             name: 'messages',
             pageBuilder: (context, state) =>
-                NoTransitionPage(child: const MessagesScreen()),
+                NoTransitionPage(
+                  child: MessagesScreen(
+                    initialMessageId: state.uri.queryParameters['id'],
+                  ),
+                ),
           ),
           GoRoute(
             path: '/notifications',
             name: 'notifications',
             pageBuilder: (context, state) =>
-                NoTransitionPage(child: const NotificationsScreen()),
+                NoTransitionPage(
+                  child: NotificationsScreen(
+                    initialNotificationId: state.uri.queryParameters['id'],
+                  ),
+                ),
           ),
           GoRoute(
             path: '/stats',
@@ -406,7 +414,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/documents',
             name: 'documents',
             pageBuilder: (context, state) =>
-                NoTransitionPage(child: const DocumentsScreen()),
+                NoTransitionPage(
+                  child: DocumentsScreen(
+                    initialDocumentId: state.uri.queryParameters['id'],
+                  ),
+                ),
           ),
           GoRoute(
             path: '/profile',

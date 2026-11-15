@@ -55,9 +55,17 @@ class Announcement extends Equatable {
   });
 
   factory Announcement.fromJson(Map<String, dynamic> json) {
+    final payload = (json['payload'] as Map<String, dynamic>?) ?? {};
+    final isStudent = json['scope']?.toString() == 'student' ||
+        payload['target_student_id'] != null ||
+        json['target_student_id'] != null;
+    final scope = isStudent
+        ? AnnouncementScope.student
+        : _parseScopeFromJson(json['scope']);
+
     return Announcement(
       id: json['id'] as String,
-      scope: _parseScopeFromJson(json['scope']),
+      scope: scope,
       schoolId: json['school_id'] as String?,
       classId: json['class_id'] as String?,
       groupId: json['group_id'] as String?,
@@ -78,7 +86,7 @@ class Announcement extends Equatable {
       attachmentName: json['attachment_name'] as String?,
       createdBy: json['created_by'] as String?,
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-      payload: (json['payload'] as Map<String, dynamic>?) ?? {},
+      payload: payload,
     );
   }
 

@@ -210,6 +210,12 @@ class ConsoleSidebar extends ConsumerWidget {
                         badgeCount: openBugs,
                       ),
                       _NavItem(
+                        icon: Icons.health_and_safety_outlined,
+                        label: 'Sécurité & SLOs',
+                        route: '/security',
+                        currentRoute: currentRoute,
+                      ),
+                      _NavItem(
                         icon: Icons.settings_outlined,
                         label: tr.navSettings,
                         route: '/settings',

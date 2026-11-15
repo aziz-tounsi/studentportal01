@@ -129,15 +129,18 @@ class _RealtimeNotificationWrapperState
             final message =
                 body.isNotEmpty ? body : 'Nouvelle notification disponible';
             final recId = record['id']?.toString();
+            final route = recId != null && recId.isNotEmpty
+                ? '/notifications?id=$recId'
+                : '/notifications';
             final dedupKey = recId != null && recId.isNotEmpty
                 ? 'announcements_global:$recId'
                 : null;
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
-                  dedupKey ?? '$title|$message|/notifications'),
+                  dedupKey ?? '$title|$message|$route'),
               title: title,
               body: message,
-              routePayload: '/notifications',
+              routePayload: route,
               dedupKey: dedupKey,
             );
           }
@@ -200,15 +203,18 @@ class _RealtimeNotificationWrapperState
                 ? cleanBody
                 : 'Nouveau message disponible';
             final recId = record['id']?.toString();
+            final route = recId != null && recId.isNotEmpty
+                ? '/messages?id=$recId'
+                : '/messages';
             final dedupKey = recId != null && recId.isNotEmpty
                 ? 'announcements_class:$recId'
                 : null;
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
-                  dedupKey ?? '$title|$message|/messages'),
+                  dedupKey ?? '$title|$message|$route'),
               title: title,
               body: message,
-              routePayload: '/messages',
+              routePayload: route,
               dedupKey: dedupKey,
             );
           }
@@ -348,14 +354,17 @@ class _RealtimeNotificationWrapperState
                 ? cleanDesc
                 : 'Un nouveau document a été partagé.';
             final recId = record['id']?.toString();
+            final route = recId != null && recId.isNotEmpty
+                ? '/documents?id=$recId'
+                : '/documents';
             final dedupKey =
                 recId != null && recId.isNotEmpty ? 'documents:$recId' : null;
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
-                  dedupKey ?? '$title|$message|/documents'),
+                  dedupKey ?? '$title|$message|$route'),
               title: title,
               body: message,
-              routePayload: '/documents',
+              routePayload: route,
               dedupKey: dedupKey,
             );
           }

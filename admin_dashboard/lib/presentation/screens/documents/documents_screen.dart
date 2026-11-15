@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:html' as html;
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
@@ -3052,6 +3053,27 @@ class _TabItem {
 // ─────────────────────────────────────────────────────────────
 // ADD / EDIT DOCUMENT MODAL DIALOG
 // ─────────────────────────────────────────────────────────────
+class _UploadedDocItem {
+  final String fileUrl;
+  final String fileName;
+  final int fileSize;
+  final String mimeType;
+  final Uint8List? bytes;
+
+  const _UploadedDocItem({
+    required this.fileUrl,
+    required this.fileName,
+    required this.fileSize,
+    required this.mimeType,
+    this.bytes,
+  });
+
+  bool get isImage =>
+      mimeType.toLowerCase().startsWith('image/') ||
+      ['.png', '.jpg', '.jpeg', '.webp', '.gif']
+          .any((ext) => fileName.toLowerCase().endsWith(ext));
+}
+
 class _DocumentFormDialog extends ConsumerStatefulWidget {
   final Document? editDoc;
   const _DocumentFormDialog({this.editDoc});
@@ -3078,10 +3100,9 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
   bool _clearedExistingStudent = false;
   bool _isUploading = false;
   bool _isSaving = false;
-  String _fileUrl = '';
-  String? _uploadedFileName;
-  int? _uploadedFileSize;
-  String? _uploadedMimeType;
+  int _uploadingImagesSkeletonCount = 0;
+  int _uploadingDocsSkeletonCount = 0;
+  final List<_UploadedDocItem> _uploadedFiles = [];
   String? _formError;
 
   bool get isEditing => widget.editDoc != null;
@@ -3097,10 +3118,16 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
     if (d != null) {
       _selectedCategory = d.category;
       _selectedClassId = d.classId;
-      _fileUrl = d.fileUrl;
-      _uploadedFileName = d.fileName;
-      _uploadedFileSize = d.fileSize;
-      _uploadedMimeType = d.mimeType;
+      if (d.fileUrl.isNotEmpty) {
+        _uploadedFiles.add(
+          _UploadedDocItem(
+            fileUrl: d.fileUrl,
+            fileName: d.fileName ?? d.title,
+            fileSize: d.fileSize ?? 0,
+            mimeType: d.mimeType ?? 'application/pdf',
+          ),
+        );
+      }
 
       if (d.isStudentDedicated) {
         _targetMode = 'student';
@@ -3118,16 +3145,6 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
     _descController.dispose();
     _studentSearchController.dispose();
     super.dispose();
-  }
-
-  String get _displayFileName {
-    if (_uploadedFileName != null && _uploadedFileName!.trim().isNotEmpty) {
-      return _uploadedFileName!.trim();
-    }
-    if (_fileUrl.isEmpty) return '';
-    final uri = Uri.tryParse(_fileUrl);
-    final last = uri?.pathSegments.where((s) => s.isNotEmpty).lastOrNull;
-    return (last != null && last.isNotEmpty) ? last : _fileUrl;
   }
 
   String _formatBytes(int? bytes) {
@@ -3158,7 +3175,63 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
     return list.isNotEmpty ? list.first.number : 1;
   }
 
-  Future<void> _pickAndUploadFile() async {
+  String _getMimeType(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'ppt':
+        return 'application/vnd.ms-powerpoint';
+      case 'pptx':
+        return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  IconData _getDocTypeIcon(String name, String mime) {
+    final lowerName = name.toLowerCase();
+    final lowerMime = mime.toLowerCase();
+    if (lowerName.endsWith('.pdf') || lowerMime.contains('pdf')) {
+      return Icons.picture_as_pdf_rounded;
+    }
+    if (lowerName.endsWith('.doc') ||
+        lowerName.endsWith('.docx') ||
+        lowerMime.contains('word')) {
+      return Icons.description_rounded;
+    }
+    if (lowerName.endsWith('.xls') ||
+        lowerName.endsWith('.xlsx') ||
+        lowerName.endsWith('.csv') ||
+        lowerMime.contains('excel') ||
+        lowerMime.contains('sheet')) {
+      return Icons.table_chart_rounded;
+    }
+    if (lowerName.endsWith('.ppt') ||
+        lowerName.endsWith('.pptx') ||
+        lowerMime.contains('presentation')) {
+      return Icons.slideshow_rounded;
+    }
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Future<void> _pickAndUploadFiles() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -3173,22 +3246,29 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
           'png',
           'jpg',
           'jpeg',
+          'webp',
         ],
+        allowMultiple: true,
         withData: true,
       );
       if (result == null || result.files.isEmpty) return;
 
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) {
-        setState(() {
-          _formError = 'Unable to read the selected file. Please choose another file.';
-        });
-        return;
+      final imgExts = {'png', 'jpg', 'jpeg', 'webp', 'gif'};
+      int imgCount = 0;
+      int docCount = 0;
+      for (final f in result.files) {
+        final ext = (f.extension ?? '').toLowerCase();
+        if (imgExts.contains(ext)) {
+          imgCount++;
+        } else {
+          docCount++;
+        }
       }
 
       setState(() {
         _isUploading = true;
+        _uploadingImagesSkeletonCount += imgCount;
+        _uploadingDocsSkeletonCount += docCount;
         _formError = null;
       });
 
@@ -3209,11 +3289,6 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
         } catch (_) {}
       }
 
-      final extension = (file.extension ?? 'pdf').toLowerCase();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final mimeType = _getMimeType(extension);
-
       final candidateBuckets = <String>[
         'documents',
         SupabaseConfig.attachmentsBucket,
@@ -3222,104 +3297,120 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
         'profiles',
       ];
 
-      String? uploadedUrl;
-      Object? lastError;
-
-      for (final bucket in candidateBuckets) {
-        final storagePath = bucket == 'documents'
-            ? 'uploads/${timestamp}_$safeName'
-            : '$schoolPrefix/documents/${timestamp}_$safeName';
-        try {
-          await supabase.storage.from(bucket).uploadBinary(
-                storagePath,
-                bytes,
-                fileOptions: FileOptions(contentType: mimeType),
-              );
-          uploadedUrl = supabase.storage.from(bucket).getPublicUrl(storagePath);
-          break;
-        } on StorageException catch (e) {
-          lastError = e;
-          final msg = e.message.toLowerCase();
-          final isRetryable = e.statusCode == '404' ||
-              e.statusCode == '403' ||
-              e.statusCode == '400' ||
-              e.statusCode == '415' ||
-              msg.contains('bucket') ||
-              msg.contains('mime') ||
-              msg.contains('policy') ||
-              msg.contains('not found');
-          if (!isRetryable) rethrow;
+      final total = result.files.length;
+      for (int i = 0; i < total; i++) {
+        final file = result.files[i];
+        final bytes = file.bytes;
+        if (bytes == null) {
+          final ext = (file.extension ?? '').toLowerCase();
+          if (imgExts.contains(ext)) {
+            _uploadingImagesSkeletonCount = (_uploadingImagesSkeletonCount - 1).clamp(0, 999);
+          } else {
+            _uploadingDocsSkeletonCount = (_uploadingDocsSkeletonCount - 1).clamp(0, 999);
+          }
+          continue;
         }
-      }
 
-      if (uploadedUrl == null) {
-        throw lastError ??
-            Exception('Aucun espace de stockage disponible pour ce fichier.');
+        final extension = (file.extension ?? 'pdf').toLowerCase();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+        final mimeType = _getMimeType(extension);
+
+        String? uploadedUrl;
+        Object? lastError;
+
+        for (final bucket in candidateBuckets) {
+          final storagePath = bucket == 'documents'
+              ? 'uploads/${timestamp}_$safeName'
+              : '$schoolPrefix/documents/${timestamp}_$safeName';
+          try {
+            await supabase.storage.from(bucket).uploadBinary(
+                  storagePath,
+                  bytes,
+                  fileOptions: FileOptions(contentType: mimeType),
+                );
+            uploadedUrl = supabase.storage.from(bucket).getPublicUrl(storagePath);
+            break;
+          } on StorageException catch (e) {
+            lastError = e;
+            final msg = e.message.toLowerCase();
+            final isRetryable = e.statusCode == '404' ||
+                e.statusCode == '403' ||
+                e.statusCode == '400' ||
+                e.statusCode == '415' ||
+                msg.contains('bucket') ||
+                msg.contains('mime') ||
+                msg.contains('policy') ||
+                msg.contains('not found');
+            if (!isRetryable) rethrow;
+          }
+        }
+
+        if (uploadedUrl == null) {
+          final ext = extension.toLowerCase();
+          if (imgExts.contains(ext)) {
+            _uploadingImagesSkeletonCount = (_uploadingImagesSkeletonCount - 1).clamp(0, 999);
+          } else {
+            _uploadingDocsSkeletonCount = (_uploadingDocsSkeletonCount - 1).clamp(0, 999);
+          }
+          throw lastError ??
+              Exception('Aucun espace de stockage disponible pour ${file.name}.');
+        }
+
+        final isImg = imgExts.contains(extension);
+        _uploadedFiles.add(_UploadedDocItem(
+          fileUrl: uploadedUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: mimeType,
+          bytes: bytes,
+        ));
+
+        if (isImg) {
+          _uploadingImagesSkeletonCount = (_uploadingImagesSkeletonCount - 1).clamp(0, 999);
+        } else {
+          _uploadingDocsSkeletonCount = (_uploadingDocsSkeletonCount - 1).clamp(0, 999);
+        }
+
+        if (_titleController.text.trim().isEmpty) {
+          _titleController.text = file.name
+              .replaceAll(RegExp(r'\.[^.]+$'), '')
+              .replaceAll('_', ' ');
+        }
       }
 
       if (mounted) {
         setState(() {
-          _fileUrl = uploadedUrl!;
-          _uploadedFileName = file.name;
-          _uploadedFileSize = file.size;
-          _uploadedMimeType = mimeType;
           _isUploading = false;
+          _uploadingImagesSkeletonCount = 0;
+          _uploadingDocsSkeletonCount = 0;
           _formError = null;
-          if (_titleController.text.trim().isEmpty) {
-            _titleController.text = file.name
-                .replaceAll(RegExp(r'\.[^.]+$'), '')
-                .replaceAll('_', ' ');
-          }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isUploading = false;
+          _uploadingImagesSkeletonCount = 0;
+          _uploadingDocsSkeletonCount = 0;
           _formError = UserFriendlyError.format(
             e,
-            fallback: 'Unable to upload this file right now. Please try again.',
+            fallback: 'Unable to upload file(s). Please try again.',
           );
         });
       }
     }
   }
 
-  String _getMimeType(String ext) {
-    switch (ext.toLowerCase()) {
-      case 'pdf':
-        return 'application/pdf';
-      case 'doc':
-        return 'application/msword';
-      case 'docx':
-        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls':
-        return 'application/vnd.ms-excel';
-      case 'xlsx':
-        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'ppt':
-      case 'pptx':
-        return 'application/vnd.ms-powerpoint';
-      case 'png':
-        return 'image/png';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      default:
-        return 'application/octet-stream';
-    }
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final title = _titleController.text.trim();
+    final baseTitle = _titleController.text.trim();
     final description = _descController.text.trim();
-    final fileUrl = _fileUrl.trim();
 
-    if (fileUrl.isEmpty) {
+    if (_uploadedFiles.isEmpty) {
       setState(() {
-        _formError = 'Please upload a document file before saving.';
+        _formError = 'Veuillez téléverser au moins un fichier avant d\'enregistrer.';
       });
       return;
     }
@@ -3327,7 +3418,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
     if (_targetMode == 'class' &&
         (_selectedClassId == null || _selectedClassId!.isEmpty)) {
       setState(() {
-        _formError = 'Please select a target class.';
+        _formError = 'Veuillez sélectionner une classe destinataire.';
       });
       return;
     }
@@ -3350,7 +3441,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
       }
       if (targetStudentId == null || targetStudentId.isEmpty) {
         setState(() {
-          _formError = 'Please search and select a student.';
+          _formError = 'Veuillez rechercher et sélectionner un étudiant.';
         });
         return;
       }
@@ -3370,14 +3461,15 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
       final targetClassId = _targetMode == 'class' ? _selectedClassId : null;
 
       if (isEditing) {
+        final first = _uploadedFiles.first;
         await notifier.updateDocument(
           id: widget.editDoc!.id,
-          title: title,
+          title: baseTitle,
           description: description,
-          fileUrl: fileUrl,
-          fileName: _uploadedFileName ?? _displayFileName,
-          fileSize: _uploadedFileSize,
-          mimeType: _uploadedMimeType,
+          fileUrl: first.fileUrl,
+          fileName: first.fileName,
+          fileSize: first.fileSize,
+          mimeType: first.mimeType,
           classId: targetClassId,
           category: _selectedCategory,
           semester: targetSemester,
@@ -3386,20 +3478,57 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
           studentCode: targetStudentCode,
         );
       } else {
-        await notifier.create(
-          title: title,
-          description: description,
-          fileUrl: fileUrl,
-          fileName: _uploadedFileName ?? _displayFileName,
-          fileSize: _uploadedFileSize,
-          mimeType: _uploadedMimeType,
-          classId: targetClassId,
-          category: _selectedCategory,
-          semester: targetSemester,
-          studentId: targetStudentId,
-          studentName: targetStudentName,
-          studentCode: targetStudentCode,
-        );
+        if (_uploadedFiles.length == 1) {
+          final first = _uploadedFiles.first;
+          await notifier.create(
+            title: baseTitle,
+            description: description,
+            fileUrl: first.fileUrl,
+            fileName: first.fileName,
+            fileSize: first.fileSize,
+            mimeType: first.mimeType,
+            classId: targetClassId,
+            category: _selectedCategory,
+            semester: targetSemester,
+            studentId: targetStudentId,
+            studentName: targetStudentName,
+            studentCode: targetStudentCode,
+          );
+        } else {
+          final filesToInsert = <({
+            String title,
+            String fileUrl,
+            String? fileName,
+            int? fileSize,
+            String? mimeType,
+          })>[];
+
+          for (int i = 0; i < _uploadedFiles.length; i++) {
+            final f = _uploadedFiles[i];
+            final docTitle = _uploadedFiles.length > 1
+                ? '$baseTitle (${i + 1}/${_uploadedFiles.length})'
+                : baseTitle;
+
+            filesToInsert.add((
+              title: docTitle,
+              fileUrl: f.fileUrl,
+              fileName: f.fileName,
+              fileSize: f.fileSize,
+              mimeType: f.mimeType,
+            ));
+          }
+
+          await notifier.createMultiple(
+            files: filesToInsert,
+            description: description,
+            classId: targetClassId,
+            category: _selectedCategory,
+            semester: targetSemester,
+            studentId: targetStudentId,
+            studentName: targetStudentName,
+            studentCode: targetStudentCode,
+          );
+        }
       }
 
       if (mounted) {
@@ -3409,7 +3538,9 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
             content: Text(
               isEditing
                   ? 'Document mis à jour avec succès'
-                  : 'Document ajouté avec succès',
+                  : (_uploadedFiles.length > 1
+                      ? '${_uploadedFiles.length} documents ajoutés avec succès'
+                      : 'Document ajouté avec succès'),
             ),
             backgroundColor: AppColors.success,
           ),
@@ -3421,7 +3552,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
           _isSaving = false;
           _formError = UserFriendlyError.format(
             e,
-            fallback: 'Unable to save this document right now. Please try again.',
+            fallback: 'Unable to save document(s). Please try again.',
           );
         });
       }
@@ -3792,12 +3923,28 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                         ],
                       ],
 
-                      // Fichier du document (Dropzone + Carte fichier modifiable)
-                      _buildFieldLabel('FICHIER DU DOCUMENT *'),
+                      // Fichiers du document (Sélection multiple, prévisualisation carrée 100x100 pour photos, cartes documents, aucun bouton remplacer)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildFieldLabel('FICHIER(S) DU DOCUMENT *'),
+                          if (_uploadedFiles.isNotEmpty)
+                            Text(
+                              '${_uploadedFiles.length} fichier${_uploadedFiles.length > 1 ? "s" : ""}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF6D4CF6),
+                              ),
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
-                      if (_fileUrl.isEmpty)
+
+                      if (_uploadedFiles.isEmpty && !_isUploading && _uploadingImagesSkeletonCount == 0 && _uploadingDocsSkeletonCount == 0)
                         InkWell(
-                          onTap: _isUploading ? null : _pickAndUploadFile,
+                          onTap: _pickAndUploadFiles,
+                          mouseCursor: SystemMouseCursors.click,
                           borderRadius: BorderRadius.circular(12),
                           child: Container(
                             width: double.infinity,
@@ -3818,26 +3965,19 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF6D4CF6)
-                                        .withOpacity(0.1),
+                                    color: const Color(0xFF6D4CF6).withOpacity(0.1),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: _isUploading
-                                      ? const IosLoader.small(
-                                          color: Color(0xFF6D4CF6),
-                                        )
-                                      : const Icon(
-                                          Icons.cloud_upload_outlined,
-                                          size: 24,
-                                          color: Color(0xFF6D4CF6),
-                                        ),
+                                  child: const Icon(
+                                    Icons.cloud_upload_outlined,
+                                    size: 24,
+                                    color: Color(0xFF6D4CF6),
+                                  ),
                                 ),
                                 const SizedBox(height: 10),
-                                Text(
-                                  _isUploading
-                                      ? 'Téléversement en cours...'
-                                      : 'Cliquez pour téléverser un document',
-                                  style: const TextStyle(
+                                const Text(
+                                  'Cliquez pour ajouter des fichiers',
+                                  style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF6D4CF6),
@@ -3845,7 +3985,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                                 ),
                                 const SizedBox(height: 4),
                                 const Text(
-                                  'PDF, DOC, DOCX, XLS, XLSX, PPT, PNG, JPG',
+                                  'PDF, DOC, DOCX, XLS, XLSX, PPT, PNG, JPG (Multi-sélection possible)',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textTertiary,
@@ -3856,106 +3996,244 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                           ),
                         )
                       else
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppColors.slate50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF6D4CF6)
-                                      .withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: _isUploading
-                                    ? const Center(
-                                        child: IosLoader.small(
-                                          color: Color(0xFF6D4CF6),
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.insert_drive_file_rounded,
-                                        color: Color(0xFF6D4CF6),
-                                        size: 20,
-                                      ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Images section (square 100x100 preview + skeletons)
+                            Builder(
+                              builder: (context) {
+                                final images = _uploadedFiles.where((f) => f.isImage).toList();
+                                if (images.isEmpty && _uploadingImagesSkeletonCount == 0) return const SizedBox.shrink();
+
+                                return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      _displayFileName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 13,
+                                    const Text(
+                                      'Images & Photos',
+                                      style: TextStyle(
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
+                                        color: AppColors.textSecondary,
                                       ),
                                     ),
-                                    if (_formatBytes(_uploadedFileSize)
-                                        .isNotEmpty) ...[
-                                      const SizedBox(height: 3),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
+                                      children: [
+                                        ...images.map((item) {
+                                          return Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: item.bytes != null
+                                                    ? Image.memory(
+                                                        item.bytes!,
+                                                        width: 100,
+                                                        height: 100,
+                                                        fit: BoxFit.cover,
+                                                      )
+                                                    : Image.network(
+                                                        item.fileUrl,
+                                                        width: 100,
+                                                        height: 100,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (context, error, stackTrace) => Container(
+                                                          width: 100,
+                                                          height: 100,
+                                                          color: AppColors.slate100,
+                                                          child: const Icon(
+                                                            Icons.image_outlined,
+                                                            color: Color(0xFF6D4CF6),
+                                                            size: 32,
+                                                          ),
+                                                        ),
+                                                      ),
+                                              ),
+                                              Positioned(
+                                                top: 4,
+                                                right: 4,
+                                                child: MouseRegion(
+                                                  cursor: SystemMouseCursors.click,
+                                                  child: GestureDetector(
+                                                    onTap: _isUploading
+                                                        ? null
+                                                        : () => setState(() {
+                                                              _uploadedFiles.remove(item);
+                                                              _formError = null;
+                                                            }),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(4),
+                                                      decoration: const BoxDecoration(
+                                                        color: AppColors.error,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.close,
+                                                        size: 14,
+                                                        color: AppColors.surface,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        }),
+                                        ...List.generate(
+                                          _uploadingImagesSkeletonCount,
+                                          (_) => const _SkeletonBox(
+                                            width: 100,
+                                            height: 100,
+                                            borderRadius: 8,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                );
+                              },
+                            ),
+
+                            // Documents section (non-images + skeletons)
+                            Builder(
+                              builder: (context) {
+                                final docs = _uploadedFiles.where((f) => !f.isImage).toList();
+                                if (docs.isEmpty && _uploadingDocsSkeletonCount == 0) return const SizedBox.shrink();
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Documents & Fichiers',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ...docs.map((item) {
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.slate50,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.border),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 38,
+                                              height: 38,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF6D4CF6).withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Icon(
+                                                _getDocTypeIcon(item.fileName, item.mimeType),
+                                                color: const Color(0xFF6D4CF6),
+                                                size: 20,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    item.fileName,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                  if (_formatBytes(item.fileSize).isNotEmpty) ...[
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      _formatBytes(item.fileSize),
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                        color: AppColors.textTertiary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: IconButton(
+                                                icon: const Icon(
+                                                  Icons.close_rounded,
+                                                  size: 18,
+                                                  color: AppColors.error,
+                                                ),
+                                                tooltip: 'Supprimer ce fichier',
+                                                onPressed: _isUploading
+                                                    ? null
+                                                    : () => setState(() {
+                                                          _uploadedFiles.remove(item);
+                                                          _formError = null;
+                                                        }),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                    ...List.generate(
+                                      _uploadingDocsSkeletonCount,
+                                      (_) => const _SkeletonDocCard(),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+
+                            // "Ajouter d'autres fichiers" button (borderless!)
+                            const SizedBox(height: 4),
+                            MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: InkWell(
+                                onTap: _isUploading ? null : _pickAndUploadFiles,
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    color: const Color(0xFF6D4CF6).withOpacity(0.06),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.add_circle_outline_rounded,
+                                        size: 16,
+                                        color: Color(0xFF6D4CF6),
+                                      ),
+                                      SizedBox(width: 8),
                                       Text(
-                                        _formatBytes(_uploadedFileSize),
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textTertiary,
+                                        'Ajouter d\'autres fichiers (images, pdf, documents...)',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6D4CF6),
                                         ),
                                       ),
                                     ],
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton.icon(
-                                onPressed:
-                                    _isUploading ? null : _pickAndUploadFile,
-                                icon: const Icon(
-                                  Icons.upload_file_rounded,
-                                  size: 16,
-                                ),
-                                label: const Text(
-                                  'Remplacer',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFF6D4CF6),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
                                   ),
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.close_rounded,
-                                  size: 18,
-                                  color: AppColors.textTertiary,
-                                ),
-                                tooltip: 'Supprimer le fichier',
-                                onPressed: _isUploading
-                                    ? null
-                                    : () => setState(() {
-                                          _fileUrl = '';
-                                          _uploadedFileName = null;
-                                          _uploadedFileSize = null;
-                                          _uploadedMimeType = null;
-                                          _formError = null;
-                                        }),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       const SizedBox(height: 18),
 
@@ -3995,6 +4273,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
+                        enabledMouseCursor: SystemMouseCursors.click,
                       ),
                       child: const Text(
                         'Annuler',
@@ -4011,7 +4290,11 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                           ? const IosLoader.small(color: Colors.white)
                           : const Icon(Icons.check_rounded, size: 16),
                       label: Text(
-                        isEditing ? 'Enregistrer' : 'Ajouter le document',
+                        isEditing
+                            ? 'Enregistrer'
+                            : (_uploadedFiles.length > 1
+                                ? 'Ajouter les ${_uploadedFiles.length} documents'
+                                : 'Ajouter le document'),
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -4022,6 +4305,7 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         elevation: 2,
+                        enabledMouseCursor: SystemMouseCursors.click,
                       ),
                     ),
                   ),
@@ -4096,6 +4380,147 @@ class _DocumentFormDialogState extends ConsumerState<_DocumentFormDialog> {
           borderRadius: BorderRadius.circular(12),
         ),
       ),
+    );
+  }
+}
+
+class _SkeletonBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final double borderRadius;
+  const _SkeletonBox({
+    required this.width,
+    required this.height,
+    this.borderRadius = 8,
+  });
+
+  @override
+  State<_SkeletonBox> createState() => _SkeletonBoxState();
+}
+
+class _SkeletonBoxState extends State<_SkeletonBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.35, end: 0.85).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: AppColors.slate200.withOpacity(_animation.value),
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SkeletonDocCard extends StatefulWidget {
+  const _SkeletonDocCard();
+
+  @override
+  State<_SkeletonDocCard> createState() => _SkeletonDocCardState();
+}
+
+class _SkeletonDocCardState extends State<_SkeletonDocCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.35, end: 0.85).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.slate50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.slate200.withOpacity(_animation.value),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 140,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: AppColors.slate200.withOpacity(_animation.value),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 60,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: AppColors.slate200.withOpacity(_animation.value),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

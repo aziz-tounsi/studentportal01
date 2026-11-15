@@ -2377,8 +2377,37 @@ class AppLocalizations {
   String get importantLabel => translate('important');
   String get sentByLabel => translate('sent_by');
 
+  static String normalizeAnnouncementType(String? rawType) {
+    if (rawType == null) return 'general';
+    final t = rawType.trim().toLowerCase()
+        .replaceAll('é', 'e')
+        .replaceAll('è', 'e')
+        .replaceAll('ê', 'e')
+        .replaceAll('à', 'a')
+        .replaceAll('â', 'a');
+
+    if (t == 'teacher_absent' || t.contains('absence prof') || t.contains('prof absent')) return 'teacher_absent';
+    if (t == 'room_change' || t.contains('changement salle') || t.contains('salle')) return 'room_change';
+    if (t == 'exam' || t.contains('examen') || t.contains('evaluation') || t.contains('controle')) return 'exam';
+    if (t == 'retenue') return 'retenue';
+    if (t == 'reminder' || t.contains('rappel')) return 'reminder';
+    if (t == 'trip' || t.contains('sortie') || t.contains('voyage')) return 'trip';
+    if (t == 'party' || t.contains('evenement') || t.contains('fete')) return 'party';
+    if (t == 'payment' || t.contains('paiement') || t.contains('frais')) return 'payment';
+    if (t == 'closure' || t.contains('fermeture')) return 'closure';
+    if (t == 'avertissement') return 'avertissement';
+    if (t == 'exclusion_classe' || t.contains('exclusion classe')) return 'exclusion_classe';
+    if (t == 'exclusion_etablissement' || t.contains('exclusion etab')) return 'exclusion_etablissement';
+    if (t == 'convocation_parents' || t.contains('convocation')) return 'convocation_parents';
+    if (t == 'conseil_discipline' || t.contains('conseil disc')) return 'conseil_discipline';
+    if (t == 'exclusion_definitive' || t.contains('exclusion def')) return 'exclusion_definitive';
+    if (t == 'general' || t.contains('general')) return 'general';
+    return t;
+  }
+
   String getAnnouncementTypeLabel(String? type) {
-    switch (type) {
+    final norm = normalizeAnnouncementType(type);
+    switch (norm) {
       case 'teacher_absent':
         return translate('at_teacher_absent');
       case 'room_change':
@@ -2409,6 +2438,7 @@ class AppLocalizations {
         return translate('at_conseil_discipline');
       case 'exclusion_definitive':
         return translate('at_exclusion_definitive');
+      case 'general':
       default:
         return translate('at_general');
     }

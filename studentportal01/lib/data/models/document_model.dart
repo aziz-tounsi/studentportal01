@@ -234,6 +234,56 @@ class DocumentModel {
     return '${(fileSize! / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  bool get isPdf => mimeType == 'application/pdf' || fileName.endsWith('.pdf');
-  bool get isImage => mimeType?.startsWith('image/') ?? false;
+  static final RegExp _batchRegex = RegExp(r'\((\d+)\/(\d+)\)\s*$');
+
+  /// If part of a multi-document upload, returns a map with index and total:
+  /// e.g. {'index': 2, 'total': 2}
+  Map<String, int>? get batchInfo {
+    final match = _batchRegex.firstMatch(title.trim());
+    if (match != null) {
+      final idx = int.tryParse(match.group(1) ?? '');
+      final tot = int.tryParse(match.group(2) ?? '');
+      if (idx != null && tot != null) {
+        return {'index': idx, 'total': tot};
+      }
+    }
+    return null;
+  }
+
+  /// Title without batch suffix (e.g. "Devoir Math" from "Devoir Math (2/2)")
+  String get displayTitle {
+    final trimmed = title.trim();
+    final match = _batchRegex.firstMatch(trimmed);
+    if (match != null) {
+      final clean = trimmed.substring(0, match.start).trim();
+      if (clean.isNotEmpty) return clean;
+    }
+    return trimmed;
+  }
+
+  String get fileExtension {
+    final lowerName = fileName.toLowerCase();
+    if (lowerName.contains('.')) {
+      return lowerName.split('.').last.toUpperCase();
+    }
+    if (mimeType != null && mimeType!.contains('/')) {
+      return mimeType!.split('/').last.toUpperCase();
+    }
+    return 'DOC';
+  }
+
+  bool get isPdf {
+    final lowerName = fileName.toLowerCase();
+    return mimeType == 'application/pdf' || lowerName.endsWith('.pdf');
+  }
+
+  bool get isImage {
+    final lowerName = fileName.toLowerCase();
+    return (mimeType?.startsWith('image/') ?? false) ||
+        lowerName.endsWith('.png') ||
+        lowerName.endsWith('.jpg') ||
+        lowerName.endsWith('.jpeg') ||
+        lowerName.endsWith('.webp') ||
+        lowerName.endsWith('.gif');
+  }
 }

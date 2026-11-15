@@ -1,6 +1,6 @@
+// ignore_for_file: deprecated_member_use, unused_element, unnecessary_underscores, avoid_web_libraries_in_flutter, unused_local_variable, unused_field, unnecessary_non_null_assertion, prefer_final_fields, unused_element_parameter
 import 'dart:async';
 import 'dart:ui';
-// ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
@@ -22,6 +21,7 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/modern_animated_switch.dart';
 
 /// Text formatter that capitalizes the first letter of each word
 class CapitalizeWordsFormatter extends TextInputFormatter {
@@ -1685,10 +1685,64 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     );
   }
 
+  String _formatTimeAgo(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.isNegative || diff.inSeconds < 45) {
+      return "À l'instant";
+    }
+    if (diff.inMinutes < 60) {
+      return 'Il y a ${diff.inMinutes} min';
+    }
+    if (diff.inHours < 24) {
+      return 'Il y a ${diff.inHours}h';
+    }
+    if (diff.inDays == 1) {
+      final hour = dt.hour.toString().padLeft(2, '0');
+      final minute = dt.minute.toString().padLeft(2, '0');
+      return 'Hier à $hour:$minute';
+    }
+    if (diff.inDays < 7) {
+      return 'Il y a ${diff.inDays}j';
+    }
+    if (diff.inDays < 30) {
+      final weeks = (diff.inDays / 7).floor();
+      return 'Il y a $weeks sem.';
+    }
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+  }
+
   Widget _buildAnnouncementCard(AnnouncementModel a) {
     final typeInfo = _getTypeInfo(a.announcementType);
     final isSelected = _selectedIds.contains(a.id);
     final dateStr = '${a.createdAt.day.toString().padLeft(2, '0')}/${a.createdAt.month.toString().padLeft(2, '0')}/${a.createdAt.year}';
+    final timeAgoStr = _formatTimeAgo(a.createdAt);
+
+    String? studentTarget;
+    final payloadName = a.payload['student_name']?.toString() ??
+        a.payload['target_student_name']?.toString() ??
+        a.payload['student']?['full_name']?.toString() ??
+        a.payload['student']?['name']?.toString();
+    if (payloadName != null && payloadName.trim().isNotEmpty) {
+      studentTarget = payloadName.trim();
+    } else {
+      final match = RegExp(r'\*\*@([^*]+)\*\*').firstMatch(a.content);
+      if (match != null && match.group(1)?.trim().isNotEmpty == true) {
+        studentTarget = match.group(1)!.trim();
+      } else {
+        final match2 = RegExp(r'@([A-Za-zÀ-ÿ\s\-]+)').firstMatch(a.content);
+        if (match2 != null && match2.group(1)?.trim().isNotEmpty == true) {
+          studentTarget = match2.group(1)!.trim();
+        }
+      }
+    }
+    final isStudentMsg = a.scope == 'student' || studentTarget != null || (_tabController.index == 3);
+
+    final bool hasAttachments = a.hasAttachment ||
+        (a.payload['attachments'] is List && (a.payload['attachments'] as List).isNotEmpty) ||
+        (a.payload['files'] is List && (a.payload['files'] as List).isNotEmpty) ||
+        (a.payload['attachment_url'] != null && a.payload['attachment_url'].toString().trim().isNotEmpty) ||
+        (a.payload['file_url'] != null && a.payload['file_url'].toString().trim().isNotEmpty);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1785,7 +1839,35 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                                       TextOverflow.ellipsis,
                                 ),
                         ),
-                        if (a.className != null) ...[
+                        if (isStudentMsg && studentTarget != null) ...[
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.person_outline, size: 12, color: Color(0xFF475569)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  a.className != null && a.className!.isNotEmpty
+                                      ? '$studentTarget • ${a.className}'
+                                      : studentTarget,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF334155),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else if (a.className != null) ...[
                           const SizedBox(width: 10),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -1821,6 +1903,33 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                                 color: typeInfo.color),
                           ),
                         ),
+                        if (hasAttachments) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E8FF),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.attach_file_rounded,
+                                    size: 12, color: Color(0xFF9333EA)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Pièce jointe',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF9333EA),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         if (a.isPinned) ...[  
                           const SizedBox(width: 10),
                           Container(
@@ -1930,13 +2039,25 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: AppColors.slate400),
+                      Icon(Icons.access_time_rounded,
+                          size: 13, color: AppColors.slate400),
                       const SizedBox(width: 4),
-                      Text(dateStr,
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.slate400)),
+                      Text(
+                        timeAgoStr,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.slate600,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '($dateStr)',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.slate400,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -2149,11 +2270,11 @@ class _AnnouncementComposerDialogState
   late TextEditingController _examTimeCtrl; // Separate time for exam
   late TextEditingController _changeDateCtrl; // Separate date for room change
   late TextEditingController _changeTimeCtrl; // Separate time for room change
-  String?
-  _selectedBuildingId; // For building selection in room forms (new room)
+  String? _selectedBuildingId; // For building selection in room forms (new room)
+  String? _selectedFloorId; // For floor selection in room forms (new room)
   String? _selectedRoomId; // For room selection in room forms (new room)
-  String?
-  _selectedOldBuildingId; // For old room building selection in room_change
+  String? _selectedOldBuildingId; // For old room building selection in room_change
+  String? _selectedOldFloorId; // For old room floor selection in room_change
   String? _selectedOldRoomId; // For old room selection in room_change
   late TextEditingController _instructionsCtrl;
   late TextEditingController _reasonCtrl;
@@ -2209,6 +2330,8 @@ class _AnnouncementComposerDialogState
   bool _isLoading = false;
 
   final List<_PendingFile> _pendingFiles = [];
+  int _loadingImagesSkeletonCount = 0;
+  int _loadingDocsSkeletonCount = 0;
   List<Map<String, dynamic>> _existingAttachments =
       []; // Existing attachments from DB
   final List<String> _attachmentsToDelete = []; // IDs to delete on save
@@ -2247,37 +2370,75 @@ class _AnnouncementComposerDialogState
     _examTimeCtrl = TextEditingController(text: payload['exam_time'] ?? '');
     _changeDateCtrl = TextEditingController(text: payload['change_date'] ?? '');
     _changeTimeCtrl = TextEditingController(text: payload['change_time'] ?? '');
-    // Room name is stored in payload, need to look up room ID when loading
+    // Room restoration when editing
     final roomName = payload['room'] as String?;
-    if (roomName != null && roomName.isNotEmpty) {
-      // Will be loaded asynchronously when building provider is available
+    final newRoomId = payload['new_room_id'] as String?;
+    final oldRoomId = payload['old_room_id'] as String?;
+    final oldRoomName = payload['old_room'] as String?;
+    if ((roomName != null && roomName.isNotEmpty) ||
+        (newRoomId != null && newRoomId.isNotEmpty) ||
+        (oldRoomId != null && oldRoomId.isNotEmpty) ||
+        (oldRoomName != null && oldRoomName.isNotEmpty)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final buildingAsync = ref.read(buildingProvider);
         if (!buildingAsync.hasValue) return;
         final buildingState = buildingAsync.value!;
-        if (true) {
-          final room = buildingState.availableRooms.firstWhere(
+
+        // Restore new room
+        RoomModel? foundRoom;
+        if (newRoomId != null && newRoomId.isNotEmpty) {
+          foundRoom = buildingState.availableRooms.firstWhere(
+            (r) => r.id == newRoomId,
+            orElse: () => RoomModel(id: '', floorId: '', name: ''),
+          );
+        }
+        if ((foundRoom == null || foundRoom.id.isEmpty) && roomName != null && roomName.isNotEmpty) {
+          foundRoom = buildingState.availableRooms.firstWhere(
             (r) => r.name == roomName,
             orElse: () => RoomModel(id: '', floorId: '', name: ''),
           );
-          if (room.id.isNotEmpty) {
-            // Find which building contains this room
-            String? buildingId;
-            for (final building in buildingState.buildings) {
-              final roomsInBuilding = buildingState.roomsForBuilding(
-                building.id,
-              );
-              if (roomsInBuilding.any((r) => r.id == room.id)) {
-                buildingId = building.id;
+        }
+        if (foundRoom != null && foundRoom.id.isNotEmpty) {
+          for (final b in buildingState.buildings) {
+            for (final f in b.floors) {
+              if (f.id == foundRoom.floorId || f.rooms.any((r) => r.id == foundRoom!.id)) {
+                _selectedBuildingId = b.id;
+                _selectedFloorId = f.id;
+                _selectedRoomId = foundRoom.id;
                 break;
               }
             }
-            setState(() {
-              _selectedRoomId = room.id;
-              _selectedBuildingId = buildingId;
-            });
           }
         }
+
+        // Restore old room if present (e.g. room_change)
+        RoomModel? foundOldRoom;
+        if (oldRoomId != null && oldRoomId.isNotEmpty) {
+          foundOldRoom = buildingState.availableRooms.firstWhere(
+            (r) => r.id == oldRoomId,
+            orElse: () => RoomModel(id: '', floorId: '', name: ''),
+          );
+        }
+        if ((foundOldRoom == null || foundOldRoom.id.isEmpty) && oldRoomName != null && oldRoomName.isNotEmpty) {
+          foundOldRoom = buildingState.availableRooms.firstWhere(
+            (r) => r.name == oldRoomName,
+            orElse: () => RoomModel(id: '', floorId: '', name: ''),
+          );
+        }
+        if (foundOldRoom != null && foundOldRoom.id.isNotEmpty) {
+          for (final b in buildingState.buildings) {
+            for (final f in b.floors) {
+              if (f.id == foundOldRoom.floorId || f.rooms.any((r) => r.id == foundOldRoom!.id)) {
+                _selectedOldBuildingId = b.id;
+                _selectedOldFloorId = f.id;
+                _selectedOldRoomId = foundOldRoom.id;
+                break;
+              }
+            }
+          }
+        }
+
+        if (mounted) setState(() {});
       });
     }
     _instructionsCtrl = TextEditingController(
@@ -2410,10 +2571,8 @@ class _AnnouncementComposerDialogState
       _senderType = a.senderType;
       _isPinned = a.isPinned;
       _isImportant = a.isImportant;
-      // Load existing attachments
-      if (a.hasAttachment) {
-        _loadExistingAttachments(a.id, a.scope);
-      }
+      // Load existing attachments unconditionally
+      _loadExistingAttachments(a.id);
     } else {
       // Handle initial parameters from navigation
       if (widget.initialScope != null) {
@@ -2430,17 +2589,13 @@ class _AnnouncementComposerDialogState
     _loadClasses();
   }
 
-  Future<void> _loadExistingAttachments(
-    String announcementId,
-    String scope,
-  ) async {
+  Future<void> _loadExistingAttachments(String announcementId) async {
     try {
       final supabase = Supabase.instance.client;
       final data = await supabase
           .from('announcement_attachments')
           .select()
-          .eq('announcement_id', announcementId)
-          .eq('scope', scope);
+          .eq('announcement_id', announcementId);
       if (mounted) {
         setState(() {
           _existingAttachments = List<Map<String, dynamic>>.from(data);
@@ -2717,10 +2872,13 @@ class _AnnouncementComposerDialogState
         final date = _sanctionDateCtrl.text.trim();
         final notes = _sanctionNotesCtrl.text.trim();
 
-        generated = 'Vous avez reçu un avertissement';
-        if (date.isNotEmpty) generated += ' en date du $date';
-        generated += '.';
-        if (reason.isNotEmpty) generated += ' Motif: $reason.';
+        generated = 'Un avertissement vous a été adressé';
+        if (date.isNotEmpty) generated += ' le $date';
+        if (reason.isNotEmpty) {
+          generated += ' en raison de : $reason.';
+        } else {
+          generated += '.';
+        }
         if (notes.isNotEmpty) generated += ' $notes';
         break;
 
@@ -2730,7 +2888,7 @@ class _AnnouncementComposerDialogState
         final duration = _sanctionDurationCtrl.text.trim();
         final notes = _sanctionNotesCtrl.text.trim();
 
-        generated = 'Vous êtes exclu(e) de cours';
+        generated = 'Une mesure d\'exclusion temporaire de cours a été prononcée';
         if (duration.isNotEmpty) {
           final plural =
               int.tryParse(duration) != null && int.parse(duration) > 1;
@@ -2740,9 +2898,12 @@ class _AnnouncementComposerDialogState
           generated += ' pour une durée de $duration $unitText';
         }
         if (date.isNotEmpty) generated += ' à compter du $date';
-        generated += '.';
-        if (reason.isNotEmpty) generated += ' Motif: $reason.';
-        if (notes.isNotEmpty) generated += ' Travail à faire: $notes';
+        if (reason.isNotEmpty) {
+          generated += ', suite aux faits suivants : $reason.';
+        } else {
+          generated += '.';
+        }
+        if (notes.isNotEmpty) generated += ' Travail à effectuer : $notes';
         break;
 
       case 'exclusion_etablissement':
@@ -2751,7 +2912,7 @@ class _AnnouncementComposerDialogState
         final duration = _sanctionDurationCtrl.text.trim();
         final notes = _sanctionNotesCtrl.text.trim();
 
-        generated = 'Vous êtes exclu(e) de l\'établissement';
+        generated = 'Une exclusion temporaire de l\'établissement a été prononcée';
         if (duration.isNotEmpty) {
           final plural =
               int.tryParse(duration) != null && int.parse(duration) > 1;
@@ -2761,10 +2922,13 @@ class _AnnouncementComposerDialogState
           generated += ' pour une durée de $duration $unitText';
         }
         if (date.isNotEmpty) generated += ' à compter du $date';
-        generated += '.';
-        if (reason.isNotEmpty) generated += ' Motif: $reason.';
+        if (reason.isNotEmpty) {
+          generated += ' en raison de : $reason.';
+        } else {
+          generated += '.';
+        }
         generated +=
-            ' Vous ne pouvez pas accéder à l\'établissement pendant cette période.';
+            ' L\'accès à l\'établissement vous est strictement interdit durant cette période.';
         if (notes.isNotEmpty) generated += ' $notes';
         break;
 
@@ -2774,15 +2938,18 @@ class _AnnouncementComposerDialogState
         final meetingTime = _meetingTimeCtrl.text.trim();
         final notes = _sanctionNotesCtrl.text.trim();
 
-        generated = 'Convocation de vos parents ou représentant légal';
+        generated = 'Vos parents ou votre représentant légal sont convoqués au sein de l\'établissement';
         if (meetingDate.isNotEmpty) {
-          generated += ' pour le $meetingDate';
+          generated += ' le $meetingDate';
           if (meetingTime.isNotEmpty) generated += ' à $meetingTime';
         }
-        generated += '.';
-        if (reason.isNotEmpty) generated += ' Objet: $reason.';
-        if (notes.isNotEmpty) generated += ' Lieu: $notes.';
-        generated += ' La présence des parents est obligatoire.';
+        if (reason.isNotEmpty) {
+          generated += ' concernant : $reason.';
+        } else {
+          generated += '.';
+        }
+        generated += ' La présence d\'au moins un responsable légal est obligatoire.';
+        if (notes.isNotEmpty) generated += ' Lieu : $notes';
         break;
 
       case 'conseil_discipline':
@@ -2791,15 +2958,18 @@ class _AnnouncementComposerDialogState
         final meetingTime = _meetingTimeCtrl.text.trim();
         final notes = _sanctionNotesCtrl.text.trim();
 
-        generated = 'Vous êtes convoqué(e) à un conseil de discipline';
+        generated = 'Vous êtes convoqué(e) à une séance du conseil de discipline';
         if (meetingDate.isNotEmpty) {
           generated += ' le $meetingDate';
           if (meetingTime.isNotEmpty) generated += ' à $meetingTime';
         }
-        generated += '.';
-        if (subject.isNotEmpty) generated += ' Sujet: $subject.';
+        if (subject.isNotEmpty) {
+          generated += ' concernant les faits suivants : $subject.';
+        } else {
+          generated += '.';
+        }
         generated +=
-            ' La présence de vos parents ou représentant légal est obligatoire.';
+            ' La présence de vos parents ou de votre représentant légal est obligatoire.';
         if (notes.isNotEmpty) generated += ' $notes';
         break;
 
@@ -2808,13 +2978,16 @@ class _AnnouncementComposerDialogState
         final date = _sanctionDateCtrl.text.trim();
         final notes = _sanctionNotesCtrl.text.trim();
 
-        generated = 'EXCLUSION DÉFINITIVE de l\'établissement';
+        generated = 'Une exclusion définitive de l\'établissement a été prononcée à votre encontre';
         if (date.isNotEmpty) generated += ' à compter du $date';
-        generated += '.';
-        if (reason.isNotEmpty) generated += ' Motif: $reason.';
+        if (reason.isNotEmpty) {
+          generated += ' en raison de : $reason.';
+        } else {
+          generated += '.';
+        }
         generated +=
-            ' Cette décision met fin à votre scolarité dans cet établissement.';
-        if (notes.isNotEmpty) generated += ' Modalités: $notes';
+            ' Cette décision met fin à votre scolarité au sein de l\'établissement.';
+        if (notes.isNotEmpty) generated += ' Modalités : $notes';
         break;
     }
 
@@ -2878,24 +3051,24 @@ class _AnnouncementComposerDialogState
   }) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: AppColors.slate400, fontSize: 13),
+      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
       filled: true,
-      fillColor: AppColors.slate50.withOpacity(0.5),
+      fillColor: const Color(0xFFF8FAFC),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: AppColors.secondary, width: 2),
+        borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       prefixIcon: prefixIcon != null
-          ? Icon(prefixIcon, size: 20, color: AppColors.slate400)
+          ? Icon(prefixIcon, size: 18, color: const Color(0xFF94A3B8))
           : null,
       suffixIcon: suffix,
     );
@@ -2928,27 +3101,14 @@ class _AnnouncementComposerDialogState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 3,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                title.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: 20),
           ...children,
@@ -2970,6 +3130,7 @@ class _AnnouncementComposerDialogState
         TextFormField(
           controller: ctrl,
           readOnly: true,
+          mouseCursor: SystemMouseCursors.click,
           style: const TextStyle(fontSize: 13),
           decoration: _styledInputDecoration(
             hint: 'Date',
@@ -2977,6 +3138,7 @@ class _AnnouncementComposerDialogState
             suffix: ctrl.text.isNotEmpty
                 ? IconButton(
                     icon: Icon(Icons.clear, size: 16, color: AppColors.slate400),
+                    mouseCursor: SystemMouseCursors.click,
                     onPressed: () => setState(() => ctrl.clear()),
                   )
                 : null,
@@ -2999,6 +3161,7 @@ class _AnnouncementComposerDialogState
         TextFormField(
           controller: ctrl,
           readOnly: true,
+          mouseCursor: SystemMouseCursors.click,
           style: const TextStyle(fontSize: 13),
           decoration: _styledInputDecoration(
             hint: 'Heure',
@@ -3006,6 +3169,7 @@ class _AnnouncementComposerDialogState
             suffix: ctrl.text.isNotEmpty
                 ? IconButton(
                     icon: Icon(Icons.clear, size: 16, color: AppColors.slate400),
+                    mouseCursor: SystemMouseCursors.click,
                     onPressed: () => setState(() => ctrl.clear()),
                   )
                 : null,
@@ -3027,6 +3191,7 @@ class _AnnouncementComposerDialogState
     String? Function(String?)? validator,
     VoidCallback? onChanged,
   }) {
+    final effectivePrefix = maxLines > 1 ? null : prefixIcon;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3037,7 +3202,7 @@ class _AnnouncementComposerDialogState
           maxLines: maxLines,
           inputFormatters: inputFormatters,
           keyboardType: keyboardType,
-          decoration: _styledInputDecoration(hint: hint, prefixIcon: prefixIcon),
+          decoration: _styledInputDecoration(hint: hint, prefixIcon: effectivePrefix),
           validator: validator,
           onChanged: onChanged != null ? (_) => onChanged() : null,
         ),
@@ -3534,27 +3699,14 @@ class _AnnouncementComposerDialogState
                     children: [
                       // 1. Type de publication
                       if (!isEditing) ...[
-                        Row(
-                          children: [
-                            Container(
-                              width: 3,
-                              height: 15,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              '1. TYPE DE PUBLICATION',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                                color: Color(0xFF4B5563),
-                              ),
-                            ),
-                          ],
+                        const Text(
+                          '1. TYPE DE PUBLICATION',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: Color(0xFF4B5563),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         _buildScopeSelector(),
@@ -3562,31 +3714,22 @@ class _AnnouncementComposerDialogState
                         _buildScopeBadge(),
                       const SizedBox(height: 32),
                       // 2. Détails de l'annonce
-                      Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 15,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '2. DÉTAILS DE L\'ANNONCE',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
-                              color: Color(0xFF4B5563),
-                            ),
-                          ),
-                        ],
+                      const Text(
+                        '2. DÉTAILS DE L\'ANNONCE',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: Color(0xFF4B5563),
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      if (_scope == 'class' && !isEditing)
+                      if (_scope == 'class' && !isEditing) ...[
                         _buildClassSelector(),
+                        const SizedBox(height: 12),
+                        _buildSenderSelector(),
+                        const SizedBox(height: 16),
+                      ],
                       if (_scope == 'student' && !isEditing)
                         _buildStudentSelector(),
                       _buildTypeSelector(),
@@ -3755,6 +3898,7 @@ class _AnnouncementComposerDialogState
             ),
           ),
           InkWell(
+            mouseCursor: SystemMouseCursors.click,
             onTap: () => Navigator.pop(context),
             borderRadius: BorderRadius.circular(20),
             child: Container(
@@ -3773,10 +3917,10 @@ class _AnnouncementComposerDialogState
 
   Widget _buildScopeSelector() {
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: AppColors.slate100,
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.slate100.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -3791,28 +3935,41 @@ class _AnnouncementComposerDialogState
 
   Widget _buildScopeTab(String value, String label) {
     final selected = _scope == value;
-    return GestureDetector(
-      onTap: () => setState(() {
-        _scope = value;
-        _selectedClassId = null;
-        _selectedStudentId = null;
-        if (_scope == 'global') _senderType = 'administration';
-      }),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: selected
-              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: selected ? AppColors.secondary : AppColors.slate500,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _scope = value;
+          _selectedClassId = null;
+          _selectedStudentId = null;
+          if (_scope == 'global') _senderType = 'administration';
+          if (_scope == 'student') {
+            if (!const ['avertissement', 'retenue', 'exclusion_classe', 'exclusion_etablissement', 'convocation_parents', 'conseil_discipline', 'exclusion_definitive'].contains(_announcementType)) {
+              _announcementType = 'avertissement';
+            }
+          } else {
+            if (!const ['general', 'teacher_absent', 'room_change', 'exam', 'retenue', 'reminder', 'trip', 'party', 'payment', 'closure'].contains(_announcementType)) {
+              _announcementType = 'general';
+            }
+          }
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: selected
+                ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))]
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: selected ? AppColors.textPrimary : AppColors.textTertiary,
+            ),
           ),
         ),
       ),
@@ -3854,7 +4011,6 @@ class _AnnouncementComposerDialogState
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -4116,7 +4272,6 @@ class _AnnouncementComposerDialogState
                           colors: [AppColors.secondary.withOpacity(0.08), AppColors.secondary.withOpacity(0.03)],
                         ),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.secondary.withOpacity(0.25)),
                       ),
                       child: Row(
                         children: [
@@ -4330,7 +4485,6 @@ class _AnnouncementComposerDialogState
                             colors: [AppColors.secondary.withOpacity(0.08), AppColors.secondary.withOpacity(0.03)],
                           ),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.secondary.withOpacity(0.25)),
                         ),
                         child: Row(
                           children: [
@@ -4379,6 +4533,7 @@ class _AnnouncementComposerDialogState
                               ),
                             ),
                             InkWell(
+                              mouseCursor: SystemMouseCursors.click,
                               onTap: () => setState(() => _selectedStudentId = null),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
@@ -4405,6 +4560,7 @@ class _AnnouncementComposerDialogState
                         prefixIcon: Icons.search,
                         suffix: _searchStudentCtrl.text.isNotEmpty
                             ? IconButton(
+                                mouseCursor: SystemMouseCursors.click,
                                 icon: Icon(Icons.clear, size: 16, color: AppColors.slate400),
                                 onPressed: () {
                                   _searchStudentCtrl.clear();
@@ -4496,6 +4652,7 @@ class _AnnouncementComposerDialogState
                                           ? AppColors.secondary.withOpacity(0.06)
                                           : Colors.transparent,
                                       child: InkWell(
+                                        mouseCursor: SystemMouseCursors.click,
                                         onTap: () {
                                           setState(() {
                                             _selectedStudentId = isSelected ? null : studentId;
@@ -4648,6 +4805,7 @@ class _AnnouncementComposerDialogState
           children: types.map((t) {
             final selected = _announcementType == t.$1;
             return InkWell(
+              mouseCursor: SystemMouseCursors.click,
               onTap: () => setState(() => _announcementType = t.$1),
               borderRadius: BorderRadius.circular(10),
               child: Container(
@@ -4690,22 +4848,25 @@ class _AnnouncementComposerDialogState
     Color color,
   ) {
     final selected = _announcementType == value;
-    return FilterChip(
-      selected: selected,
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: selected ? AppColors.textOnPrimary : color),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: FilterChip(
+        selected: selected,
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: selected ? AppColors.textOnPrimary : color),
+            const SizedBox(width: 6),
+            Text(label),
+          ],
+        ),
+        onSelected: (_) {
+          setState(() => _announcementType = value);
+        },
+        selectedColor: color,
+        checkmarkColor: AppColors.textOnPrimary,
+        labelStyle: TextStyle(color: selected ? AppColors.textOnPrimary : AppColors.textPrimary),
       ),
-      onSelected: (_) {
-        setState(() => _announcementType = value);
-      },
-      selectedColor: color,
-      checkmarkColor: AppColors.textOnPrimary,
-      labelStyle: TextStyle(color: selected ? AppColors.textOnPrimary : AppColors.textPrimary),
     );
   }
 
@@ -5298,6 +5459,7 @@ class _AnnouncementComposerDialogState
                 hint: 'Ex: 1, 2, 3 *',
                 prefixIcon: Icons.schedule,
                 keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 validator: (v) => v == null || v.trim().isEmpty ? 'La durée est requise' : null,
               ),
             ),
@@ -5357,6 +5519,7 @@ class _AnnouncementComposerDialogState
                       hint: 'Ex: 3 *',
                       prefixIcon: Icons.schedule,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       validator: (v) => v == null || v.trim().isEmpty ? 'Requis' : null,
                     ),
                   ),
@@ -5605,17 +5768,32 @@ class _AnnouncementComposerDialogState
               );
             }
 
-            final filteredRooms = _selectedBuildingId != null
-                ? buildingState
-                      .roomsForBuilding(_selectedBuildingId!)
-                      .where((r) => r.isActive)
-                      .toList()
+            final selectedBuilding = _selectedBuildingId != null
+                ? buildings.cast<BuildingModel?>().firstWhere(
+                    (b) => b?.id == _selectedBuildingId,
+                    orElse: () => null,
+                  )
+                : null;
+
+            final floors = selectedBuilding != null
+                ? selectedBuilding.floors.where((f) => f.isActive).toList()
+                : <FloorModel>[];
+
+            final selectedFloor = _selectedFloorId != null
+                ? floors.cast<FloorModel?>().firstWhere(
+                    (f) => f?.id == _selectedFloorId,
+                    orElse: () => null,
+                  )
+                : null;
+
+            final rooms = selectedFloor != null
+                ? selectedFloor.rooms.where((r) => r.isActive).toList()
                 : <RoomModel>[];
 
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bloc dropdown
+                // 1. Bloc dropdown
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -5655,6 +5833,7 @@ class _AnnouncementComposerDialogState
                         onChanged: (value) {
                           setState(() {
                             _selectedBuildingId = value;
+                            _selectedFloorId = null;
                             _selectedRoomId = null;
                           });
                         },
@@ -5662,65 +5841,99 @@ class _AnnouncementComposerDialogState
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                // Salle dropdown
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _formFieldLabel('SALLE'),
-                      DropdownButtonFormField<String>(
-                        value: _selectedRoomId,
-                        decoration: _styledInputDecoration(
-                          hint: _selectedBuildingId == null
-                              ? 'Sélectionnez d\'abord un bloc'
-                              : 'Sélectionner une salle',
-                          prefixIcon: Icons.meeting_room,
+
+                // 2. Étage dropdown (appears when bloc is selected)
+                if (_selectedBuildingId != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _formFieldLabel('ÉTAGE'),
+                        DropdownButtonFormField<String>(
+                          value: _selectedFloorId,
+                          decoration: _styledInputDecoration(
+                            hint: 'Sélectionner un étage',
+                            prefixIcon: Icons.layers_outlined,
+                          ),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          borderRadius: BorderRadius.circular(10),
+                          isExpanded: true,
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('Sélectionner un étage'),
+                            ),
+                            ...floors.map(
+                              (f) => DropdownMenuItem<String>(
+                                value: f.id,
+                                child: Text(f.name, overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedFloorId = value;
+                              _selectedRoomId = null;
+                            });
+                          },
                         ),
-                        style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                        borderRadius: BorderRadius.circular(10),
-                        isExpanded: true,
-                        items: _selectedBuildingId == null
-                            ? [
-                                const DropdownMenuItem<String>(
-                                  value: null,
-                                  child: Text('Sélectionnez d\'abord un bloc'),
-                                ),
-                              ]
-                            : [
-                                const DropdownMenuItem<String>(
-                                  value: null,
-                                  child: Text('Sélectionner une salle'),
-                                ),
-                                ...filteredRooms.map(
-                                  (r) => DropdownMenuItem<String>(
-                                    value: r.id,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          r.roomType == 'lab' ? Icons.science
-                                              : r.roomType == 'office' ? Icons.work
-                                              : Icons.meeting_room,
-                                          size: 16, color: AppColors.textSecondary,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Flexible(child: Text(r.name, overflow: TextOverflow.ellipsis)),
-                                        const SizedBox(width: 4),
-                                        Text('(${r.capacity})', style: TextStyle(fontSize: 11, color: AppColors.slate500)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                        onChanged: _selectedBuildingId == null
-                            ? null
-                            : (value) {
-                                setState(() => _selectedRoomId = value);
-                              },
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ],
+
+                // 3. Salle dropdown (appears when étage is selected)
+                if (_selectedFloorId != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _formFieldLabel('SALLE'),
+                        DropdownButtonFormField<String>(
+                          value: _selectedRoomId,
+                          decoration: _styledInputDecoration(
+                            hint: 'Sélectionner une salle',
+                            prefixIcon: Icons.meeting_room_outlined,
+                          ),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          borderRadius: BorderRadius.circular(10),
+                          isExpanded: true,
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('Sélectionner une salle'),
+                            ),
+                            ...rooms.map(
+                              (r) => DropdownMenuItem<String>(
+                                value: r.id,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      r.roomType == 'lab' ? Icons.science
+                                          : r.roomType == 'office' ? Icons.work
+                                          : Icons.meeting_room,
+                                      size: 16,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(child: Text(r.name, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(width: 4),
+                                    Text('(${r.capacity})', style: TextStyle(fontSize: 11, color: AppColors.slate500)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() => _selectedRoomId = value);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             );
           },
@@ -5729,7 +5942,7 @@ class _AnnouncementComposerDialogState
     );
   }
 
-  /// Room selector for room_change type (supports old and new rooms) — bloc & salle on same line
+  /// Room selector for room_change type (supports old and new rooms) — bloc, étage & salle hierarchical cascade
   Widget _buildRoomSelectorForType({required bool isOldRoom}) {
     return Consumer(
       builder: (context, ref, _) {
@@ -5741,20 +5954,39 @@ class _AnnouncementComposerDialogState
             final selectedBuildingId = isOldRoom
                 ? _selectedOldBuildingId
                 : _selectedBuildingId;
+            final selectedFloorId = isOldRoom
+                ? _selectedOldFloorId
+                : _selectedFloorId;
             final selectedRoomId = isOldRoom
                 ? _selectedOldRoomId
                 : _selectedRoomId;
 
-            final filteredRooms = selectedBuildingId != null
-                ? state.roomsForBuilding(selectedBuildingId)
-                      .where((r) => r.isActive)
-                      .toList()
+            final selectedBuilding = selectedBuildingId != null
+                ? buildings.cast<BuildingModel?>().firstWhere(
+                    (b) => b?.id == selectedBuildingId,
+                    orElse: () => null,
+                  )
+                : null;
+
+            final floors = selectedBuilding != null
+                ? selectedBuilding.floors.where((f) => f.isActive).toList()
+                : <FloorModel>[];
+
+            final selectedFloor = selectedFloorId != null
+                ? floors.cast<FloorModel?>().firstWhere(
+                    (f) => f?.id == selectedFloorId,
+                    orElse: () => null,
+                  )
+                : null;
+
+            final rooms = selectedFloor != null
+                ? selectedFloor.rooms.where((r) => r.isActive).toList()
                 : <RoomModel>[];
 
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bloc dropdown
+                // 1. Bloc dropdown
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: selectedBuildingId,
@@ -5791,72 +6023,109 @@ class _AnnouncementComposerDialogState
                       setState(() {
                         if (isOldRoom) {
                           _selectedOldBuildingId = value;
+                          _selectedOldFloorId = null;
                           _selectedOldRoomId = null;
                         } else {
                           _selectedBuildingId = value;
+                          _selectedFloorId = null;
                           _selectedRoomId = null;
                         }
                       });
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
-                // Salle dropdown
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: selectedRoomId,
-                    decoration: _styledInputDecoration(
-                      hint: selectedBuildingId == null ? 'Sélectionnez d\'abord un bloc' : 'Sélectionner une salle',
-                      prefixIcon: Icons.meeting_room,
+
+                // 2. Étage dropdown (appears when bloc is selected)
+                if (selectedBuildingId != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedFloorId,
+                      decoration: _styledInputDecoration(
+                        hint: 'Sélectionner un étage',
+                        prefixIcon: Icons.layers_outlined,
+                      ),
+                      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                      borderRadius: BorderRadius.circular(10),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('Sélectionner un étage'),
+                        ),
+                        ...floors.map(
+                          (f) => DropdownMenuItem<String>(
+                            value: f.id,
+                            child: Text(f.name, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          if (isOldRoom) {
+                            _selectedOldFloorId = value;
+                            _selectedOldRoomId = null;
+                          } else {
+                            _selectedFloorId = value;
+                            _selectedRoomId = null;
+                          }
+                        });
+                      },
                     ),
-                    style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                    borderRadius: BorderRadius.circular(10),
-                    isExpanded: true,
-                    items: selectedBuildingId == null
-                        ? [
-                            const DropdownMenuItem<String>(
-                              value: null,
-                              child: Text('Sélectionnez d\'abord un bloc'),
-                            ),
-                          ]
-                        : [
-                            const DropdownMenuItem<String>(
-                              value: null,
-                              child: Text('Sélectionner une salle'),
-                            ),
-                            ...filteredRooms.map(
-                              (r) => DropdownMenuItem<String>(
-                                value: r.id,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      r.roomType == 'lab' ? Icons.science
-                                          : r.roomType == 'office' ? Icons.work
-                                          : Icons.meeting_room,
-                                      size: 16, color: AppColors.textSecondary,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(child: Text(r.name, overflow: TextOverflow.ellipsis)),
-                                    const SizedBox(width: 4),
-                                    Text('(${r.capacity})', style: TextStyle(fontSize: 11, color: AppColors.slate500)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                    onChanged: selectedBuildingId == null
-                        ? null
-                        : (value) {
-                            setState(() {
-                              if (isOldRoom) {
-                                _selectedOldRoomId = value;
-                              } else {
-                                _selectedRoomId = value;
-                              }
-                            });
-                          },
                   ),
-                ),
+                ],
+
+                // 3. Salle dropdown (appears when étage is selected)
+                if (selectedFloorId != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedRoomId,
+                      decoration: _styledInputDecoration(
+                        hint: 'Sélectionner une salle',
+                        prefixIcon: Icons.meeting_room_outlined,
+                      ),
+                      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                      borderRadius: BorderRadius.circular(10),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('Sélectionner une salle'),
+                        ),
+                        ...rooms.map(
+                          (r) => DropdownMenuItem<String>(
+                            value: r.id,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  r.roomType == 'lab' ? Icons.science
+                                      : r.roomType == 'office' ? Icons.work
+                                      : Icons.meeting_room,
+                                  size: 16,
+                                  color: AppColors.textSecondary,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(child: Text(r.name, overflow: TextOverflow.ellipsis)),
+                                const SizedBox(width: 4),
+                                Text('(${r.capacity})', style: TextStyle(fontSize: 11, color: AppColors.slate500)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          if (isOldRoom) {
+                            _selectedOldRoomId = value;
+                          } else {
+                            _selectedRoomId = value;
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                ],
               ],
             );
           },
@@ -5972,13 +6241,10 @@ class _AnnouncementComposerDialogState
               ],
             ),
           ),
-          Switch(
+          ModernAnimatedSwitch(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.white,
-            activeTrackColor: activeColor,
-            inactiveThumbColor: const Color(0xFFB0B8C1),
-            inactiveTrackColor: const Color(0xFFE5E7EB),
+            activeColor: activeColor,
           ),
         ],
       ),
@@ -5996,29 +6262,41 @@ class _AnnouncementComposerDialogState
     // Filter existing attachments (exclude those marked for deletion)
     final existingImages = _existingAttachments
         .where(
-          (a) =>
-              !_attachmentsToDelete.contains(a['id']) &&
-              (a['file_type']?.toString().startsWith('image/') ?? false),
+          (a) {
+            if (_attachmentsToDelete.contains(a['id'])) return false;
+            final type = (a['file_type'] ?? a['mime_type'] ?? '').toString().toLowerCase();
+            final name = (a['file_name'] ?? a['display_name'] ?? a['file_url'] ?? '').toString().toLowerCase();
+            return type.startsWith('image/') ||
+                ['.png', '.jpg', '.jpeg', '.webp', '.gif'].any((ext) => name.endsWith(ext));
+          },
         )
         .toList();
     final existingFiles = _existingAttachments
         .where(
-          (a) =>
-              !_attachmentsToDelete.contains(a['id']) &&
-              !(a['file_type']?.toString().startsWith('image/') ?? false),
+          (a) {
+            if (_attachmentsToDelete.contains(a['id'])) return false;
+            final type = (a['file_type'] ?? a['mime_type'] ?? '').toString().toLowerCase();
+            final name = (a['file_name'] ?? a['display_name'] ?? a['file_url'] ?? '').toString().toLowerCase();
+            final isImg = type.startsWith('image/') ||
+                ['.png', '.jpg', '.jpeg', '.webp', '.gif'].any((ext) => name.endsWith(ext));
+            return !isImg;
+          },
         )
         .toList();
 
     final hasContent =
         _pendingFiles.isNotEmpty ||
         existingImages.isNotEmpty ||
-        existingFiles.isNotEmpty;
+        existingFiles.isNotEmpty ||
+        _loadingImagesSkeletonCount > 0 ||
+        _loadingDocsSkeletonCount > 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Dropzone
         InkWell(
+          mouseCursor: SystemMouseCursors.click,
           onTap: _pickFiles,
           borderRadius: BorderRadius.circular(12),
           child: Container(
@@ -6071,7 +6349,11 @@ class _AnnouncementComposerDialogState
           if (existingImages.isNotEmpty) ...[
             const Text(
               'Images existantes',
-              style: TextStyle(fontSize: 12, color: AppColors.slate300),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -6098,19 +6380,22 @@ class _AnnouncementComposerDialogState
                     Positioned(
                       top: 4,
                       right: 4,
-                      child: GestureDetector(
-                        onTap: () =>
-                            setState(() => _attachmentsToDelete.add(att['id'])),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: AppColors.error,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            size: 14,
-                            color: AppColors.surface,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () =>
+                              setState(() => _attachmentsToDelete.add(att['id'])),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.error,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 14,
+                              color: AppColors.surface,
+                            ),
                           ),
                         ),
                       ),
@@ -6122,51 +6407,68 @@ class _AnnouncementComposerDialogState
             const SizedBox(height: 12),
           ],
           // New images to upload
-          if (imageFiles.isNotEmpty) ...[
+          if (imageFiles.isNotEmpty || _loadingImagesSkeletonCount > 0) ...[
             const Text(
               'Nouvelles images',
-              style: TextStyle(fontSize: 12, color: AppColors.slate300),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: imageFiles.map((f) {
-                final index = _pendingFiles.indexOf(f);
-                return Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(
-                        f.bytes,
-                        width: 100,
-                        height: 100,
-                        fit: BoxFit.cover,
+              children: [
+                ...imageFiles.map((f) {
+                  final index = _pendingFiles.indexOf(f);
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          f.bytes,
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: () =>
-                            setState(() => _pendingFiles.removeAt(index)),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: AppColors.error,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            size: 14,
-                            color: AppColors.surface,
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => _pendingFiles.removeAt(index)),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: AppColors.error,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 14,
+                                color: AppColors.surface,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              }).toList(),
+                    ],
+                  );
+                }),
+                ...List.generate(
+                  _loadingImagesSkeletonCount,
+                  (_) => const _SkeletonBox(
+                    width: 100,
+                    height: 100,
+                    borderRadius: 8,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
           ],
@@ -6174,78 +6476,200 @@ class _AnnouncementComposerDialogState
           if (existingFiles.isNotEmpty) ...[
             const Text(
               'Documents existants',
-              style: TextStyle(fontSize: 12, color: AppColors.slate300),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 8),
             Column(
               children: existingFiles.map((att) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    _getFileIcon(att['file_type'] ?? ''),
-                    color: AppColors.primary,
+                final fileName = att['display_name'] ?? att['file_name'] ?? 'Document';
+                final fileSize = att['size_bytes'] ?? att['file_size'] ?? 0;
+                final fileType = (att['file_type'] ?? att['mime_type'] ?? '').toString();
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.slate50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  title: Text(
-                    att['display_name'] ?? att['file_name'] ?? 'Document',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(_formatBytes(att['file_size'] ?? 0)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 18),
-                        onPressed: () => _editExistingFileName(att),
-                        tooltip: 'Modifier le nom',
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6D4CF6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _getFileIcon(fileType),
+                          color: const Color(0xFF6D4CF6),
+                          size: 20,
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.error),
-                        onPressed: () =>
-                            setState(() => _attachmentsToDelete.add(att['id'])),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              fileName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            if (_formatBytes(fileSize).isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _formatBytes(fileSize),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: IconButton(
+                          mouseCursor: SystemMouseCursors.click,
+                          icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.slate500),
+                          onPressed: () => _editExistingFileName(att),
+                          tooltip: 'Modifier le nom',
+                        ),
+                      ),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: IconButton(
+                          mouseCursor: SystemMouseCursors.click,
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: AppColors.error,
+                          ),
+                          tooltip: 'Supprimer ce fichier',
+                          onPressed: () =>
+                              setState(() => _attachmentsToDelete.add(att['id'])),
+                        ),
                       ),
                     ],
                   ),
                 );
               }).toList(),
             ),
+            const SizedBox(height: 12),
           ],
           // New files to upload
-          if (otherFiles.isNotEmpty) ...[
+          if (otherFiles.isNotEmpty || _loadingDocsSkeletonCount > 0) ...[
             const Text(
               'Nouveaux documents',
-              style: TextStyle(fontSize: 12, color: AppColors.slate300),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 8),
             Column(
-              children: otherFiles.map((f) {
-                final index = _pendingFiles.indexOf(f);
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(_getFileIcon(f.mimeType), color: AppColors.primary),
-                  title: Text(
-                    f.customDisplayName ?? f.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(_formatBytes(f.bytes.length)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 18),
-                        onPressed: () => _editFileName(f),
-                        tooltip: 'Modifier le nom',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.error),
-                        onPressed: () =>
-                            setState(() => _pendingFiles.removeAt(index)),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+              children: [
+                ...otherFiles.map((f) {
+                  final index = _pendingFiles.indexOf(f);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.slate50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6D4CF6).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _getFileIcon(f.mimeType),
+                            color: const Color(0xFF6D4CF6),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                f.customDisplayName ?? f.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (_formatBytes(f.bytes.length).isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  _formatBytes(f.bytes.length),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: IconButton(
+                            mouseCursor: SystemMouseCursors.click,
+                            icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.slate500),
+                            onPressed: () => _editFileName(f),
+                            tooltip: 'Modifier le nom',
+                          ),
+                        ),
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: IconButton(
+                            mouseCursor: SystemMouseCursors.click,
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              size: 18,
+                              color: AppColors.error,
+                            ),
+                            tooltip: 'Supprimer ce fichier',
+                            onPressed: () =>
+                                setState(() => _pendingFiles.removeAt(index)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                ...List.generate(
+                  _loadingDocsSkeletonCount,
+                  (_) => const _SkeletonDocCard(),
+                ),
+              ],
             ),
           ],
         ],
@@ -6639,6 +7063,7 @@ class _AnnouncementComposerDialogState
               onPressed: _isLoading ? null : () => Navigator.pop(context),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.slate500,
+                enabledMouseCursor: SystemMouseCursors.click,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
               ),
               child: const Text('Annuler', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
@@ -6659,6 +7084,7 @@ class _AnnouncementComposerDialogState
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6D4CF6),
                 foregroundColor: Colors.white,
+                enabledMouseCursor: SystemMouseCursors.click,
                 elevation: 2,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -6688,50 +7114,23 @@ class _AnnouncementComposerDialogState
         ],
         withData: true,
       );
-      if (result != null) {
-        for (final f in result.files) {
-          if (f.bytes == null) continue;
-          final mimeType = _getMimeType(f.extension ?? '');
-
-          // For images, compress and resize if too large
-          if (mimeType.startsWith('image/')) {
-            final compressedResult = await _compressImage(
-              f.bytes!,
-              f.name,
-              mimeType,
-            );
-            if (compressedResult != null) {
-              setState(() {
-                _pendingFiles.add(
-                  _PendingFile(
-                    name: compressedResult.name,
-                    bytes: compressedResult.bytes,
-                    mimeType: compressedResult.mimeType,
-                  ),
-                );
-              });
-
-              // Show compression info
-              if (compressedResult.wasCompressed && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '${f.name}: ${_formatBytes(f.bytes!.length)} → ${_formatBytes(compressedResult.bytes.length)}',
-                    ),
-                    backgroundColor: AppColors.success,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-            }
-          } else {
-            // Non-image files: add directly
-            setState(() {
+      if (result != null && result.files.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            for (final f in result.files) {
+              if (f.bytes == null) continue;
+              final mimeType = _getMimeType(f.extension ?? '');
               _pendingFiles.add(
-                _PendingFile(name: f.name, bytes: f.bytes!, mimeType: mimeType),
+                _PendingFile(
+                  name: f.name,
+                  bytes: f.bytes!,
+                  mimeType: mimeType,
+                ),
               );
-            });
-          }
+            }
+            _loadingImagesSkeletonCount = 0;
+            _loadingDocsSkeletonCount = 0;
+          });
         }
       }
     } catch (e) {
@@ -6748,101 +7147,6 @@ class _AnnouncementComposerDialogState
           ),
         );
       }
-    }
-  }
-
-  /// Compress and resize image if needed (max 1200px width, max 500KB)
-  Future<_CompressedImage?> _compressImage(
-    Uint8List bytes,
-    String fileName,
-    String mimeType,
-  ) async {
-    try {
-      // Decode image
-      final image = img.decodeImage(bytes);
-      if (image == null) {
-        // Can't decode, return original
-        return _CompressedImage(
-          name: fileName,
-          bytes: bytes,
-          mimeType: mimeType,
-          wasCompressed: false,
-        );
-      }
-
-      // Max dimensions (good for announcements)
-      const maxWidth = 1200;
-      const maxHeight = 1200;
-      const maxSizeBytes = 500 * 1024; // 500KB target
-
-      var processedImage = image;
-      var quality = 85;
-
-      // Resize if too large
-      if (image.width > maxWidth || image.height > maxHeight) {
-        final ratio = (image.width > image.height)
-            ? maxWidth / image.width
-            : maxHeight / image.height;
-        final newWidth = (image.width * ratio).round();
-        final newHeight = (image.height * ratio).round();
-        processedImage = img.copyResize(
-          image,
-          width: newWidth,
-          height: newHeight,
-          interpolation: img.Interpolation.linear,
-        );
-      }
-
-      // Encode with compression
-      Uint8List compressed;
-      String outputMime = mimeType;
-      String outputName = fileName;
-
-      if (mimeType == 'image/png') {
-        // Convert large PNGs to JPEG for better compression
-        if (bytes.length > maxSizeBytes) {
-          compressed = Uint8List.fromList(
-            img.encodeJpg(processedImage, quality: quality),
-          );
-          outputMime = 'image/jpeg';
-          outputName = fileName.replaceAll(
-            RegExp(r'\.png$', caseSensitive: false),
-            '.jpg',
-          );
-        } else {
-          compressed = Uint8List.fromList(img.encodePng(processedImage));
-        }
-      } else {
-        // JPEG - compress with quality reduction if needed
-        compressed = Uint8List.fromList(
-          img.encodeJpg(processedImage, quality: quality),
-        );
-
-        // Further reduce quality if still too large
-        while (compressed.length > maxSizeBytes && quality > 50) {
-          quality -= 10;
-          compressed = Uint8List.fromList(
-            img.encodeJpg(processedImage, quality: quality),
-          );
-        }
-      }
-
-      final wasCompressed = compressed.length < bytes.length;
-      return _CompressedImage(
-        name: outputName,
-        bytes: wasCompressed ? compressed : bytes,
-        mimeType: wasCompressed ? outputMime : mimeType,
-        wasCompressed: wasCompressed,
-      );
-    } catch (e) {
-      // If compression fails, return original
-      debugPrint('Image compression failed: $e');
-      return _CompressedImage(
-        name: fileName,
-        bytes: bytes,
-        mimeType: mimeType,
-        wasCompressed: false,
-      );
     }
   }
 
@@ -7058,7 +7362,7 @@ class _AnnouncementComposerDialogState
           id: widget.announcement!.id,
           title: title,
           content: content,
-          targetClassId: widget.announcement!.targetClassId,
+          targetClassId: _scope == 'student' ? null : _selectedClassId,
           isPinned: _isPinned,
           isImportant: _isImportant,
           scope: _scope,
@@ -7199,15 +7503,143 @@ class _PendingFile {
   });
 }
 
-class _CompressedImage {
-  final String name;
-  final Uint8List bytes;
-  final String mimeType;
-  final bool wasCompressed;
-  _CompressedImage({
-    required this.name,
-    required this.bytes,
-    required this.mimeType,
-    required this.wasCompressed,
+class _SkeletonBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final double borderRadius;
+  const _SkeletonBox({
+    required this.width,
+    required this.height,
+    this.borderRadius = 8,
   });
+
+  @override
+  State<_SkeletonBox> createState() => _SkeletonBoxState();
+}
+
+class _SkeletonBoxState extends State<_SkeletonBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.35, end: 0.85).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: AppColors.slate200.withOpacity(_animation.value),
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SkeletonDocCard extends StatefulWidget {
+  const _SkeletonDocCard();
+
+  @override
+  State<_SkeletonDocCard> createState() => _SkeletonDocCardState();
+}
+
+class _SkeletonDocCardState extends State<_SkeletonDocCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.35, end: 0.85).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.slate50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.slate200.withOpacity(_animation.value),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 140,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: AppColors.slate200.withOpacity(_animation.value),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 60,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: AppColors.slate200.withOpacity(_animation.value),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

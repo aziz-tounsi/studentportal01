@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/models/user_model.dart';
@@ -301,7 +302,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (user.role != 'student') {
         // Non-student trying to access student app
         debugPrint('AuthProvider: User is not a student, role=${user.role}');
-        await _supabase.auth.signOut();
+        await _supabase.auth.signOut(scope: SignOutScope.local);
         state = AuthState(
           accessDenied: true,
           errorMessage: 'Access denied. This app is for students only. Please use the admin dashboard.',
@@ -544,9 +545,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> signOut() async {
-    await _supabase.auth.signOut();
-    await OfflineCacheService.instance.clearAll();
+  Future<void> signOut({bool global = false}) async {
+    try {
+      await _supabase.auth.signOut(
+        scope: global ? SignOutScope.global : SignOutScope.local,
+      );
+    } catch (_) {}
+    try {
+      await OfflineCacheService.instance.clearAll();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (_) {}
     state = AuthState();
   }
 

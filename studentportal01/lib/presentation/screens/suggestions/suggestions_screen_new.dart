@@ -18,6 +18,7 @@ import '../../widgets/detail_modal_sheet.dart';
 import 'write_suggestion_screen.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/suggestions_screen_skeleton.dart';
+import '../../../core/utils/file_download_helper.dart';
 
 class SuggestionsScreen extends ConsumerStatefulWidget {
   const SuggestionsScreen({super.key});
@@ -678,41 +679,13 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                        ),
                      ],
                     ),
-                    const SizedBox(height: 12),
-                   Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                     children: [
-                       Expanded(
-                         child: _buildHighlightedText(
-                           suggestion.body,
-                           _searchQuery,
-                           TextStyle(
-                             fontSize: 13,
-                             fontWeight: FontWeight.w500,
-                             color: Colors.grey[700],
-                             height: 1.4,
-                           ),
-                           maxLines: 3,
-                           overflow: TextOverflow.ellipsis,
-                         ),
-                       ),
-                       if (imageAttachments.isNotEmpty) ...[
-                         const SizedBox(width: 10),
-                         _buildImageThumbnail(
-                           imageAttachments: imageAttachments,
-                           initialIndex: 0,
-                         ),
-                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                    if (suggestion.replies.isNotEmpty || hasDocumentAttachment) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
-                          if (suggestion.replies.isNotEmpty) ...[
+                          if (suggestion.replies.isNotEmpty)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                               decoration: BoxDecoration(
@@ -741,26 +714,61 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 6),
-                          ],
-                          if (hasDocumentAttachment) ...[
+                          if (hasDocumentAttachment)
                             _buildBadge(
                               l10n.attachment,
                               Colors.purple,
                             ),
-                          ],
                         ],
                       ),
-                      Text(
-                        _getRelativeTime(suggestion.createdAt, l10n.locale.languageCode),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildHighlightedText(
+                            suggestion.body,
+                            _searchQuery,
+                            TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[700],
+                              height: 1.4,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (imageAttachments.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          _buildImageThumbnail(
+                            imageAttachments: imageAttachments,
+                            initialIndex: 0,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 12,
                           color: Colors.grey[500],
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _getRelativeTime(suggestion.createdAt, l10n.locale.languageCode),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -921,33 +929,77 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
 
   void _showSuggestionDetail(Suggestion suggestion) {
     final l10n = AppLocalizations.of(context);
+    final typeColor = _getTypeColor(suggestion.suggestionType);
+    final typeIcon = _getTypeIcon(suggestion.suggestionType);
+    final typeLabel = _getTypeLabel(suggestion.suggestionType, l10n, suggestion.title);
+
     DetailModalSheet.show(
       context: context,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
+          // Header with category icon, type pill, and date
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  _getDetailTitle(suggestion, l10n),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1F2937),
-                    letterSpacing: -0.5,
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [typeColor, typeColor.withValues(alpha: 0.7)],
                   ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: typeColor.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
+                child: Icon(typeIcon, color: Colors.white, size: 28),
               ),
-              const SizedBox(width: 12),
-              Text(
-                _formatDate(suggestion.createdAt, l10n.locale.languageCode),
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: typeColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        typeLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: typeColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.formatAnnouncementDateTime(
+                        suggestion.createdAt,
+                      ),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           // Body
           Text(
             suggestion.body,
@@ -1069,7 +1121,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     required List<SuggestionAttachment> imageAttachments,
     required int initialIndex,
   }) {
-    return GestureDetector(
+    return BouncingWrapper(
+      shrinkScale: 0.90,
+      overshootScale: 1.10,
       onTap: () => _showImageViewer(imageAttachments, initialIndex),
       child: Container(
         width: 48,
@@ -1141,117 +1195,149 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
   }
 
   Widget _buildDetailAttachment(SuggestionAttachment attachment) {
+    final l10n = AppLocalizations.of(context);
     final isImage = _isImageAttachment(attachment);
     final url = attachment.fileUrl;
+    final fileName = _getCleanFileName(attachment);
 
-    return GestureDetector(
-      onTap: () {
-        if (isImage) {
-          _showImageViewer([attachment], 0);
-        } else {
-          _openAttachment(url);
-        }
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isImage) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                url,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[100],
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image, color: Colors.grey[400]),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Image non disponible',
-                        style: TextStyle(color: Colors.grey[500]),
-                      ),
-                    ],
+    if (isImage) {
+      return BouncingWrapper(
+        shrinkScale: 0.94,
+        overshootScale: 1.05,
+        onTap: () => _showImageViewer([attachment], 0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                height: 200,
+                color: Colors.grey[100],
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                        : null,
                   ),
                 ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) => Container(
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.broken_image, color: Colors.grey[400]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Image non disponible',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                ],
               ),
             ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.purple.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: BouncingWrapper(
+              behavior: HitTestBehavior.opaque,
+              shrinkScale: 0.96,
+              overshootScale: 1.04,
+              onTap: () => FileDownloadHelper.viewFile(
+                context: context,
+                url: url,
+                fileName: fileName,
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: Colors.purple.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       _getAttachmentIcon(attachment),
-                      size: 24,
+                      size: 22,
                       color: Colors.purple[700],
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _getCleanFileName(attachment),
+                          fileName,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Colors.purple[800],
                           ),
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
-                          'Appuyez pour télécharger',
+                          l10n.tapToDownload,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             color: Colors.purple[600],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Icon(Icons.download_rounded, color: Colors.purple[600]),
                 ],
               ),
             ),
-          ],
+          ),
+          const SizedBox(width: 8),
+          BouncingWrapper(
+            shrinkScale: 0.82,
+            overshootScale: 1.18,
+            onTap: () {
+              Navigator.of(context, rootNavigator: true).pop();
+              FileDownloadHelper.downloadFile(
+                context: context,
+                url: url,
+                fileName: fileName,
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.download_rounded,
+                size: 20,
+                color: Colors.purple[700],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1312,8 +1398,36 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
               ),
               Positioned(
                 top: 50,
+                right: 76,
+                child: BouncingWrapper(
+                  shrinkScale: 0.85,
+                  overshootScale: 1.15,
+                  onTap: () {
+                    Navigator.pop(context);
+                    final att = imageAttachments[initialIndex];
+                    FileDownloadHelper.downloadFile(
+                      context: context,
+                      url: att.fileUrl,
+                      fileName: _getCleanFileName(att),
+                    );
+                  },
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.download_rounded, color: Colors.white, size: 24),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 50,
                 right: 20,
-                child: GestureDetector(
+                child: BouncingWrapper(
+                  shrinkScale: 0.85,
+                  overshootScale: 1.15,
                   onTap: () => Navigator.pop(context),
                   child: Container(
                     width: 44,
@@ -1322,7 +1436,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.close, color: Colors.white),
+                    child: const Icon(Icons.close, color: Colors.white, size: 24),
                   ),
                 ),
               ),
