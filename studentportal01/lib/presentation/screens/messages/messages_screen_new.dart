@@ -1229,35 +1229,13 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Text(
-                                  typeLabel,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: typeColor,
-                                  ),
-                                ),
-                                if (!isRead) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEF4444),
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFFEF4444).withValues(alpha: 0.5),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 1),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
+                            Text(
+                              typeLabel,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: typeColor,
+                              ),
                             ),
                             const SizedBox(height: 3),
                             Text(
@@ -1300,6 +1278,19 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen>
                       if (isPinned) ...[
                         const SizedBox(width: 8),
                         _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
+                      ],
+                      // Unread indicator dot at the edge of the card at header right (no glow)
+                      if (!isRead) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                       ],
                     ],
                   ),
