@@ -372,8 +372,11 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       final clampedT = t.clamp(0.0, 1.0);
       final rawProgress = _expandCtrl!.value.clamp(0.0, 1.0);
 
-      // Motion flight blur on expanding card content (exactly like profile pic popup bounce-to-appear)
-      final cardFlightBlur = math.sin(rawProgress * math.pi) * 12.0;
+      // Motion flight blur on expanding card content:
+      // Active only during the initial flight, clears completely by 60% of expansion so there is NO lingering blur at the end!
+      final cardFlightBlur = rawProgress < 0.60
+          ? math.sin((rawProgress / 0.60) * math.pi) * 10.0
+          : 0.0;
 
       final startRect = _originRect ??
           Rect.fromCenter(
@@ -386,8 +389,8 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       // When t > 1.0 during spring bounce, currentRect naturally overshoots screen size and springs back!
       final currentRect = Rect.lerp(startRect, targetRect, t)!;
 
-      // Prominent rounded border radius through expansion, smoothly settling at full screen
-      final radiusValue = (26.0 * (1.0 - math.pow(clampedT, 3.0))).clamp(0.0, 26.0);
+      // Much more pronounced rounded border radius during expansion (48px squircle), smoothly settling at full screen
+      final radiusValue = (48.0 * (1.0 - math.pow(clampedT, 3.5))).clamp(0.0, 48.0);
       final radius = BorderRadius.circular(radiusValue);
 
       // Smooth fast fade-in during the first 12% so elements are clearly visible throughout
