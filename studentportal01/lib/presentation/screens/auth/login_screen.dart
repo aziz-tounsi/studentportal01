@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +10,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/school_logo_widget.dart';
+import '../../widgets/ios_bounce_zoom_transition.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 
@@ -119,14 +119,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     bool isSubmitting = false;
     bool isSubmitted = false;
 
-    showDialog(
+    showGeneralDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.38),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () => FocusScope.of(ctx).unfocus(),
+      barrierDismissible: true,
+      barrierLabel: '',
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (ctx, anim, sec) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusScope.of(ctx).unfocus(),
           child: StatefulBuilder(
             builder: (context, setDialogState) {
               if (isSubmitted) {
@@ -366,6 +367,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             },
           ),
         ),
+      transitionBuilder: (ctx, anim, sec, child) => buildIosBounceZoomTransition(
+        context: ctx,
+        animation: anim,
+        child: child,
+        backdropSigma: 16.0,
+        maxFlightBlur: 14.0,
       ),
     );
   }

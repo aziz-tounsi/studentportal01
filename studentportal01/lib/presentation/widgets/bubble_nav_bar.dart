@@ -133,7 +133,7 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     }
 
     // Navigating to a different route
-    // If returning to Home dashboard from any of the 6 home pages, close animate by side sliding
+    // If returning to Home dashboard from any of the 6 home pages, close animate by pop bouncing zoom-out with flight blur
     const homeFeatureRoutes = [
       '/suggestions',
       '/absences',
@@ -150,7 +150,7 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
         _selectedIndex = index;
       });
       _animationController.forward(from: 0.0);
-      IosEdgeSwipeBackState.currentActive!.animateBack();
+      IosEdgeSwipeBackState.currentActive!.animateZoomOutBack();
       return;
     }
 

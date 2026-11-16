@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import '../../../core/utils/file_download_helper.dart';
 import 'bouncing_wrapper.dart';
+import 'ios_bounce_zoom_transition.dart';
 
 /// iOS-style interactive photo gallery viewer matching native iOS Photos:
 /// - Smooth single-finger drag in ANY direction to dismiss
@@ -41,16 +42,12 @@ class IosPhotoGalleryViewer extends StatefulWidget {
           );
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-            CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutBack,
-              reverseCurve: Curves.easeInBack,
-            ),
-          );
-          return ScaleTransition(
-            scale: scaleAnimation,
+          return buildIosBounceZoomTransition(
+            context: context,
+            animation: animation,
             child: child,
+            backdropSigma: 0.0,
+            maxFlightBlur: 14.0,
           );
         },
       ),

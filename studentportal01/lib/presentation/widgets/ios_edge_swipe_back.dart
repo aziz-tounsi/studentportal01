@@ -1,17 +1,12 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../screens/home/home_screen.dart';
 
-/// Wraps a page with native iOS-style interactive edge-swipe-to-return gesture.
-///
-/// In LTR (Latin: English, French): sliding from the left edge towards right pops the page.
-/// In RTL (Arabic): sliding from the right edge towards left pops the page.
-///
-/// The gesture is strictly locked to the horizontal axis so that vertical scrolling
-/// cannot occur simultaneously. While dragging, the destination bottom page is
-/// displayed underneath with an iOS frosted glass blur, starts slightly zoomed out,
-/// zooms in smoothly as you slide, and does a subtle micro-bounce as it surfaces to the top.
+/// Wraps a page with native iOS-style interactive edge-swipe-to-return gesture,
+/// fluid card expansion from HomeScreen, and bouncing zoom-out with flight blur
+/// when closing back to Home.
 class IosEdgeSwipeBack extends StatefulWidget {
   final Widget child;
   final Widget? backgroundPage;
@@ -33,6 +28,12 @@ class IosEdgeSwipeBack extends StatefulWidget {
   /// Tracks whether an edge swipe back gesture was performed to return to Home.
   static bool didEdgeSwipe = false;
 
+  /// Holds the origin Rect of the tapped card from HomeScreen for expansion/closing.
+  static Rect? cardOriginRect;
+
+  /// Flag indicating whether the page should animate an expand on entry.
+  static bool shouldAnimateExpand = false;
+
   static IosEdgeSwipeBackState? of(BuildContext context) {
     return context.findAncestorStateOfType<IosEdgeSwipeBackState>();
   }
@@ -42,10 +43,11 @@ class IosEdgeSwipeBack extends StatefulWidget {
 }
 
 class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// Reference to the currently visible IosEdgeSwipeBackState
   static IosEdgeSwipeBackState? currentActive;
 
+  // 1. Edge-swipe interactive gesture controller
   late AnimationController _animCtrl;
   late Animation<double> _progressAnim;
 
@@ -57,10 +59,23 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
   int _lastTime = 0;
   double _velocity = 0.0; // px / ms
 
+  // 2. Expand entry animation controller
+  AnimationController? _expandCtrl;
+  Animation<double>? _expandAnim;
+  bool _isExpanding = false;
+
+  // 3. Zoom-out exit animation controller (for closing to Home)
+  AnimationController? _zoomOutCtrl;
+  Animation<double>? _zoomOutAnim;
+  bool _isZoomingOut = false;
+
+  Rect? _originRect;
+
   @override
   void initState() {
     super.initState();
     currentActive = this;
+
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -70,6 +85,33 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
         _progress = _progressAnim.value;
       });
     });
+
+    if (IosEdgeSwipeBack.shouldAnimateExpand && IosEdgeSwipeBack.cardOriginRect != null) {
+      _originRect = IosEdgeSwipeBack.cardOriginRect;
+      IosEdgeSwipeBack.shouldAnimateExpand = false;
+      _isExpanding = true;
+
+      _expandCtrl = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 440),
+      );
+      _expandAnim = CurvedAnimation(
+        parent: _expandCtrl!,
+        curve: const Cubic(0.20, 1.0, 0.32, 1.0),
+      );
+      _expandCtrl!.addListener(() {
+        setState(() {});
+      });
+      _expandCtrl!.forward().then((_) {
+        if (mounted) {
+          setState(() {
+            _isExpanding = false;
+          });
+        }
+      });
+    } else {
+      _originRect = IosEdgeSwipeBack.cardOriginRect;
+    }
   }
 
   @override
@@ -84,11 +126,13 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       currentActive = null;
     }
     _animCtrl.dispose();
+    _expandCtrl?.dispose();
+    _zoomOutCtrl?.dispose();
     super.dispose();
   }
 
   void _onDragStart(DragStartDetails details, bool isRtl, double screenWidth) {
-    if (_animCtrl.isAnimating) return;
+    if (_animCtrl.isAnimating || _isExpanding || _isZoomingOut) return;
     if (widget.onInterceptSwipe != null && widget.onInterceptSwipe!()) {
       return;
     }
@@ -131,7 +175,6 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     final passedDist = _progress >= 0.22;
 
     if (passedDist || flicked) {
-      // Animate slide completion and execute return
       _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
         CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
@@ -139,7 +182,6 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
         _executeReturn();
       });
     } else {
-      // Snap back to closed state
       _progressAnim = Tween<double>(begin: _progress, end: 0.0).animate(
         CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
       );
@@ -157,19 +199,46 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     }
   }
 
-  void animateBack() {
-    if (_animCtrl.isAnimating) return;
-    _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
-      CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
+  /// Closes the page with pop bouncing zoom-out and flight blur in the middle of the distance.
+  void animateZoomOutBack() {
+    if ((_zoomOutCtrl != null && _zoomOutCtrl!.isAnimating) || _animCtrl.isAnimating) return;
+
+    _zoomOutCtrl?.dispose();
+    _zoomOutCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
     );
-    _animCtrl.forward(from: 0.0).then((_) {
-      _executeReturn();
+    _zoomOutAnim = CurvedAnimation(
+      parent: _zoomOutCtrl!,
+      curve: Curves.easeInBack, // iOS bouncing zoom-out curve
+    );
+    _zoomOutCtrl!.addListener(() {
+      setState(() {});
     });
+
+    setState(() {
+      _isZoomingOut = true;
+    });
+
+    _zoomOutCtrl!.forward(from: 0.0).then((_) {
+      _executeReturn();
+      if (mounted) {
+        setState(() {
+          _isZoomingOut = false;
+        });
+      }
+    });
+  }
+
+  /// Alias for backward compatibility that triggers pop zoom out instead of slide
+  void animateBack() {
+    animateZoomOutBack();
   }
 
   void _executeReturn() {
     if (!mounted) return;
     IosEdgeSwipeBack.didEdgeSwipe = true;
+    IosEdgeSwipeBack.cardOriginRect = null;
     if (widget.onReturn != null) {
       widget.onReturn!();
       return;
@@ -186,10 +255,9 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
   @override
   Widget build(BuildContext context) {
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    // Zoomed out slightly at start (0.92), zooms smoothly to 1.0 as progress reaches 1.0
-    final double underPageScale = 0.92 + (0.08 * _progress);
+    final screenSize = MediaQuery.sizeOf(context);
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
 
     const defaultHomeGradient = LinearGradient(
       begin: Alignment.topLeft,
@@ -204,11 +272,199 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       stops: [0.0, 0.25, 0.5, 0.75, 1.0],
     );
 
+    // ==========================================
+    // 1. EXPAND ENTRY ANIMATION (Card -> Full Page)
+    // ==========================================
+    if (_isExpanding && _expandAnim != null) {
+      final t = _expandAnim!.value.clamp(0.0, 1.0);
+      final startRect = _originRect ??
+          Rect.fromCenter(
+            center: Offset(screenWidth / 2, screenHeight / 2),
+            width: screenWidth * 0.45,
+            height: 180,
+          );
+      final targetRect = Offset.zero & screenSize;
+      final currentRect = Rect.lerp(startRect, targetRect, t)!;
+
+      final double radiusValue;
+      if (t < 0.88) {
+        radiusValue = 24.0 + (t / 0.88) * 23.0; // 24 -> 47
+      } else {
+        final finishP = (t - 0.88) / 0.12;
+        radiusValue = 47.0 * (1.0 - finishP);
+      }
+      final radius = BorderRadius.circular(radiusValue);
+      final contentOpacity = (t / 0.40).clamp(0.0, 1.0);
+
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Underlying background layer
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: widget.backgroundGradient ?? defaultHomeGradient,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Transform.scale(
+                scale: 0.94 + (0.06 * t),
+                alignment: Alignment.center,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: (14.0 * (1.0 - t)).clamp(0.0, 14.0),
+                    sigmaY: (14.0 * (1.0 - t)).clamp(0.0, 14.0),
+                  ),
+                  child: RepaintBoundary(
+                    child: widget.backgroundPage ?? const HomeScreen(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Expanding Card Container
+          Positioned.fromRect(
+            rect: currentRect,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                boxShadow: t < 0.98
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: 0.22 * (1.0 - t * 0.4),
+                          ),
+                          blurRadius: 36 * (1.0 - t * 0.2),
+                          offset: Offset(0, 14 * (1.0 - t)),
+                          spreadRadius: 2.0 * (1.0 - t),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: ClipRRect(
+                borderRadius: radius,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(color: Colors.white),
+                    Opacity(
+                      opacity: contentOpacity,
+                      child: RepaintBoundary(
+                        child: widget.child,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ==========================================
+    // 2. ZOOM-OUT EXIT ANIMATION (Page -> Bounce Zoom Out with Middle Blur)
+    // ==========================================
+    if (_isZoomingOut && _zoomOutAnim != null && _zoomOutCtrl != null) {
+      final p = _zoomOutCtrl!.value.clamp(0.0, 1.0);
+      final animP = _zoomOutAnim!.value.clamp(0.0, 1.0);
+      final targetRect = _originRect ??
+          Rect.fromCenter(
+            center: Offset(screenWidth / 2, screenHeight / 2),
+            width: screenWidth * 0.45,
+            height: 180,
+          );
+      final currentRect = Rect.lerp(Offset.zero & screenSize, targetRect, animP)!;
+
+      // Squircle radius during shrink
+      final radius = BorderRadius.circular(24.0 * animP + 47.0 * (1.0 - animP));
+
+      // Flight motion blur: peaks in the middle of the distance
+      final flightBlur = math.sin(p * math.pi) * 14.0;
+      final pageOpacity = (1.0 - p * 1.15).clamp(0.0, 1.0);
+
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Underlying background layer
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: widget.backgroundGradient ?? defaultHomeGradient,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Transform.scale(
+                scale: 0.94 + (0.06 * (1.0 - p)),
+                alignment: Alignment.center,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: (14.0 * p).clamp(0.0, 14.0),
+                    sigmaY: (14.0 * p).clamp(0.0, 14.0),
+                  ),
+                  child: RepaintBoundary(
+                    child: widget.backgroundPage ?? const HomeScreen(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Zooming out Page with Middle Blur
+          Positioned.fromRect(
+            rect: currentRect,
+            child: Opacity(
+              opacity: pageOpacity,
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: flightBlur,
+                  sigmaY: flightBlur,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: 0.20 * (1.0 - p),
+                        ),
+                        blurRadius: 28,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: radius,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Container(color: Colors.white),
+                        RepaintBoundary(
+                          child: widget.child,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ==========================================
+    // 3. STANDARD / INTERACTIVE EDGE SWIPE GESTURE
+    // ==========================================
+    final double underPageScale = 0.92 + (0.08 * _progress);
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. App background gradient layer: fills the outer margin around the zoomed-out underpage
-        // completely eliminating any black/grey edge areas during swipe gesture
         if (_progress > 0.0) ...[
           Positioned.fill(
             child: Container(
@@ -227,14 +483,16 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                     sigmaX: (14.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 14.0),
                     sigmaY: (14.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 14.0),
                   ),
-                  child: widget.backgroundPage ?? const HomeScreen(),
+                  child: RepaintBoundary(
+                    child: widget.backgroundPage ?? const HomeScreen(),
+                  ),
                 ),
               ),
             ),
           ),
         ],
 
-        // 2. Sliding top page strictly translated on X axis
+        // Sliding top page strictly translated on X axis
         Transform.translate(
           offset: Offset(
             isRtl ? -(_progress * screenWidth) : (_progress * screenWidth),
@@ -262,7 +520,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
           ),
         ),
 
-        // 3. Edge Swipe Detector Strip (consumes touches on the edge to prevent vertical/child gesture conflicts)
+        // Edge Swipe Detector Strip
         Positioned(
           top: MediaQuery.of(context).padding.top + 80,
           bottom: 0,

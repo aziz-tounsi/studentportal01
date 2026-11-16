@@ -22,6 +22,7 @@ import '../../../core/utils/file_download_helper.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
 import '../../widgets/ios_photo_gallery_viewer.dart';
+import '../../widgets/ios_bounce_zoom_transition.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const Color _pink = Color(0xFFFF2D78);
@@ -1746,22 +1747,12 @@ I have **complete** access to your academic data — grades, timetable, absences
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutBack,
-            reverseCurve: Curves.easeInBack,
-          ),
-        );
-        return BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: 15 * animation.value.clamp(0.0, 1.0),
-            sigmaY: 15 * animation.value.clamp(0.0, 1.0),
-          ),
-          child: ScaleTransition(
-            scale: scaleAnimation,
-            child: child,
-          ),
+        return buildIosBounceZoomTransition(
+          context: context,
+          animation: animation,
+          child: child,
+          backdropSigma: 15.0,
+          maxFlightBlur: 14.0,
         );
       },
     );

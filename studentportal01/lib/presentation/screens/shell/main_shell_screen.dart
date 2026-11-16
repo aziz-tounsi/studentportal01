@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../../providers/announcements_provider.dart';
@@ -13,26 +12,8 @@ import '../../../core/services/notification_service.dart';
 import '../../../data/services/offline_cache_service.dart';
 import '../documents/documents_screen.dart';
 
-class InAppBannerData {
-  final String title;
-  final String message;
-  final String? route;
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBgColor;
-
-  const InAppBannerData({
-    required this.title,
-    required this.message,
-    this.route,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBgColor,
-  });
-}
-
 /// Wraps authenticated app shell to manage FCM token sync and Supabase Realtime
-/// provider refreshes plus deduplicated native OS foreground notifications and in-app alerts.
+/// provider refreshes plus deduplicated native OS notifications.
 class RealtimeNotificationWrapper extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -52,8 +33,6 @@ class _RealtimeNotificationWrapperState
   DateTime? _lastResumeSync;
   RealtimeChannel? _globalRealtimeChannel;
   String? _subscribedUserId;
-  InAppBannerData? _currentBanner;
-  Timer? _bannerDismissTimer;
   Timer? _periodicCatchUpTimer;
   final Set<String> _alertedNotificationIds = {};
 
@@ -99,15 +78,6 @@ class _RealtimeNotificationWrapperState
           final route = '/notifications?id=${a.id}';
           final dedupKey = 'announcements_global:${a.id}';
 
-          _showInAppBanner(
-            title: title,
-            message: body,
-            route: route,
-            icon: Icons.campaign_rounded,
-            iconColor: const Color(0xFF6D4CF6),
-            iconBgColor: const Color(0xFF6D4CF6).withValues(alpha: 0.12),
-          );
-
           LocalNotificationService.showNotification(
             id: LocalNotificationService.stableNotificationId(dedupKey),
             title: title,
@@ -128,15 +98,6 @@ class _RealtimeNotificationWrapperState
           final route = '/messages?id=${m.id}';
           final dedupKey = 'announcements_class:${m.id}';
 
-          _showInAppBanner(
-            title: title,
-            message: message,
-            route: route,
-            icon: Icons.chat_bubble_rounded,
-            iconColor: const Color(0xFF2563EB),
-            iconBgColor: const Color(0xFF2563EB).withValues(alpha: 0.12),
-          );
-
           LocalNotificationService.showNotification(
             id: LocalNotificationService.stableNotificationId(dedupKey),
             title: title,
@@ -150,40 +111,6 @@ class _RealtimeNotificationWrapperState
     } catch (e) {
       debugPrint('Catch-up unseen notifications error: $e');
     }
-  }
-
-  void _showInAppBanner({
-    required String title,
-    required String message,
-    String? route,
-    required IconData icon,
-    required Color iconColor,
-    required Color iconBgColor,
-  }) {
-    if (!mounted) return;
-    try {
-      HapticFeedback.mediumImpact();
-    } catch (_) {}
-
-    _bannerDismissTimer?.cancel();
-    setState(() {
-      _currentBanner = InAppBannerData(
-        title: title,
-        message: message,
-        route: route,
-        icon: icon,
-        iconColor: iconColor,
-        iconBgColor: iconBgColor,
-      );
-    });
-
-    _bannerDismissTimer = Timer(const Duration(milliseconds: 4500), () {
-      if (mounted && _currentBanner != null) {
-        setState(() {
-          _currentBanner = null;
-        });
-      }
-    });
   }
 
   @override
@@ -217,7 +144,6 @@ class _RealtimeNotificationWrapperState
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _bannerDismissTimer?.cancel();
     _periodicCatchUpTimer?.cancel();
     _tearDownRealtime();
     super.dispose();
@@ -302,15 +228,6 @@ class _RealtimeNotificationWrapperState
                 ? 'announcements_global:$recId'
                 : null;
 
-            _showInAppBanner(
-              title: title,
-              message: message,
-              route: route,
-              icon: Icons.campaign_rounded,
-              iconColor: const Color(0xFF6D4CF6),
-              iconBgColor: const Color(0xFF6D4CF6).withValues(alpha: 0.12),
-            );
-
             if (recId != null) _markAsAlerted(userId, recId);
 
             LocalNotificationService.showNotification(
@@ -386,15 +303,6 @@ class _RealtimeNotificationWrapperState
                 ? 'announcements_class:$recId'
                 : null;
 
-            _showInAppBanner(
-              title: title,
-              message: message,
-              route: route,
-              icon: Icons.chat_bubble_rounded,
-              iconColor: const Color(0xFF2563EB),
-              iconBgColor: const Color(0xFF2563EB).withValues(alpha: 0.12),
-            );
-
             if (recId != null) _markAsAlerted(userId, recId);
 
             LocalNotificationService.showNotification(
@@ -436,15 +344,6 @@ class _RealtimeNotificationWrapperState
             final recId = record['id']?.toString();
             final route = recId != null && recId.isNotEmpty ? '/messages?id=$recId' : '/messages';
             final dedupKey = recId != null && recId.isNotEmpty ? 'announcements_student:$recId' : null;
-
-            _showInAppBanner(
-              title: title,
-              message: message,
-              route: route,
-              icon: Icons.mark_email_unread_rounded,
-              iconColor: const Color(0xFF4F46E5),
-              iconBgColor: const Color(0xFF4F46E5).withValues(alpha: 0.12),
-            );
 
             if (recId != null) _markAsAlerted(userId, recId);
 
@@ -524,15 +423,6 @@ class _RealtimeNotificationWrapperState
                 ? 'suggestion_replies:$recId'
                 : null;
 
-            _showInAppBanner(
-              title: 'Réponse à votre suggestion',
-              message: message,
-              route: '/suggestions',
-              icon: Icons.reply_rounded,
-              iconColor: const Color(0xFF10B981),
-              iconBgColor: const Color(0xFF10B981).withValues(alpha: 0.12),
-            );
-
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? 'Réponse à votre suggestion|$message|/suggestions'),
@@ -606,15 +496,6 @@ class _RealtimeNotificationWrapperState
                 : '/documents';
             final dedupKey =
                 recId != null && recId.isNotEmpty ? 'documents:$recId' : null;
-
-            _showInAppBanner(
-              title: title,
-              message: message,
-              route: route,
-              icon: Icons.description_rounded,
-              iconColor: const Color(0xFFF59E0B),
-              iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-            );
 
             if (recId != null) _markAsAlerted(userId, recId);
 
@@ -698,37 +579,7 @@ class _RealtimeNotificationWrapperState
       }
     });
 
-    return Stack(
-      children: [
-        widget.child,
-        if (_currentBanner != null)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: _InAppFloatingNotificationBanner(
-                  banner: _currentBanner!,
-                  onDismiss: () {
-                    _bannerDismissTimer?.cancel();
-                    setState(() => _currentBanner = null);
-                  },
-                  onTap: () {
-                    final targetRoute = _currentBanner?.route;
-                    _bannerDismissTimer?.cancel();
-                    setState(() => _currentBanner = null);
-                    if (targetRoute != null) {
-                      LocalNotificationService.navigateToRoute(targetRoute);
-                    }
-                  },
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    return widget.child;
   }
 }
 
@@ -754,119 +605,4 @@ class MainShellScreen extends StatelessWidget {
   }
 }
 
-class _InAppFloatingNotificationBanner extends StatelessWidget {
-  final InAppBannerData banner;
-  final VoidCallback onDismiss;
-  final VoidCallback onTap;
-
-  const _InAppFloatingNotificationBanner({
-    required this.banner,
-    required this.onDismiss,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Dismissible(
-      key: UniqueKey(),
-      direction: DismissDirection.up,
-      onDismissed: (_) => onDismiss(),
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 18,
-                offset: const Offset(0, 6),
-                spreadRadius: 2,
-              ),
-              BoxShadow(
-                color: banner.iconColor.withValues(alpha: 0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: banner.iconBgColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(banner.icon, size: 20, color: banner.iconColor),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                banner.title,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF111827),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'À l\'instant',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF9CA3AF),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          banner.message,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF4B5563),
-                            height: 1.25,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF9CA3AF)),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                    onPressed: onDismiss,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 

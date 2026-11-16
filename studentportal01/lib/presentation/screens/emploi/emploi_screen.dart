@@ -1,5 +1,4 @@
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -16,6 +15,7 @@ import '../../providers/student_context_provider.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/emploi_skeleton.dart';
+import '../../widgets/ios_bounce_zoom_transition.dart';
 import '../../providers/nav_bar_provider.dart';
 
 final emploiSemesterProvider = StateProvider<int>((ref) => 1);
@@ -1268,20 +1268,12 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutBack,
-          reverseCurve: Curves.easeInBack,
-        );
-        return BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: 8.0,
-            sigmaY: 8.0,
-          ),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.0, end: 1.0).animate(curved),
-            child: child,
-          ),
+        return buildIosBounceZoomTransition(
+          context: context,
+          animation: animation,
+          child: child,
+          backdropSigma: 8.0,
+          maxFlightBlur: 14.0,
         );
       },
     );

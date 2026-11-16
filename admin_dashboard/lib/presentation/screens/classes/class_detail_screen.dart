@@ -492,7 +492,6 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
               radius: 8,
               hasShadow: false,
               backgroundColor: Colors.transparent,
-              borderColor: _brand.withOpacity(0.3),
               iconColor: _brand,
               options: const [
                 SortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),
@@ -2695,7 +2694,6 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                   radius: 8,
                   hasShadow: false,
                   backgroundColor: Colors.transparent,
-                  borderColor: _brand.withOpacity(0.3),
                   iconColor: _brand,
                   options: const [
                     SortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),

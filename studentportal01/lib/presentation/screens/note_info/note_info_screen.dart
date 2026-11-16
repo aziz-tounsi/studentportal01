@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/announcement_model.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/ios_photo_gallery_viewer.dart';
 
 // =====================================================
 // REAL-TIME ANNOUNCEMENT STATE NOTIFIER
@@ -1041,42 +1042,9 @@ class _AnnouncementCard extends StatelessWidget {
   }
 
   void _showFullImage(BuildContext context, String imageUrl) {
-    showDialog(
+    IosPhotoGalleryViewer.show(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(color: Colors.black87),
-            ),
-            InteractiveViewer(
-              child: Center(
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
-                    Icons.broken_image,
-                    size: 64,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 40,
-              right: 16,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ],
-        ),
-      ),
+      imageUrls: [imageUrl],
     );
   }
 

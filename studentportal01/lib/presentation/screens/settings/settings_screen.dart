@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +12,7 @@ import '../../providers/locale_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
+import '../../widgets/ios_bounce_zoom_transition.dart';
 
 const Color _navPink = Color(0xFFFF2D78);
 
@@ -312,22 +312,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutBack,
-            reverseCurve: Curves.easeInBack,
-          ),
-        );
-        return BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: 12 * animation.value.clamp(0.0, 1.0),
-            sigmaY: 12 * animation.value.clamp(0.0, 1.0),
-          ),
-          child: ScaleTransition(
-            scale: scaleAnimation,
-            child: child,
-          ),
+        return buildIosBounceZoomTransition(
+          context: context,
+          animation: animation,
+          child: child,
+          backdropSigma: 12.0,
+          maxFlightBlur: 14.0,
         );
       },
     );

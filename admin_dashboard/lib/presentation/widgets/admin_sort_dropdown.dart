@@ -70,6 +70,7 @@ class AdminSortDropdown<T> extends StatelessWidget {
       surfaceTintColor: Colors.transparent,
       elevation: 8,
       shadowColor: Colors.black.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(radius),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -150,25 +151,8 @@ class AdminSortDropdown<T> extends StatelessWidget {
           vertical: 0,
         ),
         decoration: BoxDecoration(
-          color: isNonDefault
-              ? (backgroundColor ?? effectiveActiveColor.withValues(alpha: 0.08))
-              : (backgroundColor ?? Colors.transparent),
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(radius),
-          border: Border.all(
-            color: borderColor ?? (isNonDefault
-                ? effectiveActiveColor.withValues(alpha: 0.2)
-                : Colors.transparent),
-            width: 1.0,
-          ),
-          boxShadow: hasShadow
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

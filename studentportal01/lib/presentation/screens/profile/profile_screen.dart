@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -23,6 +22,7 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../../core/theme/responsive.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/profile_skeleton.dart';
+import '../../widgets/ios_bounce_zoom_transition.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
 import '../../providers/nav_bar_provider.dart';
@@ -168,22 +168,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutBack,
-            reverseCurve: Curves.easeInBack,
-          ),
-        );
-        return BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: 12 * animation.value.clamp(0.0, 1.0),
-            sigmaY: 12 * animation.value.clamp(0.0, 1.0),
-          ),
-          child: ScaleTransition(
-            scale: scaleAnimation,
-            child: child,
-          ),
+        return buildIosBounceZoomTransition(
+          context: context,
+          animation: animation,
+          child: child,
+          backdropSigma: 12.0,
+          maxFlightBlur: 14.0,
         );
       },
     );
