@@ -4,6 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../screens/home/home_screen.dart';
 
+/// iOS-style app open spring curve:
+/// Fast cubic expansion to screen size (t = 0 to 0.68),
+/// followed by an organic spring bounce overshoot (~3%) settling at t = 1.0.
+class IosAppBounceCurve extends Curve {
+  const IosAppBounceCurve();
+
+  @override
+  double transformInternal(double t) {
+    if (t <= 0.0) return 0.0;
+    if (t >= 1.0) return 1.0;
+    if (t < 0.68) {
+      final p = t / 0.68;
+      return 1.0 - math.pow(1.0 - p, 3.0);
+    } else {
+      final p = (t - 0.68) / 0.32;
+      return 1.0 + math.sin(p * math.pi) * 0.032 * (1.0 - p * 0.3);
+    }
+  }
+}
+
 /// Wraps a page with native iOS-style interactive edge-swipe-to-return gesture,
 /// fluid card expansion from HomeScreen, and bouncing zoom-out with flight blur
 /// when closing back to Home.
@@ -99,11 +119,11 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
       _expandCtrl = AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 450),
+        duration: const Duration(milliseconds: 460),
       );
       _expandAnim = CurvedAnimation(
         parent: _expandCtrl!,
-        curve: Curves.easeOutCubic,
+        curve: const IosAppBounceCurve(),
       );
       _expandCtrl!.addListener(() {
         setState(() {});
@@ -348,7 +368,8 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     // 1. EXPAND ENTRY ANIMATION (Card → Full Page, iOS app-open style)
     // ==========================================
     if (_isExpanding && _expandAnim != null) {
-      final t = _expandAnim!.value.clamp(0.0, 1.0);
+      final t = _expandAnim!.value;
+      final clampedT = t.clamp(0.0, 1.0);
       final startRect = _originRect ??
           Rect.fromCenter(
             center: Offset(screenWidth / 2, screenHeight / 2),
@@ -356,19 +377,21 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
             height: 180,
           );
       final targetRect = Offset.zero & screenSize;
+
+      // When t > 1.0 during spring bounce, currentRect naturally overshoots screen size and springs back!
       final currentRect = Rect.lerp(startRect, targetRect, t)!;
 
-      // Radius animates from card-corner-radius (20) down to 0 (full screen)
-      final radiusValue = (20.0 * (1.0 - t)).clamp(0.0, 20.0);
+      // Prominent rounded border radius through expansion, smoothly settling at full screen
+      final radiusValue = (26.0 * (1.0 - math.pow(clampedT, 3.0))).clamp(0.0, 26.0);
       final radius = BorderRadius.circular(radiusValue);
 
-      // Content fades in during the first 40% of the animation (iOS style)
-      final contentOpacity = Curves.easeOut.transform((t / 0.40).clamp(0.0, 1.0));
+      // Smooth fast fade-in during the first 12% so elements are clearly visible throughout
+      final contentOpacity = (t / 0.12).clamp(0.0, 1.0);
 
       // Background scales slightly inward and blurs as the card opens (iOS feel)
-      final bgScale = 1.0 - (0.05 * t);  // 1.0 → 0.95
-      final bgBlur = 14.0 * t;            // 0 → 14 px
-      final bgDim = 0.16 * t;             // 0 → 0.16
+      final bgScale = 1.0 - (0.05 * clampedT);  // 1.0 → 0.95
+      final bgBlur = 14.0 * clampedT;           // 0 → 14 px
+      final bgDim = 0.16 * clampedT;            // 0 → 0.16
 
       return PopScope(
         canPop: false,
@@ -384,21 +407,22 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
               scaleValue: bgScale,
               dimAlpha: bgDim,
             ),
-            // Expanding card container — stable child anchored at topCenter with ZERO element movement
+            // Expanding card container with rounded borders, expanding elements, and spring bounce
             Positioned.fromRect(
               rect: currentRect,
               child: RepaintBoundary(
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: radius,
-                    boxShadow: t < 0.95
+                    boxShadow: t < 0.98
                         ? [
                             BoxShadow(
-                              color:
-                                  Colors.black.withValues(alpha: 0.20 * (1.0 - t)),
-                              blurRadius: 32 * (1.0 - t),
-                              offset: Offset(0, 10 * (1.0 - t)),
-                              spreadRadius: 2.0 * (1.0 - t),
+                              color: Colors.black.withValues(
+                                alpha: (0.22 * (1.0 - clampedT)).clamp(0.0, 0.22),
+                              ),
+                              blurRadius: 36 * (1.0 - clampedT),
+                              offset: Offset(0, 12 * (1.0 - clampedT)),
+                              spreadRadius: 2.0 * (1.0 - clampedT),
                             ),
                           ]
                         : null,
@@ -409,16 +433,19 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                       fit: StackFit.expand,
                       children: [
                         Container(color: Colors.white),
-                        // Fixed topCenter child: elements do NOT translate down during expand
-                        OverflowBox(
-                          alignment: Alignment.topCenter,
-                          minWidth: screenWidth,
-                          maxWidth: screenWidth,
-                          minHeight: screenHeight,
-                          maxHeight: screenHeight,
-                          child: Opacity(
-                            opacity: contentOpacity,
-                            child: RepaintBoundary(child: widget.child),
+                        // Page elements scale and expand outward together with the card bounds!
+                        Opacity(
+                          opacity: contentOpacity,
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            child: SizedBox(
+                              width: screenWidth,
+                              height: screenHeight,
+                              child: RepaintBoundary(
+                                child: widget.child,
+                              ),
+                            ),
                           ),
                         ),
                       ],
