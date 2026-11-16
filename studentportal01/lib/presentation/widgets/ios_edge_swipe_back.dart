@@ -367,9 +367,14 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     // ==========================================
     // 1. EXPAND ENTRY ANIMATION (Card → Full Page, iOS app-open style)
     // ==========================================
-    if (_isExpanding && _expandAnim != null) {
+    if (_isExpanding && _expandAnim != null && _expandCtrl != null) {
       final t = _expandAnim!.value;
       final clampedT = t.clamp(0.0, 1.0);
+      final rawProgress = _expandCtrl!.value.clamp(0.0, 1.0);
+
+      // Motion flight blur on expanding card content (exactly like profile pic popup bounce-to-appear)
+      final cardFlightBlur = math.sin(rawProgress * math.pi) * 12.0;
+
       final startRect = _originRect ??
           Rect.fromCenter(
             center: Offset(screenWidth / 2, screenHeight / 2),
@@ -434,19 +439,38 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                       children: [
                         Container(color: Colors.white),
                         // Page elements scale and expand outward together with the card bounds!
+                        // Blurred during expansion flight like profile pic popup, clearing as it bounces to appear!
                         Opacity(
                           opacity: contentOpacity,
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            alignment: Alignment.topCenter,
-                            child: SizedBox(
-                              width: screenWidth,
-                              height: screenHeight,
-                              child: RepaintBoundary(
-                                child: widget.child,
-                              ),
-                            ),
-                          ),
+                          child: cardFlightBlur > 0.05
+                              ? ImageFiltered(
+                                  imageFilter: ImageFilter.blur(
+                                    sigmaX: cardFlightBlur,
+                                    sigmaY: cardFlightBlur,
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.topCenter,
+                                    child: SizedBox(
+                                      width: screenWidth,
+                                      height: screenHeight,
+                                      child: RepaintBoundary(
+                                        child: widget.child,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : FittedBox(
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.topCenter,
+                                  child: SizedBox(
+                                    width: screenWidth,
+                                    height: screenHeight,
+                                    child: RepaintBoundary(
+                                      child: widget.child,
+                                    ),
+                                  ),
+                                ),
                         ),
                       ],
                     ),
