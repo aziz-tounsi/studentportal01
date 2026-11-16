@@ -93,11 +93,11 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
       _expandCtrl = AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 440),
+        duration: const Duration(milliseconds: 290),
       );
       _expandAnim = CurvedAnimation(
         parent: _expandCtrl!,
-        curve: const Cubic(0.20, 1.0, 0.32, 1.0),
+        curve: const Cubic(0.20, 0.90, 0.25, 1.0),
       );
       _expandCtrl!.addListener(() {
         setState(() {});
@@ -206,7 +206,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     _zoomOutCtrl?.dispose();
     _zoomOutCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 300),
     );
     _zoomOutAnim = CurvedAnimation(
       parent: _zoomOutCtrl!,
@@ -286,15 +286,9 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       final targetRect = Offset.zero & screenSize;
       final currentRect = Rect.lerp(startRect, targetRect, t)!;
 
-      final double radiusValue;
-      if (t < 0.88) {
-        radiusValue = 24.0 + (t / 0.88) * 23.0; // 24 -> 47
-      } else {
-        final finishP = (t - 0.88) / 0.12;
-        radiusValue = 47.0 * (1.0 - finishP);
-      }
+      final radiusValue = (24.0 * (1.0 - t)).clamp(0.0, 24.0);
       final radius = BorderRadius.circular(radiusValue);
-      final contentOpacity = (t / 0.40).clamp(0.0, 1.0);
+      final contentOpacity = (t / 0.20).clamp(0.0, 1.0);
 
       return Stack(
         fit: StackFit.expand,
@@ -310,12 +304,12 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
           Positioned.fill(
             child: IgnorePointer(
               child: Transform.scale(
-                scale: 0.94 + (0.06 * t),
+                scale: 0.96 + (0.04 * (1.0 - t)),
                 alignment: Alignment.center,
                 child: ImageFiltered(
                   imageFilter: ImageFilter.blur(
-                    sigmaX: (14.0 * (1.0 - t)).clamp(0.0, 14.0),
-                    sigmaY: (14.0 * (1.0 - t)).clamp(0.0, 14.0),
+                    sigmaX: (8.0 * t).clamp(0.0, 8.0),
+                    sigmaY: (8.0 * t).clamp(0.0, 8.0),
                   ),
                   child: RepaintBoundary(
                     child: widget.backgroundPage ?? const HomeScreen(),
@@ -324,7 +318,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
               ),
             ),
           ),
-          // Expanding Card Container
+          // Expanding Card Container with stable full-screen child
           Positioned.fromRect(
             rect: currentRect,
             child: Container(
@@ -334,11 +328,11 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                     ? [
                         BoxShadow(
                           color: Colors.black.withValues(
-                            alpha: 0.22 * (1.0 - t * 0.4),
+                            alpha: 0.16 * (1.0 - t),
                           ),
-                          blurRadius: 36 * (1.0 - t * 0.2),
-                          offset: Offset(0, 14 * (1.0 - t)),
-                          spreadRadius: 2.0 * (1.0 - t),
+                          blurRadius: 24 * (1.0 - t),
+                          offset: Offset(0, 8 * (1.0 - t)),
+                          spreadRadius: 1.0 * (1.0 - t),
                         ),
                       ]
                     : null,
@@ -349,10 +343,17 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                   fit: StackFit.expand,
                   children: [
                     Container(color: Colors.white),
-                    Opacity(
-                      opacity: contentOpacity,
-                      child: RepaintBoundary(
-                        child: widget.child,
+                    // Child elements are fixed at screen (0,0) with full dimensions: ZERO moving/squishing!
+                    Positioned(
+                      top: -currentRect.top,
+                      left: -currentRect.left,
+                      width: screenWidth,
+                      height: screenHeight,
+                      child: Opacity(
+                        opacity: contentOpacity,
+                        child: RepaintBoundary(
+                          child: widget.child,
+                        ),
                       ),
                     ),
                   ],
@@ -365,25 +366,14 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     }
 
     // ==========================================
-    // 2. ZOOM-OUT EXIT ANIMATION (Page -> Bounce Zoom Out with Middle Blur)
+    // 2. ZOOM-OUT EXIT ANIMATION (Centered Bounce Zoom-Out with Middle Flight Blur)
     // ==========================================
     if (_isZoomingOut && _zoomOutAnim != null && _zoomOutCtrl != null) {
       final p = _zoomOutCtrl!.value.clamp(0.0, 1.0);
-      final animP = _zoomOutAnim!.value.clamp(0.0, 1.0);
-      final targetRect = _originRect ??
-          Rect.fromCenter(
-            center: Offset(screenWidth / 2, screenHeight / 2),
-            width: screenWidth * 0.45,
-            height: 180,
-          );
-      final currentRect = Rect.lerp(Offset.zero & screenSize, targetRect, animP)!;
-
-      // Squircle radius during shrink
-      final radius = BorderRadius.circular(24.0 * animP + 47.0 * (1.0 - animP));
-
-      // Flight motion blur: peaks in the middle of the distance
-      final flightBlur = math.sin(p * math.pi) * 14.0;
-      final pageOpacity = (1.0 - p * 1.15).clamp(0.0, 1.0);
+      final scale = (1.0 - _zoomOutAnim!.value).clamp(0.0, 1.0);
+      final flightBlur = math.sin(p * math.pi) * 12.0;
+      final pageOpacity = (1.0 - p * 1.20).clamp(0.0, 1.0);
+      final radius = BorderRadius.circular(30.0 * p);
 
       return Stack(
         fit: StackFit.expand,
@@ -399,12 +389,12 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
           Positioned.fill(
             child: IgnorePointer(
               child: Transform.scale(
-                scale: 0.94 + (0.06 * (1.0 - p)),
+                scale: 0.96 + (0.04 * p),
                 alignment: Alignment.center,
                 child: ImageFiltered(
                   imageFilter: ImageFilter.blur(
-                    sigmaX: (14.0 * p).clamp(0.0, 14.0),
-                    sigmaY: (14.0 * p).clamp(0.0, 14.0),
+                    sigmaX: (8.0 * (1.0 - p)).clamp(0.0, 8.0),
+                    sigmaY: (8.0 * (1.0 - p)).clamp(0.0, 8.0),
                   ),
                   child: RepaintBoundary(
                     child: widget.backgroundPage ?? const HomeScreen(),
@@ -413,40 +403,45 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
               ),
             ),
           ),
-          // Zooming out Page with Middle Blur
-          Positioned.fromRect(
-            rect: currentRect,
-            child: Opacity(
-              opacity: pageOpacity,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(
-                  sigmaX: flightBlur,
-                  sigmaY: flightBlur,
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: 0.20 * (1.0 - p),
-                        ),
-                        blurRadius: 28,
-                        spreadRadius: 2,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+          // Centered bounce zoom-out like emploi_screen detail cell
+          Center(
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.center,
+              child: Opacity(
+                opacity: pageOpacity,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: flightBlur,
+                    sigmaY: flightBlur,
                   ),
-                  child: ClipRRect(
-                    borderRadius: radius,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Container(color: Colors.white),
-                        RepaintBoundary(
-                          child: widget.child,
+                  child: Container(
+                    width: screenWidth,
+                    height: screenHeight,
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: 0.16 * (1.0 - p),
+                          ),
+                          blurRadius: 24,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 8),
                         ),
                       ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: radius,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Container(color: Colors.white),
+                          RepaintBoundary(
+                            child: widget.child,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

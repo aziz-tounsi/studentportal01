@@ -104,21 +104,6 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     final targetRoute = items[index].route;
     final currentRoute = GoRouterState.of(context).matchedLocation;
 
-    // Dismiss any pushed modals/sheets/popups so we cleanly show the destination tab
-    dismissAllOverlaysAndPopups();
-    try {
-      final rootNav = Navigator.of(context, rootNavigator: true);
-      while (rootNav.canPop()) {
-        rootNav.pop();
-      }
-    } catch (_) {}
-    try {
-      final localNav = Navigator.of(context, rootNavigator: false);
-      while (localNav.canPop()) {
-        localNav.pop();
-      }
-    } catch (_) {}
-
     if (currentRoute == targetRoute) {
       // Truly on the same page: stay bouncing purely on the same button!
       setState(() {
@@ -132,7 +117,6 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
       return;
     }
 
-    // Navigating to a different route
     // If returning to Home dashboard from any of the 6 home pages, close animate by pop bouncing zoom-out with flight blur
     const homeFeatureRoutes = [
       '/suggestions',
@@ -153,6 +137,21 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
       IosEdgeSwipeBackState.currentActive!.animateZoomOutBack();
       return;
     }
+
+    // Dismiss any pushed modals/sheets/popups so we cleanly show the destination tab
+    dismissAllOverlaysAndPopups();
+    try {
+      final rootNav = Navigator.of(context, rootNavigator: true);
+      while (rootNav.canPop()) {
+        rootNav.pop();
+      }
+    } catch (_) {}
+    try {
+      final localNav = Navigator.of(context, rootNavigator: false);
+      while (localNav.canPop()) {
+        localNav.pop();
+      }
+    } catch (_) {}
 
     if (targetRoute == '/ai-chat' && currentRoute != '/ai-chat') {
       ref.read(aiChatOriginRouteProvider.notifier).state = currentRoute;

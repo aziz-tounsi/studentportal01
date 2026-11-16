@@ -19,6 +19,7 @@ import 'write_suggestion_screen.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/suggestions_screen_skeleton.dart';
 import '../../widgets/ios_photo_gallery_viewer.dart';
+import '../../widgets/ios_edge_swipe_back.dart';
 import '../../../core/utils/file_download_helper.dart';
 
 class SuggestionsScreen extends ConsumerStatefulWidget {
@@ -42,6 +43,30 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
   final String _selectedFilter = 'all';
   final List<PlatformFile> _attachedFiles = [];
   bool _isSubmitting = false;
+
+  final GlobalKey _emptyBtnKey = GlobalKey();
+  final GlobalKey _fabKey = GlobalKey();
+
+  void _openWriteSuggestion(GlobalKey? key) {
+    Rect? btnRect;
+    if (key != null && key.currentContext != null) {
+      final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null && renderBox.hasSize) {
+        final origin = renderBox.localToGlobal(Offset.zero);
+        btnRect = origin & renderBox.size;
+      }
+    }
+    final screenSize = MediaQuery.sizeOf(context);
+    btnRect ??= Rect.fromCenter(
+      center: Offset(screenSize.width - 56, screenSize.height - 192),
+      width: 64,
+      height: 64,
+    );
+
+    IosEdgeSwipeBack.cardOriginRect = btnRect;
+    IosEdgeSwipeBack.shouldAnimateExpand = true;
+    context.go('/write-suggestion');
+  }
 
   @override
   void initState() {
@@ -261,8 +286,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                           ),
                                           const SizedBox(height: 20),
                                           BouncingWrapper(
+                                            key: _emptyBtnKey,
                                             shrinkScale: 0.92,
-                                            onTap: () => context.go('/write-suggestion'),
+                                            onTap: () => _openWriteSuggestion(_emptyBtnKey),
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                                               decoration: BoxDecoration(
@@ -342,8 +368,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
             right: 24,
             bottom: 160,
             child: BouncingWrapper(
+              key: _fabKey,
               shrinkScale: 0.88,
-              onTap: () => context.go('/write-suggestion'),
+              onTap: () => _openWriteSuggestion(_fabKey),
               child: Container(
                   width: 64,
                   height: 64,

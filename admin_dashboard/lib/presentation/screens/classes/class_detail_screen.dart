@@ -13,7 +13,7 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/admin_sort_dropdown.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart' hide Border;
+import 'package:excel/excel.dart' hide Border, TextSpan, BorderStyle;
 
 const _brand = Color(0xFF655DD5);
 const _brandLight = Color(0xFFEEECFB);
