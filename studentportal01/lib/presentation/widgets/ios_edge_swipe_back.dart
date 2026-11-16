@@ -199,6 +199,17 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     }
   }
 
+  /// Closes the page with smooth side sliding animation
+  void animateSlideBack() {
+    if (_animCtrl.isAnimating || (_zoomOutCtrl != null && _zoomOutCtrl!.isAnimating)) return;
+    _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
+      CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
+    );
+    _animCtrl.forward(from: 0.0).then((_) {
+      _executeReturn();
+    });
+  }
+
   /// Closes the page with pop bouncing zoom-out and flight blur in the middle of the distance.
   void animateZoomOutBack() {
     if ((_zoomOutCtrl != null && _zoomOutCtrl!.isAnimating) || _animCtrl.isAnimating) return;
@@ -230,9 +241,9 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     });
   }
 
-  /// Alias for backward compatibility that triggers pop zoom out instead of slide
+  /// Alias for backward compatibility that triggers smooth side sliding
   void animateBack() {
-    animateZoomOutBack();
+    animateSlideBack();
   }
 
   void _executeReturn() {
@@ -290,78 +301,90 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       final radius = BorderRadius.circular(radiusValue);
       final contentOpacity = (t / 0.20).clamp(0.0, 1.0);
 
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          // Underlying background layer
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: widget.backgroundGradient ?? defaultHomeGradient,
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          animateSlideBack();
+        },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Underlying background layer
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: widget.backgroundGradient ?? defaultHomeGradient,
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Transform.scale(
-                scale: 0.96 + (0.04 * (1.0 - t)),
-                alignment: Alignment.center,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: (8.0 * t).clamp(0.0, 8.0),
-                    sigmaY: (8.0 * t).clamp(0.0, 8.0),
-                  ),
+            // Scaled background page without expensive dynamic blur for 60/120 FPS
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Transform.scale(
+                  scale: 0.96 + (0.04 * (1.0 - t)),
+                  alignment: Alignment.center,
                   child: RepaintBoundary(
                     child: widget.backgroundPage ?? const HomeScreen(),
                   ),
                 ),
               ),
             ),
-          ),
-          // Expanding Card Container with stable full-screen child
-          Positioned.fromRect(
-            rect: currentRect,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                boxShadow: t < 0.98
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: 0.16 * (1.0 - t),
-                          ),
-                          blurRadius: 24 * (1.0 - t),
-                          offset: Offset(0, 8 * (1.0 - t)),
-                          spreadRadius: 1.0 * (1.0 - t),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: ClipRRect(
-                borderRadius: radius,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(color: Colors.white),
-                    // Child elements are fixed at screen (0,0) with full dimensions: ZERO moving/squishing!
-                    Positioned(
-                      top: -currentRect.top,
-                      left: -currentRect.left,
-                      width: screenWidth,
-                      height: screenHeight,
-                      child: Opacity(
-                        opacity: contentOpacity,
-                        child: RepaintBoundary(
-                          child: widget.child,
-                        ),
-                      ),
-                    ),
-                  ],
+            // Dimming scrim
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.12 * t),
                 ),
               ),
             ),
-          ),
-        ],
+            // Expanding Card Container with stable full-screen child
+            Positioned.fromRect(
+              rect: currentRect,
+              child: RepaintBoundary(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    boxShadow: t < 0.98
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: 0.16 * (1.0 - t),
+                              ),
+                              blurRadius: 24 * (1.0 - t),
+                              offset: Offset(0, 8 * (1.0 - t)),
+                              spreadRadius: 1.0 * (1.0 - t),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: radius,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Container(color: Colors.white),
+                        // Child elements are fixed at screen (0,0) with full dimensions: ZERO moving/squishing!
+                        Positioned(
+                          top: -currentRect.top,
+                          left: -currentRect.left,
+                          width: screenWidth,
+                          height: screenHeight,
+                          child: Opacity(
+                            opacity: contentOpacity,
+                            child: RepaintBoundary(
+                              child: widget.child,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -375,164 +398,181 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       final pageOpacity = (1.0 - p * 1.20).clamp(0.0, 1.0);
       final radius = BorderRadius.circular(30.0 * p);
 
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          // Underlying background layer
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: widget.backgroundGradient ?? defaultHomeGradient,
+      return PopScope(
+        canPop: false,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Underlying background layer
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: widget.backgroundGradient ?? defaultHomeGradient,
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Transform.scale(
-                scale: 0.96 + (0.04 * p),
-                alignment: Alignment.center,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: (8.0 * (1.0 - p)).clamp(0.0, 8.0),
-                    sigmaY: (8.0 * (1.0 - p)).clamp(0.0, 8.0),
-                  ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Transform.scale(
+                  scale: 0.96 + (0.04 * p),
+                  alignment: Alignment.center,
                   child: RepaintBoundary(
                     child: widget.backgroundPage ?? const HomeScreen(),
                   ),
                 ),
               ),
             ),
-          ),
-          // Centered bounce zoom-out like emploi_screen detail cell
-          Center(
-            child: Transform.scale(
-              scale: scale,
-              alignment: Alignment.center,
-              child: Opacity(
-                opacity: pageOpacity,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: flightBlur,
-                    sigmaY: flightBlur,
-                  ),
-                  child: Container(
-                    width: screenWidth,
-                    height: screenHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: 0.16 * (1.0 - p),
-                          ),
-                          blurRadius: 24,
-                          spreadRadius: 1,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.12 * (1.0 - p)),
+                ),
+              ),
+            ),
+            // Centered bounce zoom-out like emploi_screen detail cell
+            Center(
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.center,
+                child: Opacity(
+                  opacity: pageOpacity,
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(
+                      sigmaX: flightBlur,
+                      sigmaY: flightBlur,
                     ),
-                    child: ClipRRect(
-                      borderRadius: radius,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Container(color: Colors.white),
-                          RepaintBoundary(
-                            child: widget.child,
+                    child: Container(
+                      width: screenWidth,
+                      height: screenHeight,
+                      decoration: BoxDecoration(
+                        borderRadius: radius,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: 0.16 * (1.0 - p),
+                            ),
+                            blurRadius: 24,
+                            spreadRadius: 1,
+                            offset: const Offset(0, 8),
                           ),
                         ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: radius,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Container(color: Colors.white),
+                            RepaintBoundary(
+                              child: widget.child,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
     // ==========================================
     // 3. STANDARD / INTERACTIVE EDGE SWIPE GESTURE
     // ==========================================
-    final double underPageScale = 0.92 + (0.08 * _progress);
+    final double underPageScale = 0.94 + (0.06 * _progress);
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (_progress > 0.0) ...[
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: widget.backgroundGradient ?? defaultHomeGradient,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (widget.onInterceptSwipe != null && widget.onInterceptSwipe!()) {
+          return;
+        }
+        animateSlideBack();
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_progress > 0.0) ...[
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: widget.backgroundGradient ?? defaultHomeGradient,
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Transform.scale(
-                scale: underPageScale,
-                alignment: Alignment.center,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: (14.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 14.0),
-                    sigmaY: (14.0 * (1.0 - (_progress * 0.75))).clamp(0.0, 14.0),
-                  ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Transform.scale(
+                  scale: underPageScale,
+                  alignment: Alignment.center,
                   child: RepaintBoundary(
                     child: widget.backgroundPage ?? const HomeScreen(),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: Colors.black.withValues(
+                    alpha: 0.14 * (1.0 - _progress),
+                  ),
+                ),
+              ),
+            ),
+          ],
 
-        // Sliding top page strictly translated on X axis
-        Transform.translate(
-          offset: Offset(
-            isRtl ? -(_progress * screenWidth) : (_progress * screenWidth),
-            0.0,
-          ),
-          child: Container(
-            decoration: _progress > 0.0
-                ? BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: 0.18 * (1.0 - _progress),
+          // Sliding top page strictly translated on X axis
+          Transform.translate(
+            offset: Offset(
+              isRtl ? -(_progress * screenWidth) : (_progress * screenWidth),
+              0.0,
+            ),
+            child: Container(
+              decoration: _progress > 0.0
+                  ? BoxDecoration(
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: 0.18 * (1.0 - _progress),
+                          ),
+                          blurRadius: 28,
+                          spreadRadius: 2,
+                          offset: Offset(isRtl ? 10 : -10, 0),
                         ),
-                        blurRadius: 28,
-                        spreadRadius: 2,
-                        offset: Offset(isRtl ? 10 : -10, 0),
-                      ),
-                    ],
-                  )
-                : null,
-            child: IgnorePointer(
-              ignoring: _isDragging || _animCtrl.isAnimating,
-              child: widget.child,
+                      ],
+                    )
+                  : null,
+              child: IgnorePointer(
+                ignoring: _isDragging || _animCtrl.isAnimating,
+                child: widget.child,
+              ),
             ),
           ),
-        ),
 
-        // Edge Swipe Detector Strip
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 80,
-          bottom: 0,
-          left: isRtl ? null : 0,
-          right: isRtl ? 0 : null,
-          width: _isDragging ? screenWidth : widget.edgeThreshold,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onHorizontalDragStart: (details) =>
-                _onDragStart(details, isRtl, screenWidth),
-            onHorizontalDragUpdate: (details) =>
-                _onDragUpdate(details, isRtl, screenWidth),
-            onHorizontalDragEnd: (details) => _onDragEnd(details, isRtl),
-            onHorizontalDragCancel: _onDragCancel,
+          // Edge Swipe Detector Strip
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 80,
+            bottom: 0,
+            left: isRtl ? null : 0,
+            right: isRtl ? 0 : null,
+            width: _isDragging ? screenWidth : widget.edgeThreshold,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragStart: (details) =>
+                  _onDragStart(details, isRtl, screenWidth),
+              onHorizontalDragUpdate: (details) =>
+                  _onDragUpdate(details, isRtl, screenWidth),
+              onHorizontalDragEnd: (details) => _onDragEnd(details, isRtl),
+              onHorizontalDragCancel: _onDragCancel,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

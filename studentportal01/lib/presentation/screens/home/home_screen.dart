@@ -168,12 +168,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       }
     });
 
-    return RepaintBoundary(
-      child: Scaffold(
-        extendBody: true,
-        body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
+    final isDrawerOpenForPop = ref.read(sideDrawerOpenProvider);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (isDrawerOpenForPop) {
+          ref.read(sideDrawerOpenProvider.notifier).state = false;
+        }
+        // On HomeScreen we silently absorb the system back
+      },
+      child: RepaintBoundary(
+        child: Scaffold(
+          extendBody: true,
+          body: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDrawerOpen = ref.watch(sideDrawerOpenProvider);
           final screenHeight = constraints.maxHeight;
           final screenWidth = constraints.maxWidth;
           final safeTop = MediaQuery.of(context).padding.top;
@@ -538,6 +548,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           );
         },
       ),
+    ),
     ),
     );
   }
