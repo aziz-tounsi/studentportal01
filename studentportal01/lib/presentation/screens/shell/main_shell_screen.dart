@@ -56,7 +56,7 @@ class _RealtimeNotificationWrapperState
     ));
   }
 
-  Future<void> _catchUpUnseenNotifications() async {
+  void _syncExistingNotificationIdsAsAlerted() {
     if (!mounted) return;
     final session = Supabase.instance.client.auth.currentSession;
     if (session == null) return;
@@ -64,52 +64,21 @@ class _RealtimeNotificationWrapperState
     if (_alertedNotificationIds.isEmpty) {
       _loadAlertedIds(userId);
     }
-
     try {
-      final readIds = ref.read(readAnnouncementsProvider);
       final globalList = ref.read(globalAnnouncementsProvider).valueOrNull ?? [];
       final classList = ref.read(classMessagesProvider).valueOrNull ?? [];
-
       for (final a in globalList) {
-        if (!readIds.contains(a.id) && !_alertedNotificationIds.contains(a.id)) {
-          _markAsAlerted(userId, a.id);
-          final title = a.title.trim().isNotEmpty ? a.title.trim() : 'Nouvelle notification';
-          final body = a.body.trim().isNotEmpty ? a.body.trim() : 'Nouvelle notification disponible';
-          final route = '/notifications?id=${a.id}';
-          final dedupKey = 'announcements_global:${a.id}';
-
-          LocalNotificationService.showNotification(
-            id: LocalNotificationService.stableNotificationId(dedupKey),
-            title: title,
-            body: body,
-            routePayload: route,
-            dedupKey: dedupKey,
-          );
-          return;
-        }
+        _alertedNotificationIds.add(a.id);
       }
-
       for (final m in classList) {
-        if (!readIds.contains(m.id) && !_alertedNotificationIds.contains(m.id)) {
-          _markAsAlerted(userId, m.id);
-          final title = m.title.trim().isNotEmpty ? m.title.trim() : 'Nouveau message';
-          final cleanBody = m.body.replaceFirst(RegExp(r'^\*\*@[^*]+\*\*\s*'), '').trim();
-          final message = cleanBody.isNotEmpty ? cleanBody : 'Nouveau message disponible';
-          final route = '/messages?id=${m.id}';
-          final dedupKey = 'announcements_class:${m.id}';
-
-          LocalNotificationService.showNotification(
-            id: LocalNotificationService.stableNotificationId(dedupKey),
-            title: title,
-            body: message,
-            routePayload: route,
-            dedupKey: dedupKey,
-          );
-          return;
-        }
+        _alertedNotificationIds.add(m.id);
       }
+      unawaited(OfflineCacheService.instance.setJson(
+        'alerted_notification_ids_$userId',
+        _alertedNotificationIds.toList(),
+      ));
     } catch (e) {
-      debugPrint('Catch-up unseen notifications error: $e');
+      debugPrint('Sync existing notification IDs error: $e');
     }
   }
 
@@ -129,14 +98,7 @@ class _RealtimeNotificationWrapperState
       }
       await Future.delayed(const Duration(milliseconds: 1000));
       if (mounted) {
-        _catchUpUnseenNotifications();
-      }
-    });
-
-    _periodicCatchUpTimer?.cancel();
-    _periodicCatchUpTimer = Timer.periodic(const Duration(seconds: 40), (_) {
-      if (mounted) {
-        _catchUpUnseenNotifications();
+        _syncExistingNotificationIdsAsAlerted();
       }
     });
   }
@@ -561,7 +523,7 @@ class _RealtimeNotificationWrapperState
         ref.invalidate(suggestionsProvider);
         Future.delayed(const Duration(milliseconds: 1200), () {
           if (mounted) {
-            _catchUpUnseenNotifications();
+            _syncExistingNotificationIdsAsAlerted();
           }
         });
       }

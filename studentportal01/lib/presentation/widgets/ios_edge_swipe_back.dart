@@ -99,12 +99,11 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
       _expandCtrl = AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 460),
+        duration: const Duration(milliseconds: 450),
       );
       _expandAnim = CurvedAnimation(
         parent: _expandCtrl!,
-        // iOS spring-like: fast acceleration, slight overshoot settling
-        curve: const Cubic(0.25, 0.46, 0.45, 1.0),
+        curve: Curves.easeOutCubic,
       );
       _expandCtrl!.addListener(() {
         setState(() {});
@@ -363,13 +362,13 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       final radiusValue = (20.0 * (1.0 - t)).clamp(0.0, 20.0);
       final radius = BorderRadius.circular(radiusValue);
 
-      // Content fades in quickly then holds
-      final contentOpacity = Curves.easeOut.transform((t / 0.35).clamp(0.0, 1.0));
+      // Content fades in during the first 40% of the animation (iOS style)
+      final contentOpacity = Curves.easeOut.transform((t / 0.40).clamp(0.0, 1.0));
 
       // Background scales slightly inward and blurs as the card opens (iOS feel)
-      final bgScale = 1.0 - (0.06 * t);  // 1.0 → 0.94
+      final bgScale = 1.0 - (0.05 * t);  // 1.0 → 0.95
       final bgBlur = 14.0 * t;            // 0 → 14 px
-      final bgDim = 0.18 * t;             // 0 → 0.18
+      final bgDim = 0.16 * t;             // 0 → 0.16
 
       return PopScope(
         canPop: false,
@@ -385,7 +384,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
               scaleValue: bgScale,
               dimAlpha: bgDim,
             ),
-            // Expanding card container — child rendered at full screen coords
+            // Expanding card container — stable child anchored at topCenter with ZERO element movement
             Positioned.fromRect(
               rect: currentRect,
               child: RepaintBoundary(
@@ -410,12 +409,13 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                       fit: StackFit.expand,
                       children: [
                         Container(color: Colors.white),
-                        // Pin child at its natural position: no jarring movement
-                        Positioned(
-                          top: -currentRect.top,
-                          left: -currentRect.left,
-                          width: screenWidth,
-                          height: screenHeight,
+                        // Fixed topCenter child: elements do NOT translate down during expand
+                        OverflowBox(
+                          alignment: Alignment.topCenter,
+                          minWidth: screenWidth,
+                          maxWidth: screenWidth,
+                          minHeight: screenHeight,
+                          maxHeight: screenHeight,
                           child: Opacity(
                             opacity: contentOpacity,
                             child: RepaintBoundary(child: widget.child),

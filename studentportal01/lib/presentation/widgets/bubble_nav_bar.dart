@@ -134,7 +134,7 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
         _selectedIndex = index;
       });
       _animationController.forward(from: 0.0);
-      IosEdgeSwipeBackState.currentActive!.animateZoomOutBack();
+      IosEdgeSwipeBackState.currentActive!.animateSlideBack();
       return;
     }
 
