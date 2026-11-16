@@ -18,6 +18,7 @@ import '../../providers/building_provider.dart';
 import '../../providers/subjects_management_provider.dart';
 import '../../../data/models/building_models.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
@@ -304,6 +305,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   Timer? _debounce;
+  String _sortKey = 'pinned_first';
 
   // Filter state
   String? _filterType; // null = all types
@@ -1021,6 +1023,23 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                       ),
                     ),
                 const SizedBox(width: 8),
+                AdminSortDropdown<String>(
+                  value: _sortKey,
+                  tooltip: 'Trier les annonces',
+                  onChanged: (v) => setState(() {
+                    _sortKey = v;
+                    _currentPage = 0;
+                  }),
+                  options: const [
+                    SortOption(value: 'pinned_first', label: 'Épinglés d’abord', icon: Icons.push_pin_outlined),
+                    SortOption(value: 'date_desc', label: 'Date (Plus récent)', icon: Icons.calendar_today_outlined),
+                    SortOption(value: 'date_asc', label: 'Date (Plus ancien)', icon: Icons.calendar_today_outlined),
+                    SortOption(value: 'title_asc', label: 'Titre (A → Z)', icon: Icons.sort_by_alpha),
+                    SortOption(value: 'title_desc', label: 'Titre (Z → A)', icon: Icons.sort_by_alpha),
+                    SortOption(value: 'type_asc', label: 'Type d’annonce', icon: Icons.category_outlined),
+                  ],
+                ),
+                const SizedBox(width: 8),
                 _buildHeaderIconButton(
                   icon: Icons.filter_list_rounded,
                   tooltip: 'Filtres',
@@ -1512,11 +1531,31 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     }
 
     // Sort
-    list.sort((a, b) {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return b.createdAt.compareTo(a.createdAt);
-    });
+    switch (_sortKey) {
+      case 'date_desc':
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case 'date_asc':
+        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        break;
+      case 'title_asc':
+        list.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        break;
+      case 'title_desc':
+        list.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        break;
+      case 'type_asc':
+        list.sort((a, b) => a.announcementType.compareTo(b.announcementType));
+        break;
+      case 'pinned_first':
+      default:
+        list.sort((a, b) {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return b.createdAt.compareTo(a.createdAt);
+        });
+        break;
+    }
 
     // Paginate
     final totalPages = (list.length / _pageSize).ceil().clamp(1, 999999);

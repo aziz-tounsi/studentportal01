@@ -12,6 +12,7 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 
 const _brand = Color(0xFF655DD5);
 const _brandLight = Color(0xFFEEECFB);
@@ -27,6 +28,7 @@ class TeacherProfileScreen extends ConsumerStatefulWidget {
 class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   bool _loading = true;
   bool _showWeeklySchedule = false;
+  String _classSortKey = 'name_asc';
   Map<String, dynamic>? _user;
   List<Map<String, dynamic>> _assignments = [];
   List<Map<String, dynamic>> _classDetails = [];
@@ -977,10 +979,55 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
 
   // ── Classes Assignées ──
   Widget _buildClassesSection() {
+    final sortedClasses = List<Map<String, dynamic>>.from(_classDetails);
+    sortedClasses.sort((a, b) {
+      switch (_classSortKey) {
+        case 'name_desc':
+          final na = (a['name']?.toString() ?? '').toLowerCase();
+          final nb = (b['name']?.toString() ?? '').toLowerCase();
+          return nb.compareTo(na);
+        case 'niveau_asc':
+          final nva = (a['niveau_name']?.toString() ?? '').toLowerCase();
+          final nvb = (b['niveau_name']?.toString() ?? '').toLowerCase();
+          return nva.compareTo(nvb);
+        case 'students_desc':
+          final ea = int.tryParse(a['student_count']?.toString() ?? '0') ?? 0;
+          final eb = int.tryParse(b['student_count']?.toString() ?? '0') ?? 0;
+          return eb.compareTo(ea);
+        case 'students_asc':
+          final ea = int.tryParse(a['student_count']?.toString() ?? '0') ?? 0;
+          final eb = int.tryParse(b['student_count']?.toString() ?? '0') ?? 0;
+          return ea.compareTo(eb);
+        case 'name_asc':
+        default:
+          final na = (a['name']?.toString() ?? '').toLowerCase();
+          final nb = (b['name']?.toString() ?? '').toLowerCase();
+          return na.compareTo(nb);
+      }
+    });
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Text('Classes Assignées', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
         const Spacer(),
+        AdminSortDropdown<String>(
+          selectedValue: _classSortKey,
+          height: 32,
+          radius: 8,
+          options: const [
+            SortOption(value: 'name_asc', label: 'Classe: A → Z', icon: Icons.sort_by_alpha_rounded),
+            SortOption(value: 'name_desc', label: 'Classe: Z → A', icon: Icons.sort_by_alpha_rounded),
+            SortOption(value: 'niveau_asc', label: 'Niveau: A → Z', icon: Icons.school_outlined),
+            SortOption(value: 'students_desc', label: 'Effectif: Plus élevé', icon: Icons.groups_rounded),
+            SortOption(value: 'students_asc', label: 'Effectif: Moins élevé', icon: Icons.groups_outlined),
+          ],
+          onSelected: (val) {
+            setState(() {
+              _classSortKey = val;
+            });
+          },
+        ),
+        const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(12)),
@@ -988,7 +1035,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         ),
       ]),
       const SizedBox(height: 16),
-      if (_classDetails.isEmpty)
+      if (sortedClasses.isEmpty)
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(32),
@@ -1009,7 +1056,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           return Wrap(
             spacing: 16,
             runSpacing: 16,
-            children: _classDetails.map((c) {
+            children: sortedClasses.map((c) {
               final cardWidth = (constraints.maxWidth - (crossCount - 1) * 16) / crossCount;
               return SizedBox(
                 width: cardWidth,

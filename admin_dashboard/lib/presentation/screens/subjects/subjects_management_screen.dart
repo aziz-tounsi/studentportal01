@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../../core/utils/error_messages.dart';
 import '../../providers/subjects_management_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
@@ -30,6 +31,7 @@ class _SubjectsManagementScreenState
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _searchController = TextEditingController();
+  String _sortKey = 'name_asc';
 
   // Selection state for bulk operations
   final Set<String> _selectedAssignmentIds = {};
@@ -339,6 +341,21 @@ class _SubjectsManagementScreenState
                 setState(() {});
               },
             ),
+          ),
+          const SizedBox(width: 12),
+          AdminSortDropdown<String>(
+            value: _sortKey,
+            tooltip: 'Trier les matières',
+            onChanged: (v) => setState(() => _sortKey = v),
+            options: const [
+              SortOption(value: 'name_asc', label: 'Nom (A → Z)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'name_desc', label: 'Nom (Z → A)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'date_desc', label: 'Plus récent', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'date_asc', label: 'Plus ancien', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'coef_desc', label: 'Coefficient (Plus grand)', icon: Icons.trending_up),
+              SortOption(value: 'coef_asc', label: 'Coefficient (Plus petit)', icon: Icons.trending_down),
+              SortOption(value: 'code_asc', label: 'Code (A → Z)', icon: Icons.tag),
+            ],
           ),
           const SizedBox(width: 12),
           IconButton(
@@ -1021,9 +1038,42 @@ class _SubjectsManagementScreenState
     BuildContext context,
     SubjectsManagementState state,
   ) {
-    final subjects = _filtersActive
+    final rawSubjects = _filtersActive
         ? _applyLocalFilters(state.filteredSubjects, state)
         : state.filteredSubjects;
+    final subjects = List<SubjectModel>.from(rawSubjects);
+    switch (_sortKey) {
+      case 'name_desc':
+        subjects.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        break;
+      case 'date_desc':
+        subjects.sort((a, b) {
+          final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return db.compareTo(da);
+        });
+        break;
+      case 'date_asc':
+        subjects.sort((a, b) {
+          final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return da.compareTo(db);
+        });
+        break;
+      case 'coef_desc':
+        subjects.sort((a, b) => (b.defaultCoefficient ?? 1).compareTo(a.defaultCoefficient ?? 1));
+        break;
+      case 'coef_asc':
+        subjects.sort((a, b) => (a.defaultCoefficient ?? 1).compareTo(b.defaultCoefficient ?? 1));
+        break;
+      case 'code_asc':
+        subjects.sort((a, b) => (a.code ?? '').compareTo(b.code ?? ''));
+        break;
+      case 'name_asc':
+      default:
+        subjects.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        break;
+    }
 
     return Padding(
       padding: const EdgeInsets.all(32),
@@ -1604,6 +1654,26 @@ class _SubjectsManagementScreenState
     for (final assignment in state.filteredAssignments) {
       final key = assignment.gradeLevelId;
       assignmentsByNiveau.putIfAbsent(key, () => []).add(assignment);
+    }
+    for (final list in assignmentsByNiveau.values) {
+      switch (_sortKey) {
+        case 'name_desc':
+          list.sort((a, b) => (b.subjectName ?? '').toLowerCase().compareTo((a.subjectName ?? '').toLowerCase()));
+          break;
+        case 'coef_desc':
+          list.sort((a, b) => b.coefficient.compareTo(a.coefficient));
+          break;
+        case 'coef_asc':
+          list.sort((a, b) => a.coefficient.compareTo(b.coefficient));
+          break;
+        case 'code_asc':
+          list.sort((a, b) => (a.subjectCode ?? '').compareTo(b.subjectCode ?? ''));
+          break;
+        case 'name_asc':
+        default:
+          list.sort((a, b) => (a.subjectName ?? '').toLowerCase().compareTo((b.subjectName ?? '').toLowerCase()));
+          break;
+      }
     }
     final hasSelection = _selectedAssignmentIds.isNotEmpty;
     final allExpanded = state.gradeLevels.every(

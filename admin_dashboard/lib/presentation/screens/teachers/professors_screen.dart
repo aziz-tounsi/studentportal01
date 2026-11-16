@@ -13,6 +13,7 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 
 
 // ── Speciality Color Helper ───────────────────────────────────────────────
@@ -145,6 +146,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   String? _statusFilter; // null = tous, 'active', 'archived'
   String _genderFilter = 'all';
   String _specialityFilter = 'all';
+  String _sortKey = 'name_asc';
   final _searchController = TextEditingController();
   bool _showFilterDrawer = false;
 
@@ -163,6 +165,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     _statusFilter = null;
     _genderFilter = 'all';
     _specialityFilter = 'all';
+    _sortKey = 'name_asc';
     _currentPage = 1;
   });
 
@@ -173,7 +176,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   }
 
   List<Map<String, dynamic>> _applyFilters(List<Map<String, dynamic>> professors) {
-    return professors.where((p) {
+    final filtered = professors.where((p) {
       final name = (p['full_name'] as String? ?? '').toLowerCase();
       final email = (p['email'] as String? ?? '').toLowerCase();
       final query = _searchQuery.toLowerCase();
@@ -197,6 +200,43 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
 
       return matchesSearch && matchesStatus && matchesGender && matchesSpeciality;
     }).toList();
+
+    filtered.sort((a, b) {
+      switch (_sortKey) {
+        case 'date_desc':
+          final da = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(1970);
+          final db = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(1970);
+          return db.compareTo(da);
+        case 'date_asc':
+          final da = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(1970);
+          final db = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(1970);
+          return da.compareTo(db);
+        case 'name_desc':
+          final na = (a['full_name'] as String? ?? '').toLowerCase();
+          final nb = (b['full_name'] as String? ?? '').toLowerCase();
+          return nb.compareTo(na);
+        case 'speciality_asc':
+          final sa = (a['speciality'] as String? ?? '').toLowerCase();
+          final sb = (b['speciality'] as String? ?? '').toLowerCase();
+          if (sa.isEmpty && sb.isNotEmpty) return 1;
+          if (sa.isNotEmpty && sb.isEmpty) return -1;
+          return sa.compareTo(sb);
+        case 'status_active':
+          final aa = a['is_active'] == true ? 0 : 1;
+          final ab = b['is_active'] == true ? 0 : 1;
+          if (aa != ab) return aa.compareTo(ab);
+          final na = (a['full_name'] as String? ?? '').toLowerCase();
+          final nb = (b['full_name'] as String? ?? '').toLowerCase();
+          return na.compareTo(nb);
+        case 'name_asc':
+        default:
+          final na = (a['full_name'] as String? ?? '').toLowerCase();
+          final nb = (b['full_name'] as String? ?? '').toLowerCase();
+          return na.compareTo(nb);
+      }
+    });
+
+    return filtered;
   }
 
   @override
@@ -411,7 +451,25 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          AdminSortDropdown<String>(
+            selectedValue: _sortKey,
+            options: const [
+              SortOption(value: 'name_asc', label: 'Nom: A → Z', icon: Icons.sort_by_alpha_rounded),
+              SortOption(value: 'name_desc', label: 'Nom: Z → A', icon: Icons.sort_by_alpha_rounded),
+              SortOption(value: 'date_desc', label: 'Date: Plus récent', icon: Icons.schedule_rounded),
+              SortOption(value: 'date_asc', label: 'Date: Plus ancien', icon: Icons.history_rounded),
+              SortOption(value: 'speciality_asc', label: 'Spécialité: A → Z', icon: Icons.school_outlined),
+              SortOption(value: 'status_active', label: 'Statut: Actifs d\'abord', icon: Icons.verified_user_outlined),
+            ],
+            onSelected: (val) {
+              setState(() {
+                _sortKey = val;
+                _currentPage = 1;
+              });
+            },
+          ),
+          const SizedBox(width: 8),
           // Filter button — same as users
           IconButton(
             icon: const Icon(Icons.filter_list_rounded, size: 20),

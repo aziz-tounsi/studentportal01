@@ -20,6 +20,7 @@ import '../../providers/documents_provider.dart';
 import '../../providers/semesters_provider.dart';
 import '../../providers/users_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
@@ -45,6 +46,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
   // Selection state for multi-action
   final Set<String> _selectedIds = {};
+  String _sortKey = 'date_desc';
 
   // Pagination
   int _currentPage = 1;
@@ -921,6 +923,24 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             ),
           ),
           const SizedBox(width: 12),
+          AdminSortDropdown<String>(
+            value: _sortKey,
+            tooltip: 'Trier les documents',
+            onChanged: (v) => setState(() {
+              _sortKey = v;
+              _currentPage = 1;
+            }),
+            options: const [
+              SortOption(value: 'date_desc', label: 'Date (Plus récent)', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'date_asc', label: 'Date (Plus ancien)', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'title_asc', label: 'Titre (A → Z)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'title_desc', label: 'Titre (Z → A)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'size_desc', label: 'Taille (Plus volumineux)', icon: Icons.arrow_upward),
+              SortOption(value: 'size_asc', label: 'Taille (Moins volumineux)', icon: Icons.arrow_downward),
+              SortOption(value: 'category_asc', label: 'Catégorie (A → Z)', icon: Icons.folder_outlined),
+            ],
+          ),
+          const SizedBox(width: 8),
 
           // Filter Button
           _buildHeaderIconButton(
@@ -1129,6 +1149,30 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   // ─────────────────────────────────────────────────────────────
   Widget _buildBody(List<Document> allDocs, List<SemesterModel> semesters) {
     final filtered = _applyFiltering(allDocs, semesters);
+    switch (_sortKey) {
+      case 'date_asc':
+        filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        break;
+      case 'title_asc':
+        filtered.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        break;
+      case 'title_desc':
+        filtered.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        break;
+      case 'size_desc':
+        filtered.sort((a, b) => (b.fileSize ?? 0).compareTo(a.fileSize ?? 0));
+        break;
+      case 'size_asc':
+        filtered.sort((a, b) => (a.fileSize ?? 0).compareTo(b.fileSize ?? 0));
+        break;
+      case 'category_asc':
+        filtered.sort((a, b) => a.category.toLowerCase().compareTo(b.category.toLowerCase()));
+        break;
+      case 'date_desc':
+      default:
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+    }
 
     // Header Category Tabs: Tous, Académiques, Administratif, Cours, Examens, Autre
     final totalCount = allDocs.length;

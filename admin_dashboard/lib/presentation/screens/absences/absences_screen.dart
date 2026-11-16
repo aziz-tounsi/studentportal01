@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/absences_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
@@ -23,6 +24,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   final _searchController = TextEditingController();
   bool _showFilters = false;
   bool _isSelectionMode = false;
+  String _sortKey = 'date_desc';
 
   // Pagination state
   int _currentPage = 1;
@@ -225,6 +227,25 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
             ),
           ),
           const SizedBox(width: 12),
+          AdminSortDropdown<String>(
+            value: _sortKey,
+            tooltip: 'Trier les absences',
+            onChanged: (v) => setState(() {
+              _sortKey = v;
+              _currentPage = 1;
+            }),
+            options: const [
+              SortOption(value: 'date_desc', label: 'Date (Plus récent)', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'date_asc', label: 'Date (Plus ancien)', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'student_asc', label: 'Étudiant (A → Z)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'student_desc', label: 'Étudiant (Z → A)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'class_asc', label: 'Classe (A → Z)', icon: Icons.class_outlined),
+              SortOption(value: 'unjustified_first', label: 'Non justifiées d’abord', icon: Icons.warning_amber_rounded),
+              SortOption(value: 'justified_first', label: 'Justifiées d’abord', icon: Icons.check_circle_outline),
+              SortOption(value: 'hours_desc', label: 'Heures (Décroissant)', icon: Icons.access_time),
+            ],
+          ),
+          const SizedBox(width: 8),
           _buildHeaderIconButton(
             icon: Icons.filter_list_rounded,
             tooltip: 'Filtres',
@@ -882,7 +903,41 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   }
 
   Widget _buildAbsenceDataTable(BuildContext context, AbsencesState state) {
-    final absences = state.filtered;
+    final rawAbsences = state.filtered;
+    final absences = List<AbsenceModel>.from(rawAbsences);
+    switch (_sortKey) {
+      case 'date_asc':
+        absences.sort((a, b) => a.date.compareTo(b.date));
+        break;
+      case 'student_asc':
+        absences.sort((a, b) => a.studentName.toLowerCase().compareTo(b.studentName.toLowerCase()));
+        break;
+      case 'student_desc':
+        absences.sort((a, b) => b.studentName.toLowerCase().compareTo(a.studentName.toLowerCase()));
+        break;
+      case 'class_asc':
+        absences.sort((a, b) => (a.className ?? '').toLowerCase().compareTo((b.className ?? '').toLowerCase()));
+        break;
+      case 'unjustified_first':
+        absences.sort((a, b) {
+          if (a.justified == b.justified) return b.date.compareTo(a.date);
+          return a.justified ? 1 : -1;
+        });
+        break;
+      case 'justified_first':
+        absences.sort((a, b) {
+          if (a.justified == b.justified) return b.date.compareTo(a.date);
+          return a.justified ? -1 : 1;
+        });
+        break;
+      case 'hours_desc':
+        absences.sort((a, b) => b.hoursAbsent.compareTo(a.hoursAbsent));
+        break;
+      case 'date_desc':
+      default:
+        absences.sort((a, b) => b.date.compareTo(a.date));
+        break;
+    }
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     final totalPages = _itemsPerPage == -1 ? 1 : (absences.length / _itemsPerPage).ceil();

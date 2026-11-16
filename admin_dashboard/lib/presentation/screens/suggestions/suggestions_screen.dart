@@ -12,6 +12,7 @@ import '../../providers/suggestions_provider.dart';
 import '../../providers/classes_provider.dart';
 import '../../../data/models/class_model.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../users/user_profile_screen.dart';
@@ -282,6 +283,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
   final _searchController = TextEditingController();
   Timer? _searchDebounce;
   bool _showFilters = false;
+  String _sortKey = 'date_desc';
   final Set<String> _selectedIds = {};
   bool _selectionMode = false;
 
@@ -546,6 +548,24 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             ),
           ),
           const SizedBox(width: 12),
+          AdminSortDropdown<String>(
+            value: _sortKey,
+            tooltip: 'Trier les suggestions',
+            onChanged: (v) => setState(() {
+              _sortKey = v;
+              _currentPage = 1;
+            }),
+            options: const [
+              SortOption(value: 'date_desc', label: 'Date (Plus récent)', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'date_asc', label: 'Date (Plus ancien)', icon: Icons.calendar_today_outlined),
+              SortOption(value: 'pending_first', label: 'En attente d’abord', icon: Icons.hourglass_top),
+              SortOption(value: 'unread_first', label: 'Non lues d’abord', icon: Icons.mark_email_unread_outlined),
+              SortOption(value: 'subject_asc', label: 'Sujet (A → Z)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'subject_desc', label: 'Sujet (Z → A)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'student_asc', label: 'Étudiant (A → Z)', icon: Icons.person_outline),
+            ],
+          ),
+          const SizedBox(width: 8),
           _buildHeaderIconButton(
             icon: Icons.filter_list_rounded,
             tooltip: 'Filtres',
@@ -989,7 +1009,42 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     SuggestionsState state,
   ) {
     final searchQuery = state.searchQuery;
-    final list = state.filtered;
+    final rawList = state.filtered;
+    final list = List<Suggestion>.from(rawList);
+    switch (_sortKey) {
+      case 'date_asc':
+        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        break;
+      case 'pending_first':
+        list.sort((a, b) {
+          final aPending = a.status == 'pending' ? 0 : 1;
+          final bPending = b.status == 'pending' ? 0 : 1;
+          if (aPending != bPending) return aPending.compareTo(bPending);
+          return b.createdAt.compareTo(a.createdAt);
+        });
+        break;
+      case 'unread_first':
+        list.sort((a, b) {
+          final aUnread = !a.isRead ? 0 : 1;
+          final bUnread = !b.isRead ? 0 : 1;
+          if (aUnread != bUnread) return aUnread.compareTo(bUnread);
+          return b.createdAt.compareTo(a.createdAt);
+        });
+        break;
+      case 'subject_asc':
+        list.sort((a, b) => a.subject.toLowerCase().compareTo(b.subject.toLowerCase()));
+        break;
+      case 'subject_desc':
+        list.sort((a, b) => b.subject.toLowerCase().compareTo(a.subject.toLowerCase()));
+        break;
+      case 'student_asc':
+        list.sort((a, b) => (a.studentName ?? '').toLowerCase().compareTo((b.studentName ?? '').toLowerCase()));
+        break;
+      case 'date_desc':
+      default:
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+    }
     
     if (list.isEmpty) {
       return Center(

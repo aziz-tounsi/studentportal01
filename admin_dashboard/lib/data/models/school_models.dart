@@ -1,4 +1,4 @@
-﻿class GroupModel {
+class GroupModel {
   final String id;
   final String classId;
   final String name;

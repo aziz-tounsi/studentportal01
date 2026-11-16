@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/payments_provider.dart';
 import '../../widgets/admin_sidebar.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
@@ -58,6 +59,7 @@ class PaymentsScreen extends ConsumerStatefulWidget {
 class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   final _searchController = TextEditingController();
   bool _showFilters = false;
+  String _sortKey = 'student_asc';
   Set<String> _selectedPayments = {};
 
   // Hierarchical filter state
@@ -416,7 +418,19 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
           ),
 
           const SizedBox(width: 12),
-
+          AdminSortDropdown<String>(
+            value: _sortKey,
+            tooltip: 'Trier les étudiants',
+            onChanged: (v) => setState(() => _sortKey = v),
+            options: const [
+              SortOption(value: 'student_asc', label: 'Étudiant (A → Z)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'student_desc', label: 'Étudiant (Z → A)', icon: Icons.sort_by_alpha),
+              SortOption(value: 'unpaid_first', label: 'Non soldés d’abord', icon: Icons.schedule_rounded),
+              SortOption(value: 'paid_first', label: 'Soldés d’abord', icon: Icons.check_circle_outline),
+              SortOption(value: 'payments_desc', label: 'Paiements (Décroissant)', icon: Icons.payments_outlined),
+            ],
+          ),
+          const SizedBox(width: 8),
           // Filter button
           _buildHeaderIconButton(
             icon: Icons.filter_list_rounded,
@@ -2359,6 +2373,35 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
         'paidPayments': existingSummary?.paidPayments ?? 0,
         'totalPayments': existingSummary?.totalPayments ?? 0,
       });
+    }
+
+    switch (_sortKey) {
+      case 'student_desc':
+        enrichedStudents.sort((a, b) => (b['full_name'] as String).toLowerCase().compareTo((a['full_name'] as String).toLowerCase()));
+        break;
+      case 'unpaid_first':
+        enrichedStudents.sort((a, b) {
+          final aUnpaid = ((a['totalPayments'] as int) - (a['paidPayments'] as int)) > 0 ? 0 : 1;
+          final bUnpaid = ((b['totalPayments'] as int) - (b['paidPayments'] as int)) > 0 ? 0 : 1;
+          if (aUnpaid != bUnpaid) return aUnpaid.compareTo(bUnpaid);
+          return (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
+        });
+        break;
+      case 'paid_first':
+        enrichedStudents.sort((a, b) {
+          final aPaid = ((a['totalPayments'] as int) > 0 && (a['paidPayments'] as int) >= (a['totalPayments'] as int)) ? 0 : 1;
+          final bPaid = ((b['totalPayments'] as int) > 0 && (b['paidPayments'] as int) >= (b['totalPayments'] as int)) ? 0 : 1;
+          if (aPaid != bPaid) return aPaid.compareTo(bPaid);
+          return (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
+        });
+        break;
+      case 'payments_desc':
+        enrichedStudents.sort((a, b) => (b['totalPayments'] as int).compareTo(a['totalPayments'] as int));
+        break;
+      case 'student_asc':
+      default:
+        enrichedStudents.sort((a, b) => (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase()));
+        break;
     }
 
     final totalPages = _classStudentsPerPage > 0
@@ -4374,6 +4417,7 @@ class _StudentPaymentDetailDialogState
   List<Map<String, dynamic>> _paymentPlans = [];
   bool _isLoading = true;
   String _selectedCategory = 'all';
+  String _detailSortKey = 'due_date_asc';
   final Set<String> _selectedPaymentIds = {};
   double _paidAmount = 0;
   double _totalAmount = 0;
@@ -4465,16 +4509,49 @@ class _StudentPaymentDetailDialogState
         return plan?['category'] == _selectedCategory;
       }).toList();
     }
-    result.sort((a, b) {
-      final catA = (a['payment_plans'] as Map<String, dynamic>?)?['category'] ?? '';
-      final catB = (b['payment_plans'] as Map<String, dynamic>?)?['category'] ?? '';
-      final statusA = a['status'] ?? '';
-      final statusB = b['status'] ?? '';
-      if (statusA == statusB) return catA.compareTo(catB);
-      if (statusA == 'pending') return -1;
-      if (statusB == 'pending') return 1;
-      return catA.compareTo(catB);
-    });
+    switch (_detailSortKey) {
+      case 'due_date_desc':
+        result.sort((a, b) {
+          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return db.compareTo(da);
+        });
+        break;
+      case 'amount_desc':
+        result.sort((a, b) => ((b['amount'] as num?) ?? 0).compareTo((a['amount'] as num?) ?? 0));
+        break;
+      case 'amount_asc':
+        result.sort((a, b) => ((a['amount'] as num?) ?? 0).compareTo((b['amount'] as num?) ?? 0));
+        break;
+      case 'pending_first':
+        result.sort((a, b) {
+          final sA = a['status'] == 'pending' ? 0 : 1;
+          final sB = b['status'] == 'pending' ? 0 : 1;
+          if (sA != sB) return sA.compareTo(sB);
+          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return da.compareTo(db);
+        });
+        break;
+      case 'paid_first':
+        result.sort((a, b) {
+          final sA = a['status'] == 'paid' ? 0 : 1;
+          final sB = b['status'] == 'paid' ? 0 : 1;
+          if (sA != sB) return sA.compareTo(sB);
+          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return da.compareTo(db);
+        });
+        break;
+      case 'due_date_asc':
+      default:
+        result.sort((a, b) {
+          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return da.compareTo(db);
+        });
+        break;
+    }
     return result;
   }
 
@@ -5764,6 +5841,23 @@ class _StudentPaymentDetailDialogState
                     ),
                   if (_filteredPayments.isNotEmpty) const SizedBox(width: 10),
                   Expanded(child: _buildCategoryFilter()),
+                  const SizedBox(width: 8),
+                  AdminSortDropdown<String>(
+                    value: _detailSortKey,
+                    tooltip: 'Trier les échéances',
+                    height: 32,
+                    radius: 8,
+                    onChanged: (v) => setState(() => _detailSortKey = v),
+                    options: const [
+                      SortOption(value: 'due_date_asc', label: 'Échéance (Croissant)', icon: Icons.calendar_today_outlined),
+                      SortOption(value: 'due_date_desc', label: 'Échéance (Décroissant)', icon: Icons.calendar_today_outlined),
+                      SortOption(value: 'amount_desc', label: 'Montant (Plus élevé)', icon: Icons.arrow_upward),
+                      SortOption(value: 'amount_asc', label: 'Montant (Moins élevé)', icon: Icons.arrow_downward),
+                      SortOption(value: 'pending_first', label: 'En attente d’abord', icon: Icons.schedule_rounded),
+                      SortOption(value: 'paid_first', label: 'Payés d’abord', icon: Icons.check_circle_outline),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
                   if (_selectedPaymentIds.isNotEmpty)
                     Text(
                       '${_selectedPaymentIds.length} sélectionné(s)',

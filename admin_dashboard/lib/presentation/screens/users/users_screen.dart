@@ -18,6 +18,7 @@ import 'bulk_photo_upload_screen.dart';
 import 'simple_bulk_import_screen.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 
 
 class UsersScreen extends ConsumerStatefulWidget {
@@ -34,6 +35,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   bool _showFilterDrawer = false;
   String _sortBy = 'name';
   bool _sortAscending = true;
+  String _sortKey = 'date_desc';
   String? _classFilter;
   String? _levelFilter;
   String? _genderFilter;
@@ -72,6 +74,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     setState(() {
       _sortBy = 'name';
       _sortAscending = true;
+      _sortKey = 'date_desc';
       _classFilter = null;
       _levelFilter = null;
       _genderFilter = null;
@@ -316,7 +319,25 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          AdminSortDropdown<String>(
+            selectedValue: _sortKey,
+            options: const [
+              SortOption(value: 'date_desc', label: 'Date: Plus récent', icon: Icons.schedule_rounded),
+              SortOption(value: 'date_asc', label: 'Date: Plus ancien', icon: Icons.history_rounded),
+              SortOption(value: 'name_asc', label: 'Nom: A → Z', icon: Icons.sort_by_alpha_rounded),
+              SortOption(value: 'name_desc', label: 'Nom: Z → A', icon: Icons.sort_by_alpha_rounded),
+              SortOption(value: 'email_asc', label: 'Email: A → Z', icon: Icons.email_outlined),
+              SortOption(value: 'status_active', label: 'Statut: Actifs d\'abord', icon: Icons.verified_user_outlined),
+            ],
+            onSelected: (val) {
+              setState(() {
+                _sortKey = val;
+                _currentPage = 1;
+              });
+            },
+          ),
+          const SizedBox(width: 8),
           _buildHeaderIconButton(
             icon: Icons.filter_list_rounded,
             tooltip: 'Filtres',
@@ -1638,21 +1659,39 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
     // Apply sorting
     users.sort((a, b) {
-      int result;
-      switch (_sortBy) {
-        case 'email':
-          result = a.email.compareTo(b.email);
-          break;
-        case 'id':
-          result = a.id.compareTo(b.id);
-          break;
-        case 'date':
-          result = a.createdAt.compareTo(b.createdAt);
-          break;
+      switch (_sortKey) {
+        case 'date_desc':
+          return b.createdAt.compareTo(a.createdAt);
+        case 'date_asc':
+          return a.createdAt.compareTo(b.createdAt);
+        case 'name_desc':
+          return b.fullName.toLowerCase().compareTo(a.fullName.toLowerCase());
+        case 'email_asc':
+          return a.email.toLowerCase().compareTo(b.email.toLowerCase());
+        case 'status_active':
+          if (a.isActive != b.isActive) {
+            return a.isActive ? -1 : 1;
+          }
+          return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+        case 'name_asc':
+          return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
         default:
-          result = a.fullName.compareTo(b.fullName);
+          int result;
+          switch (_sortBy) {
+            case 'email':
+              result = a.email.compareTo(b.email);
+              break;
+            case 'id':
+              result = a.id.compareTo(b.id);
+              break;
+            case 'date':
+              result = a.createdAt.compareTo(b.createdAt);
+              break;
+            default:
+              result = a.fullName.compareTo(b.fullName);
+          }
+          return _sortAscending ? result : -result;
       }
-      return _sortAscending ? result : -result;
     });
 
     return users;

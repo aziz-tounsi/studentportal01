@@ -1,4 +1,4 @@
-﻿class ClassModel {
+class ClassModel {
   final String id;
   final String schoolId;
   final String name;

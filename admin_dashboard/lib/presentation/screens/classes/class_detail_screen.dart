@@ -11,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/admin_sort_dropdown.dart';
 
 const _brand = Color(0xFF655DD5);
 const _brandLight = Color(0xFFEEECFB);
@@ -198,6 +199,8 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
   String _searchQuery = '';
   String _sortBy = 'name';
   bool _sortAsc = true;
+  String _studentSortKey = 'name_asc';
+  String _teacherSortKey = 'name_asc';
   int _currentPage = 0;
   int _perPage = 10;
   final Set<String> _selectedStudentIds = {};
@@ -263,13 +266,17 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
     }).toList();
 
     filtered.sort((a, b) {
-      int cmp;
-      switch (_sortBy) {
-        case 'code': cmp = (a.studentCode ?? '').compareTo(b.studentCode ?? ''); break;
-        case 'status': cmp = a.status.compareTo(b.status); break;
-        default: cmp = a.fullName.compareTo(b.fullName);
+      switch (_studentSortKey) {
+        case 'name_desc':
+          return b.fullName.compareTo(a.fullName);
+        case 'code_asc':
+          return (a.studentCode ?? '').compareTo(b.studentCode ?? '');
+        case 'status_asc':
+          return a.status.compareTo(b.status);
+        case 'name_asc':
+        default:
+          return a.fullName.compareTo(b.fullName);
       }
-      return _sortAsc ? cmp : -cmp;
     });
 
     final totalPages = (filtered.length / _perPage).ceil();
@@ -372,8 +379,11 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           if (data.niveauName != null) ...[
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFFF5F3FF), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFFE0E7FF))),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F3FF),
+                borderRadius: BorderRadius.circular(9999),
+              ),
               child: Text(data.niveauName!, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary)),
             ),
           ],
@@ -407,10 +417,10 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
 
   Widget _inlineStat(IconData icon, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(9999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -458,6 +468,17 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
               child: Text('${all.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _brand)),
             ),
             const Spacer(),
+            AdminSortDropdown(
+              value: _studentSortKey,
+              onChanged: (val) => setState(() => _studentSortKey = val),
+              options: [
+                AdminSortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),
+                AdminSortOption(value: 'name_desc', label: 'Nom Z → A', icon: Icons.sort_by_alpha_rounded),
+                AdminSortOption(value: 'code_asc', label: 'Matricule A → Z', icon: Icons.tag_rounded),
+                AdminSortOption(value: 'status_asc', label: 'Statut', icon: Icons.toggle_on_rounded),
+              ],
+            ),
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: () => _showAddStudentDialog(ctx, data),
               icon: const Icon(Icons.person_add_rounded, size: 16),
@@ -1539,6 +1560,345 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
     );
   }
 
+  void _showAddTeacherDialog(BuildContext ctx, ClassDetailData data) async {
+    List<Map<String, dynamic>> allTeachers = [];
+    List<Map<String, dynamic>> allSubjects = [];
+    Map<String, Map<String, dynamic>> teacherPrimarySubject = {};
+    String? schoolId;
+
+    try {
+      final classResp = await SupabaseConfig.adminClient
+          .from('classes')
+          .select('school_id')
+          .eq('id', data.classId)
+          .single();
+      schoolId = classResp['school_id'] as String?;
+
+      var tQuery = SupabaseConfig.adminClient
+          .from('users')
+          .select('id, full_name, email, phone, photo_url, gender, created_at, is_active')
+          .eq('role', 'teacher')
+          .eq('is_active', true);
+      if (schoolId != null) {
+        tQuery = tQuery.eq('school_id', schoolId);
+      }
+      final tResp = await tQuery.order('full_name');
+      allTeachers = List<Map<String, dynamic>>.from(tResp as List);
+
+      var sQuery = SupabaseConfig.adminClient
+          .from('subjects')
+          .select('id, name, code')
+          .eq('is_active', true);
+      if (schoolId != null) {
+        sQuery = sQuery.eq('school_id', schoolId);
+      }
+      final sResp = await sQuery.order('name');
+      allSubjects = List<Map<String, dynamic>>.from(sResp as List);
+
+      // Fetch teacher assignments to know each teacher's primary subject
+      final aResp = await SupabaseConfig.adminClient
+          .from('teacher_assignments')
+          .select('teacher_id, subject_id, subjects(id, name, code)')
+          .eq('is_active', true);
+      for (final row in aResp as List) {
+        final tid = row['teacher_id']?.toString();
+        final sub = row['subjects'] as Map<String, dynamic>?;
+        if (tid != null && sub != null && !teacherPrimarySubject.containsKey(tid)) {
+          teacherPrimarySubject[tid] = sub;
+        }
+      }
+    } catch (e) {
+      debugPrint('Load teachers error: $e');
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: ctx,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (dCtx) {
+        String search = '';
+        String sortBy = 'name';
+        String? selectedSubjectId;
+        final assignedTeacherIds = ref.read(classAllTeachersProvider(data.classId)).value?.map((t) => t.id).toSet() ?? <String>{};
+
+        return StatefulBuilder(builder: (dCtx, setInner) {
+          var filtered = allTeachers.where((t) => !assignedTeacherIds.contains(t['id'])).toList();
+
+          // Filter by subject
+          if (selectedSubjectId != null) {
+            filtered = filtered.where((t) {
+              final sub = teacherPrimarySubject[t['id']];
+              return sub != null && sub['id'] == selectedSubjectId;
+            }).toList();
+          }
+
+          // Sort
+          if (sortBy == 'name') {
+            filtered.sort((a, b) => (a['full_name'] ?? '').toString().compareTo((b['full_name'] ?? '').toString()));
+          } else if (sortBy == 'date') {
+            filtered.sort((a, b) => (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
+          }
+
+          // Search filter
+          if (search.isNotEmpty) {
+            final q = search.toLowerCase();
+            filtered = filtered.where((t) {
+              final name = t['full_name']?.toString().toLowerCase() ?? '';
+              final email = t['email']?.toString().toLowerCase() ?? '';
+              final subName = teacherPrimarySubject[t['id']]?['name']?.toString().toLowerCase() ?? '';
+              return name.contains(q) || email.contains(q) || subName.contains(q);
+            }).toList();
+          }
+
+          return BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 520,
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(dCtx).size.height * 0.8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 30,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      decoration: const BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Color(0xFFF1F1F5))),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEECFB),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.school_rounded, color: Color(0xFF6D4CF6), size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Ajouter un enseignant', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text('Classe: ${data.className}', style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                        ])),
+                        IconButton(
+                          onPressed: () => Navigator.pop(dCtx),
+                          icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9CA3AF)),
+                        ),
+                      ]),
+                    ),
+                    // Search + filter
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: TextField(
+                        onChanged: (v) => setInner(() => search = v),
+                        style: const TextStyle(fontSize: 13),
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: 'Rechercher un enseignant...',
+                          hintStyle: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textTertiary),
+                          suffixIcon: PopupMenuButton<String>(
+                            icon: Icon(Icons.tune_rounded, size: 18, color: (selectedSubjectId != null || sortBy != 'name') ? _brand : AppColors.textTertiary),
+                            tooltip: 'Filtrer et trier',
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 8,
+                            offset: const Offset(0, 40),
+                            onSelected: (v) {
+                              if (v == 'sort_name') {
+                                setInner(() => sortBy = 'name');
+                              } else if (v == 'sort_date') {
+                                setInner(() => sortBy = 'date');
+                              } else if (v == 'sub_all') {
+                                setInner(() => selectedSubjectId = null);
+                              } else if (v.startsWith('sub_')) {
+                                setInner(() => selectedSubjectId = v.substring(4));
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              _buildSortItem('sort_name', Icons.sort_by_alpha_rounded, 'Trier par nom (A → Z)', sortBy == 'name'),
+                              _buildSortItem('sort_date', Icons.calendar_today_outlined, 'Trier par date (récents)', sortBy == 'date'),
+                              const PopupMenuDivider(),
+                              _buildSortItem('sub_all', Icons.apps_rounded, 'Toutes les matières', selectedSubjectId == null),
+                              ...allSubjects.map((s) => _buildSortItem('sub_${s['id']}', Icons.book_outlined, s['name'] ?? '', selectedSubjectId == s['id'])),
+                            ],
+                          ),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E4EA))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E4EA))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6))),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    // Teachers list
+                    Flexible(
+                      child: filtered.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.person_search_rounded, size: 48, color: AppColors.slate300),
+                                const SizedBox(height: 12),
+                                Text(
+                                  search.isEmpty ? 'Tous les enseignants sont déjà assignés' : 'Aucun résultat pour "$search"',
+                                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                                ),
+                              ]),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              shrinkWrap: true,
+                              itemCount: filtered.length,
+                              itemBuilder: (dCtx, i) {
+                                final t = filtered[i];
+                                final name = t['full_name']?.toString() ?? '';
+                                final email = t['email']?.toString() ?? '';
+                                final photoUrl = t['photo_url']?.toString();
+                                final gender = t['gender']?.toString();
+                                final sub = teacherPrimarySubject[t['id']];
+                                final subName = sub?['name']?.toString();
+                                final subColor = _subjectColor(subName);
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFF1F1F5)),
+                                  ),
+                                  child: InkWell(
+                                    onTap: () {
+                                      ctx.push('/teachers/${t['id']}');
+                                    },
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      child: Row(children: [
+                                        UserAvatar(name: name, photoUrl: photoUrl, radius: 18, gender: gender),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                          Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary), overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 2),
+                                          Text(email, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary), overflow: TextOverflow.ellipsis),
+                                        ])),
+                                        if (subName != null) ...[
+                                          Container(
+                                            margin: const EdgeInsets.only(right: 12),
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: subColor.withOpacity(0.12),
+                                              borderRadius: BorderRadius.circular(9999),
+                                            ),
+                                            child: Text(
+                                              subName,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: subColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        // Add button
+                                        InkWell(
+                                          onTap: () async {
+                                            try {
+                                              final existing = await SupabaseConfig.adminClient
+                                                  .from('teacher_assignments')
+                                                  .select('id')
+                                                  .eq('class_id', data.classId)
+                                                  .eq('teacher_id', t['id'])
+                                                  .maybeSingle();
+
+                                              final targetSubId = selectedSubjectId ?? sub?['id'];
+
+                                              if (existing != null) {
+                                                await SupabaseConfig.adminClient
+                                                    .from('teacher_assignments')
+                                                    .update({
+                                                      'is_active': true,
+                                                      if (targetSubId != null) 'subject_id': targetSubId,
+                                                    })
+                                                    .eq('id', existing['id']);
+                                              } else {
+                                                await SupabaseConfig.adminClient
+                                                    .from('teacher_assignments')
+                                                    .insert({
+                                                      if (schoolId != null) 'school_id': schoolId,
+                                                      'teacher_id': t['id'],
+                                                      'class_id': data.classId,
+                                                      if (targetSubId != null) 'subject_id': targetSubId,
+                                                      'is_active': true,
+                                                    });
+                                              }
+                                              setInner(() {
+                                                assignedTeacherIds.add(t['id']);
+                                              });
+                                              ref.invalidate(classAllTeachersProvider(data.classId));
+                                              if (dCtx.mounted) {
+                                                ScaffoldMessenger.of(dCtx).showSnackBar(SnackBar(
+                                                  content: Text('$name ajouté(e) à ${data.className}'),
+                                                  backgroundColor: const Color(0xFF10B981),
+                                                  behavior: SnackBarBehavior.floating,
+                                                ));
+                                              }
+                                            } catch (e) {
+                                              debugPrint('Add teacher error: $e');
+                                            }
+                                          },
+                                          child: Container(
+                                            height: 32,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            decoration: BoxDecoration(
+                                              color: _brand,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.add_rounded, size: 15, color: Colors.white),
+                                                SizedBox(width: 4),
+                                                Text('Ajouter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ]),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    // Footer count only
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: const BoxDecoration(
+                        border: Border(top: BorderSide(color: Color(0xFFF1F1F5))),
+                      ),
+                      child: Text('${filtered.length} enseignant(s) disponible(s)', style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
   // ══════════════════════════════════════════════════════════════
   //  TEACHERS SECTION — Horizontal Compact Cards
   // ══════════════════════════════════════════════════════════════
@@ -1574,6 +1934,27 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
         ),
       ),
       data: (teachers) {
+        final sortedTeachers = List<ClassTeacherWithSubject>.from(teachers);
+        sortedTeachers.sort((a, b) {
+          switch (_teacherSortKey) {
+            case 'name_desc':
+              return b.fullName.compareTo(a.fullName);
+            case 'subject_asc':
+              return (a.subjectName ?? '').compareTo(b.subjectName ?? '');
+            case 'date_desc':
+              final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              return db.compareTo(da);
+            case 'date_asc':
+              final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              return da.compareTo(db);
+            case 'name_asc':
+            default:
+              return a.fullName.compareTo(b.fullName);
+          }
+        });
+
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -1597,11 +1978,33 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                 const SizedBox(width: 12),
                 const Text('Enseignants assignés', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
                 const Spacer(),
-                _buildGererButton(data),
+                AdminSortDropdown(
+                  value: _teacherSortKey,
+                  onChanged: (val) => setState(() => _teacherSortKey = val),
+                  options: [
+                    AdminSortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),
+                    AdminSortOption(value: 'name_desc', label: 'Nom Z → A', icon: Icons.sort_by_alpha_rounded),
+                    AdminSortOption(value: 'subject_asc', label: 'Matière A → Z', icon: Icons.book_outlined),
+                    AdminSortOption(value: 'date_desc', label: 'Plus récents', icon: Icons.calendar_today_outlined),
+                    AdminSortOption(value: 'date_asc', label: 'Plus anciens', icon: Icons.calendar_today_outlined),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () => _showAddTeacherDialog(context, data),
+                  icon: const Icon(Icons.person_add_rounded, size: 16),
+                  label: const Text('Ajouter un enseignant', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: _brand,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    backgroundColor: _brandLight,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
               ]),
             ),
 
-            if (teachers.isEmpty)
+            if (sortedTeachers.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 48),
                 child: Center(
@@ -1675,7 +2078,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                         ),
                       ),
                     ],
-                    rows: teachers.map((t) {
+                    rows: sortedTeachers.map((t) {
                       final subColor = _subjectColor(t.subjectName ?? t.subjectCode);
                       return DataRow(
                         cells: [
@@ -1728,11 +2131,10 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                               child: Center(
                                 child: t.subjectName != null
                                     ? Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: subColor.withOpacity(0.08),
-                                          borderRadius: BorderRadius.circular(AppRadius.xs),
-                                          border: Border.all(color: subColor.withOpacity(0.25)),
+                                          color: subColor.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(9999),
                                         ),
                                         child: Text(
                                           t.subjectName!,
@@ -1767,13 +2169,10 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                               width: statusW,
                               child: Center(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: t.isActive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
-                                    borderRadius: BorderRadius.circular(AppRadius.xs),
-                                    border: Border.all(
-                                      color: t.isActive ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA),
-                                    ),
+                                    borderRadius: BorderRadius.circular(9999),
                                   ),
                                   child: Text(
                                     t.isActive ? 'Actif' : 'Inactif',
@@ -1813,9 +2212,57 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   elevation: 8,
                                   offset: const Offset(-8, 32),
-                                  onSelected: (action) {
+                                  onSelected: (action) async {
                                     switch (action) {
-                                      case 'profile': context.push('/teachers/${t.id}'); break;
+                                      case 'profile':
+                                        context.push('/teachers/${t.id}');
+                                        break;
+                                      case 'remove':
+                                        final confirmed = await showDialog<bool>(
+                                          context: context,
+                                          builder: (c) => AlertDialog(
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                            title: const Text('Retirer l\'enseignant ?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                            content: Text('Voulez-vous retirer ${t.fullName} de cette classe ?'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(c, false),
+                                                child: const Text('Annuler'),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () => Navigator.pop(c, true),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: AppColors.error,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                                child: const Text('Retirer'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed == true) {
+                                          try {
+                                            await SupabaseConfig.adminClient
+                                                .from('teacher_assignments')
+                                                .update({'is_active': false})
+                                                .eq('teacher_id', t.id)
+                                                .eq('class_id', data.classId);
+                                            ref.invalidate(classAllTeachersProvider(data.classId));
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('${t.fullName} retiré(e) de la classe'),
+                                                  backgroundColor: const Color(0xFF10B981),
+                                                  behavior: SnackBarBehavior.floating,
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            debugPrint('Remove teacher error: $e');
+                                          }
+                                        }
+                                        break;
                                     }
                                   },
                                   itemBuilder: (_) => [
@@ -1826,6 +2273,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                         Icon(Icons.visibility_outlined, size: 17, color: AppColors.success),
                                         const SizedBox(width: 12),
                                         Text('Voir profil', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.slate700)),
+                                      ]),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'remove',
+                                      height: 40,
+                                      child: Row(children: [
+                                        const Icon(Icons.person_remove_rounded, size: 17, color: AppColors.error),
+                                        const SizedBox(width: 12),
+                                        const Text('Retirer de la classe', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.error)),
                                       ]),
                                     ),
                                   ],
@@ -1841,7 +2297,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
               ),
 
             // Pagination footer
-            if (teachers.isNotEmpty)
+            if (sortedTeachers.isNotEmpty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 decoration: BoxDecoration(
@@ -1854,7 +2310,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                 ),
                 child: Row(children: [
                   Text(
-                    'Affichage de 1 à ${teachers.length} sur ${teachers.length} enseignant(s)',
+                    'Affichage de 1 à ${sortedTeachers.length} sur ${sortedTeachers.length} enseignant(s)',
                     style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
                   ),
                   const Spacer(),
