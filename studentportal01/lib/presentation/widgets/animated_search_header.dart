@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/theme/arabic_typography.dart';
 import 'bouncing_wrapper.dart';
 
 /// Reusable animated search header component
@@ -234,6 +235,7 @@ class AnimatedSearchHeader extends StatelessWidget {
                             ],
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               const SizedBox(width: 16),
                               Icon(
@@ -243,46 +245,45 @@ class AnimatedSearchHeader extends StatelessWidget {
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: Builder(
-                                  builder: (context) {
-                                    final isAr = Localizations.localeOf(context).languageCode == 'ar';
-                                    return TextField(
-                                      controller: searchController,
-                                      focusNode: searchFocusNode,
-                                      cursorColor: Colors.grey[800],
-                                      style: isAr
+                                child: Center(
+                                  child: TextField(
+                                    controller: searchController,
+                                    focusNode: searchFocusNode,
+                                    cursorColor: Colors.grey[800],
+                                    textAlignVertical: TextAlignVertical.center,
+                                    style: ArabicTypography.isArabic(context)
+                                        ? GoogleFonts.tajawal(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.grey[900],
+                                          )
+                                        : const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF212121),
+                                          ),
+                                    decoration: InputDecoration(
+                                      hintText: AppLocalizations.of(context).search,
+                                      hintStyle: ArabicTypography.isArabic(context)
                                           ? GoogleFonts.tajawal(
+                                              color: Colors.grey[500],
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                              color: Colors.grey[900],
+                                              fontWeight: FontWeight.w600,
                                             )
-                                          : const TextStyle(
+                                          : TextStyle(
+                                              color: Colors.grey[500],
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF212121),
+                                              fontWeight: FontWeight.w600,
                                             ),
-                                      decoration: InputDecoration(
-                                        hintText: AppLocalizations.of(context).search,
-                                        hintStyle: isAr
-                                            ? GoogleFonts.tajawal(
-                                                color: Colors.grey[500],
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                              )
-                                            : TextStyle(
-                                                color: Colors.grey[500],
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        filled: false,
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                                      ),
-                                    );
-                                  },
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      isDense: true,
+                                      isCollapsed: true,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ),
                                 ),
                               ),
                               ValueListenableBuilder<TextEditingValue>(

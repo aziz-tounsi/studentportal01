@@ -6,10 +6,12 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import 'ai_data_provider.dart';
 
@@ -196,60 +198,162 @@ $studentData
 - NEVER invent grades or dates not in the student's data''';
 }
 
-/// Convert a file (PDF, image, doc) to extractable text content
+/// Convert any file (PDF, Word docx, PowerPoint, Excel, text/code) to extractable text content.
+/// Enables free OpenRouter LLM models without document/vision capabilities to analyze full documents.
 class FileTextExtractor {
+  static const int _maxCharacterLimit = 65000;
+
   static Future<(String name, String text)> extract(PlatformFile file) async {
     final name = file.name;
-    final ext = name.split('.').last.toLowerCase();
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+
+    Uint8List? bytes = file.bytes;
+    if (bytes == null && file.path != null) {
+      try {
+        final f = File(file.path!);
+        if (f.existsSync()) {
+          bytes = await f.readAsBytes();
+        }
+      } catch (e) {
+        debugPrint('File read error: $e');
+      }
+    }
+
+    if (bytes == null || bytes.isEmpty) {
+      return (name, '[Attached file: $name ($ext) — unable to read file data]');
+    }
 
     if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(ext)) {
-      return (name, '[Image file: $name — Image upload received. The student shared this visual attachment.]');
+      return (name, '[Image file: $name — visual image attached by student]');
     }
 
-    if (['txt', 'csv', 'md', 'json', 'xml', 'html'].contains(ext)) {
-      try {
-        final bytes = file.bytes ?? (file.path != null ? await File(file.path!).readAsBytes() : null);
-        if (bytes != null) {
-          final text = utf8.decode(bytes, allowMalformed: true);
-          final preview = text.length > 3000 ? '${text.substring(0, 3000)}\n...[content truncated]' : text;
-          return (name, '[Text file: $name]\n$preview');
-        }
-      } catch (_) {}
-    }
-
+    // 1. PDF Documents (full text extraction via Syncfusion pure Dart)
     if (ext == 'pdf') {
       try {
-        final bytes = file.bytes ?? (file.path != null ? await File(file.path!).readAsBytes() : null);
-        if (bytes != null) {
-          final raw = latin1.decode(bytes, allowInvalid: true);
-          final extracted = _extractPdfText(raw);
-          if (extracted.isNotEmpty) {
-            final preview = extracted.length > 3000 ? '${extracted.substring(0, 3000)}\n...[PDF truncated]' : extracted;
-            return (name, '[PDF document: $name]\n$preview');
-          }
+        final doc = sf.PdfDocument(inputBytes: bytes);
+        final extractor = sf.PdfTextExtractor(doc);
+        final extracted = extractor.extractText().trim();
+        doc.dispose();
+        if (extracted.isNotEmpty) {
+          final content = _capLength(extracted);
+          return (name, '=== DOCUMENT ATTACHÉ: $name (PDF) ===\n$content\n=== FIN DU DOCUMENT ===');
         }
-      } catch (_) {}
-      return (name, '[PDF file: $name — PDF attached for analysis]');
-    }
-
-    if (['docx', 'doc'].contains(ext)) {
+      } catch (e) {
+        debugPrint('Syncfusion PDF extract error: $e');
+      }
+      // Fallback: extract streams using Latin1 / Regex
       try {
-        final bytes = file.bytes ?? (file.path != null ? await File(file.path!).readAsBytes() : null);
-        if (bytes != null) {
-          final text = _extractDocxText(bytes);
-          if (text.isNotEmpty) {
-            final preview = text.length > 3000 ? '${text.substring(0, 3000)}\n...[DOCX truncated]' : text;
-            return (name, '[Word document: $name]\n$preview');
-          }
+        final raw = latin1.decode(bytes, allowInvalid: true);
+        final extracted = _extractPdfTextFallback(raw);
+        if (extracted.isNotEmpty) {
+          final content = _capLength(extracted);
+          return (name, '=== DOCUMENT ATTACHÉ: $name (PDF) ===\n$content\n=== FIN DU DOCUMENT ===');
         }
       } catch (_) {}
-      return (name, '[Word document: $name attached]');
+      return (name, '[Fichier PDF: $name — Document scanné ou protégé]');
     }
 
-    return (name, '[Attached file: $name (${ext.toUpperCase()})]');
+    // 2. Word Documents (.docx, .doc)
+    if (ext == 'docx' || ext == 'doc') {
+      try {
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final sb = StringBuffer();
+        for (final entry in archive) {
+          if (entry.name == 'word/document.xml') {
+            final xmlStr = utf8.decode(entry.content as List<int>, allowMalformed: true);
+            final matches = RegExp(r'<w:t[^>]*>(.*?)</w:t>').allMatches(xmlStr);
+            for (final m in matches) {
+              final t = m.group(1);
+              if (t != null && t.isNotEmpty) sb.write('$t ');
+            }
+          }
+        }
+        final extracted = sb.toString().trim();
+        if (extracted.isNotEmpty) {
+          final content = _capLength(extracted);
+          return (name, '=== DOCUMENT ATTACHÉ: $name (Word) ===\n$content\n=== FIN DU DOCUMENT ===');
+        }
+      } catch (e) {
+        debugPrint('Docx extract error: $e');
+      }
+    }
+
+    // 3. PowerPoint Presentations (.pptx)
+    if (ext == 'pptx' || ext == 'ppt') {
+      try {
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final sb = StringBuffer();
+        for (final entry in archive) {
+          if (entry.name.startsWith('ppt/slides/slide') && entry.name.endsWith('.xml')) {
+            final xmlStr = utf8.decode(entry.content as List<int>, allowMalformed: true);
+            final matches = RegExp(r'<a:t[^>]*>(.*?)</a:t>').allMatches(xmlStr);
+            for (final m in matches) {
+              final t = m.group(1);
+              if (t != null && t.isNotEmpty) sb.write('$t ');
+            }
+            sb.writeln();
+          }
+        }
+        final extracted = sb.toString().trim();
+        if (extracted.isNotEmpty) {
+          final content = _capLength(extracted);
+          return (name, '=== PRÉSENTATION ATTACHÉE: $name (PowerPoint) ===\n$content\n=== FIN DU DOCUMENT ===');
+        }
+      } catch (_) {}
+    }
+
+    // 4. Excel Spreadsheets (.xlsx, .xls)
+    if (ext == 'xlsx' || ext == 'xls') {
+      try {
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final sb = StringBuffer();
+        for (final entry in archive) {
+          if (entry.name == 'xl/sharedStrings.xml') {
+            final xmlStr = utf8.decode(entry.content as List<int>, allowMalformed: true);
+            final matches = RegExp(r'<t[^>]*>(.*?)</t>').allMatches(xmlStr);
+            for (final m in matches) {
+              final t = m.group(1);
+              if (t != null && t.isNotEmpty) sb.write('$t\t');
+            }
+          }
+        }
+        final extracted = sb.toString().trim();
+        if (extracted.isNotEmpty) {
+          final content = _capLength(extracted);
+          return (name, '=== TABLEUR ATTACHÉ: $name (Excel) ===\n$content\n=== FIN DU DOCUMENT ===');
+        }
+      } catch (_) {}
+    }
+
+    // 5. Text / Code / Data files
+    if (['txt', 'csv', 'tsv', 'md', 'json', 'xml', 'html', 'dart', 'py', 'java', 'c', 'cpp', 'h', 'js', 'ts', 'css', 'sql', 'sh', 'yaml', 'yml', 'rtf'].contains(ext) || ext.isEmpty) {
+      try {
+        final text = utf8.decode(bytes, allowMalformed: true).trim();
+        if (text.isNotEmpty) {
+          final content = _capLength(text);
+          return (name, '=== FICHIER TEXTE ATTACHÉ: $name ===\n$content\n=== FIN DU FICHIER ===');
+        }
+      } catch (_) {}
+    }
+
+    // Fallback: try raw UTF-8 decode
+    try {
+      final text = utf8.decode(bytes, allowMalformed: true).trim();
+      if (text.length > 20 && _isPrintable(text)) {
+        final content = _capLength(text);
+        return (name, '=== FICHIER ATTACHÉ: $name ===\n$content\n=== FIN DU FICHIER ===');
+      }
+    } catch (_) {}
+
+    return (name, '[Fichier attaché: $name (${ext.toUpperCase()})]');
   }
 
-  static String _extractPdfText(String raw) {
+  static String _capLength(String text) {
+    if (text.length <= _maxCharacterLimit) return text;
+    return '${text.substring(0, _maxCharacterLimit)}\n\n[... Document très volumineux: tronqué à $_maxCharacterLimit caractères pour respecter le contexte de l\'IA ...]';
+  }
+
+  static String _extractPdfTextFallback(String raw) {
     final result = StringBuffer();
     final tjPattern = RegExp(r'\(([^)]{1,200})\)\s*Tj');
     for (final m in tjPattern.allMatches(raw)) {
@@ -268,20 +372,9 @@ class FileTextExtractor {
   }
 
   static bool _isPrintable(String s) {
-    return s.runes.where((r) => r >= 32 && r < 127).length > s.length * 0.5;
-  }
-
-  static String _extractDocxText(Uint8List bytes) {
-    final raw = utf8.decode(bytes, allowMalformed: true);
-    final result = StringBuffer();
-    final pattern = RegExp(r'<w:t[^>]*>([^<]+)<\/w:t>');
-    for (final m in pattern.allMatches(raw)) {
-      final text = m.group(1)?.trim() ?? '';
-      if (text.isNotEmpty) {
-        result.write('$text ');
-      }
-    }
-    return result.toString().trim();
+    if (s.isEmpty) return false;
+    final printable = s.runes.where((r) => r >= 32 || r == 10 || r == 13 || r == 9).length;
+    return printable > s.length * 0.7;
   }
 }
 

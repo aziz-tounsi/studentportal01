@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/config/supabase_config.dart';
 import '../../../core/l10n/app_localizations.dart';
@@ -89,7 +90,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       // Update local avatar state
       ref.read(avatarProvider.notifier).selectCustom(image.path);
 
-      // Refresh auth provider state
+      // Refresh auth provider state and in-memory photo url
+      await ref.read(authProvider.notifier).updateProfilePhoto(publicUrl);
       await ref.read(authProvider.notifier).refreshUserData();
 
       if (mounted) {
@@ -837,7 +839,10 @@ class _ProfileHeroCard extends ConsumerWidget {
   }
 
   Widget _buildAvatarContent(AvatarState state, String initials) {
-    if (state.customFilePath != null) {
+    final hasValidCustomFile = state.customFilePath != null &&
+        (kIsWeb || File(state.customFilePath!).existsSync());
+
+    if (hasValidCustomFile) {
       if (kIsWeb) {
         return Image.network(
           state.customFilePath!,
@@ -856,8 +861,17 @@ class _ProfileHeroCard extends ConsumerWidget {
         );
       }
     } else if (user.photoUrl != null && user.photoUrl!.isNotEmpty) {
-      return Image.network(
-        user.photoUrl!,
+      return CachedNetworkImage(
+        imageUrl: user.photoUrl!,
+        fit: BoxFit.cover,
+        width: 110,
+        height: 110,
+        placeholder: (_, _) => const Center(child: IosLoader(color: _navPink, size: 24)),
+        errorWidget: (context, error, stackTrace) => _buildInitials(initials),
+      );
+    } else if (state.presetPath != null) {
+      return Image.asset(
+        state.presetPath!,
         fit: BoxFit.cover,
         width: 110,
         height: 110,

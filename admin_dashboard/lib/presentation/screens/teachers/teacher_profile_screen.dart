@@ -224,7 +224,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         if (emailLower.contains('gcvygvc') || emailLower.contains('hcv') || nameLower.contains('gcvygvc')) {
           final todayDow = now.weekday; // 1 = Monday, 7 = Sunday
           final testSlots = <Map<String, dynamic>>[
-            // Today's sessions
+            // Today's sessions (rich test schedule for Gantt view)
             {
               'id': 'demo-today-1',
               'day_of_week': todayDow,
@@ -242,7 +242,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
               'id': 'demo-today-2',
               'day_of_week': todayDow,
               'start_time': '10:45:00',
-              'end_time': '12:45:00',
+              'end_time': '12:15:00',
               'room': 'Lab Info 1',
               'subject_offerings': {
                 'subject_id': 'demo-sub-2',
@@ -254,14 +254,27 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             {
               'id': 'demo-today-3',
               'day_of_week': todayDow,
-              'start_time': '14:00:00',
-              'end_time': '16:00:00',
+              'start_time': '13:30:00',
+              'end_time': '15:00:00',
               'room': 'Salle B12',
               'subject_offerings': {
                 'subject_id': 'demo-sub-3',
                 'class_id': 'demo-cls-3',
                 'subjects': {'name': 'Systèmes & Réseaux', 'code': 'SYS'},
                 'classes': {'name': '8B-1'},
+              },
+            },
+            {
+              'id': 'demo-today-4',
+              'day_of_week': todayDow,
+              'start_time': '15:30:00',
+              'end_time': '17:30:00',
+              'room': 'Lab Info 2',
+              'subject_offerings': {
+                'subject_id': 'demo-sub-4',
+                'class_id': 'demo-cls-4',
+                'subjects': {'name': 'Technologies Web', 'code': 'WEB'},
+                'classes': {'name': '9B-2'},
               },
             },
             // Other days across the week
@@ -311,7 +324,16 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           ];
           for (final slot in testSlots) {
             final id = slot['id']?.toString();
-            if (id == null || seenSlotIds.add(id)) {
+            final slotDay = _parseDayOfWeek(slot['day_of_week']);
+            final sMin = _parseTimeToMinutes(_formatShortTime(slot['start_time']?.toString()));
+            final eMin = _parseTimeToMinutes(_formatShortTime(slot['end_time']?.toString()));
+            final overlaps = rawSlots.any((existing) {
+              if (_parseDayOfWeek(existing['day_of_week']) != slotDay) return false;
+              final exSMin = _parseTimeToMinutes(_formatShortTime(existing['start_time']?.toString()));
+              final exEMin = _parseTimeToMinutes(_formatShortTime(existing['end_time']?.toString()));
+              return sMin < exEMin && eMin > exSMin;
+            });
+            if (!overlaps && (id == null || seenSlotIds.add(id))) {
               rawSlots.add(slot);
             }
           }
@@ -348,9 +370,25 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             return (a['startMin'] as int).compareTo(b['startMin'] as int);
           });
 
-        _timetableAllSlots = enriched;
+        // Filter out overlapping slots so a teacher never teaches two classes at the same time
+        final nonOverlapping = <Map<String, dynamic>>[];
+        final Map<int, int> lastEndMinByDay = {};
+        for (final slot in enriched) {
+          final day = slot['dayNum'] as int;
+          final sMin = slot['startMin'] as int;
+          final eMin = slot['endMin'] as int;
+          final lastEnd = lastEndMinByDay[day] ?? -1;
+          if (sMin < lastEnd) {
+            // Simultaneous class conflict: skip overlapping slot
+            continue;
+          }
+          lastEndMinByDay[day] = eMin;
+          nonOverlapping.add(slot);
+        }
+
+        _timetableAllSlots = nonOverlapping;
         _timetableToday =
-            enriched.where((s) => s['dayNum'] == now.weekday).toList();
+            nonOverlapping.where((s) => s['dayNum'] == now.weekday).toList();
       } catch (e) {
         debugPrint('Teacher timetable load error: $e');
       }
@@ -686,7 +724,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
                 ),
                 child: Text(
                   'Enseignant',
@@ -702,9 +739,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                 decoration: BoxDecoration(
                   color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isActive ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA),
-                  ),
                 ),
                 child: Text(
                   isActive ? 'Actif' : 'Inactif',
@@ -1133,9 +1167,9 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Chart: Today (horizontal chart lines: Y = hours, X = classes) vs Week (vertical hours bar chart)
+          // Timeline: Today (Gantt timeline chart with duration pills and day timeline) vs Week (vertical hours bar chart)
           if (!_showWeeklySchedule)
-            _buildTodayClassesHoursChart(nowMin)
+            _buildTodayTimelineGantt(nowMin)
           else
             _buildWorkingHoursChart(now.weekday),
           const SizedBox(height: 14),
@@ -1206,265 +1240,484 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     return 'Classe';
   }
 
-  Widget _buildTodayClassesHoursChart(int nowMin) {
-    final Map<String, int> minutesByClass = {};
-    final Map<String, List<Map<String, dynamic>>> slotsByClass = {};
+  static const List<Map<String, Color>> _ganttPalettes = [
+    {
+      'bg': Color(0xFF2563EB), // Bold Blue
+      'accent': Color(0xFF1D4ED8),
+      'text': Colors.white,
+      'subtext': Color(0xFFE0E7FF),
+    },
+    {
+      'bg': Color(0xFF059669), // Bold Emerald Green
+      'accent': Color(0xFF047857),
+      'text': Colors.white,
+      'subtext': Color(0xFFD1FAE5),
+    },
+    {
+      'bg': Color(0xFF7C3AED), // Bold Purple / Violet
+      'accent': Color(0xFF6D28D9),
+      'text': Colors.white,
+      'subtext': Color(0xFFEDE9FE),
+    },
+    {
+      'bg': Color(0xFFEA580C), // Bold Orange
+      'accent': Color(0xFFC2410C),
+      'text': Colors.white,
+      'subtext': Color(0xFFFFEDD5),
+    },
+    {
+      'bg': Color(0xFFDB2777), // Bold Rose / Pink
+      'accent': Color(0xFFBE185D),
+      'text': Colors.white,
+      'subtext': Color(0xFFFCE7F3),
+    },
+    {
+      'bg': Color(0xFF0D9488), // Bold Teal
+      'accent': Color(0xFF0F766E),
+      'text': Colors.white,
+      'subtext': Color(0xFFCCFBF1),
+    },
+  ];
+
+  Widget _buildTodayTimelineGantt(int nowMin) {
+    if (_timetableToday.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Icon(Icons.event_available_rounded, color: Color(0xFF94A3B8), size: 24),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Aucune séance programmée aujourd\'hui',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Ce professeur n\'a pas de cours prévu pour cette journée.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Determine timetable day bounds
+    int startHour = 8;
+    int endHour = 18;
 
     for (final s in _timetableToday) {
-      final cls = _extractClassName(s);
-      minutesByClass[cls] =
-          (minutesByClass[cls] ?? 0) + (s['durationMin'] as int? ?? 0);
-      slotsByClass.putIfAbsent(cls, () => []).add(s);
+      final sMin = s['startMin'] as int? ?? 0;
+      final eMin = s['endMin'] as int? ?? 0;
+      if (sMin > 0 && (sMin ~/ 60) < startHour) {
+        startHour = (sMin ~/ 60).clamp(6, 8);
+      }
+      if (eMin > 0 && ((eMin + 59) ~/ 60) > endHour) {
+        endHour = ((eMin + 59) ~/ 60).clamp(18, 22);
+      }
     }
 
-    final totalTodayMin =
-        minutesByClass.values.fold<int>(0, (sum, m) => sum + m);
-    final classNames = minutesByClass.keys.toList();
+    final totalHours = endHour - startHour;
+    final startMinutes = startHour * 60;
+    final totalDayMinutes = totalHours * 60;
+    final endMinutes = endHour * 60;
 
-    int maxMinutes = 120;
-    for (final m in minutesByClass.values) {
-      if (m > maxMinutes) maxMinutes = m;
-    }
-    final maxHoursTick = ((maxMinutes + 59) ~/ 60).clamp(2, 12);
-    final scaleMaxMinutes = maxHoursTick * 60;
+    final totalTeachingMin = _timetableToday.fold<int>(
+      0,
+      (sum, s) => sum + (s['durationMin'] as int? ?? 0),
+    );
+    final freeMin = (totalDayMinutes - totalTeachingMin).clamp(0, totalDayMinutes);
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header info
           Row(
             children: [
               const Text(
-                'HEURES PAR CLASSE — AUJOURD\'HUI',
+                'CHRONOLOGIE D\'AUJOURD\'HUI',
                 style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: 0.8,
                   color: AppColors.textTertiary,
                 ),
               ),
-              const SizedBox(width: 8),
-              if (classNames.isNotEmpty)
-                const Text(
-                  '• Cliquer pour détails',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textTertiary,
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _brandLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_formatHoursMinutes(totalTeachingMin)} d\'enseignement',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _brand,
                   ),
                 ),
+              ),
               const Spacer(),
               Text(
-                _formatHoursMinutes(totalTodayMin),
+                '$startHour:00 - $endHour:00',
                 style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _brand,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textTertiary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (classNames.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Text(
-                  'Aucune classe programmée aujourd\'hui',
-                  style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              height: 136,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        const leftAxisWidth = 30.0;
-                        const topReserve = 18.0;
-                        const bottomReserve = 8.0;
-                        final plotWidth =
-                            (constraints.maxWidth - leftAxisWidth).clamp(60.0, 2000.0);
-                        final barZoneHeight =
-                            (constraints.maxHeight - topReserve - bottomReserve)
-                                .clamp(40.0, 200.0);
+          const SizedBox(height: 16),
 
-                        final points = List<Offset>.generate(classNames.length, (i) {
-                          final cls = classNames[i];
-                          final mins = minutesByClass[cls] ?? 0;
-                          final ratio = (mins / scaleMaxMinutes).clamp(0.0, 1.0);
-                          final colW = plotWidth / classNames.length;
-                          final x = leftAxisWidth + (i + 0.5) * colW;
-                          final y = bottomReserve + ratio * barZoneHeight;
-                          // Convert bottom-up y to top-down canvas y
-                          final canvasY = constraints.maxHeight - y;
-                          return Offset(x, canvasY);
-                        });
+          // Responsive Gantt view
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final plotWidth = constraints.maxWidth.clamp(740.0, 3000.0);
+              const double rowHeight = 52.0;
+              final double canvasHeight = _timetableToday.length * rowHeight + 14.0;
 
-                        return Stack(
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: SizedBox(
+                  width: plotWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Canvas with grid and pills
+                      Container(
+                        height: canvasHeight,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFCFDFE),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFF1F5F9)),
+                        ),
+                        child: Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            // Horizontal chart lines (Y = nb hours on the day)
-                            ...List.generate(maxHoursTick + 1, (hourVal) {
-                              final yFromBottom = bottomReserve +
-                                  (hourVal / maxHoursTick) * barZoneHeight;
+                            // 1. Vertical hour grid lines
+                            ...List.generate(totalHours + 1, (i) {
+                              final x = (i / totalHours) * plotWidth;
                               return Positioned(
-                                left: 0,
-                                right: 0,
-                                bottom: yFromBottom - 6,
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 26,
-                                      child: Text(
-                                        '${hourVal}h',
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w500,
-                                          color: AppColors.textTertiary,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Container(
-                                        height: 1,
-                                        color: hourVal == 0
-                                            ? const Color(0xFFCBD5E1)
-                                            : const Color(0xFFF1F5F9),
-                                      ),
-                                    ),
-                                  ],
+                                left: x.clamp(0.0, plotWidth - 1),
+                                top: 0,
+                                bottom: 0,
+                                width: 1,
+                                child: Container(
+                                  color: const Color(0xFFF1F5F9),
                                 ),
                               );
                             }),
-                            // Line chart + soft gradient area
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: _TodayLineChartPainter(
-                                  points: points,
-                                  baselineY:
-                                      constraints.maxHeight - bottomReserve,
-                                  leftEdge: leftAxisWidth,
-                                  rightEdge: constraints.maxWidth,
-                                  brandColor: _brand,
+
+                            // 2. Horizontal row dividing grid lines
+                            ...List.generate(_timetableToday.length + 1, (i) {
+                              final y = i * rowHeight + 6.0;
+                              return Positioned(
+                                left: 0,
+                                right: 0,
+                                top: y,
+                                height: 1,
+                                child: Container(
+                                  color: const Color(0xFFF8FAFC),
+                                ),
+                              );
+                            }),
+
+                            // 3. Current Time Vertical Line (if inside today's hours)
+                            if (nowMin >= startMinutes && nowMin <= endMinutes) ...[
+                              Positioned(
+                                left: (((nowMin - startMinutes) / totalDayMinutes) * plotWidth)
+                                    .clamp(0.0, plotWidth - 2),
+                                top: 0,
+                                bottom: 0,
+                                width: 2,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEF4444),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            // Clickable node dots & hour labels per class on X
-                            ...List.generate(classNames.length, (i) {
-                              final cls = classNames[i];
-                              final mins = minutesByClass[cls] ?? 0;
-                              final pt = points[i];
-                              final clsSlots = slotsByClass[cls] ?? [];
-                              final hasActive = clsSlots.any((s) {
-                                final sMin = s['startMin'] as int? ?? 0;
-                                final eMin = s['endMin'] as int? ?? 0;
-                                return nowMin >= sMin && nowMin < eMin;
-                              });
+                            ],
+
+                            // 4. Staggered pills for each class
+                            ...List.generate(_timetableToday.length, (i) {
+                              final slot = _timetableToday[i];
+                              final sMin = slot['startMin'] as int? ?? startMinutes;
+                              final eMin = slot['endMin'] as int? ?? (sMin + 60);
+                              final dMin = (eMin > sMin) ? (eMin - sMin) : 60;
+
+                              final subjectName = (slot['subject_offerings']?['subjects']?['name'] ??
+                                      slot['subjects']?['name'] ??
+                                      'Matière')
+                                  .toString();
+                              final className = _extractClassName(slot);
+                              final room = slot['shortRoom']?.toString() ??
+                                  slot['room']?.toString() ??
+                                  '';
+                              final startTime = slot['startShort']?.toString() ??
+                                  _formatShortTime(slot['start_time']?.toString());
+                              final endTime = slot['endShort']?.toString() ??
+                                  _formatShortTime(slot['end_time']?.toString());
+
+                              final left = (((sMin - startMinutes) / totalDayMinutes) * plotWidth)
+                                  .clamp(0.0, plotWidth - 60);
+                              final rawWidth = ((dMin / totalDayMinutes) * plotWidth);
+                              final width = rawWidth.clamp(140.0, plotWidth - left);
+                              final top = i * rowHeight + 8.0;
+
+                              final palette = _ganttPalettes[i % _ganttPalettes.length];
 
                               return Positioned(
-                                left: pt.dx - 24,
-                                top: (pt.dy - 22).clamp(0.0, constraints.maxHeight - 36),
-                                width: 48,
-                                child: MouseRegion(
-                                  cursor: SystemMouseCursors.click,
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () => _showTodayClassDetailModal(
-                                      cls,
-                                      clsSlots,
-                                      nowMin,
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          _formatShortHours(mins),
-                                          maxLines: 1,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                            color: hasActive
-                                                ? _brand
-                                                : AppColors.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Container(
-                                          width: hasActive ? 12 : 10,
-                                          height: hasActive ? 12 : 10,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: _brand,
-                                              width: hasActive ? 3 : 2.5,
+                                left: left,
+                                top: top,
+                                width: width,
+                                height: 44.0,
+                                child: Tooltip(
+                                  message:
+                                      '$subjectName • $className • $startTime - $endTime${room.isNotEmpty ? ' • $room' : ''}',
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: GestureDetector(
+                                      onTap: () => _showTodayClassDetailModal(
+                                        className,
+                                        [slot],
+                                        nowMin,
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: palette['bg'],
+                                          borderRadius: BorderRadius.circular(999),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: palette['bg']!.withValues(alpha: 0.35),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 2),
                                             ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: _brand.withOpacity(0.25),
-                                                blurRadius: 6,
-                                              ),
-                                            ],
-                                          ),
+                                          ],
                                         ),
-                                      ],
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              subjectName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.white,
+                                                letterSpacing: -0.2,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 1),
+                                            Text(
+                                              '$startTime - $endTime  •  $className${room.isNotEmpty ? ' ($room)' : ''}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white.withValues(alpha: 0.90),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
                               );
                             }),
                           ],
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  // X-axis labels (Classes)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 30),
-                    child: Row(
-                      children: classNames.map((cls) {
-                        final clsSlots = slotsByClass[cls] ?? [];
-                        return Expanded(
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: () => _showTodayClassDetailModal(
-                                cls,
-                                clsSlots,
-                                nowMin,
-                              ),
-                              child: Text(
-                                cls,
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Continuous Today Timeline Bar (teaching blocks vs free breaks)
+                      Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Stack(
+                          children: _timetableToday.map((slot) {
+                            final i = _timetableToday.indexOf(slot);
+                            final sMin = slot['startMin'] as int? ?? startMinutes;
+                            final eMin = slot['endMin'] as int? ?? (sMin + 60);
+                            final dMin = (eMin > sMin) ? (eMin - sMin) : 60;
+                            final left = (((sMin - startMinutes) / totalDayMinutes) * plotWidth)
+                                .clamp(0.0, plotWidth);
+                            final width = ((dMin / totalDayMinutes) * plotWidth)
+                                .clamp(4.0, plotWidth - left);
+                            final palette = _ganttPalettes[i % _ganttPalettes.length];
+
+                            return Positioned(
+                              left: left,
+                              top: 0,
+                              bottom: 0,
+                              width: width,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: palette['bg'],
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+
+                      // X-Axis Line & Hour Ticks
+                      SizedBox(
+                        height: 24,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            // Baseline
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              height: 1,
+                              child: Container(color: const Color(0xFFCBD5E1)),
+                            ),
+                            // Hour markers
+                            ...List.generate(totalHours + 1, (i) {
+                              final h = startHour + i;
+                              final x = (i / totalHours) * plotWidth;
+                              return Positioned(
+                                left: (x - 22).clamp(0.0, plotWidth - 44),
+                                top: 0,
+                                width: 44,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 1,
+                                      height: 5,
+                                      color: const Color(0xFF94A3B8),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${h.toString().padLeft(2, '0')}:00',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Legend summary
+                      Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: _brand,
+                              borderRadius: BorderRadius.circular(3),
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Séances de cours (${_formatHoursMinutes(totalTeachingMin)})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Pauses & Libre (${_formatHoursMinutes(freeMin)})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.touch_app_rounded, size: 13, color: Color(0xFF94A3B8)),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Cliquer sur une séance pour voir les détails',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -2891,86 +3144,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
     );
-  }
-}
-
-class _TodayLineChartPainter extends CustomPainter {
-  final List<Offset> points;
-  final double baselineY;
-  final double leftEdge;
-  final double rightEdge;
-  final Color brandColor;
-
-  _TodayLineChartPainter({
-    required this.points,
-    required this.baselineY,
-    required this.leftEdge,
-    required this.rightEdge,
-    required this.brandColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.isEmpty) return;
-
-    final List<Offset> linePts;
-    if (points.length == 1) {
-      final p = points.first;
-      final spanHalf = ((rightEdge - leftEdge) * 0.28).clamp(28.0, 90.0);
-      final x1 = (p.dx - spanHalf).clamp(leftEdge, rightEdge);
-      final x2 = (p.dx + spanHalf).clamp(leftEdge, rightEdge);
-      linePts = [Offset(x1, p.dy), Offset(x2, p.dy)];
-    } else {
-      linePts = points;
-    }
-
-    final linePath = Path()..moveTo(linePts.first.dx, linePts.first.dy);
-    for (int i = 0; i < linePts.length - 1; i++) {
-      final p0 = linePts[i];
-      final p1 = linePts[i + 1];
-      final midX = (p0.dx + p1.dx) / 2;
-      linePath.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
-    }
-
-    final fillPath = Path.from(linePath)
-      ..lineTo(linePts.last.dx, baselineY)
-      ..lineTo(linePts.first.dx, baselineY)
-      ..close();
-
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          brandColor.withValues(alpha: 0.18),
-          brandColor.withValues(alpha: 0.01),
-        ],
-      ).createShader(Rect.fromLTRB(leftEdge, 0, rightEdge, baselineY));
-
-    canvas.drawPath(fillPath, fillPaint);
-
-    final strokePaint = Paint()
-      ..color = brandColor
-      ..strokeWidth = 2.6
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    canvas.drawPath(linePath, strokePaint);
-
-    // Subtle vertical guide lines from each class point down to baseline
-    final dashPaint = Paint()
-      ..color = brandColor.withValues(alpha: 0.16)
-      ..strokeWidth = 1.2;
-    for (final p in points) {
-      canvas.drawLine(p, Offset(p.dx, baselineY), dashPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _TodayLineChartPainter oldDelegate) {
-    return oldDelegate.points != points ||
-        oldDelegate.baselineY != baselineY ||
-        oldDelegate.brandColor != brandColor;
   }
 }
 

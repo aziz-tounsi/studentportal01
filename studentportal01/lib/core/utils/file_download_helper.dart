@@ -40,7 +40,7 @@ class FileDownloadHelper {
             ),
           ],
         ),
-        duration: const Duration(seconds: 2),
+        duration: const Duration(minutes: 5),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         shape: const StadiumBorder(),
@@ -74,8 +74,9 @@ class FileDownloadHelper {
         await file.writeAsBytes(response.bodyBytes);
 
         if (context.mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.removeCurrentSnackBar();
+          messenger.showSnackBar(
             SnackBar(
               content: Row(
                 children: [
@@ -99,11 +100,18 @@ class FileDownloadHelper {
                 label: 'Ouvrir',
                 textColor: Colors.white,
                 onPressed: () {
+                  messenger.hideCurrentSnackBar();
                   OpenFilex.open(filePath);
                 },
               ),
             ),
           );
+          // Explicitly dismiss after 3 seconds to ensure it never stays stuck
+          Future.delayed(const Duration(seconds: 3), () {
+            try {
+              messenger.hideCurrentSnackBar();
+            } catch (_) {}
+          });
         }
       } else {
         await launchUrl(Uri.parse(cleanUrl), mode: LaunchMode.externalApplication);

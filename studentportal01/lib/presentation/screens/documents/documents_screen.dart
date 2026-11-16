@@ -20,9 +20,47 @@ import '../../widgets/documents_skeleton.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../../core/utils/file_download_helper.dart';
+import '../../widgets/ios_photo_gallery_viewer.dart';
 
 // Semester state provider for this screen
 final docsSemesterProvider = StateProvider<int>((ref) => 1);
+
+/// Set of document IDs that have been opened/read by the current user
+final readDocumentsProvider =
+    StateNotifierProvider<ReadDocumentsNotifier, Set<String>>((ref) {
+  final authState = ref.watch(authProvider);
+  final userId = authState.user?.id ?? 'default_user';
+  return ReadDocumentsNotifier(userId);
+});
+
+class ReadDocumentsNotifier extends StateNotifier<Set<String>> {
+  final String userId;
+  static const _storagePrefix = 'read_documents_ids_';
+
+  ReadDocumentsNotifier(this.userId) : super({}) {
+    _loadFromCache();
+  }
+
+  void _loadFromCache() {
+    try {
+      final cachedList = OfflineCacheService.instance.getList('$_storagePrefix$userId');
+      if (cachedList != null) {
+        state = cachedList.map((e) => e.toString()).toSet();
+      }
+    } catch (e) {
+      debugPrint('ReadDocumentsNotifier load error: $e');
+    }
+  }
+
+  Future<void> markAsRead(String id) async {
+    if (state.contains(id)) return;
+    final updated = Set<String>.from(state)..add(id);
+    state = updated;
+    await OfflineCacheService.instance.setJson('$_storagePrefix$userId', updated.toList());
+  }
+
+  bool isRead(String id) => state.contains(id);
+}
 
 /// Parses raw `public.documents` rows, enforces per-student / per-class / school-wide
 /// visibility, and sorts newest first.
@@ -180,9 +218,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     final match = list.where((d) => d.id == widget.initialDocumentId).firstOrNull;
     if (match != null) {
       _hasHandledInitialDocument = true;
+      ref.read(readDocumentsProvider.notifier).markAsRead(match.id);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _DocumentCard._showDocumentDetails(context, match, list);
+          _DocumentCard._showDocumentDetails(context, match, list, ref);
         }
       });
     }
@@ -811,7 +850,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
 }
 
 // Document card widget - iOS 26 premium style without entry hover animation
-class _DocumentCard extends StatelessWidget {
+class _DocumentCard extends ConsumerWidget {
   final DocumentModel document;
   final List<DocumentModel>? allDocuments;
 
@@ -821,7 +860,8 @@ class _DocumentCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isRead = ref.watch(readDocumentsProvider).contains(document.id);
     final categoryColor = _DocumentsScreenState.getCategoryColor(document.category);
     final categoryIcon = _DocumentsScreenState.getCategoryIcon(document.category);
 
@@ -834,7 +874,10 @@ class _DocumentCard extends StatelessWidget {
         shrinkScale: 0.93,
         overshootScale: 1.055,
         delayNavigation: false,
-        onTap: () => _showDocumentDetails(context, document, allDocuments),
+        onTap: () {
+          ref.read(readDocumentsProvider.notifier).markAsRead(document.id);
+          _showDocumentDetails(context, document, allDocuments, ref);
+        },
         child: Container(
           padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 16.0)),
           decoration: BoxDecoration(
@@ -891,8 +934,8 @@ class _DocumentCard extends StatelessWidget {
                         style: ArabicTypography.subtitleStyle(
                           context,
                           fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1F2937),
+                          fontWeight: isRead ? FontWeight.w600 : FontWeight.w900,
+                          color: isRead ? const Color(0xFF1F2937) : const Color(0xFF111827),
                           letterSpacing: -0.3,
                         ),
                         maxLines: 1,
@@ -905,8 +948,8 @@ class _DocumentCard extends StatelessWidget {
                           style: ArabicTypography.bodyStyle(
                             context,
                             fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.grey[600],
+                            fontWeight: isRead ? FontWeight.w400 : FontWeight.w700,
+                            color: isRead ? Colors.grey[600] : const Color(0xFF374151),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -919,7 +962,7 @@ class _DocumentCard extends StatelessWidget {
                           Icon(
                             Icons.access_time_rounded,
                             size: 12,
-                            color: Colors.grey[400],
+                            color: isRead ? Colors.grey[400] : const Color(0xFF1F2937),
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -927,8 +970,8 @@ class _DocumentCard extends StatelessWidget {
                             style: ArabicTypography.bodyStyle(
                               context,
                               fontSize: 11,
-                              color: Colors.grey[500],
-                              fontWeight: FontWeight.w400,
+                              color: isRead ? Colors.grey[500] : const Color(0xFF1F2937),
+                              fontWeight: isRead ? FontWeight.w400 : FontWeight.w800,
                             ),
                           ),
                           if (document.batchInfo != null) ...[
@@ -968,8 +1011,8 @@ class _DocumentCard extends StatelessWidget {
                               style: ArabicTypography.bodyStyle(
                                 context,
                                 fontSize: 11,
-                                color: Colors.grey[500],
-                                fontWeight: FontWeight.w400,
+                                color: isRead ? Colors.grey[500] : const Color(0xFF1F2937),
+                                fontWeight: isRead ? FontWeight.w400 : FontWeight.w800,
                               ),
                             ),
                           ],
@@ -999,97 +1042,10 @@ class _DocumentCard extends StatelessWidget {
   }
 
   static void _showImageViewer(BuildContext context, String imageUrl, String fileName) {
-    showDialog(
+    IosPhotoGalleryViewer.show(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.9),
-      builder: (ctx) => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            Center(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[900],
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.broken_image, color: Colors.white54, size: 64),
-                        SizedBox(height: 16),
-                        Text(
-                          'Image non disponible',
-                          style: TextStyle(color: Colors.white54),
-                        ),
-                      ],
-                    ),
-                  ),
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
-                        color: Colors.white,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            // Download button
-            Positioned(
-              top: 50,
-              right: 76,
-              child: BouncingWrapper(
-                shrinkScale: 0.85,
-                overshootScale: 1.15,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  FileDownloadHelper.downloadFile(
-                    context: context,
-                    url: imageUrl,
-                    fileName: fileName,
-                  );
-                },
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 24),
-                ),
-              ),
-            ),
-            // Close button
-            Positioned(
-              top: 50,
-              right: 20,
-              child: BouncingWrapper(
-                shrinkScale: 0.85,
-                overshootScale: 1.15,
-                onTap: () => Navigator.pop(ctx),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 24),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      imageUrls: [imageUrl],
+      initialIndex: 0,
     );
   }
 
@@ -1298,7 +1254,11 @@ class _DocumentCard extends StatelessWidget {
     BuildContext context,
     DocumentModel document, [
     List<DocumentModel>? allDocs,
+    WidgetRef? ref,
   ]) {
+    if (ref != null) {
+      ref.read(readDocumentsProvider.notifier).markAsRead(document.id);
+    }
     final l10n = AppLocalizations.of(context);
     final categoryColor = _DocumentsScreenState.getCategoryColor(document.category);
     final categoryIcon = _DocumentsScreenState.getCategoryIcon(document.category);

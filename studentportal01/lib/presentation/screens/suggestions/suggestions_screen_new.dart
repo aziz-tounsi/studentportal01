@@ -18,6 +18,7 @@ import '../../widgets/detail_modal_sheet.dart';
 import 'write_suggestion_screen.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/suggestions_screen_skeleton.dart';
+import '../../widgets/ios_photo_gallery_viewer.dart';
 import '../../../core/utils/file_download_helper.dart';
 
 class SuggestionsScreen extends ConsumerStatefulWidget {
@@ -586,6 +587,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     final color = _getTypeColor(suggestion.suggestionType);
     final icon = _getTypeIcon(suggestion.suggestionType);
     final typeLabel = _getTypeLabel(suggestion.suggestionType, l10n, suggestion.title);
+    final isRepliedUnread = suggestion.replies.isNotEmpty &&
+        !ref.watch(readRepliedSuggestionsProvider).contains(suggestion.id);
     final imageAttachments = suggestion.attachments
         .where(_isImageAttachment)
         .toList();
@@ -599,7 +602,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
         shrinkScale: 0.93,
         overshootScale: 1.055,
         delayNavigation: false,
-        onTap: () => _showSuggestionDetail(suggestion),
+        onTap: () {
+          if (suggestion.replies.isNotEmpty) {
+            ref.read(readRepliedSuggestionsProvider.notifier).markAsRead(suggestion.id);
+          }
+          _showSuggestionDetail(suggestion);
+        },
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
@@ -656,8 +664,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                typeLabel,
                                style: TextStyle(
                                  fontSize: 16,
-                                 fontWeight: FontWeight.w900,
-                                 color: const Color(0xFF1F2937),
+                                 fontWeight: isRepliedUnread ? FontWeight.w900 : FontWeight.w700,
+                                 color: isRepliedUnread ? const Color(0xFF111827) : const Color(0xFF1F2937),
                                  letterSpacing: -0.3,
                                  height: 1.0,
                                ),
@@ -669,8 +677,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                _formatDate(suggestion.createdAt, l10n.locale.languageCode),
                                style: TextStyle(
                                  fontSize: 12,
-                                 fontWeight: FontWeight.w600,
-                                 color: Colors.grey[600],
+                                 fontWeight: isRepliedUnread ? FontWeight.w800 : FontWeight.w600,
+                                 color: isRepliedUnread ? const Color(0xFF1F2937) : Colors.grey[600],
                                  height: 1.0,
                                ),
                              ),
@@ -732,8 +740,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                             _searchQuery,
                             TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey[700],
+                              fontWeight: isRepliedUnread ? FontWeight.w700 : FontWeight.w500,
+                              color: isRepliedUnread ? const Color(0xFF111827) : Colors.grey[700],
                               height: 1.4,
                             ),
                             maxLines: 3,
@@ -756,15 +764,15 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                         Icon(
                           Icons.access_time,
                           size: 12,
-                          color: Colors.grey[500],
+                          color: isRepliedUnread ? const Color(0xFF1F2937) : Colors.grey[500],
                         ),
                         const SizedBox(width: 4),
                         Text(
                           _getRelativeTime(suggestion.createdAt, l10n.locale.languageCode),
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[500],
+                            fontWeight: isRepliedUnread ? FontWeight.w800 : FontWeight.w600,
+                            color: isRepliedUnread ? const Color(0xFF1F2937) : Colors.grey[500],
                           ),
                         ),
                       ],
@@ -1347,125 +1355,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
     List<SuggestionAttachment> imageAttachments,
     int initialIndex,
   ) {
-    showDialog(
+    IosPhotoGalleryViewer.show(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.9),
-      builder: (context) => GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Stack(
-            children: [
-              Center(
-                child: InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Image.network(
-                    imageAttachments[initialIndex].fileUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey[900],
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.broken_image,
-                            color: Colors.white54,
-                            size: 64,
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            'Image non disponible',
-                            style: TextStyle(color: Colors.white54),
-                          ),
-                        ],
-                      ),
-                    ),
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                              : null,
-                          color: Colors.white,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 50,
-                right: 76,
-                child: BouncingWrapper(
-                  shrinkScale: 0.85,
-                  overshootScale: 1.15,
-                  onTap: () {
-                    Navigator.pop(context);
-                    final att = imageAttachments[initialIndex];
-                    FileDownloadHelper.downloadFile(
-                      context: context,
-                      url: att.fileUrl,
-                      fileName: _getCleanFileName(att),
-                    );
-                  },
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.download_rounded, color: Colors.white, size: 24),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 50,
-                right: 20,
-                child: BouncingWrapper(
-                  shrinkScale: 0.85,
-                  overshootScale: 1.15,
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 24),
-                  ),
-                ),
-              ),
-              if (imageAttachments.length > 1)
-                Positioned(
-                  top: 50,
-                  left: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${initialIndex + 1} / ${imageAttachments.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+      imageUrls: imageAttachments.map((a) => a.fileUrl).toList(),
+      initialIndex: initialIndex,
     );
   }
 
@@ -1928,6 +1821,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                             ],
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               const SizedBox(width: 16),
                               Icon(
@@ -1937,34 +1831,36 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  focusNode: _searchFocusNode,
-                                  cursorColor: Colors.grey[800],
-                                  onChanged: (value) => setState(
-                                    () => _searchQuery = value.toLowerCase(),
-                                  ),
-                                  style: ArabicTypography.bodyStyle(
-                                    context,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey[900],
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: AppLocalizations.of(context).search,
-                                    hintStyle: ArabicTypography.bodyStyle(
-                                      context,
-                                      color: Colors.grey[500],
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                child: Center(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    focusNode: _searchFocusNode,
+                                    cursorColor: Colors.grey[800],
+                                    textAlignVertical: TextAlignVertical.center,
+                                    onChanged: (value) => setState(
+                                      () => _searchQuery = value.toLowerCase(),
                                     ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 14,
+                                    style: ArabicTypography.bodyStyle(
+                                      context,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey[900],
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: AppLocalizations.of(context).search,
+                                      hintStyle: ArabicTypography.bodyStyle(
+                                        context,
+                                        color: Colors.grey[500],
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      isDense: true,
+                                      isCollapsed: true,
+                                      contentPadding: EdgeInsets.zero,
                                     ),
                                   ),
                                 ),

@@ -13,6 +13,7 @@ import '../../core/l10n/app_localizations.dart';
 import '../../data/services/core_data_service.dart';
 import '../providers/student_context_provider.dart';
 import 'ios_loader.dart';
+import 'bouncing_wrapper.dart';
 
 /// Dynamic Semester Navigator - iOS 26 Style
 ///
@@ -247,9 +248,11 @@ class _SemesterTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-    return GestureDetector(
-      onTap: onTap,
+    return BouncingWrapper(
       behavior: HitTestBehavior.opaque,
+      shrinkScale: 0.94,
+      overshootScale: 1.05,
+      onTap: onTap,
       child: Container(
         alignment: Alignment.center,
         child: AnimatedDefaultTextStyle(
@@ -359,7 +362,10 @@ class SemesterTabBar extends ConsumerWidget {
         children: semesters.map((semester) {
           final isSelected = selectedNumber == semester.number;
           return Expanded(
-            child: GestureDetector(
+            child: BouncingWrapper(
+              behavior: HitTestBehavior.opaque,
+              shrinkScale: 0.93,
+              overshootScale: 1.05,
               onTap: () => onChanged(semester.number),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),

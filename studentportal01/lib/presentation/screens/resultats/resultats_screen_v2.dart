@@ -374,6 +374,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                             ],
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               const SizedBox(width: 16),
                               Icon(
@@ -383,33 +384,35 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  focusNode: _searchFocusNode,
-                                  cursorColor: Colors.grey[800],
-                                  onChanged: (value) =>
-                                      setState(() => _searchQuery = value),
-                                  style: ArabicTypography.bodyStyle(
-                                    context,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey[900],
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: AppLocalizations.of(context).search,
-                                    hintStyle: ArabicTypography.bodyStyle(
+                                child: Center(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    focusNode: _searchFocusNode,
+                                    cursorColor: Colors.grey[800],
+                                    textAlignVertical: TextAlignVertical.center,
+                                    onChanged: (value) =>
+                                        setState(() => _searchQuery = value),
+                                    style: ArabicTypography.bodyStyle(
                                       context,
-                                      color: Colors.grey[500],
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey[900],
                                     ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 14,
+                                    decoration: InputDecoration(
+                                      hintText: AppLocalizations.of(context).search,
+                                      hintStyle: ArabicTypography.bodyStyle(
+                                        context,
+                                        color: Colors.grey[500],
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      isDense: true,
+                                      isCollapsed: true,
+                                      contentPadding: EdgeInsets.zero,
                                     ),
                                   ),
                                 ),
@@ -1015,7 +1018,9 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
           child: Column(
             children: [
               // Header
-              InkWell(
+              BouncingWrapper(
+                shrinkScale: 0.96,
+                overshootScale: 1.03,
                 onTap: () {
                   setState(() => _isExpanded = !_isExpanded);
                   if (_isExpanded) {
@@ -1024,7 +1029,6 @@ class _GlassySubjectCardState extends State<_GlassySubjectCard>
                     _controller.reverse();
                   }
                 },
-                borderRadius: BorderRadius.circular(32),
                 child: Padding(
                   padding: EdgeInsets.all(AppResponsive.cardPadding(context, base: 20.0)),
                   child: Row(

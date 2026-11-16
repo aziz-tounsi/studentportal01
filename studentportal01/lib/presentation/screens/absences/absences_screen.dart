@@ -619,6 +619,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                             ],
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               const SizedBox(width: 16),
                               Icon(
@@ -628,31 +629,33 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  focusNode: _searchFocusNode,
-                                  cursorColor: Colors.grey[800],
-                                  style: ArabicTypography.bodyStyle(
-                                    context,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey[900],
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: l10n.search,
-                                    hintStyle: ArabicTypography.bodyStyle(
+                                child: Center(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    focusNode: _searchFocusNode,
+                                    cursorColor: Colors.grey[800],
+                                    textAlignVertical: TextAlignVertical.center,
+                                    style: ArabicTypography.bodyStyle(
                                       context,
-                                      color: Colors.grey[500],
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey[900],
                                     ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 14,
+                                    decoration: InputDecoration(
+                                      hintText: l10n.search,
+                                      hintStyle: ArabicTypography.bodyStyle(
+                                        context,
+                                        color: Colors.grey[500],
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      isDense: true,
+                                      isCollapsed: true,
+                                      contentPadding: EdgeInsets.zero,
                                     ),
                                   ),
                                 ),
@@ -943,7 +946,10 @@ class _GlassyAbsenceCard extends StatelessWidget {
         break;
     }
 
-    return GestureDetector(
+    return BouncingWrapper(
+      shrinkScale: 0.94,
+      overshootScale: 1.055,
+      delayNavigation: true,
       onTap: onTap,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),

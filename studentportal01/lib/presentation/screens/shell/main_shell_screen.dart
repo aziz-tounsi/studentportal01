@@ -118,9 +118,7 @@ class _RealtimeNotificationWrapperState
           debugPrint('Realtime Shell: announcements_global updated -> refreshing');
           ref.invalidate(globalAnnouncementsProvider);
 
-          if (payload.eventType == PostgresChangeEvent.insert &&
-              WidgetsBinding.instance.lifecycleState ==
-                  AppLifecycleState.resumed) {
+          if (payload.eventType == PostgresChangeEvent.insert) {
             final title =
                 record['title']?.toString().trim().isNotEmpty == true
                     ? record['title']!.toString().trim()
@@ -187,9 +185,7 @@ class _RealtimeNotificationWrapperState
           debugPrint('Realtime Shell: announcements_class updated -> refreshing');
           ref.invalidate(classMessagesProvider);
 
-          if (payload.eventType == PostgresChangeEvent.insert &&
-              WidgetsBinding.instance.lifecycleState ==
-                  AppLifecycleState.resumed) {
+          if (payload.eventType == PostgresChangeEvent.insert) {
             final rawTitle = record['title']?.toString().trim() ?? '';
             final title = rawTitle.isNotEmpty
                 ? rawTitle
@@ -270,9 +266,7 @@ class _RealtimeNotificationWrapperState
           debugPrint('Realtime Shell: suggestion_replies updated -> refreshing');
           ref.invalidate(suggestionsProvider);
 
-          if (payload.eventType == PostgresChangeEvent.insert &&
-              WidgetsBinding.instance.lifecycleState ==
-                  AppLifecycleState.resumed) {
+          if (payload.eventType == PostgresChangeEvent.insert) {
             final text = (record['reply_text'] ??
                     record['body'] ??
                     record['message'] ??

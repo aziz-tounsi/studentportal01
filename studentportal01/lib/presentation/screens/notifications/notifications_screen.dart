@@ -15,6 +15,7 @@ import '../../widgets/bouncing_wrapper.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/notifications_screen_skeleton.dart';
+import '../../widgets/ios_photo_gallery_viewer.dart';
 import '../../../core/utils/file_download_helper.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -300,6 +301,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                             ],
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               const SizedBox(width: 16),
                               Icon(
@@ -309,33 +311,35 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  focusNode: _searchFocusNode,
-                                  cursorColor: Colors.grey[800],
-                                  onChanged: (value) =>
-                                      setState(() => _searchQuery = value),
-                                  style: ArabicTypography.bodyStyle(
-                                    context,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey[900],
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: AppLocalizations.of(context).search,
-                                    hintStyle: ArabicTypography.bodyStyle(
+                                child: Center(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    focusNode: _searchFocusNode,
+                                    cursorColor: Colors.grey[800],
+                                    textAlignVertical: TextAlignVertical.center,
+                                    onChanged: (value) =>
+                                        setState(() => _searchQuery = value),
+                                    style: ArabicTypography.bodyStyle(
                                       context,
-                                      color: Colors.grey[500],
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey[900],
                                     ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 14,
+                                    decoration: InputDecoration(
+                                      hintText: AppLocalizations.of(context).search,
+                                      hintStyle: ArabicTypography.bodyStyle(
+                                        context,
+                                        color: Colors.grey[500],
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      isDense: true,
+                                      isCollapsed: true,
+                                      contentPadding: EdgeInsets.zero,
                                     ),
                                   ),
                                 ),
@@ -533,6 +537,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
               ],
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(width: 16),
                 Icon(
@@ -542,31 +547,35 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    cursorColor: Colors.grey[800],
-                    onChanged: (value) => setState(() => _searchQuery = value),
-                    style: ArabicTypography.bodyStyle(
-                      context,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[900],
-                    ),
-                    decoration: InputDecoration(
-                      hintText: AppLocalizations.of(context).search,
-                      hintStyle: ArabicTypography.bodyStyle(
+                  child: Center(
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      cursorColor: Colors.grey[800],
+                      textAlignVertical: TextAlignVertical.center,
+                      onChanged: (value) => setState(() => _searchQuery = value),
+                      style: ArabicTypography.bodyStyle(
                         context,
-                        color: Colors.grey[500],
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey[900],
                       ),
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: InputDecoration(
+                        hintText: AppLocalizations.of(context).search,
+                        hintStyle: ArabicTypography.bodyStyle(
+                          context,
+                          color: Colors.grey[500],
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isDense: true,
+                        isCollapsed: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
                   ),
                 ),
@@ -1177,7 +1186,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                               typeLabel,
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: isRead ? FontWeight.w700 : FontWeight.w900,
                                 color: color,
                               ),
                             ),
@@ -1186,8 +1195,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                               l10n.formatAnnouncementDateTime(announcement.publishedAt),
                               style: TextStyle(
                                 fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[500],
+                                fontWeight: isRead ? FontWeight.w500 : FontWeight.w800,
+                                color: isRead ? Colors.grey[500] : const Color(0xFF1F2937),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1197,10 +1206,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                               const SizedBox(height: 3),
                               _buildFormattedText(
                                 localizedTitle,
-                                baseStyle: const TextStyle(
+                                baseStyle: TextStyle(
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF1F2937),
+                                  fontWeight: isRead ? FontWeight.w800 : FontWeight.w900,
+                                  color: isRead ? const Color(0xFF1F2937) : const Color(0xFF111827),
                                   letterSpacing: -0.3,
                                   height: 1.25,
                                 ),
@@ -1222,19 +1231,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       if (isPinned) ...[
                         const SizedBox(width: 8),
                         _buildBadge(l10n.pinnedLabel, const Color(0xFFFF2D78), Icons.push_pin),
-                      ],
-                      // Unread indicator dot at the edge of the card at header right (no glow)
-                      if (!isRead) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(top: 4),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEF4444),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
                       ],
                     ],
                   ),
@@ -1267,8 +1263,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       '**$keyInfo**',
                       baseStyle: TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey[800],
+                        fontWeight: isRead ? FontWeight.w700 : FontWeight.w900,
+                        color: isRead ? Colors.grey[800] : const Color(0xFF111827),
                         height: 1.4,
                       ),
                       boldStyle: const TextStyle(
@@ -1286,13 +1282,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       localizedBody,
                       baseStyle: TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[700],
+                        fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
+                        color: isRead ? Colors.grey[700] : const Color(0xFF111827),
                         height: 1.45,
                       ),
                       boldStyle: const TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w900,
                         color: Color(0xFF111827),
                         height: 1.45,
                       ),
@@ -1314,15 +1310,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       Icon(
                         Icons.access_time,
                         size: 12,
-                        color: Colors.grey[500],
+                        color: isRead ? Colors.grey[500] : const Color(0xFF1F2937),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         _formatTime(announcement.publishedAt),
                         style: TextStyle(
                           fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[500],
+                          fontWeight: isRead ? FontWeight.w600 : FontWeight.w900,
+                          color: isRead ? Colors.grey[500] : const Color(0xFF1F2937),
                         ),
                       ),
                     ],
@@ -1865,125 +1861,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   }
 
   void _showImageViewer(List<String> imageUrls, int initialIndex) {
-    final l10n = AppLocalizations.of(context);
-    showDialog(
+    IosPhotoGalleryViewer.show(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.9),
-      builder: (context) => GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Stack(
-            children: [
-              Center(
-                child: InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Image.network(
-                    imageUrls[initialIndex],
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey[900],
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.broken_image, color: Colors.white54, size: 64),
-                          const SizedBox(height: 16),
-                          Text(
-                            l10n.imageUnavailable,
-                            style: const TextStyle(color: Colors.white54),
-                          ),
-                        ],
-                      ),
-                    ),
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
-                          color: Colors.white,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              // Download button
-              Positioned(
-                top: 50,
-                right: 76,
-                child: BouncingWrapper(
-                  shrinkScale: 0.85,
-                  overshootScale: 1.15,
-                  onTap: () {
-                    Navigator.pop(context);
-                    final url = imageUrls[initialIndex];
-                    FileDownloadHelper.downloadFile(
-                      context: context,
-                      url: url,
-                      fileName: _getAttachmentName(url),
-                    );
-                  },
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.download_rounded, color: Colors.white, size: 24),
-                  ),
-                ),
-              ),
-              // Close button
-              Positioned(
-                top: 50,
-                right: 20,
-                child: BouncingWrapper(
-                  shrinkScale: 0.85,
-                  overshootScale: 1.15,
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              // Image counter if multiple
-              if (imageUrls.length > 1)
-                Positioned(
-                  top: 50,
-                  left: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${initialIndex + 1} / ${imageUrls.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+      imageUrls: imageUrls,
+      initialIndex: initialIndex,
     );
   }
 

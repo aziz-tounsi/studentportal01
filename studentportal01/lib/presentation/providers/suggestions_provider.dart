@@ -405,10 +405,48 @@ final readSuggestionsCountProvider = Provider<int>((ref) {
   );
 });
 
+/// Set of suggestion IDs whose replies have been seen/read by the student
+final readRepliedSuggestionsProvider =
+    StateNotifierProvider<ReadRepliedSuggestionsNotifier, Set<String>>((ref) {
+  final authState = ref.watch(authProvider);
+  final userId = authState.user?.id ?? 'default_user';
+  return ReadRepliedSuggestionsNotifier(userId);
+});
+
+class ReadRepliedSuggestionsNotifier extends StateNotifier<Set<String>> {
+  final String userId;
+  static const _storagePrefix = 'read_replied_suggestions_';
+
+  ReadRepliedSuggestionsNotifier(this.userId) : super({}) {
+    _loadFromCache();
+  }
+
+  void _loadFromCache() {
+    try {
+      final cachedList = OfflineCacheService.instance.getList('$_storagePrefix$userId');
+      if (cachedList != null) {
+        state = cachedList.map((e) => e.toString()).toSet();
+      }
+    } catch (e) {
+      debugPrint('ReadRepliedSuggestionsNotifier load error: $e');
+    }
+  }
+
+  Future<void> markAsRead(String id) async {
+    if (state.contains(id)) return;
+    final updated = Set<String>.from(state)..add(id);
+    state = updated;
+    await OfflineCacheService.instance.setJson('$_storagePrefix$userId', updated.toList());
+  }
+
+  bool isRead(String id) => state.contains(id);
+}
+
 final repliedSuggestionsCountProvider = Provider<int>((ref) {
   final suggestions = ref.watch(suggestionsProvider);
+  final readRepliedIds = ref.watch(readRepliedSuggestionsProvider);
   return suggestions.when(
-    data: (list) => list.where((s) => s.replies.isNotEmpty).length,
+    data: (list) => list.where((s) => s.replies.isNotEmpty && !readRepliedIds.contains(s.id)).length,
     loading: () => 0,
     error: (_, _) => 0,
   );
@@ -417,8 +455,9 @@ final repliedSuggestionsCountProvider = Provider<int>((ref) {
 /// Count of suggestions that have been replied to OR marked as seen by admin
 final repliedOrSeenSuggestionsCountProvider = Provider<int>((ref) {
   final suggestions = ref.watch(suggestionsProvider);
+  final readRepliedIds = ref.watch(readRepliedSuggestionsProvider);
   return suggestions.when(
-    data: (list) => list.where((s) => s.replies.isNotEmpty || s.isRead).length,
+    data: (list) => list.where((s) => (s.replies.isNotEmpty || s.isRead) && !readRepliedIds.contains(s.id)).length,
     loading: () => 0,
     error: (_, _) => 0,
   );

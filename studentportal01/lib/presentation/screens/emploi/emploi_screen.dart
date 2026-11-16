@@ -1093,140 +1093,175 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
       barrierColor: Colors.black.withValues(alpha: 0.35),
       transitionDuration: const Duration(milliseconds: 340),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        final screenWidth = MediaQuery.sizeOf(dialogContext).width;
+        final screenHeight = MediaQuery.sizeOf(dialogContext).height;
         return Center(
-          child: Dialog(
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      fullName,
-                      style: ArabicTypography.headerStyle(
-                        dialogContext,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+          child: RotatedBox(
+            quarterTurns: 3,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: (screenHeight * 0.72).clamp(280.0, 390.0),
+                maxHeight: (screenWidth * 0.90).clamp(240.0, 380.0),
+              ),
+              child: Dialog(
+                insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.access_time_filled, size: 20, color: Color(0xFF6B7280)),
-                      const SizedBox(width: 8),
-                      Text(
-                        timeRange,
-                        style: ArabicTypography.bodyStyle(
-                          dialogContext,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1F2937),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          fullName,
+                          style: ArabicTypography.headerStyle(
+                            dialogContext,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ],
-                  ),
-                  if (detailLocation.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(top: 2),
-                          child: Icon(Icons.location_on_rounded, size: 18, color: Color(0xFF6B7280)),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            detailLocation,
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.access_time_filled_rounded, size: 16, color: color),
+                          const SizedBox(width: 6),
+                          Text(
+                            timeRange,
                             style: ArabicTypography.bodyStyle(
                               dialogContext,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
                               color: const Color(0xFF1F2937),
                             ),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  Divider(color: Colors.grey.shade200),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.translate('teacher'),
-                    style: ArabicTypography.subtitleStyle(
-                      dialogContext,
-                      fontSize: 14,
-                      color: const Color(0xFF6B7280),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.grey.shade100,
-                        backgroundImage: slot.teacherPhotoUrl != null
-                            ? NetworkImage(slot.teacherPhotoUrl!)
-                            : null,
-                        child: slot.teacherPhotoUrl == null
-                            ? const Icon(Icons.person, color: Color(0xFF9CA3AF))
-                            : null,
+                          if (detailLocation.isNotEmpty) ...[
+                            const SizedBox(width: 10),
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF9CA3AF),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF6B7280)),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                detailLocation,
+                                style: ArabicTypography.bodyStyle(
+                                  dialogContext,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF374151),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Text(
-                        slot.teacherName ?? l10n.translate('not_assigned'),
-                        style: ArabicTypography.bodyStyle(
-                          dialogContext,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1F2937),
+                      const SizedBox(height: 10),
+                      Divider(height: 1, color: Colors.grey.shade200),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFF3F4F6)),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 17,
+                              backgroundColor: Colors.grey.shade200,
+                              backgroundImage: slot.teacherPhotoUrl != null
+                                  ? NetworkImage(slot.teacherPhotoUrl!)
+                                  : null,
+                              child: slot.teacherPhotoUrl == null
+                                  ? const Icon(Icons.person, color: Color(0xFF9CA3AF), size: 18)
+                                  : null,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    l10n.translate('teacher'),
+                                    style: ArabicTypography.subtitleStyle(
+                                      dialogContext,
+                                      fontSize: 10.5,
+                                      color: const Color(0xFF9CA3AF),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    slot.teacherName ?? l10n.translate('not_assigned'),
+                                    style: ArabicTypography.bodyStyle(
+                                      dialogContext,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1F2937),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: BouncingWrapper(
+                          shrinkScale: 0.94,
+                          overshootScale: 1.05,
+                          onTap: () => Navigator.of(dialogContext).pop(),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 42, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(22),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: color.withValues(alpha: 0.28),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              l10n.closeLabel,
+                              style: (Localizations.localeOf(dialogContext).languageCode == 'ar'
+                                  ? GoogleFonts.cairo(fontSize: 14.5, fontWeight: FontWeight.bold, color: Colors.white)
+                                  : const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: Text(
-                        l10n.closeLabel,
-                        style: (Localizations.localeOf(dialogContext).languageCode == 'ar'
-                            ? GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.bold)
-                            : const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1238,22 +1273,14 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
           curve: Curves.easeOutBack,
           reverseCurve: Curves.easeInBack,
         );
-        final fade = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOut,
-          reverseCurve: Curves.easeIn,
-        );
         return BackdropFilter(
           filter: ImageFilter.blur(
-            sigmaX: (8 * fade.value).clamp(0.001, 8.0),
-            sigmaY: (8 * fade.value).clamp(0.001, 8.0),
+            sigmaX: 8.0,
+            sigmaY: 8.0,
           ),
-          child: FadeTransition(
-            opacity: fade,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.82, end: 1.0).animate(curved),
-              child: child,
-            ),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.0, end: 1.0).animate(curved),
+            child: child,
           ),
         );
       },
