@@ -18,8 +18,10 @@ import '../../../data/services/ai_data_provider.dart';
 import '../../../data/services/ai_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/nav_bar_provider.dart';
+import '../../../core/utils/file_download_helper.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
+import '../../widgets/ios_photo_gallery_viewer.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const Color _pink = Color(0xFFFF2D78);
@@ -88,6 +90,101 @@ bool _isFemaleName(String name) {
 String _getGreetingEmoji(String firstName) {
   if (firstName.isEmpty) return '✨';
   return _isFemaleName(firstName) ? '🌸' : '⚡';
+}
+
+/// Intercepts questions about administrative dashboards, school-wide registration,
+/// or cross-student queries to prevent hallucinations and strictly enforce privacy (GDPR).
+String? _checkPrivacyGuardrail(String userQuery, String languageCode) {
+  final q = userQuery.trim().toLowerCase();
+
+  final isCrossStudent =
+      // English
+      q.contains('smartest student') ||
+      q.contains('who is the smartest') ||
+      q.contains('best student') ||
+      q.contains('top student') ||
+      q.contains('how many student') ||
+      q.contains('how many stcunet') ||
+      q.contains('number of students') ||
+      q.contains('other student') ||
+      q.contains('another student') ||
+      q.contains('all students') ||
+      // French
+      q.contains('plus intelligent') ||
+      q.contains('meilleur eleve') ||
+      q.contains('meilleur élève') ||
+      q.contains('meilleur etudiant') ||
+      q.contains('meilleur étudiant') ||
+      q.contains('combien d\'eleve') ||
+      q.contains('combien d\'élève') ||
+      q.contains('combien d\'etudiant') ||
+      q.contains('combien d\'étudiant') ||
+      q.contains('combien de eleve') ||
+      q.contains('nombre d\'eleve') ||
+      q.contains('nombre d\'élève') ||
+      q.contains('les autres eleves') ||
+      q.contains('les autres élèves') ||
+      q.contains('les autres etudiants') ||
+      q.contains('les autres étudiants') ||
+      q.contains('tous les eleves') ||
+      q.contains('tous les élèves') ||
+      // Arabic / Derja
+      q.contains('أذكى تلميذ') ||
+      q.contains('أذكى طالب') ||
+      q.contains('اشكون اذكى') ||
+      q.contains('chkoune adki') ||
+      q.contains('chkoun adka') ||
+      q.contains('قدّاش من تلميذ') ||
+      q.contains('قداش فما تلامذة');
+
+  final isAdminQuery =
+      // English
+      q.contains('admin dashboard') ||
+      q.contains('registered in the admin') ||
+      q.contains('registered in admin') ||
+      q.contains('last student registered') ||
+      q.contains('admin panel') ||
+      q.contains('admin system') ||
+      q.contains('admin database') ||
+      q.contains('admin credentials') ||
+      // French
+      q.contains('tableau de bord admin') ||
+      q.contains('dans le dashboard') ||
+      q.contains('inscrit dans l\'admin') ||
+      q.contains('derniere inscription') ||
+      q.contains('dernière inscription') ||
+      q.contains('dernier eleve inscrit') ||
+      q.contains('dernier élève inscrit') ||
+      q.contains('panneau admin') ||
+      q.contains('base de donnees') ||
+      q.contains('base de données');
+
+  if (isCrossStudent || isAdminQuery) {
+    if (languageCode == 'ar') {
+      return '''🔒 **إشعار الخصوصية وحماية البيانات**
+*حماية المعطيات الشخصية*
+
+أنا مساعدك الأكاديمي الشخصي. وفقاً لمعايير الخصوصية وحماية المعطيات الشخصية، لدي وصول حصري إلى **ملفك الدراسي الشخصي فقط**.
+
+ليس لدي **أي وصول** إلى لوحة تحكم الإدارة، ولا إلى ملفات أو أعداد بقية الطلاب أو إحصائيات المدرسة.''';
+    } else if (languageCode == 'fr') {
+      return '''🔒 **Confidentialité & Protection des Données**
+*Respect de la vie privée (RGPD)*
+
+Je suis ton assistant académique personnel. Pour des raisons strictes de confidentialité et de protection des données, j'ai uniquement accès à **ton dossier scolaire personnel**.
+
+Je ne dispose d'**aucun accès** au tableau de bord administrateur, aux dossiers des autres élèves ni aux effectifs globaux de l'établissement.''';
+    } else {
+      return '''🔒 **Privacy & Data Protection Notice**
+*Student Data Confidentiality (GDPR)*
+
+I am your personal academic assistant. For privacy and data protection reasons, I only have access to **your personal academic records**.
+
+I have **zero access** to administrative dashboards, other students' files, or school-wide student statistics.''';
+    }
+  }
+
+  return null;
 }
 
 TextStyle _aiTextStyle(
@@ -603,6 +700,26 @@ I have **complete** access to your academic data — grades, timetable, absences
     } else if (RegExp(r'\b(donne|affiche|mes|mon|ma|notes|cours|quel|quelle|quels|quelles|combien|solde|bonjour|salut)\b')
         .hasMatch(cleanQuery)) {
       effectiveLang = 'fr';
+    }
+
+    // Deterministic Privacy Guardrail: Strictly prevent cross-student queries & admin dashboard hallucinations
+    final privacyRefusal = _checkPrivacyGuardrail(userDisplayContent, effectiveLang);
+    if (privacyRefusal != null) {
+      if (!mounted) return;
+      final ts = DateTime.now();
+      setState(() {
+        _isTyping = false;
+        _messages.add(_ChatMessage(
+          id: ts.millisecondsSinceEpoch.toString(),
+          role: 'assistant',
+          content: privacyRefusal,
+          timestamp: ts,
+        ));
+        syncActiveSession(_messages, _currentConversationId);
+      });
+      _scrollToBottom();
+      _saveCurrentConversation();
+      return;
     }
 
     try {
@@ -2668,6 +2785,41 @@ class _MarkdownText extends StatelessWidget {
       }
       lastWasEmpty = false;
 
+      // Embedded Image Markdown: ![alt](url)
+      final imgMatch = RegExp(r'^!\[(.*?)\]\((https?://[^\s)]+)\)$').firstMatch(trimmed);
+      if (imgMatch != null) {
+        final alt = imgMatch.group(1)?.trim() ?? '';
+        final url = imgMatch.group(2)!.trim();
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: _ChatEmbeddedImageCard(imageUrl: url, caption: alt),
+        ));
+        continue;
+      }
+
+      // Embedded Standalone File Link: [title](url) where url is http/https
+      final fileMatch = RegExp(r'^\[(.*?)\]\((https?://[^\s)]+)\)$').firstMatch(trimmed);
+      if (fileMatch != null) {
+        final title = fileMatch.group(1)?.trim() ?? '';
+        final url = fileMatch.group(2)!.trim();
+        final isImg = url.toLowerCase().contains('.png') ||
+            url.toLowerCase().contains('.jpg') ||
+            url.toLowerCase().contains('.jpeg') ||
+            url.toLowerCase().contains('.webp');
+        if (isImg) {
+          widgets.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: _ChatEmbeddedImageCard(imageUrl: url, caption: title),
+          ));
+        } else {
+          widgets.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: _ChatEmbeddedFileCard(title: title, url: url),
+          ));
+        }
+        continue;
+      }
+
       // Horizontal rule
       if (trimmed == '---' || trimmed == '***' || trimmed == '___') {
         widgets.add(Padding(
@@ -3139,6 +3291,25 @@ class _MarkdownText extends StatelessWidget {
                       .state = true;
                   context.go(safeRoute);
                 }
+              } else if (linkTarget.startsWith('http://') || linkTarget.startsWith('https://')) {
+                final isImg = linkTarget.toLowerCase().contains('.png') ||
+                    linkTarget.toLowerCase().contains('.jpg') ||
+                    linkTarget.toLowerCase().contains('.jpeg') ||
+                    linkTarget.toLowerCase().contains('.webp');
+                if (isImg) {
+                  IosPhotoGalleryViewer.show(
+                    context: context,
+                    imageUrls: [linkTarget],
+                  );
+                } else {
+                  FileDownloadHelper.downloadFile(
+                    context: context,
+                    url: linkTarget,
+                    fileName: linkTitle.replaceAll('📥', '').replaceAll('📎', '').trim().isNotEmpty
+                        ? linkTitle.replaceAll('📥', '').replaceAll('📎', '').trim()
+                        : 'document',
+                  );
+                }
               }
             },
         ));
@@ -3202,6 +3373,256 @@ class _MarkdownText extends StatelessWidget {
       ));
     }
     return TextSpan(children: spans);
+  }
+}
+
+/// Embedded Image Card inside AI chat responses with tap-to-zoom and download
+class _ChatEmbeddedImageCard extends StatelessWidget {
+  final String imageUrl;
+  final String caption;
+
+  const _ChatEmbeddedImageCard({required this.imageUrl, required this.caption});
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveCaption = caption.isNotEmpty ? caption : 'Image';
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BouncingWrapper(
+            onTap: () {
+              IosPhotoGalleryViewer.show(
+                context: context,
+                imageUrls: [imageUrl],
+              );
+            },
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220, minHeight: 120),
+                  child: Image.network(
+                    imageUrl,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (ctx, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        height: 140,
+                        color: const Color(0xFFF1F5F9),
+                        child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _pink),
+                        ),
+                      );
+                    },
+                    errorBuilder: (ctx, err, stack) {
+                      return Container(
+                        height: 120,
+                        color: const Color(0xFFF1F5F9),
+                        child: const Center(
+                          child: Icon(Icons.broken_image_rounded, color: Colors.grey, size: 36),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Aperçu',
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    effectiveCaption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                ),
+                BouncingWrapper(
+                  onTap: () {
+                    FileDownloadHelper.downloadFile(
+                      context: context,
+                      url: imageUrl,
+                      fileName: effectiveCaption.endsWith('.png') ||
+                              effectiveCaption.endsWith('.jpg') ||
+                              effectiveCaption.endsWith('.jpeg')
+                          ? effectiveCaption
+                          : '$effectiveCaption.jpg',
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _pink.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.download_rounded, color: _pink, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Télécharger',
+                          style: TextStyle(
+                            color: _pink,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Embedded File Card inside AI chat responses with one-tap download
+class _ChatEmbeddedFileCard extends StatelessWidget {
+  final String title;
+  final String url;
+
+  const _ChatEmbeddedFileCard({required this.title, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanTitle = title.replaceAll('📥', '').replaceAll('📎', '').trim();
+    final isPdf = url.toLowerCase().contains('.pdf') || cleanTitle.toLowerCase().endsWith('.pdf');
+    final isImg = url.toLowerCase().contains('.png') ||
+        url.toLowerCase().contains('.jpg') ||
+        url.toLowerCase().contains('.jpeg') ||
+        url.toLowerCase().contains('.webp');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            if (isImg) {
+              IosPhotoGalleryViewer.show(context: context, imageUrls: [url]);
+            } else {
+              FileDownloadHelper.downloadFile(
+                context: context,
+                url: url,
+                fileName: cleanTitle.isNotEmpty ? cleanTitle : 'document',
+              );
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isPdf ? const Color(0xFFFFEBEE) : const Color(0xFFFFF0F5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isPdf ? Icons.picture_as_pdf_rounded : (isImg ? Icons.image_rounded : Icons.insert_drive_file_rounded),
+                    color: isPdf ? const Color(0xFFD32F2F) : _pink,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cleanTitle.isNotEmpty ? cleanTitle : 'Document joint',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E293B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Appuyer pour télécharger / ouvrir',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _pink.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.download_rounded, color: _pink, size: 18),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -982,7 +982,10 @@ String buildAISystemContext(StudentAISnapshot snap) {
       final so = c['subject_offerings'] as Map<String, dynamic>?;
       final sub = so?['subjects'] as Map<String, dynamic>?;
       final subName = sub?['name'] ?? '';
-      sb.writeln('• ${subName.isNotEmpty ? "[$subName] " : ""}${c['title'] ?? 'Matière'}: ${c['description'] ?? ''}');
+      final fUrl = (c['file_url'] != null && c['file_url'].toString().isNotEmpty)
+          ? ' [Fichier: ${c['file_url']}]'
+          : '';
+      sb.writeln('• ${subName.isNotEmpty ? "[$subName] " : ""}${c['title'] ?? 'Matière'}: ${c['description'] ?? ''}$fUrl');
     }
   }
 
@@ -993,7 +996,26 @@ String buildAISystemContext(StudentAISnapshot snap) {
   } else {
     for (final n in snap.notifications.take(15)) {
       final bodyClean = n.body.length > 350 ? '${n.body.substring(0, 350)}...' : n.body;
-      sb.writeln('• [${_fmtDate(n.publishedAt)}]${n.isPinned ? " 📌" : ""}${n.isImportant ? " ❗" : ""} ${n.title}: $bodyClean');
+      final fileList = <String>[];
+      if (n.attachmentUrl != null && n.attachmentUrl!.isNotEmpty) {
+        final isImg = n.attachmentUrl!.toLowerCase().contains('.png') ||
+            n.attachmentUrl!.toLowerCase().contains('.jpg') ||
+            n.attachmentUrl!.toLowerCase().contains('.jpeg') ||
+            n.attachmentUrl!.toLowerCase().contains('.webp');
+        fileList.add('${isImg ? "[IMAGE]" : "[FICHIER]"} URL: ${n.attachmentUrl!} (nom: ${n.attachmentName ?? "pièce jointe"})');
+      }
+      for (final a in n.attachments) {
+        if (a.fileUrl.isNotEmpty) {
+          final isImg = (a.fileType?.toLowerCase().contains('image') ?? false) ||
+              a.fileName.toLowerCase().endsWith('.png') ||
+              a.fileName.toLowerCase().endsWith('.jpg') ||
+              a.fileName.toLowerCase().endsWith('.jpeg') ||
+              a.fileName.toLowerCase().endsWith('.webp');
+          fileList.add('${isImg ? "[IMAGE]" : "[FICHIER]"} URL: ${a.fileUrl} (nom: ${a.effectiveName})');
+        }
+      }
+      final filesStr = fileList.isNotEmpty ? ' | Pièces jointes: ${fileList.join(", ")}' : '';
+      sb.writeln('• [${_fmtDate(n.publishedAt)}]${n.isPinned ? " 📌" : ""}${n.isImportant ? " ❗" : ""} ${n.title}: $bodyClean$filesStr');
     }
   }
 
@@ -1005,7 +1027,26 @@ String buildAISystemContext(StudentAISnapshot snap) {
     for (final m in snap.messages.take(15)) {
       final bodyClean = m.body.length > 350 ? '${m.body.substring(0, 350)}...' : m.body;
       final sender = m.senderLabel != null ? ' [De: ${m.senderLabel}]' : '';
-      sb.writeln('• [${_fmtDate(m.publishedAt)}]$sender ${m.title}: $bodyClean');
+      final fileList = <String>[];
+      if (m.attachmentUrl != null && m.attachmentUrl!.isNotEmpty) {
+        final isImg = m.attachmentUrl!.toLowerCase().contains('.png') ||
+            m.attachmentUrl!.toLowerCase().contains('.jpg') ||
+            m.attachmentUrl!.toLowerCase().contains('.jpeg') ||
+            m.attachmentUrl!.toLowerCase().contains('.webp');
+        fileList.add('${isImg ? "[IMAGE]" : "[FICHIER]"} URL: ${m.attachmentUrl!} (nom: ${m.attachmentName ?? "pièce jointe"})');
+      }
+      for (final a in m.attachments) {
+        if (a.fileUrl.isNotEmpty) {
+          final isImg = (a.fileType?.toLowerCase().contains('image') ?? false) ||
+              a.fileName.toLowerCase().endsWith('.png') ||
+              a.fileName.toLowerCase().endsWith('.jpg') ||
+              a.fileName.toLowerCase().endsWith('.jpeg') ||
+              a.fileName.toLowerCase().endsWith('.webp');
+          fileList.add('${isImg ? "[IMAGE]" : "[FICHIER]"} URL: ${a.fileUrl} (nom: ${a.effectiveName})');
+        }
+      }
+      final filesStr = fileList.isNotEmpty ? ' | Pièces jointes: ${fileList.join(", ")}' : '';
+      sb.writeln('• [${_fmtDate(m.publishedAt)}]$sender ${m.title}: $bodyClean$filesStr');
     }
   }
 
@@ -1033,7 +1074,10 @@ String buildAISystemContext(StudentAISnapshot snap) {
     sb.writeln('No documents available.');
   } else {
     for (final d in snap.documents) {
-      sb.writeln('• ${d['title'] ?? 'Document'} (${d['category'] ?? d['file_name'] ?? 'Fichier'}) - Date: ${_fmtDateStr(d['created_at'])}');
+      final fUrl = (d['file_url'] != null && d['file_url'].toString().isNotEmpty)
+          ? ' | URL: ${d['file_url']}'
+          : '';
+      sb.writeln('• ${d['title'] ?? 'Document'} (${d['category'] ?? d['file_name'] ?? 'Fichier'}) - Date: ${_fmtDateStr(d['created_at'])}$fUrl');
     }
   }
 

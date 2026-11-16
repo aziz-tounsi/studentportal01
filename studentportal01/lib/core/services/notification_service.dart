@@ -349,6 +349,9 @@ class LocalNotificationService {
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        presentBanner: true,
+        presentList: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
       );
 
       final details = NotificationDetails(
