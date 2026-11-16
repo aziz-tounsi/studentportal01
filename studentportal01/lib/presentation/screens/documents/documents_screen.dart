@@ -178,6 +178,17 @@ final documentsProvider =
   return docs.where((doc) => doc.matchesSemester(semester)).toList();
 });
 
+/// Unread documents counter provider for the current student
+final unreadDocumentsCountProvider = Provider<int>((ref) {
+  final docsAsync = ref.watch(allStudentDocumentsProvider);
+  final readIds = ref.watch(readDocumentsProvider);
+  return docsAsync.when(
+    data: (docs) => docs.where((d) => !readIds.contains(d.id)).length,
+    loading: () => 0,
+    error: (_, _) => 0,
+  );
+});
+
 class DocumentsScreen extends ConsumerStatefulWidget {
   final String? initialDocumentId;
 
@@ -568,6 +579,16 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        Icon(
+                          _selectedCategory != null
+                              ? getCategoryIcon(_selectedCategory!)
+                              : Icons.dashboard_rounded,
+                          size: 15,
+                          color: _selectedCategory != null
+                              ? getCategoryColor(_selectedCategory!)
+                              : const Color(0xFF6B5CE7),
+                        ),
+                        const SizedBox(width: 6),
                         Text(
                           currentLabel,
                           style: TextStyle(
@@ -616,7 +637,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
       case 'planning':
         return Icons.calendar_month_rounded;
       case 'certificat':
-        return Icons.assignment_turned_in_rounded;
+        return Icons.workspace_premium_rounded;
       case 'stage_pfe':
         return Icons.work_rounded;
       case 'reglement':
@@ -861,6 +882,7 @@ class _DocumentCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final isRead = ref.watch(readDocumentsProvider).contains(document.id);
     final categoryColor = _DocumentsScreenState.getCategoryColor(document.category);
     final categoryIcon = _DocumentsScreenState.getCategoryIcon(document.category);
@@ -929,6 +951,34 @@ class _DocumentCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Dedicated Category Type Pill with its Icon
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: categoryColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(categoryIcon, size: 11, color: categoryColor),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                DocumentTypeHelper.getLabel(document.category, l10n),
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: categoryColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       Text(
                         document.title,
                         style: ArabicTypography.subtitleStyle(

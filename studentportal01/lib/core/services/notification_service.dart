@@ -90,6 +90,9 @@ class LocalNotificationService {
     showBadge: true,
   );
 
+  static bool get isFirebaseAvailable =>
+      !kIsWeb && Firebase.apps.isNotEmpty;
+
   static Future<void> init() async {
     if (_isInitialized) return;
 
@@ -101,7 +104,9 @@ class LocalNotificationService {
       // 1. Initialize Firebase Core
       try {
         await Firebase.initializeApp();
-        FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+        if (Firebase.apps.isNotEmpty) {
+          FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+        }
       } catch (e) {
         debugPrint('Firebase.initializeApp warning/error: $e');
       }
@@ -112,6 +117,11 @@ class LocalNotificationService {
         requestAlertPermission: true,
         requestBadgePermission: true,
         requestSoundPermission: true,
+        defaultPresentAlert: true,
+        defaultPresentSound: true,
+        defaultPresentBadge: true,
+        defaultPresentBanner: true,
+        defaultPresentList: true,
       );
 
       const initSettings = InitializationSettings(
@@ -137,15 +147,16 @@ class LocalNotificationService {
             ?.createNotificationChannel(_channel);
       }
 
-      // 4. Configure Firebase messaging listeners
-      try {
-        // Keep iOS native FCM presentation alerts off because showNotification presents unified OS alerts deduplicated with Realtime
-        await FirebaseMessaging.instance
-            .setForegroundNotificationPresentationOptions(
-          alert: false,
-          badge: true,
-          sound: false,
-        );
+      // 4. Configure Firebase messaging listeners (if Firebase is initialized)
+      if (isFirebaseAvailable) {
+        try {
+          // Keep iOS native FCM presentation alerts off because showNotification presents unified OS alerts deduplicated with Realtime
+          await FirebaseMessaging.instance
+              .setForegroundNotificationPresentationOptions(
+            alert: false,
+            badge: true,
+            sound: false,
+          );
 
         // Foreground notification handling -> post single native phone OS notification
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -211,9 +222,10 @@ class LocalNotificationService {
               navigateToRoute(resolvedRoute);
             });
           }
+          }
+        } catch (e) {
+          debugPrint('Firebase messaging listener setup error: $e');
         }
-      } catch (e) {
-        debugPrint('Firebase messaging listener setup error: $e');
       }
 
       _isInitialized = true;
@@ -244,15 +256,17 @@ class LocalNotificationService {
             ?.requestPermissions(alert: true, badge: true, sound: true);
       }
 
-      await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        announcement: false,
-        badge: true,
-        carPlay: false,
-        criticalAlert: false,
-        provisional: false,
-        sound: true,
-      );
+      if (isFirebaseAvailable) {
+        await FirebaseMessaging.instance.requestPermission(
+          alert: true,
+          announcement: false,
+          badge: true,
+          carPlay: false,
+          criticalAlert: false,
+          provisional: false,
+          sound: true,
+        );
+      }
     } catch (e) {
       debugPrint('Notification permission request error: $e');
     }
@@ -266,8 +280,16 @@ class LocalNotificationService {
         await init();
       }
 
+      if (!isFirebaseAvailable) {
+        debugPrint('Firebase not available on this device; skipping FCM token sync');
+        return;
+      }
+
       // ignore: deprecated_member_use
-      final token = await FirebaseMessaging.instance.getToken();
+      final token = await FirebaseMessaging.instance.getToken().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => null,
+      );
       if (token != null && token.isNotEmpty) {
         await Supabase.instance.client.from('user_fcm_tokens').upsert({
           'user_id': userId,

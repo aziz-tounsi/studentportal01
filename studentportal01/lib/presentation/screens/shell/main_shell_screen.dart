@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../../providers/announcements_provider.dart';
@@ -10,8 +12,26 @@ import '../../widgets/bubble_nav_bar.dart';
 import '../../../core/services/notification_service.dart';
 import '../documents/documents_screen.dart';
 
+class InAppBannerData {
+  final String title;
+  final String message;
+  final String? route;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBgColor;
+
+  const InAppBannerData({
+    required this.title,
+    required this.message,
+    this.route,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBgColor,
+  });
+}
+
 /// Wraps authenticated app shell to manage FCM token sync and Supabase Realtime
-/// provider refreshes plus deduplicated native OS foreground notifications.
+/// provider refreshes plus deduplicated native OS foreground notifications and in-app alerts.
 class RealtimeNotificationWrapper extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -31,6 +51,42 @@ class _RealtimeNotificationWrapperState
   DateTime? _lastResumeSync;
   RealtimeChannel? _globalRealtimeChannel;
   String? _subscribedUserId;
+  InAppBannerData? _currentBanner;
+  Timer? _bannerDismissTimer;
+
+  void _showInAppBanner({
+    required String title,
+    required String message,
+    String? route,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+  }) {
+    if (!mounted) return;
+    try {
+      HapticFeedback.mediumImpact();
+    } catch (_) {}
+
+    _bannerDismissTimer?.cancel();
+    setState(() {
+      _currentBanner = InAppBannerData(
+        title: title,
+        message: message,
+        route: route,
+        icon: icon,
+        iconColor: iconColor,
+        iconBgColor: iconBgColor,
+      );
+    });
+
+    _bannerDismissTimer = Timer(const Duration(milliseconds: 4500), () {
+      if (mounted && _currentBanner != null) {
+        setState(() {
+          _currentBanner = null;
+        });
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -43,7 +99,7 @@ class _RealtimeNotificationWrapperState
       if (!mounted) return;
       final userId = Supabase.instance.client.auth.currentSession?.user.id;
       if (userId != null) {
-        LocalNotificationService.syncDeviceToken(userId);
+        unawaited(LocalNotificationService.syncDeviceToken(userId).catchError((_) {}));
       }
     });
   }
@@ -51,6 +107,7 @@ class _RealtimeNotificationWrapperState
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _bannerDismissTimer?.cancel();
     _tearDownRealtime();
     super.dispose();
   }
@@ -86,7 +143,7 @@ class _RealtimeNotificationWrapperState
       final userId = session.user.id;
 
       // Sync FCM device token for background push notifications
-      LocalNotificationService.syncDeviceToken(userId);
+      unawaited(LocalNotificationService.syncDeviceToken(userId).catchError((_) {}));
 
       if (_subscribedUserId == userId && _globalRealtimeChannel != null) {
         return; // already subscribed for this user
@@ -133,6 +190,16 @@ class _RealtimeNotificationWrapperState
             final dedupKey = recId != null && recId.isNotEmpty
                 ? 'announcements_global:$recId'
                 : null;
+
+            _showInAppBanner(
+              title: title,
+              message: message,
+              route: route,
+              icon: Icons.campaign_rounded,
+              iconColor: const Color(0xFF6D4CF6),
+              iconBgColor: const Color(0xFF6D4CF6).withValues(alpha: 0.12),
+            );
+
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? '$title|$message|$route'),
@@ -205,6 +272,16 @@ class _RealtimeNotificationWrapperState
             final dedupKey = recId != null && recId.isNotEmpty
                 ? 'announcements_class:$recId'
                 : null;
+
+            _showInAppBanner(
+              title: title,
+              message: message,
+              route: route,
+              icon: Icons.chat_bubble_rounded,
+              iconColor: const Color(0xFF2563EB),
+              iconBgColor: const Color(0xFF2563EB).withValues(alpha: 0.12),
+            );
+
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? '$title|$message|$route'),
@@ -217,7 +294,56 @@ class _RealtimeNotificationWrapperState
         },
       );
 
-      // 3. Suggestions & Replies
+      // 3. Student personal announcements (Messages ciblés)
+      _globalRealtimeChannel?.onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'announcements_student',
+        callback: (payload) {
+          if (!mounted) return;
+          final record = payload.newRecord;
+          final recStudentId = record['student_id']?.toString() ??
+              (record['payload'] is Map ? record['payload']['target_student_id']?.toString() : null);
+          if (recStudentId != null && recStudentId.isNotEmpty && recStudentId != userId) {
+            return;
+          }
+
+          debugPrint('Realtime Shell: announcements_student updated -> refreshing');
+          ref.invalidate(classMessagesProvider);
+          ref.invalidate(globalAnnouncementsProvider);
+
+          if (payload.eventType == PostgresChangeEvent.insert) {
+            final title = record['title']?.toString().trim().isNotEmpty == true
+                ? record['title']!.toString().trim()
+                : 'Nouveau message personnel';
+            final body = record['body']?.toString().trim() ?? '';
+            final message = body.isNotEmpty ? body : 'Nouveau message disponible';
+            final recId = record['id']?.toString();
+            final route = recId != null && recId.isNotEmpty ? '/messages?id=$recId' : '/messages';
+            final dedupKey = recId != null && recId.isNotEmpty ? 'announcements_student:$recId' : null;
+
+            _showInAppBanner(
+              title: title,
+              message: message,
+              route: route,
+              icon: Icons.mark_email_unread_rounded,
+              iconColor: const Color(0xFF4F46E5),
+              iconBgColor: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+            );
+
+            LocalNotificationService.showNotification(
+              id: LocalNotificationService.stableNotificationId(
+                  dedupKey ?? '$title|$message|$route'),
+              title: title,
+              body: message,
+              routePayload: route,
+              dedupKey: dedupKey,
+            );
+          }
+        },
+      );
+
+      // 4. Suggestions & Replies
       _globalRealtimeChannel?.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
@@ -280,6 +406,16 @@ class _RealtimeNotificationWrapperState
             final dedupKey = recId != null && recId.isNotEmpty
                 ? 'suggestion_replies:$recId'
                 : null;
+
+            _showInAppBanner(
+              title: 'Réponse à votre suggestion',
+              message: message,
+              route: '/suggestions',
+              icon: Icons.reply_rounded,
+              iconColor: const Color(0xFF10B981),
+              iconBgColor: const Color(0xFF10B981).withValues(alpha: 0.12),
+            );
+
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? 'Réponse à votre suggestion|$message|/suggestions'),
@@ -292,7 +428,7 @@ class _RealtimeNotificationWrapperState
         },
       );
 
-      // 4. Documents
+      // 5. Documents
       _globalRealtimeChannel?.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
@@ -353,6 +489,16 @@ class _RealtimeNotificationWrapperState
                 : '/documents';
             final dedupKey =
                 recId != null && recId.isNotEmpty ? 'documents:$recId' : null;
+
+            _showInAppBanner(
+              title: title,
+              message: message,
+              route: route,
+              icon: Icons.description_rounded,
+              iconColor: const Color(0xFFF59E0B),
+              iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+            );
+
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? '$title|$message|$route'),
@@ -428,7 +574,37 @@ class _RealtimeNotificationWrapperState
       }
     });
 
-    return widget.child;
+    return Stack(
+      children: [
+        widget.child,
+        if (_currentBanner != null)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: _InAppFloatingNotificationBanner(
+                  banner: _currentBanner!,
+                  onDismiss: () {
+                    _bannerDismissTimer?.cancel();
+                    setState(() => _currentBanner = null);
+                  },
+                  onTap: () {
+                    final targetRoute = _currentBanner?.route;
+                    _bannerDismissTimer?.cancel();
+                    setState(() => _currentBanner = null);
+                    if (targetRoute != null) {
+                      LocalNotificationService.navigateToRoute(targetRoute);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -449,6 +625,122 @@ class MainShellScreen extends StatelessWidget {
         extendBody: true,
         body: child,
         bottomNavigationBar: BubbleNavBar(currentIndex: currentIndex),
+      ),
+    );
+  }
+}
+
+class _InAppFloatingNotificationBanner extends StatelessWidget {
+  final InAppBannerData banner;
+  final VoidCallback onDismiss;
+  final VoidCallback onTap;
+
+  const _InAppFloatingNotificationBanner({
+    required this.banner,
+    required this.onDismiss,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dismissible(
+      key: UniqueKey(),
+      direction: DismissDirection.up,
+      onDismissed: (_) => onDismiss(),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+                spreadRadius: 2,
+              ),
+              BoxShadow(
+                color: banner.iconColor.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: banner.iconBgColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(banner.icon, size: 20, color: banner.iconColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                banner.title,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF111827),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'À l\'instant',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          banner.message,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4B5563),
+                            height: 1.25,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF9CA3AF)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                    onPressed: onDismiss,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

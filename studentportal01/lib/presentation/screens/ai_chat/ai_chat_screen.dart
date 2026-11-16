@@ -731,9 +731,11 @@ I have **complete** access to your academic data — grades, timetable, absences
       }
       final snapshot = _cachedSnapshot!;
 
+      final pastMemory = _buildPastConversationsMemory();
       final systemPrompt = buildSystemPrompt(
         snapshot: snapshot,
         languageCode: effectiveLang,
+        conversationMemory: pastMemory.isNotEmpty ? pastMemory : null,
       );
 
       // Build history excluding welcome message
@@ -758,12 +760,13 @@ I have **complete** access to your academic data — grades, timetable, absences
 
       if (!mounted) return;
       final ts = DateTime.now();
+      final cleanedReply = _sanitizeAiReply(reply);
       setState(() {
         _isTyping = false;
         _messages.add(_ChatMessage(
           id: ts.millisecondsSinceEpoch.toString(),
           role: 'assistant',
-          content: reply,
+          content: cleanedReply,
           timestamp: ts,
         ));
         syncActiveSession(_messages, _currentConversationId);
@@ -793,6 +796,51 @@ I have **complete** access to your academic data — grades, timetable, absences
       _scrollToBottom();
       _saveCurrentConversation();
     }
+  }
+
+  String _buildPastConversationsMemory() {
+    if (_conversations.isEmpty) return '';
+    final sb = StringBuffer();
+    int count = 0;
+    for (final c in _conversations) {
+      if (c.id == _currentConversationId) continue;
+      final userMsgs = c.messages.where((m) => m.role == 'user').toList();
+      final aiMsgs = c.messages.where((m) => m.role == 'assistant').toList();
+      if (userMsgs.isEmpty) continue;
+
+      final lastUserMsg = userMsgs.last.content.replaceAll('\n', ' ').trim();
+      final cleanUser = lastUserMsg.length > 90 ? '${lastUserMsg.substring(0, 90)}...' : lastUserMsg;
+
+      String cleanAi = '';
+      if (aiMsgs.isNotEmpty) {
+        final rawAi = aiMsgs.last.content.split('\n').firstWhere((l) => l.trim().isNotEmpty, orElse: () => '').trim();
+        cleanAi = rawAi.length > 90 ? '${rawAi.substring(0, 90)}...' : rawAi;
+      }
+
+      sb.writeln('- Topic "${c.title}": Student asked: "$cleanUser"${cleanAi.isNotEmpty ? ' -> Response: "$cleanAi"' : ''}');
+      count++;
+      if (count >= 5) break;
+    }
+    return sb.toString().trim();
+  }
+
+  String _sanitizeAiReply(String reply) {
+    var cleaned = reply.trim();
+    // Strip leading student email / name header lines like:
+    // "👤 Nour El Houda Khalil | ✉️ nour.new06@school.tn"
+    // "👤 Nour El Houda Khalil"
+    final headerRegex = RegExp(r'^(?:👤[^\n|]+(?:\|\s*✉️[^\n]+)?|👤[^\n]+)\s*\n*', multiLine: false);
+    cleaned = cleaned.replaceFirst(headerRegex, '').trim();
+
+    while (cleaned.startsWith('👤')) {
+      final firstNewline = cleaned.indexOf('\n');
+      if (firstNewline != -1) {
+        cleaned = cleaned.substring(firstNewline + 1).trim();
+      } else {
+        break;
+      }
+    }
+    return cleaned;
   }
 
 
@@ -2785,8 +2833,47 @@ class _MarkdownText extends StatelessWidget {
       }
       lastWasEmpty = false;
 
-      // Embedded Image Markdown: ![alt](url)
-      final imgMatch = RegExp(r'^!\[(.*?)\]\((https?://[^\s)]+)\)$').firstMatch(trimmed);
+      // Markdown Table: | Header 1 | Header 2 | ... |
+      if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.contains('|')) {
+        if (i + 1 < lines.length) {
+          final nextTrimmed = lines[i + 1].trim();
+          final nextRowParts = _parseTableRow(nextTrimmed);
+          final isSeparator = nextTrimmed.startsWith('|') &&
+              nextTrimmed.endsWith('|') &&
+              nextRowParts.isNotEmpty &&
+              nextRowParts.every((c) => RegExp(r'^:?-+:?$').hasMatch(c));
+
+          if (isSeparator) {
+            final tableLines = <String>[trimmed];
+            int j = i + 1;
+            while (j < lines.length && lines[j].trim().startsWith('|') && lines[j].trim().endsWith('|')) {
+              tableLines.add(lines[j].trim());
+              j++;
+            }
+            final headerParts = _parseTableRow(tableLines[0]);
+            final dataRows = <List<String>>[];
+            for (int r = 2; r < tableLines.length; r++) {
+              dataRows.add(_parseTableRow(tableLines[r]));
+            }
+
+            if (headerParts.isNotEmpty) {
+              widgets.add(Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: _MarkdownTableWidget(
+                  headers: headerParts,
+                  rows: dataRows,
+                  textColor: textColor,
+                ),
+              ));
+              i = j - 1;
+              continue;
+            }
+          }
+        }
+      }
+
+      // Embedded Image Markdown: ![alt](url) (supports optional leading bullet)
+      final imgMatch = RegExp(r'^(?:[-*•]\s*)?!\[(.*?)\]\((https?://[^\s)]+)\)$').firstMatch(trimmed);
       if (imgMatch != null) {
         final alt = imgMatch.group(1)?.trim() ?? '';
         final url = imgMatch.group(2)!.trim();
@@ -2797,8 +2884,8 @@ class _MarkdownText extends StatelessWidget {
         continue;
       }
 
-      // Embedded Standalone File Link: [title](url) where url is http/https
-      final fileMatch = RegExp(r'^\[(.*?)\]\((https?://[^\s)]+)\)$').firstMatch(trimmed);
+      // Embedded Standalone File Link: [title](url) where url is http/https (supports optional leading bullet)
+      final fileMatch = RegExp(r'^(?:[-*•]\s*)?\[(.*?)\]\((https?://[^\s)]+)\)$').firstMatch(trimmed);
       if (fileMatch != null) {
         final title = fileMatch.group(1)?.trim() ?? '';
         final url = fileMatch.group(2)!.trim();
@@ -2818,6 +2905,33 @@ class _MarkdownText extends StatelessWidget {
           ));
         }
         continue;
+      }
+
+      // Raw or prefixed URL line: "• URL : https://...", "URL : https://...", "Lien : https://...", or bare "https://..."
+      final rawUrlMatch = RegExp(r'^(?:[-*•]\s*)?(?:URL|Lien|Fichier|Image|Document)?\s*[:：]?\s*(https?://[^\s)]+)\s*$', caseSensitive: false).firstMatch(trimmed);
+      if (rawUrlMatch != null) {
+        final url = rawUrlMatch.group(1)!.trim();
+        final isImg = url.toLowerCase().contains('.png') ||
+            url.toLowerCase().contains('.jpg') ||
+            url.toLowerCase().contains('.jpeg') ||
+            url.toLowerCase().contains('.webp') ||
+            url.toLowerCase().contains('image');
+        if (isImg) {
+          widgets.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: _ChatEmbeddedImageCard(imageUrl: url, caption: 'Photo'),
+          ));
+          continue;
+        } else {
+          final uri = Uri.tryParse(url);
+          final rawFileName = uri?.pathSegments.lastOrNull ?? 'Document';
+          final decodedName = Uri.decodeComponent(rawFileName);
+          widgets.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: _ChatEmbeddedFileCard(title: decodedName, url: url),
+          ));
+          continue;
+        }
       }
 
       // Horizontal rule
@@ -3238,8 +3352,18 @@ class _MarkdownText extends StatelessWidget {
     );
   }
 
+  static List<String> _parseTableRow(String line) {
+    var trimmed = line.trim();
+    if (trimmed.startsWith('|')) trimmed = trimmed.substring(1);
+    if (trimmed.endsWith('|')) trimmed = trimmed.substring(0, trimmed.length - 1);
+    return trimmed.split('|').map((c) => c.trim()).toList();
+  }
+
   /// Parse inline markdown: **bold**, *italic*, `code`, [title](url)
-  TextSpan _parseInline(String text, BuildContext context, TextStyle base) {
+  TextSpan _parseInline(String text, BuildContext context, TextStyle base) =>
+      parseInline(text, context, base);
+
+  static TextSpan parseInline(String text, BuildContext context, TextStyle base) {
     final spans = <InlineSpan>[];
     // Pattern: [title](url), **bold**, *italic*, `code`
     final pattern = RegExp(r'\[(.+?)\]\((.+?)\)|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`');
@@ -3373,6 +3497,100 @@ class _MarkdownText extends StatelessWidget {
       ));
     }
     return TextSpan(children: spans);
+  }
+}
+
+/// Real minimal rounded tables inside AI chat with clean radius (14px) and horizontal scrolling
+class _MarkdownTableWidget extends StatelessWidget {
+  final List<String> headers;
+  final List<List<String>> rows;
+  final Color textColor;
+
+  const _MarkdownTableWidget({
+    required this.headers,
+    required this.rows,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (headers.isEmpty && rows.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFE2E8F0),
+            width: 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: DataTable(
+            headingRowColor: WidgetStateProperty.all(
+              const Color(0xFFF8FAFC),
+            ),
+            horizontalMargin: 16,
+            columnSpacing: 20,
+            headingRowHeight: 40,
+            dataRowMinHeight: 38,
+            dataRowMaxHeight: 56,
+            dividerThickness: 0.8,
+            columns: headers.map((h) {
+              return DataColumn(
+                label: RichText(
+                  text: _MarkdownText.parseInline(
+                    h.trim(),
+                    context,
+                    _aiTextStyle(
+                      context,
+                      text: h,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+            rows: rows.map((row) {
+              return DataRow(
+                cells: List.generate(headers.length, (idx) {
+                  final cellText = idx < row.length ? row[idx].trim() : '';
+                  return DataCell(
+                    RichText(
+                      text: _MarkdownText.parseInline(
+                        cellText,
+                        context,
+                        _aiTextStyle(
+                          context,
+                          text: cellText,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
   }
 }
 

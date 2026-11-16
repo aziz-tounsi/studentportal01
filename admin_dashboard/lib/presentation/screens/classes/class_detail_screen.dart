@@ -468,14 +468,20 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
               child: Text('${all.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _brand)),
             ),
             const Spacer(),
-            AdminSortDropdown(
+            AdminSortDropdown<String>(
               value: _studentSortKey,
               onChanged: (val) => setState(() => _studentSortKey = val),
-              options: [
-                AdminSortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),
-                AdminSortOption(value: 'name_desc', label: 'Nom Z → A', icon: Icons.sort_by_alpha_rounded),
-                AdminSortOption(value: 'code_asc', label: 'Matricule A → Z', icon: Icons.tag_rounded),
-                AdminSortOption(value: 'status_asc', label: 'Statut', icon: Icons.toggle_on_rounded),
+              height: 32,
+              radius: 8,
+              hasShadow: false,
+              backgroundColor: Colors.transparent,
+              borderColor: _brand.withOpacity(0.3),
+              iconColor: _brand,
+              options: const [
+                SortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),
+                SortOption(value: 'name_desc', label: 'Nom Z → A', icon: Icons.sort_by_alpha_rounded),
+                SortOption(value: 'code_asc', label: 'Matricule A → Z', icon: Icons.tag_rounded),
+                SortOption(value: 'status_asc', label: 'Statut', icon: Icons.toggle_on_rounded),
               ],
             ),
             const SizedBox(width: 8),
@@ -485,7 +491,9 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
               label: const Text('Ajouter un étudiant', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
               style: TextButton.styleFrom(
                 foregroundColor: _brand,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                fixedSize: const Size.fromHeight(32),
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: BorderSide(color: _brand.withOpacity(0.3)),
@@ -1438,12 +1446,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                 ),
                               ]),
                             )
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shrinkWrap: true,
-                              itemCount: filtered.length,
-                              itemBuilder: (dCtx, i) {
-                                final s = filtered[i];
+                          : Builder(
+                              builder: (context) {
+                                final displayList = filtered.take(6).toList();
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  shrinkWrap: true,
+                                  itemCount: displayList.length,
+                                  itemBuilder: (dCtx, i) {
+                                    final s = displayList[i];
                                 final name = s['full_name']?.toString() ?? '';
                                 final email = s['email']?.toString() ?? '';
                                 final photoUrl = s['photo_url']?.toString();
@@ -1527,7 +1538,9 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                   ),
                                 );
                               },
-                            ),
+                            );
+                          },
+                        ),
                     ),
                     // Footer count only
                     Container(
@@ -1535,7 +1548,22 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                       decoration: const BoxDecoration(
                         border: Border(top: BorderSide(color: Color(0xFFF1F1F5))),
                       ),
-                      child: Text('${filtered.length} étudiant(s) disponible(s)', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            filtered.length > 6
+                                ? '6 sur ${filtered.length} étudiants affichés'
+                                : '${filtered.length} étudiant(s) disponible(s)',
+                            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                          ),
+                          if (filtered.length > 6)
+                            const Text(
+                              'Recherchez pour filtrer',
+                              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textTertiary),
+                            ),
+                        ],
+                      ),
                     ),
                   ]),
                 ),
@@ -1756,12 +1784,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                 ),
                               ]),
                             )
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shrinkWrap: true,
-                              itemCount: filtered.length,
-                              itemBuilder: (dCtx, i) {
-                                final t = filtered[i];
+                          : Builder(
+                              builder: (context) {
+                                final displayList = filtered.take(6).toList();
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  shrinkWrap: true,
+                                  itemCount: displayList.length,
+                                  itemBuilder: (dCtx, i) {
+                                    final t = displayList[i];
                                 final name = t['full_name']?.toString() ?? '';
                                 final email = t['email']?.toString() ?? '';
                                 final photoUrl = t['photo_url']?.toString();
@@ -1879,7 +1910,9 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                   ),
                                 );
                               },
-                            ),
+                            );
+                          },
+                        ),
                     ),
                     // Footer count only
                     Container(
@@ -1887,7 +1920,22 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                       decoration: const BoxDecoration(
                         border: Border(top: BorderSide(color: Color(0xFFF1F1F5))),
                       ),
-                      child: Text('${filtered.length} enseignant(s) disponible(s)', style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            filtered.length > 6
+                                ? '6 sur ${filtered.length} enseignants affichés'
+                                : '${filtered.length} enseignant(s) disponible(s)',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                          ),
+                          if (filtered.length > 6)
+                            const Text(
+                              'Recherchez pour filtrer',
+                              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textTertiary),
+                            ),
+                        ],
+                      ),
                     ),
                   ]),
                 ),
@@ -1978,15 +2026,21 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                 const SizedBox(width: 12),
                 const Text('Enseignants assignés', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
                 const Spacer(),
-                AdminSortDropdown(
+                AdminSortDropdown<String>(
                   value: _teacherSortKey,
                   onChanged: (val) => setState(() => _teacherSortKey = val),
-                  options: [
-                    AdminSortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),
-                    AdminSortOption(value: 'name_desc', label: 'Nom Z → A', icon: Icons.sort_by_alpha_rounded),
-                    AdminSortOption(value: 'subject_asc', label: 'Matière A → Z', icon: Icons.book_outlined),
-                    AdminSortOption(value: 'date_desc', label: 'Plus récents', icon: Icons.calendar_today_outlined),
-                    AdminSortOption(value: 'date_asc', label: 'Plus anciens', icon: Icons.calendar_today_outlined),
+                  height: 32,
+                  radius: 8,
+                  hasShadow: false,
+                  backgroundColor: Colors.transparent,
+                  borderColor: _brand.withOpacity(0.3),
+                  iconColor: _brand,
+                  options: const [
+                    SortOption(value: 'name_asc', label: 'Nom A → Z', icon: Icons.sort_by_alpha_rounded),
+                    SortOption(value: 'name_desc', label: 'Nom Z → A', icon: Icons.sort_by_alpha_rounded),
+                    SortOption(value: 'subject_asc', label: 'Matière A → Z', icon: Icons.book_outlined),
+                    SortOption(value: 'date_desc', label: 'Plus récents', icon: Icons.calendar_today_outlined),
+                    SortOption(value: 'date_asc', label: 'Plus anciens', icon: Icons.calendar_today_outlined),
                   ],
                 ),
                 const SizedBox(width: 8),
@@ -1996,9 +2050,13 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                   label: const Text('Ajouter un enseignant', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
                     foregroundColor: _brand,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    backgroundColor: _brandLight,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    fixedSize: const Size.fromHeight(32),
+                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: _brand.withOpacity(0.3)),
+                    ),
                   ),
                 ),
               ]),

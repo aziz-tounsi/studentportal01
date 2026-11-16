@@ -4,12 +4,14 @@ import 'package:flutter/physics.dart';
 import '../../../core/utils/file_download_helper.dart';
 import 'bouncing_wrapper.dart';
 
-/// iOS-style interactive photo gallery viewer with:
-/// - Pinch-to-zoom (InteractiveViewer)
-/// - Drag in any direction
-/// - Magnetic bounce back to center if released below threshold
-/// - Swipe to dismiss in any direction (velocity or distance threshold)
-/// - Background opacity fades with drag distance
+/// iOS-style interactive photo gallery viewer matching native iOS Photos:
+/// - Smooth single-finger drag in ANY direction to dismiss
+/// - Magnetic spring snap-back if released within threshold
+/// - Swipe-to-dismiss beyond threshold or with velocity
+/// - Dynamic background blur and opacity that fades with drag distance
+/// - Natural pinch-to-zoom in all directions
+/// - Double-tap to zoom in (2.5x) and zoom out
+/// - Bounce-to-shrink close animation
 class IosPhotoGalleryViewer extends StatefulWidget {
   final List<String> imageUrls;
   final int initialIndex;
@@ -60,17 +62,24 @@ class IosPhotoGalleryViewer extends StatefulWidget {
 }
 
 class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late int _currentIndex;
   late PageController _pageController;
-  final TransformationController _transformController = TransformationController();
 
+  // Single-finger dismiss physics
   Offset _dragOffset = Offset.zero;
   bool _isDragging = false;
-  bool _isZoomed = false;
-
   late AnimationController _springController;
   late Animation<Offset> _springAnimation;
+
+  // Zoom and pan state
+  double _scale = 1.0;
+  double _baseScale = 1.0;
+  Offset _panOffset = Offset.zero;
+
+  // Double tap animation
+  late AnimationController _doubleTapController;
+  Animation<double>? _doubleTapAnimation;
 
   @override
   void initState() {
@@ -82,78 +91,118 @@ class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
-
     _springAnimation = _springController.drive(
       Tween<Offset>(begin: Offset.zero, end: Offset.zero),
     );
 
-    _transformController.addListener(_onTransformChanged);
-  }
-
-  void _onTransformChanged() {
-    final scale = _transformController.value.getMaxScaleOnAxis();
-    final isZoomed = (scale - 1.0).abs() > 0.05;
-    if (isZoomed != _isZoomed) {
-      setState(() => _isZoomed = isZoomed);
-    }
+    _doubleTapController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _doubleTapController.addListener(() {
+      if (_doubleTapAnimation != null) {
+        setState(() {
+          _scale = _doubleTapAnimation!.value;
+          if (_scale <= 1.0) {
+            _panOffset = Offset.zero;
+          }
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
-    _transformController.removeListener(_onTransformChanged);
-    _transformController.dispose();
     _springController.dispose();
+    _doubleTapController.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
-  void _onPanStart(DragStartDetails details) {
-    if (_isZoomed) return;
-    _springController.stop();
+  bool get _isZoomed => _scale > 1.05;
+
+  void _onScaleStart(ScaleStartDetails details) {
+    if (_doubleTapController.isAnimating) _doubleTapController.stop();
+    if (_springController.isAnimating) _springController.stop();
+
+    _baseScale = _scale;
+
+    if (!_isZoomed && details.pointerCount == 1) {
+      _isDragging = true;
+    }
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    // 1. Two-finger pinch-to-zoom
+    if (details.pointerCount >= 2) {
+      setState(() {
+        _scale = (_baseScale * details.scale).clamp(0.8, 5.0);
+        // If zooming, reset dismiss drag
+        if (_scale > 1.0) {
+          _dragOffset = Offset.zero;
+          _isDragging = false;
+        }
+      });
+      return;
+    }
+
+    // 2. Single finger while zoomed in: Pan the zoomed image
+    if (_isZoomed) {
+      setState(() {
+        _panOffset += details.focalPointDelta;
+      });
+      return;
+    }
+
+    // 3. Single finger at 1.0 scale: Drag in ANY direction to dismiss
     setState(() {
+      _dragOffset += details.focalPointDelta;
       _isDragging = true;
     });
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
-    if (_isZoomed) return;
-    setState(() {
-      _dragOffset += details.delta;
-    });
-  }
+  void _onScaleEnd(ScaleEndDetails details) {
+    // If zoomed out below 1.0, spring back to 1.0
+    if (_scale < 1.0) {
+      _animateScaleTo(1.0);
+      _springBackToCenter();
+      return;
+    }
 
-  void _onPanEnd(DragEndDetails details) {
-    if (_isZoomed) return;
+    // If zoomed in, clamp pan offset if needed
+    if (_isZoomed) {
+      return;
+    }
+
+    // Dismiss drag evaluation
     final distance = _dragOffset.distance;
     final velocity = details.velocity.pixelsPerSecond.distance;
 
-    // Threshold to dismiss: dragged more than 110px or flicked quickly
-    if (distance > 110 || velocity > 650) {
-      _dismissWithAnimation(details.velocity.pixelsPerSecond);
+    // Threshold: dragged > 95px or flicked quickly (> 520px/s)
+    if (distance > 95 || velocity > 520) {
+      Navigator.of(context).pop();
     } else {
-      _bounceBackToCenter();
+      _springBackToCenter();
     }
   }
 
-  void _bounceBackToCenter() {
+  void _springBackToCenter() {
     _springAnimation = _springController.drive(
-      Tween<Offset>(
-        begin: _dragOffset,
-        end: Offset.zero,
-      ),
+      Tween<Offset>(begin: _dragOffset, end: Offset.zero),
     );
 
     _springController.reset();
     final simulation = SpringSimulation(
       const SpringDescription(
         mass: 1.0,
-        stiffness: 220.0,
-        damping: 20.0,
+        stiffness: 280.0,
+        damping: 22.0,
       ),
       0.0,
       1.0,
       0.0,
     );
+
     _springController.animateWith(simulation).then((_) {
       if (mounted) {
         setState(() {
@@ -164,8 +213,18 @@ class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
     });
   }
 
-  void _dismissWithAnimation(Offset velocity) {
-    Navigator.of(context).pop();
+  void _handleDoubleTap() {
+    if (_doubleTapController.isAnimating) return;
+
+    final targetScale = _scale > 1.2 ? 1.0 : 2.5;
+    _animateScaleTo(targetScale);
+  }
+
+  void _animateScaleTo(double target) {
+    _doubleTapAnimation = Tween<double>(begin: _scale, end: target).animate(
+      CurvedAnimation(parent: _doubleTapController, curve: Curves.easeOutCubic),
+    );
+    _doubleTapController.forward(from: 0.0);
   }
 
   String _getFileName(String url) {
@@ -180,9 +239,12 @@ class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
 
   @override
   Widget build(BuildContext context) {
-    final distance = _dragOffset.distance;
-    // Slight scale down as dragged
-    final scale = (1.0 - (distance / 1200)).clamp(0.8, 1.0);
+    final dragDist = _dragOffset.distance;
+    final progress = (dragDist / 300).clamp(0.0, 1.0);
+    // Background fades smoothly as photo is dragged
+    final bgOpacity = (0.75 * (1.0 - progress * 0.70)).clamp(0.15, 0.75);
+    // Photo smoothly scales down as dragged away
+    final dragScale = (1.0 - (dragDist / 1200)).clamp(0.72, 1.0);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -191,14 +253,17 @@ class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
           // Dynamic blurred backdrop
           Positioned.fill(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 22.0, sigmaY: 22.0),
+              filter: ImageFilter.blur(
+                sigmaX: 20.0 * (1.0 - progress * 0.5),
+                sigmaY: 20.0 * (1.0 - progress * 0.5),
+              ),
               child: Container(
-                color: Colors.black.withValues(alpha: 0.70),
+                color: Colors.black.withValues(alpha: bgOpacity),
               ),
             ),
           ),
 
-          // Central draggable & zoomable image
+          // Central interactive image
           AnimatedBuilder(
             animation: _springController,
             builder: (context, child) {
@@ -209,15 +274,16 @@ class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
               return Transform.translate(
                 offset: currentOffset,
                 child: Transform.scale(
-                  scale: _springController.isAnimating ? 1.0 : scale,
+                  scale: _springController.isAnimating ? 1.0 : dragScale,
                   child: child,
                 ),
               );
             },
             child: GestureDetector(
-              onPanStart: _onPanStart,
-              onPanUpdate: _onPanUpdate,
-              onPanEnd: _onPanEnd,
+              onDoubleTap: _handleDoubleTap,
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: _onScaleUpdate,
+              onScaleEnd: _onScaleEnd,
               child: PageView.builder(
                 controller: _pageController,
                 physics: _isZoomed || _isDragging
@@ -227,47 +293,48 @@ class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
                 onPageChanged: (index) {
                   setState(() {
                     _currentIndex = index;
-                    _transformController.value = Matrix4.identity();
-                    _isZoomed = false;
+                    _scale = 1.0;
+                    _panOffset = Offset.zero;
+                    _dragOffset = Offset.zero;
                   });
                 },
                 itemBuilder: (context, index) {
                   final url = widget.imageUrls[index];
                   return Center(
-                    child: InteractiveViewer(
-                      transformationController: _transformController,
-                      minScale: 0.8,
-                      maxScale: 4.5,
-                      clipBehavior: Clip.none,
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.grey[900],
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.broken_image, color: Colors.white54, size: 64),
-                              SizedBox(height: 16),
-                              Text(
-                                'Image non disponible',
-                                style: TextStyle(color: Colors.white54),
-                              ),
-                            ],
-                          ),
-                        ),
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                  : null,
-                              color: Colors.white,
+                    child: Transform.translate(
+                      offset: _panOffset,
+                      child: Transform.scale(
+                        scale: _scale,
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey[900],
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Image non disponible',
+                                  style: TextStyle(color: Colors.white54),
+                                ),
+                              ],
                             ),
-                          );
-                        },
+                          ),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: Colors.white,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   );
@@ -327,7 +394,7 @@ class _IosPhotoGalleryViewerState extends State<IosPhotoGalleryViewer>
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Close button
+                // Close button (bounces on tap)
                 BouncingWrapper(
                   shrinkScale: 0.85,
                   overshootScale: 1.15,

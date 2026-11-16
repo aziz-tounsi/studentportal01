@@ -1074,8 +1074,13 @@ String buildAISystemContext(StudentAISnapshot snap) {
     sb.writeln('No documents available.');
   } else {
     for (final d in snap.documents) {
-      final fUrl = (d['file_url'] != null && d['file_url'].toString().isNotEmpty)
-          ? ' | URL: ${d['file_url']}'
+      final urlStr = d['file_url']?.toString() ?? '';
+      final isImg = urlStr.toLowerCase().contains('.png') ||
+          urlStr.toLowerCase().contains('.jpg') ||
+          urlStr.toLowerCase().contains('.jpeg') ||
+          urlStr.toLowerCase().contains('.webp');
+      final fUrl = urlStr.isNotEmpty
+          ? ' | ${isImg ? "[IMAGE]" : "[FICHIER]"} URL: $urlStr (nom: ${d['file_name'] ?? d['title'] ?? "document"})'
           : '';
       sb.writeln('• ${d['title'] ?? 'Document'} (${d['category'] ?? d['file_name'] ?? 'Fichier'}) - Date: ${_fmtDateStr(d['created_at'])}$fUrl');
     }

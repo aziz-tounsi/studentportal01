@@ -13,6 +13,8 @@ class SortOption<T> {
   });
 }
 
+typedef AdminSortOption<T> = SortOption<T>;
+
 /// Modern reusable sort dropdown with rounded radius, checkmark indicator,
 /// and smooth theme alignment across all admin dashboard tables and pages.
 class AdminSortDropdown<T> extends StatelessWidget {
@@ -27,6 +29,8 @@ class AdminSortDropdown<T> extends StatelessWidget {
   final Color? backgroundColor;
   final Color? borderColor;
   final T? defaultValue;
+  final bool hasShadow;
+  final Color? iconColor;
 
   AdminSortDropdown({
     super.key,
@@ -43,6 +47,8 @@ class AdminSortDropdown<T> extends StatelessWidget {
     this.backgroundColor,
     this.borderColor,
     this.defaultValue,
+    this.hasShadow = true,
+    this.iconColor,
   })  : selectedValue = (selectedValue ?? value) as T,
         onSelected = (onSelected ?? onChanged) ?? ((_) {});
 
@@ -143,22 +149,24 @@ class AdminSortDropdown<T> extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isNonDefault
-              ? effectiveActiveColor.withOpacity(0.08)
+              ? (backgroundColor == Colors.transparent ? effectiveActiveColor.withOpacity(0.08) : effectiveActiveColor.withOpacity(0.08))
               : (backgroundColor ?? Colors.white),
           borderRadius: BorderRadius.circular(radius),
           border: Border.all(
-            color: isNonDefault
+            color: borderColor ?? (isNonDefault
                 ? effectiveActiveColor.withOpacity(0.35)
-                : (borderColor ?? const Color(0xFFE5E7EB)),
+                : const Color(0xFFE5E7EB)),
             width: isNonDefault ? 1.3 : 1.0,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          boxShadow: hasShadow
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -169,8 +177,8 @@ class AdminSortDropdown<T> extends StatelessWidget {
               children: [
                 Icon(
                   Icons.swap_vert_rounded,
-                  size: 20,
-                  color: isNonDefault ? effectiveActiveColor : const Color(0xFF6B7280),
+                  size: height <= 34 ? 16 : 20,
+                  color: iconColor ?? (isNonDefault ? effectiveActiveColor : const Color(0xFF6B7280)),
                 ),
                 if (isNonDefault && !showLabel)
                   Positioned(

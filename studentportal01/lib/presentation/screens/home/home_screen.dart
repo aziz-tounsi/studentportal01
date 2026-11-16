@@ -13,6 +13,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../providers/school_provider.dart';
+import '../documents/documents_screen.dart' show unreadDocumentsCountProvider;
 import '../../widgets/glass_card.dart';
 import '../../widgets/student_card.dart';
 import '../../widgets/student_card_skeleton.dart';
@@ -584,6 +585,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final suggestionBadgeCount = ref.watch(
       repliedOrSeenSuggestionsCountProvider,
     );
+    // Get count of unread documents
+    final unreadDocumentsCount = ref.watch(
+      unreadDocumentsCountProvider,
+    );
 
     final cards = [
       _CardData(
@@ -634,6 +639,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         route: '/documents',
         gradientColors: const [Color(0xFF7C3AED), Color(0xFF8B5CF6)],
         iconAlignment: Alignment.topLeft,
+        badgeCount: unreadDocumentsCount > 0 ? unreadDocumentsCount : null,
       ),
     ];
 
