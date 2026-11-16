@@ -7,6 +7,10 @@ import '../screens/home/home_screen.dart';
 /// Wraps a page with native iOS-style interactive edge-swipe-to-return gesture,
 /// fluid card expansion from HomeScreen, and bouncing zoom-out with flight blur
 /// when closing back to Home.
+///
+/// Background blur is applied via BackdropFilter which composites over an already-
+/// rendered RepaintBoundary layer — it costs only a single GPU blur pass per frame,
+/// never re-paints the background widget tree.
 class IosEdgeSwipeBack extends StatefulWidget {
   final Widget child;
   final Widget? backgroundPage;
@@ -64,7 +68,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
   Animation<double>? _expandAnim;
   bool _isExpanding = false;
 
-  // 3. Zoom-out exit animation controller (for closing to Home)
+  // 3. Zoom-out exit animation controller (for closing to Home via bottom nav)
   AnimationController? _zoomOutCtrl;
   Animation<double>? _zoomOutAnim;
   bool _isZoomingOut = false;
@@ -78,26 +82,29 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 240),
     );
+    _progressAnim = Tween<double>(begin: 0.0, end: 0.0).animate(_animCtrl);
     _animCtrl.addListener(() {
       setState(() {
         _progress = _progressAnim.value;
       });
     });
 
-    if (IosEdgeSwipeBack.shouldAnimateExpand && IosEdgeSwipeBack.cardOriginRect != null) {
+    if (IosEdgeSwipeBack.shouldAnimateExpand &&
+        IosEdgeSwipeBack.cardOriginRect != null) {
       _originRect = IosEdgeSwipeBack.cardOriginRect;
       IosEdgeSwipeBack.shouldAnimateExpand = false;
       _isExpanding = true;
 
       _expandCtrl = AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 290),
+        duration: const Duration(milliseconds: 460),
       );
       _expandAnim = CurvedAnimation(
         parent: _expandCtrl!,
-        curve: const Cubic(0.20, 0.90, 0.25, 1.0),
+        // iOS spring-like: fast acceleration, slight overshoot settling
+        curve: const Cubic(0.25, 0.46, 0.45, 1.0),
       );
       _expandCtrl!.addListener(() {
         setState(() {});
@@ -145,7 +152,8 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     setState(() {});
   }
 
-  void _onDragUpdate(DragUpdateDetails details, bool isRtl, double screenWidth) {
+  void _onDragUpdate(
+      DragUpdateDetails details, bool isRtl, double screenWidth) {
     if (!_isDragging) return;
     final currentX = details.globalPosition.dx;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -156,8 +164,6 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     _lastX = currentX;
     _lastTime = now;
 
-    // In LTR: drag from left towards right (currentX - _startX)
-    // In RTL: drag from right towards left (_startX - currentX)
     final dragDist = isRtl ? (_startX - currentX) : (currentX - _startX);
     setState(() {
       _progress = (dragDist / screenWidth).clamp(0.0, 1.0);
@@ -199,9 +205,12 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     }
   }
 
-  /// Closes the page with smooth side sliding animation
+  /// Closes the page with smooth side sliding animation (used by all back buttons).
   void animateSlideBack() {
-    if (_animCtrl.isAnimating || (_zoomOutCtrl != null && _zoomOutCtrl!.isAnimating)) return;
+    if (_animCtrl.isAnimating ||
+        (_zoomOutCtrl != null && _zoomOutCtrl!.isAnimating)) {
+      return;
+    }
     _progressAnim = Tween<double>(begin: _progress, end: 1.0).animate(
       CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic),
     );
@@ -210,18 +219,22 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     });
   }
 
-  /// Closes the page with pop bouncing zoom-out and flight blur in the middle of the distance.
+  /// Closes the page with centered bounce zoom-out + mid-flight blur.
+  /// Used ONLY by the BubbleNavBar Home tap.
   void animateZoomOutBack() {
-    if ((_zoomOutCtrl != null && _zoomOutCtrl!.isAnimating) || _animCtrl.isAnimating) return;
+    if ((_zoomOutCtrl != null && _zoomOutCtrl!.isAnimating) ||
+        _animCtrl.isAnimating) {
+      return;
+    }
 
     _zoomOutCtrl?.dispose();
     _zoomOutCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 340),
     );
     _zoomOutAnim = CurvedAnimation(
       parent: _zoomOutCtrl!,
-      curve: Curves.easeInBack, // iOS bouncing zoom-out curve
+      curve: Curves.easeInBack,
     );
     _zoomOutCtrl!.addListener(() {
       setState(() {});
@@ -241,7 +254,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     });
   }
 
-  /// Alias for backward compatibility that triggers smooth side sliding
+  /// Alias — back buttons call this → smooth side slide.
   void animateBack() {
     animateSlideBack();
   }
@@ -284,7 +297,56 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     );
 
     // ==========================================
-    // 1. EXPAND ENTRY ANIMATION (Card -> Full Page)
+    // SHARED BACKGROUND WIDGET
+    // RepaintBoundary isolates the background page into its own compositing layer.
+    // BackdropFilter then blurs THAT layer cheaply — the background is never repainted.
+    // ==========================================
+    Widget backgroundLayer({required double blurSigma, required double scaleValue, required double dimAlpha}) {
+      return Positioned.fill(
+        child: IgnorePointer(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Gradient fallback (always painted, cheap)
+              Container(
+                decoration: BoxDecoration(
+                  gradient: widget.backgroundGradient ?? defaultHomeGradient,
+                ),
+              ),
+              // The actual background page, isolated in its own layer
+              Transform.scale(
+                scale: scaleValue,
+                alignment: Alignment.center,
+                child: RepaintBoundary(
+                  child: widget.backgroundPage ?? const HomeScreen(),
+                ),
+              ),
+              // BackdropFilter blurs the composited layer above — single GPU pass
+              if (blurSigma > 0.0)
+                ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: blurSigma,
+                      sigmaY: blurSigma,
+                      tileMode: TileMode.clamp,
+                    ),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: dimAlpha),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  color: Colors.black.withValues(alpha: dimAlpha),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ==========================================
+    // 1. EXPAND ENTRY ANIMATION (Card → Full Page, iOS app-open style)
     // ==========================================
     if (_isExpanding && _expandAnim != null) {
       final t = _expandAnim!.value.clamp(0.0, 1.0);
@@ -297,9 +359,17 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       final targetRect = Offset.zero & screenSize;
       final currentRect = Rect.lerp(startRect, targetRect, t)!;
 
-      final radiusValue = (24.0 * (1.0 - t)).clamp(0.0, 24.0);
+      // Radius animates from card-corner-radius (20) down to 0 (full screen)
+      final radiusValue = (20.0 * (1.0 - t)).clamp(0.0, 20.0);
       final radius = BorderRadius.circular(radiusValue);
-      final contentOpacity = (t / 0.20).clamp(0.0, 1.0);
+
+      // Content fades in quickly then holds
+      final contentOpacity = Curves.easeOut.transform((t / 0.35).clamp(0.0, 1.0));
+
+      // Background scales slightly inward and blurs as the card opens (iOS feel)
+      final bgScale = 1.0 - (0.06 * t);  // 1.0 → 0.94
+      final bgBlur = 14.0 * t;            // 0 → 14 px
+      final bgDim = 0.18 * t;             // 0 → 0.18
 
       return PopScope(
         canPop: false,
@@ -310,50 +380,26 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Underlying background layer
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: widget.backgroundGradient ?? defaultHomeGradient,
-                ),
-              ),
+            backgroundLayer(
+              blurSigma: bgBlur,
+              scaleValue: bgScale,
+              dimAlpha: bgDim,
             ),
-            // Scaled background page without expensive dynamic blur for 60/120 FPS
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Transform.scale(
-                  scale: 0.96 + (0.04 * (1.0 - t)),
-                  alignment: Alignment.center,
-                  child: RepaintBoundary(
-                    child: widget.backgroundPage ?? const HomeScreen(),
-                  ),
-                ),
-              ),
-            ),
-            // Dimming scrim
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.12 * t),
-                ),
-              ),
-            ),
-            // Expanding Card Container with stable full-screen child
+            // Expanding card container — child rendered at full screen coords
             Positioned.fromRect(
               rect: currentRect,
               child: RepaintBoundary(
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: radius,
-                    boxShadow: t < 0.98
+                    boxShadow: t < 0.95
                         ? [
                             BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: 0.16 * (1.0 - t),
-                              ),
-                              blurRadius: 24 * (1.0 - t),
-                              offset: Offset(0, 8 * (1.0 - t)),
-                              spreadRadius: 1.0 * (1.0 - t),
+                              color:
+                                  Colors.black.withValues(alpha: 0.20 * (1.0 - t)),
+                              blurRadius: 32 * (1.0 - t),
+                              offset: Offset(0, 10 * (1.0 - t)),
+                              spreadRadius: 2.0 * (1.0 - t),
                             ),
                           ]
                         : null,
@@ -364,7 +410,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                       fit: StackFit.expand,
                       children: [
                         Container(color: Colors.white),
-                        // Child elements are fixed at screen (0,0) with full dimensions: ZERO moving/squishing!
+                        // Pin child at its natural position: no jarring movement
                         Positioned(
                           top: -currentRect.top,
                           left: -currentRect.left,
@@ -372,9 +418,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                           height: screenHeight,
                           child: Opacity(
                             opacity: contentOpacity,
-                            child: RepaintBoundary(
-                              child: widget.child,
-                            ),
+                            child: RepaintBoundary(child: widget.child),
                           ),
                         ),
                       ],
@@ -389,47 +433,31 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     }
 
     // ==========================================
-    // 2. ZOOM-OUT EXIT ANIMATION (Centered Bounce Zoom-Out with Middle Flight Blur)
+    // 2. ZOOM-OUT EXIT ANIMATION (Home-button bounce zoom-out + mid-flight blur)
     // ==========================================
     if (_isZoomingOut && _zoomOutAnim != null && _zoomOutCtrl != null) {
       final p = _zoomOutCtrl!.value.clamp(0.0, 1.0);
       final scale = (1.0 - _zoomOutAnim!.value).clamp(0.0, 1.0);
-      final flightBlur = math.sin(p * math.pi) * 12.0;
-      final pageOpacity = (1.0 - p * 1.20).clamp(0.0, 1.0);
-      final radius = BorderRadius.circular(30.0 * p);
+      final flightBlur = math.sin(p * math.pi) * 14.0;
+      final pageOpacity = (1.0 - p * 1.25).clamp(0.0, 1.0);
+      final radius = BorderRadius.circular(32.0 * p);
+
+      // Background un-blurs and scales back to normal as the page zooms away
+      final bgScale = 0.92 + (0.08 * p);
+      final bgBlur = 14.0 * (1.0 - p);
+      final bgDim = 0.18 * (1.0 - p);
 
       return PopScope(
         canPop: false,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Underlying background layer
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: widget.backgroundGradient ?? defaultHomeGradient,
-                ),
-              ),
+            backgroundLayer(
+              blurSigma: bgBlur,
+              scaleValue: bgScale,
+              dimAlpha: bgDim,
             ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Transform.scale(
-                  scale: 0.96 + (0.04 * p),
-                  alignment: Alignment.center,
-                  child: RepaintBoundary(
-                    child: widget.backgroundPage ?? const HomeScreen(),
-                  ),
-                ),
-              ),
-            ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.12 * (1.0 - p)),
-                ),
-              ),
-            ),
-            // Centered bounce zoom-out like emploi_screen detail cell
+            // Zooming-out page with mid-flight blur on the page itself
             Center(
               child: Transform.scale(
                 scale: scale,
@@ -448,10 +476,9 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                         borderRadius: radius,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: 0.16 * (1.0 - p),
-                            ),
-                            blurRadius: 24,
+                            color: Colors.black
+                                .withValues(alpha: 0.18 * (1.0 - p)),
+                            blurRadius: 28,
                             spreadRadius: 1,
                             offset: const Offset(0, 8),
                           ),
@@ -459,15 +486,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                       ),
                       child: ClipRRect(
                         borderRadius: radius,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Container(color: Colors.white),
-                            RepaintBoundary(
-                              child: widget.child,
-                            ),
-                          ],
-                        ),
+                        child: RepaintBoundary(child: widget.child),
                       ),
                     ),
                   ),
@@ -480,9 +499,12 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     }
 
     // ==========================================
-    // 3. STANDARD / INTERACTIVE EDGE SWIPE GESTURE
+    // 3. STANDARD / INTERACTIVE EDGE SWIPE GESTURE (+ animateSlideBack)
     // ==========================================
-    final double underPageScale = 0.94 + (0.06 * _progress);
+    final double underPageScale = 0.93 + (0.07 * _progress);
+    // As user swipes: background un-blurs from 12→0 and un-dims from 0.18→0
+    final double swipeBlur = 12.0 * (1.0 - _progress);
+    final double swipeDim = 0.18 * (1.0 - _progress);
 
     return PopScope(
       canPop: false,
@@ -496,37 +518,14 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (_progress > 0.0) ...[
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: widget.backgroundGradient ?? defaultHomeGradient,
-                ),
-              ),
+          if (_progress > 0.0)
+            backgroundLayer(
+              blurSigma: swipeBlur,
+              scaleValue: underPageScale,
+              dimAlpha: swipeDim,
             ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Transform.scale(
-                  scale: underPageScale,
-                  alignment: Alignment.center,
-                  child: RepaintBoundary(
-                    child: widget.backgroundPage ?? const HomeScreen(),
-                  ),
-                ),
-              ),
-            ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: Colors.black.withValues(
-                    alpha: 0.14 * (1.0 - _progress),
-                  ),
-                ),
-              ),
-            ),
-          ],
 
-          // Sliding top page strictly translated on X axis
+          // Sliding top page on X axis only
           Transform.translate(
             offset: Offset(
               isRtl ? -(_progress * screenWidth) : (_progress * screenWidth),
@@ -537,12 +536,11 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
                   ? BoxDecoration(
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: 0.18 * (1.0 - _progress),
-                          ),
-                          blurRadius: 28,
+                          color: Colors.black
+                              .withValues(alpha: 0.20 * (1.0 - _progress)),
+                          blurRadius: 32,
                           spreadRadius: 2,
-                          offset: Offset(isRtl ? 10 : -10, 0),
+                          offset: Offset(isRtl ? 12 : -12, 0),
                         ),
                       ],
                     )

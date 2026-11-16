@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -650,6 +651,32 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                   ),
                 ),
               ),
+              // Blur the background page as the timetable expands (BackdropFilter: cheap GPU pass)
+              if (_isExpanded)
+                Positioned.fill(
+                  child: AnimatedBuilder(
+                    animation: _expandAnimationController,
+                    builder: (context, _) {
+                      final blur = _expandFadeAnimation.value * 16.0;
+                      return IgnorePointer(
+                        child: ClipRect(
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(
+                              sigmaX: blur,
+                              sigmaY: blur,
+                              tileMode: TileMode.clamp,
+                            ),
+                            child: Container(
+                              color: Colors.black.withValues(
+                                alpha: _expandFadeAnimation.value * 0.20,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               if (_isExpanded)
                 timetableAsync.when(
                   data: (slots) => Positioned.fill(
