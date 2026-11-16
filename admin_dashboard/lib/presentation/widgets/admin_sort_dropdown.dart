@@ -41,13 +41,13 @@ class AdminSortDropdown<T> extends StatelessWidget {
     ValueChanged<T>? onChanged,
     this.tooltip = 'Trier par',
     this.showLabel = false,
-    this.radius = 10,
+    this.radius = 8,
     this.height = 40,
     this.activeColor,
     this.backgroundColor,
     this.borderColor,
     this.defaultValue,
-    this.hasShadow = true,
+    this.hasShadow = false,
     this.iconColor,
   })  : selectedValue = (selectedValue ?? value) as T,
         onSelected = (onSelected ?? onChanged) ?? ((_) {});
@@ -69,7 +69,7 @@ class AdminSortDropdown<T> extends StatelessWidget {
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
       elevation: 8,
-      shadowColor: Colors.black.withOpacity(0.12),
+      shadowColor: Colors.black.withValues(alpha: 0.12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -143,25 +143,27 @@ class AdminSortDropdown<T> extends StatelessWidget {
       },
       child: Container(
         height: height,
+        width: showLabel ? null : height,
+        alignment: Alignment.center,
         padding: EdgeInsets.symmetric(
-          horizontal: showLabel ? 12 : 10,
+          horizontal: showLabel ? 12 : 0,
           vertical: 0,
         ),
         decoration: BoxDecoration(
           color: isNonDefault
-              ? (backgroundColor == Colors.transparent ? effectiveActiveColor.withOpacity(0.08) : effectiveActiveColor.withOpacity(0.08))
-              : (backgroundColor ?? Colors.white),
+              ? (backgroundColor ?? effectiveActiveColor.withValues(alpha: 0.08))
+              : (backgroundColor ?? Colors.transparent),
           borderRadius: BorderRadius.circular(radius),
           border: Border.all(
             color: borderColor ?? (isNonDefault
-                ? effectiveActiveColor.withOpacity(0.35)
-                : const Color(0xFFE5E7EB)),
-            width: isNonDefault ? 1.3 : 1.0,
+                ? effectiveActiveColor.withValues(alpha: 0.2)
+                : Colors.transparent),
+            width: 1.0,
           ),
           boxShadow: hasShadow
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 4,
                     offset: const Offset(0, 1),
                   ),
@@ -170,6 +172,7 @@ class AdminSortDropdown<T> extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Stack(

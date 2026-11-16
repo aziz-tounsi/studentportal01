@@ -26,3 +26,9 @@ final homeScrollOffsetProvider = StateProvider<double>((ref) => 0.0);
 /// Triggers smooth scrolling to top on the HomeScreen when Home tab is tapped while already on Home.
 final homeScrollToTopTriggerProvider = StateProvider<int>((ref) => 0);
 
+/// Tracks current route location across tabs
+final currentRouteProvider = StateProvider<String>((ref) => '/');
+
+/// Tracks previous route location across tabs
+final previousRouteProvider = StateProvider<String>((ref) => '/');
+

@@ -137,14 +137,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _showFloatingPhotoPicker() {
-    showDialog(
+    showGeneralDialog(
       context: context,
       useRootNavigator: true,
       barrierDismissible: true,
+      barrierLabel: '',
       barrierColor: Colors.black.withValues(alpha: 0.35),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Center(
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (ctx, animation, secondaryAnimation) {
+        return Center(
           child: SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -164,8 +165,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutBack,
+            reverseCurve: Curves.easeInBack,
+          ),
+        );
+        return BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: 12 * animation.value.clamp(0.0, 1.0),
+            sigmaY: 12 * animation.value.clamp(0.0, 1.0),
+          ),
+          child: ScaleTransition(
+            scale: scaleAnimation,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -694,11 +714,11 @@ class _GradientBackground extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFFE8D5F2),
-            Color(0xFFD4C4E8),
-            Color(0xFFC9D6F0),
-            Color(0xFFE0EAF5),
-            Color(0xFFF0F5FA),
+            Color(0xFFF8F0FC),
+            Color(0xFFF0E6F8),
+            Color(0xFFEAF0FA),
+            Color(0xFFF4F8FC),
+            Color(0xFFFAFCFD),
           ],
           stops: [0.0, 0.25, 0.5, 0.75, 1.0],
         ),
@@ -1043,10 +1063,10 @@ class _FloatingPhotoPickerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.18),
@@ -1090,7 +1110,11 @@ class _FloatingPhotoPickerCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              GestureDetector(
+              BouncingWrapper(
+                shrinkScale: 0.86,
+                overshootScale: 1.10,
+                delayNavigation: false,
+                hitPadding: const EdgeInsets.all(12),
                 onTap: onClose,
                 child: Container(
                   width: 36,
@@ -1104,7 +1128,7 @@ class _FloatingPhotoPickerCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           // Option 1: Camera
           _PickerOptionButton(
             icon: Icons.camera_alt_rounded,
@@ -1113,7 +1137,7 @@ class _FloatingPhotoPickerCard extends StatelessWidget {
             color: _navPink,
             onTap: onPickCamera,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           // Option 2: Gallery
           _PickerOptionButton(
             icon: Icons.photo_library_rounded,
@@ -1147,23 +1171,24 @@ class _PickerOptionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRtl = Directionality.of(context) == TextDirection.rtl;
 
-    return InkWell(
+    return BouncingWrapper(
+      shrinkScale: 0.93,
+      overshootScale: 1.055,
+      delayNavigation: false,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(18),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFF8FAFC))),
         ),
         child: Row(
           children: [
             Container(
-              width: 46,
-              height: 46,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
                 color: color,
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: Colors.white, size: 22),
             ),
@@ -1181,7 +1206,7 @@ class _PickerOptionButton extends StatelessWidget {
                       color: const Color(0xFF1E293B),
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: ArabicTypography.bodyStyle(
@@ -1195,7 +1220,7 @@ class _PickerOptionButton extends StatelessWidget {
             ),
             Icon(
               isRtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
-              color: color,
+              color: const Color(0xFF94A3B8),
               size: 20,
             ),
           ],

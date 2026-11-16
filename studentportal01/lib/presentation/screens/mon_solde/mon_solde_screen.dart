@@ -1717,6 +1717,7 @@ class _GlassyCategoryCard extends StatelessWidget {
       barrierDismissible: true,
       barrierLabel: '',
       barrierColor: Colors.black.withValues(alpha: 0.35),
+      transitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return Center(
           child: Dialog(
@@ -1824,13 +1825,20 @@ class _GlassyCategoryCard extends StatelessWidget {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutBack,
+            reverseCurve: Curves.easeInBack,
+          ),
+        );
         return BackdropFilter(
           filter: ImageFilter.blur(
-            sigmaX: 8 * animation.value,
-            sigmaY: 8 * animation.value,
+            sigmaX: 8 * animation.value.clamp(0.0, 1.0),
+            sigmaY: 8 * animation.value.clamp(0.0, 1.0),
           ),
-          child: FadeTransition(
-            opacity: animation,
+          child: ScaleTransition(
+            scale: scaleAnimation,
             child: child,
           ),
         );
@@ -2068,6 +2076,7 @@ void _showPaymentDetailsDialog(
     barrierDismissible: true,
     barrierLabel: '',
     barrierColor: Colors.black.withValues(alpha: 0.35),
+    transitionDuration: const Duration(milliseconds: 320),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return Center(
         child: Dialog(
@@ -2215,12 +2224,22 @@ void _showPaymentDetailsDialog(
       );
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
+      final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInBack,
+        ),
+      );
       return BackdropFilter(
         filter: ImageFilter.blur(
-          sigmaX: 8 * animation.value,
-          sigmaY: 8 * animation.value,
+          sigmaX: 8 * animation.value.clamp(0.0, 1.0),
+          sigmaY: 8 * animation.value.clamp(0.0, 1.0),
         ),
-        child: FadeTransition(opacity: animation, child: child),
+        child: ScaleTransition(
+          scale: scaleAnimation,
+          child: child,
+        ),
       );
     },
   );

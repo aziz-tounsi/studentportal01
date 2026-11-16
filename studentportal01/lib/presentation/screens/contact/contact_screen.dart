@@ -105,11 +105,11 @@ class ContactScreen extends ConsumerWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFFE8D5F2),
-              Color(0xFFD4C4E8),
-              Color(0xFFC9D6F0),
-              Color(0xFFE0EAF5),
-              Color(0xFFF0F5FA),
+              Color(0xFFF8F0FC),
+              Color(0xFFF0E6F8),
+              Color(0xFFEAF0FA),
+              Color(0xFFF4F8FC),
+              Color(0xFFFAFCFD),
             ],
             stops: [0.0, 0.25, 0.5, 0.75, 1.0],
           ),
@@ -482,9 +482,11 @@ class _ContactRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAr = ArabicTypography.isArabic(context);
-    return InkWell(
+    return BouncingWrapper(
+      shrinkScale: 0.96,
+      overshootScale: 1.02,
+      delayNavigation: true,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
@@ -774,7 +776,10 @@ class _IosStyleMapPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return GestureDetector(
+    return BouncingWrapper(
+      shrinkScale: 0.97,
+      overshootScale: 1.02,
+      delayNavigation: true,
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
@@ -926,35 +931,41 @@ class _IosStyleMapPreviewCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                  BouncingWrapper(
+                    shrinkScale: 0.92,
+                    overshootScale: 1.06,
+                    delayNavigation: true,
+                    onTap: onTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.directions_rounded, color: Colors.white, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          l10n.directions,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.directions_rounded, color: Colors.white, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            l10n.directions,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1041,7 +1052,10 @@ class _SocialButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return BouncingWrapper(
+      shrinkScale: 0.90,
+      overshootScale: 1.10,
+      delayNavigation: true,
       onTap: onTap,
       child: Column(
         children: [

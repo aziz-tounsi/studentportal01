@@ -678,6 +678,9 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     }
   }
 
+
+
+
   static String formatRelativeTime(BuildContext context, DateTime time) {
     final localTime = time.toLocal();
     final now = DateTime.now();
@@ -699,9 +702,12 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
       } else if (difference.inHours < 24) {
         return 'منذ ${difference.inHours} س';
       } else if (difference.inDays < 7) {
-        return 'منذ ${difference.inDays} يوم';
+        return 'منذ ${difference.inDays} ي';
+      } else if (difference.inDays < 30) {
+        final weeks = (difference.inDays / 7).floor();
+        return 'منذ $weeks أس';
       } else {
-        return ArabicTypography.toLatinDigits(DateFormat('d MMM', 'ar').format(localTime));
+        return DateFormat('d MMM', 'ar').format(localTime);
       }
     } else if (lang == 'en') {
       if (difference.inMinutes < 60) {
@@ -710,19 +716,25 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
         return '${difference.inHours}h ago';
       } else if (difference.inDays < 7) {
         return '${difference.inDays}d ago';
+      } else if (difference.inDays < 30) {
+        final weeks = (difference.inDays / 7).floor();
+        return '${weeks}w ago';
       } else {
         return DateFormat('d MMM', 'en').format(localTime);
       }
-    }
-
-    if (difference.inMinutes < 60) {
-      return 'Il y a ${difference.inMinutes} min';
-    } else if (difference.inHours < 24) {
-      return 'Il y a ${difference.inHours}h';
-    } else if (difference.inDays < 7) {
-      return 'Il y a ${difference.inDays}j';
     } else {
-      return DateFormat('d MMM', 'fr_FR').format(localTime);
+      if (difference.inMinutes < 60) {
+        return 'Il y a ${difference.inMinutes} min';
+      } else if (difference.inHours < 24) {
+        return 'Il y a ${difference.inHours} h';
+      } else if (difference.inDays < 7) {
+        return 'Il y a ${difference.inDays} j';
+      } else if (difference.inDays < 30) {
+        final weeks = (difference.inDays / 7).floor();
+        return 'Il y a $weeks sem.';
+      } else {
+        return DateFormat('d MMM', 'fr_FR').format(localTime);
+      }
     }
   }
 
@@ -951,34 +963,20 @@ class _DocumentCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Dedicated Category Type Pill with its Icon
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: categoryColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
+                      // Category type as pure colored text
+                      Text(
+                        DocumentTypeHelper.getLabel(document.category, l10n),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: categoryColor,
+                          letterSpacing: 0.1,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(categoryIcon, size: 11, color: categoryColor),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                DocumentTypeHelper.getLabel(document.category, l10n),
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: categoryColor,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 3),
+                      // Document Title
                       Text(
                         document.title,
                         style: ArabicTypography.subtitleStyle(
@@ -991,7 +989,8 @@ class _DocumentCard extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (document.cleanDescription != null) ...[
+                      if (document.cleanDescription != null &&
+                          document.cleanDescription!.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           document.cleanDescription!,
@@ -1005,67 +1004,56 @@ class _DocumentCard extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                      const SizedBox(height: 6),
-                      // Meta row without overflowing category pill
+                      const SizedBox(height: 8),
+                      // Bottom row: files count and size on left, since when received on right
                       Row(
                         children: [
+                          if (document.batchInfo != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6D4CF6).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${document.batchInfo!['index']}/${document.batchInfo!['total']}',
+                                style: ArabicTypography.bodyStyle(
+                                  context,
+                                  fontSize: 10.5,
+                                  color: const Color(0xFF6D4CF6),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (document.fileSize != null) const SizedBox(width: 6),
+                          ],
+                          if (document.fileSize != null)
+                            Text(
+                              document.displayFileSize,
+                              style: ArabicTypography.bodyStyle(
+                                context,
+                                fontSize: 11,
+                                color: isRead ? Colors.grey[500] : const Color(0xFF6B7280),
+                                fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
+                              ),
+                            ),
+                          const Spacer(),
+                          // Since when received time at bottom right (like announcement page)
                           Icon(
                             Icons.access_time_rounded,
-                            size: 12,
-                            color: isRead ? Colors.grey[400] : const Color(0xFF1F2937),
+                            size: 11,
+                            color: isRead ? Colors.grey[400] : const Color(0xFF6B7280),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             _DocumentsScreenState.formatRelativeTime(context, document.createdAt),
                             style: ArabicTypography.bodyStyle(
                               context,
-                              fontSize: 11,
-                              color: isRead ? Colors.grey[500] : const Color(0xFF1F2937),
-                              fontWeight: isRead ? FontWeight.w400 : FontWeight.w800,
+                              fontSize: 10.5,
+                              color: isRead ? Colors.grey[500] : const Color(0xFF6B7280),
+                              fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
                             ),
                           ),
-                          if (document.batchInfo != null) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              width: 3,
-                              height: 3,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${document.batchInfo!['index']}/${document.batchInfo!['total']}',
-                              style: ArabicTypography.bodyStyle(
-                                context,
-                                fontSize: 11,
-                                color: const Color(0xFF6D4CF6),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                          if (document.fileSize != null) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 3,
-                              height: 3,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              document.displayFileSize,
-                              style: ArabicTypography.bodyStyle(
-                                context,
-                                fontSize: 11,
-                                color: isRead ? Colors.grey[500] : const Color(0xFF1F2937),
-                                fontWeight: isRead ? FontWeight.w400 : FontWeight.w800,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ],
@@ -1387,64 +1375,49 @@ class _DocumentCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with icon and category badge
+          // Header with icon, category pill, and date sent like an announcement
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [categoryColor, categoryColor.withValues(alpha: 0.7)],
+                    colors: [categoryColor, categoryColor.withValues(alpha: 0.75)],
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: categoryColor.withValues(alpha: 0.4),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
+                      color: categoryColor.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                child: Icon(
-                  categoryIcon,
-                  color: Colors.white,
-                  size: 28,
-                ),
+                child: Icon(categoryIcon, color: Colors.white, size: 26),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      displayTitle,
-                      style: ArabicTypography.headerStyle(
-                        context,
-                        fontSize: titleFontSize,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1F2937),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
                       runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: categoryColor.withValues(alpha: 0.1),
+                            color: categoryColor.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             document.displayCategory(l10n),
-                            style: ArabicTypography.subtitleStyle(
-                              context,
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: categoryColor,
@@ -1463,10 +1436,10 @@ class _DocumentCard extends ConsumerWidget {
                               children: [
                                 const Icon(
                                   Icons.layers_outlined,
-                                  size: 13,
+                                  size: 12,
                                   color: Color(0xFF6D4CF6),
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 3),
                                 Text(
                                   '${batchFiles.length} fichiers',
                                   style: const TextStyle(
@@ -1480,10 +1453,30 @@ class _DocumentCard extends ConsumerWidget {
                           ),
                       ],
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      l10n.formatAnnouncementDateTime(document.createdAt),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
+          ),
+          
+          // Content area starting with title
+          const SizedBox(height: 18),
+          Text(
+            displayTitle,
+            style: ArabicTypography.headerStyle(
+              context,
+              fontSize: titleFontSize,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1F2937),
+            ),
           ),
           
           if ((document.cleanDescription ?? '').trim().isNotEmpty) ...[

@@ -10,6 +10,7 @@ import '../../providers/student_context_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../widgets/bubble_nav_bar.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../data/services/offline_cache_service.dart';
 import '../documents/documents_screen.dart';
 
 class InAppBannerData {
@@ -53,6 +54,103 @@ class _RealtimeNotificationWrapperState
   String? _subscribedUserId;
   InAppBannerData? _currentBanner;
   Timer? _bannerDismissTimer;
+  Timer? _periodicCatchUpTimer;
+  final Set<String> _alertedNotificationIds = {};
+
+  void _loadAlertedIds(String userId) {
+    try {
+      final cached = OfflineCacheService.instance.getList('alerted_notification_ids_$userId');
+      if (cached != null) {
+        _alertedNotificationIds.addAll(cached.map((e) => e.toString()));
+      }
+    } catch (_) {}
+  }
+
+  void _markAsAlerted(String userId, String id) {
+    _alertedNotificationIds.add(id);
+    if (_alertedNotificationIds.length > 200) {
+      _alertedNotificationIds.removeAll(_alertedNotificationIds.take(50).toList());
+    }
+    unawaited(OfflineCacheService.instance.setJson(
+      'alerted_notification_ids_$userId',
+      _alertedNotificationIds.toList(),
+    ));
+  }
+
+  Future<void> _catchUpUnseenNotifications() async {
+    if (!mounted) return;
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) return;
+    final userId = session.user.id;
+    if (_alertedNotificationIds.isEmpty) {
+      _loadAlertedIds(userId);
+    }
+
+    try {
+      final readIds = ref.read(readAnnouncementsProvider);
+      final globalList = ref.read(globalAnnouncementsProvider).valueOrNull ?? [];
+      final classList = ref.read(classMessagesProvider).valueOrNull ?? [];
+
+      for (final a in globalList) {
+        if (!readIds.contains(a.id) && !_alertedNotificationIds.contains(a.id)) {
+          _markAsAlerted(userId, a.id);
+          final title = a.title.trim().isNotEmpty ? a.title.trim() : 'Nouvelle notification';
+          final body = a.body.trim().isNotEmpty ? a.body.trim() : 'Nouvelle notification disponible';
+          final route = '/notifications?id=${a.id}';
+          final dedupKey = 'announcements_global:${a.id}';
+
+          _showInAppBanner(
+            title: title,
+            message: body,
+            route: route,
+            icon: Icons.campaign_rounded,
+            iconColor: const Color(0xFF6D4CF6),
+            iconBgColor: const Color(0xFF6D4CF6).withValues(alpha: 0.12),
+          );
+
+          LocalNotificationService.showNotification(
+            id: LocalNotificationService.stableNotificationId(dedupKey),
+            title: title,
+            body: body,
+            routePayload: route,
+            dedupKey: dedupKey,
+          );
+          return;
+        }
+      }
+
+      for (final m in classList) {
+        if (!readIds.contains(m.id) && !_alertedNotificationIds.contains(m.id)) {
+          _markAsAlerted(userId, m.id);
+          final title = m.title.trim().isNotEmpty ? m.title.trim() : 'Nouveau message';
+          final cleanBody = m.body.replaceFirst(RegExp(r'^\*\*@[^*]+\*\*\s*'), '').trim();
+          final message = cleanBody.isNotEmpty ? cleanBody : 'Nouveau message disponible';
+          final route = '/messages?id=${m.id}';
+          final dedupKey = 'announcements_class:${m.id}';
+
+          _showInAppBanner(
+            title: title,
+            message: message,
+            route: route,
+            icon: Icons.chat_bubble_rounded,
+            iconColor: const Color(0xFF2563EB),
+            iconBgColor: const Color(0xFF2563EB).withValues(alpha: 0.12),
+          );
+
+          LocalNotificationService.showNotification(
+            id: LocalNotificationService.stableNotificationId(dedupKey),
+            title: title,
+            body: message,
+            routePayload: route,
+            dedupKey: dedupKey,
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('Catch-up unseen notifications error: $e');
+    }
+  }
 
   void _showInAppBanner({
     required String title,
@@ -99,7 +197,19 @@ class _RealtimeNotificationWrapperState
       if (!mounted) return;
       final userId = Supabase.instance.client.auth.currentSession?.user.id;
       if (userId != null) {
+        _loadAlertedIds(userId);
         unawaited(LocalNotificationService.syncDeviceToken(userId).catchError((_) {}));
+      }
+      await Future.delayed(const Duration(milliseconds: 1000));
+      if (mounted) {
+        _catchUpUnseenNotifications();
+      }
+    });
+
+    _periodicCatchUpTimer?.cancel();
+    _periodicCatchUpTimer = Timer.periodic(const Duration(seconds: 40), (_) {
+      if (mounted) {
+        _catchUpUnseenNotifications();
       }
     });
   }
@@ -108,6 +218,7 @@ class _RealtimeNotificationWrapperState
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _bannerDismissTimer?.cancel();
+    _periodicCatchUpTimer?.cancel();
     _tearDownRealtime();
     super.dispose();
   }
@@ -200,6 +311,8 @@ class _RealtimeNotificationWrapperState
               iconBgColor: const Color(0xFF6D4CF6).withValues(alpha: 0.12),
             );
 
+            if (recId != null) _markAsAlerted(userId, recId);
+
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? '$title|$message|$route'),
@@ -282,6 +395,8 @@ class _RealtimeNotificationWrapperState
               iconBgColor: const Color(0xFF2563EB).withValues(alpha: 0.12),
             );
 
+            if (recId != null) _markAsAlerted(userId, recId);
+
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? '$title|$message|$route'),
@@ -330,6 +445,8 @@ class _RealtimeNotificationWrapperState
               iconColor: const Color(0xFF4F46E5),
               iconBgColor: const Color(0xFF4F46E5).withValues(alpha: 0.12),
             );
+
+            if (recId != null) _markAsAlerted(userId, recId);
 
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
@@ -499,6 +616,8 @@ class _RealtimeNotificationWrapperState
               iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.12),
             );
 
+            if (recId != null) _markAsAlerted(userId, recId);
+
             LocalNotificationService.showNotification(
               id: LocalNotificationService.stableNotificationId(
                   dedupKey ?? '$title|$message|$route'),
@@ -559,6 +678,11 @@ class _RealtimeNotificationWrapperState
         ref.invalidate(classMessagesProvider);
         ref.invalidate(allStudentDocumentsProvider);
         ref.invalidate(suggestionsProvider);
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            _catchUpUnseenNotifications();
+          }
+        });
       }
     }
   }

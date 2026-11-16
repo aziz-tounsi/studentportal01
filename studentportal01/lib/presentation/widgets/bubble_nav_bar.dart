@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../providers/announcements_provider.dart';
 import '../providers/nav_bar_provider.dart';
+import 'ios_edge_swipe_back.dart';
 
 const Color _pink = Color(0xFFFF2D78);
 
@@ -132,6 +133,27 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
     }
 
     // Navigating to a different route
+    // If returning to Home dashboard from any of the 6 home pages, close animate by side sliding
+    const homeFeatureRoutes = [
+      '/suggestions',
+      '/absences',
+      '/resultats',
+      '/emploi',
+      '/mon-solde',
+      '/documents',
+    ];
+    final isHomeFeature = homeFeatureRoutes.any((r) => currentRoute == r || currentRoute.startsWith('$r/'));
+
+    if (targetRoute == '/' && isHomeFeature && IosEdgeSwipeBackState.currentActive != null) {
+      setState(() {
+        _fromIndex = _selectedIndex;
+        _selectedIndex = index;
+      });
+      _animationController.forward(from: 0.0);
+      IosEdgeSwipeBackState.currentActive!.animateBack();
+      return;
+    }
+
     if (targetRoute == '/ai-chat' && currentRoute != '/ai-chat') {
       ref.read(aiChatOriginRouteProvider.notifier).state = currentRoute;
     }

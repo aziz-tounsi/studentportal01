@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/firebase_options.dart';
 import '../router/app_router.dart';
 
 @pragma('vm:entry-point')
@@ -103,12 +104,25 @@ class LocalNotificationService {
 
       // 1. Initialize Firebase Core
       try {
-        await Firebase.initializeApp();
+        if (Firebase.apps.isEmpty) {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+        }
         if (Firebase.apps.isNotEmpty) {
           FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
         }
       } catch (e) {
-        debugPrint('Firebase.initializeApp warning/error: $e');
+        try {
+          if (Firebase.apps.isEmpty) {
+            await Firebase.initializeApp();
+          }
+          if (Firebase.apps.isNotEmpty) {
+            FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+          }
+        } catch (e2) {
+          debugPrint('Firebase.initializeApp warning/error: $e / $e2');
+        }
       }
 
       // 2. Initialize Local Notifications Plugin
@@ -285,11 +299,46 @@ class LocalNotificationService {
         return;
       }
 
-      // ignore: deprecated_member_use
-      final token = await FirebaseMessaging.instance.getToken().timeout(
-        const Duration(seconds: 4),
-        onTimeout: () => null,
-      );
+      String? token;
+      if (Platform.isIOS) {
+        // Query APNs token first on iOS. On sideloaded builds without push entitlement,
+        // APNs token is null. We avoid calling getToken() when APNs is missing to prevent exceptions.
+        String? apnsToken;
+        for (int i = 0; i < 4; i++) {
+          try {
+            apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+            if (apnsToken != null) break;
+          } catch (e) {
+            debugPrint('[APNS] getAPNSToken attempt $i: $e');
+          }
+          await Future.delayed(const Duration(milliseconds: 1000));
+        }
+
+        if (apnsToken == null) {
+          debugPrint(
+            '[APNS] No APNs token available from iOS (typical on personal Apple ID sideloading without Push entitlement). '
+            'In-app Realtime & Catch-up notifications will deliver all alerts.',
+          );
+          return;
+        }
+
+        try {
+          // ignore: deprecated_member_use
+          token = await FirebaseMessaging.instance.getToken().timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => null,
+          );
+        } catch (e) {
+          debugPrint('[FCM] iOS getToken error: $e');
+        }
+      } else {
+        // ignore: deprecated_member_use
+        token = await FirebaseMessaging.instance.getToken().timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => null,
+        );
+      }
+
       if (token != null && token.isNotEmpty) {
         await Supabase.instance.client.from('user_fcm_tokens').upsert({
           'user_id': userId,

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/error_messages.dart';
+import '../../../../data/services/fcm_push_service.dart';
 import '../../../../presentation/widgets/ios_loader.dart';
 import '../../../../models/announcement_model.dart';
 import '../../../../repositories/announcement_repository.dart';
@@ -305,6 +307,39 @@ class _AnnouncementComposerDialogState
           attachmentName: firstAttachmentName,
         );
         await _repository.updateAnnouncement(savedAnnouncement);
+      }
+
+      if (widget.existing == null) {
+        final notifTitle = savedAnnouncement.title.trim().isNotEmpty
+            ? savedAnnouncement.title.trim()
+            : 'Nouvelle communication';
+        final notifBody = savedAnnouncement.body.trim().isNotEmpty
+            ? savedAnnouncement.body.trim()
+            : 'Une nouvelle communication est disponible.';
+
+        if (_scope == AnnouncementScope.global) {
+          unawaited(FcmPushService.sendPush(
+            title: notifTitle,
+            body: notifBody,
+            targetSchoolId: widget.schoolId,
+            route: '/notifications?id=${savedAnnouncement.id}',
+            extraData: {
+              'table': 'announcements_global',
+              'record_id': savedAnnouncement.id,
+            },
+          ));
+        } else if (_scope == AnnouncementScope.classScope && _selectedClassId != null) {
+          unawaited(FcmPushService.sendPush(
+            title: notifTitle,
+            body: notifBody,
+            targetClassId: _selectedClassId,
+            route: '/messages?id=${savedAnnouncement.id}',
+            extraData: {
+              'table': 'announcements_class',
+              'record_id': savedAnnouncement.id,
+            },
+          ));
+        }
       }
 
       if (mounted) {

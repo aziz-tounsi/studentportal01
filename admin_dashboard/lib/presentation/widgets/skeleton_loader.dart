@@ -505,6 +505,88 @@ class ClassesSkeletonLoader extends StatelessWidget {
   }
 }
 
+/// Minimalist Skeleton Loader for Class Timetable / Cours du jour timeline
+class ClassTimetableSkeletonLoader extends StatelessWidget {
+  final int itemCount;
+
+  const ClassTimetableSkeletonLoader({
+    super.key,
+    this.itemCount = 3,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerLoading(
+      child: Column(
+        children: List.generate(itemCount, (index) {
+          final isLast = index == itemCount - 1;
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Timeline column
+                SizedBox(
+                  width: 24,
+                  child: Column(
+                    children: [
+                      const SkeletonCircle(size: 10),
+                      if (!isLast)
+                        Expanded(
+                          child: Container(
+                            width: 2,
+                            margin: const EdgeInsets.symmetric(vertical: 2),
+                            color: const Color(0xFFE4E5EB),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Course card skeleton
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAFAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFEEEFF2)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SkeletonBox(width: 100, height: 13, borderRadius: 4),
+                              SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  SkeletonCircle(size: 16),
+                                  SizedBox(width: 6),
+                                  SkeletonBox(width: 65, height: 10, borderRadius: 3),
+                                  SizedBox(width: 10),
+                                  SkeletonBox(width: 45, height: 10, borderRadius: 3),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        SkeletonBox(width: 38, height: 12, borderRadius: 3),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
 /// Minimalist Instagram-style Skeleton Loader for Class Detail Screen (Table + Sidebar Layout)
 class ClassDetailSkeletonLoader extends StatelessWidget {
   const ClassDetailSkeletonLoader({super.key});

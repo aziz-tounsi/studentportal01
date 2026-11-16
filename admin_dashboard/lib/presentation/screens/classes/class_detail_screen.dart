@@ -12,6 +12,8 @@ import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/admin_sort_dropdown.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' hide Border;
 
 const _brand = Color(0xFF655DD5);
 const _brandLight = Color(0xFFEEECFB);
@@ -215,10 +217,25 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
         children: [
           const AdminSidebar(currentRoute: '/classes'),
           Expanded(
-            child: dataAsync.when(
-              loading: () => const ClassDetailSkeletonLoader(),
-              error: (e, _) => _buildErrorState(e),
-              data: (data) => _buildContent(context, data),
+            child: Stack(
+              children: [
+                dataAsync.when(
+                  loading: () => const ClassDetailSkeletonLoader(),
+                  error: (e, _) => _buildErrorState(e),
+                  data: (data) => _buildContent(context, data),
+                ),
+                if (_selectedStudentIds.isNotEmpty)
+                  Positioned(
+                    bottom: 24,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: dataAsync.whenOrNull(
+                        data: (data) => _buildFloatingSelectionBar(context, data),
+                      ) ?? const SizedBox.shrink(),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -1273,6 +1290,651 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                               },
                               icon: const Icon(Icons.swap_horiz_rounded, size: 18),
                               label: const Text('Transférer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6D4CF6),
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: const Color(0xFF6D4CF6).withOpacity(0.35),
+                                disabledForegroundColor: Colors.white70,
+                                elevation: 2,
+                                padding: const EdgeInsets.symmetric(horizontal: 22),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // FLOATING SELECTION BAR & BULK ACTIONS
+  // ═══════════════════════════════════════════════════
+  Widget _buildFloatingSelectionBar(BuildContext context, ClassDetailData data) {
+    final count = _selectedStudentIds.length;
+    final selectedStudents = data.students.where((s) => _selectedStudentIds.contains(s.id)).toList();
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22, height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text('$count', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Sélectionnés', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white)),
+                ],
+              ),
+            ),
+            // Actions
+            _buildSelectionAction(Icons.ios_share_rounded, 'Exporter', Colors.white70, () => _bulkExportStudents(selectedStudents, data)),
+            _buildSelectionAction(Icons.archive_outlined, 'Archiver', Colors.white70, () => _bulkArchiveStudents(context, selectedStudents, data)),
+            _buildSelectionAction(Icons.school_rounded, 'Changer classe', Colors.white70, () => _showBulkTransferDialog(context, selectedStudents, data)),
+            _buildSelectionAction(Icons.delete_outline, 'Supprimer', const Color(0xFFFCA5A5), () => _bulkDeleteStudents(context, selectedStudents, data)),
+            // Close button
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: () => setState(() => _selectedStudentIds.clear()),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionAction(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _bulkExportStudents(List<StudentInClass> selected, ClassDetailData data) async {
+    if (selected.isEmpty) return;
+
+    final excel = Excel.createExcel();
+    final sheet = excel['Étudiants'];
+
+    sheet.cell(CellIndex.indexByString('A1')).value = TextCellValue('ID');
+    sheet.cell(CellIndex.indexByString('B1')).value = TextCellValue('Code étudiant');
+    sheet.cell(CellIndex.indexByString('C1')).value = TextCellValue('Nom complet');
+    sheet.cell(CellIndex.indexByString('D1')).value = TextCellValue('Email');
+    sheet.cell(CellIndex.indexByString('E1')).value = TextCellValue('Téléphone');
+    sheet.cell(CellIndex.indexByString('F1')).value = TextCellValue('Classe');
+    sheet.cell(CellIndex.indexByString('G1')).value = TextCellValue('Statut');
+
+    for (var i = 0; i < selected.length; i++) {
+      final s = selected[i];
+      final row = i + 2;
+      sheet.cell(CellIndex.indexByString('A$row')).value = TextCellValue(s.id);
+      sheet.cell(CellIndex.indexByString('B$row')).value = TextCellValue(s.studentCode ?? '');
+      sheet.cell(CellIndex.indexByString('C$row')).value = TextCellValue(s.fullName);
+      sheet.cell(CellIndex.indexByString('D$row')).value = TextCellValue(s.email);
+      sheet.cell(CellIndex.indexByString('E$row')).value = TextCellValue(s.phone ?? '');
+      sheet.cell(CellIndex.indexByString('F$row')).value = TextCellValue(data.className);
+      sheet.cell(CellIndex.indexByString('G$row')).value = TextCellValue(s.status);
+    }
+
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+
+    final bytes = excel.encode();
+    if (bytes != null && mounted) {
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Exporter les étudiants',
+        fileName: 'etudiants_${data.className}_${DateTime.now().millisecondsSinceEpoch}.xlsx',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        bytes: Uint8List.fromList(bytes),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${selected.length} étudiant(s) exporté(s)'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _bulkArchiveStudents(BuildContext context, List<StudentInClass> students, ClassDetailData data) {
+    final count = students.length;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: AppColors.warningSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.archive_outlined, color: AppColors.warning, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Archiver les étudiants ?', style: TextStyle(fontWeight: FontWeight.w700)),
+            ],
+          ),
+          content: Text('Voulez-vous archiver $count étudiant(s) sélectionné(s) ?'),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        final studentUserIds = students.map((s) => s.id).toList();
+                        await SupabaseConfig.adminClient
+                            .from('profiles')
+                            .update({'status': 'archived'})
+                            .inFilter('id', studentUserIds);
+                        ref.invalidate(classStudentsProvider(data.classId));
+                        setState(() {
+                          _selectedStudentIds.clear();
+                        });
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('$count étudiant(s) archivé(s)'),
+                              backgroundColor: AppColors.success,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        debugPrint('Bulk archive error: $e');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback: 'Unable to archive students. Please try again.',
+                                ),
+                              ),
+                              backgroundColor: AppColors.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.archive_outlined, size: 16),
+                    label: Text('Archiver $count', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.warning,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _bulkDeleteStudents(BuildContext context, List<StudentInClass> students, ClassDetailData data) {
+    final count = students.length;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Retirer de la classe ?', style: TextStyle(fontWeight: FontWeight.w700)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Voulez-vous vraiment retirer $count étudiant(s) de la classe ${data.className} ?'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.error.withOpacity(0.2)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Les inscriptions de ces étudiants seront supprimées de cette classe.',
+                        style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        final enrollmentIds = students.map((s) => s.enrollmentId).toList();
+                        await SupabaseConfig.adminClient
+                            .from('enrollments')
+                            .delete()
+                            .inFilter('id', enrollmentIds);
+                        ref.invalidate(classStudentsProvider(data.classId));
+                        setState(() {
+                          _selectedStudentIds.clear();
+                        });
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('$count étudiant(s) retiré(s) de la classe'),
+                              backgroundColor: AppColors.success,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        debugPrint('Bulk remove students error: $e');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                UserFriendlyError.format(
+                                  e,
+                                  fallback: 'Unable to remove students from class. Please try again.',
+                                ),
+                              ),
+                              backgroundColor: AppColors.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: Text('Retirer $count', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showBulkTransferDialog(BuildContext ctx, List<StudentInClass> students, ClassDetailData data) async {
+    if (students.isEmpty) return;
+
+    // Fetch all classes from the same school
+    List<Map<String, dynamic>> allClasses = [];
+    try {
+      final classResp = await SupabaseConfig.adminClient
+          .from('classes')
+          .select('school_id')
+          .eq('id', data.classId)
+          .single();
+      final schoolId = classResp['school_id'] as String;
+      final resp = await SupabaseConfig.adminClient
+          .from('classes')
+          .select('id, name, room, capacity, niveaux(code, name)')
+          .eq('school_id', schoolId)
+          .neq('id', data.classId)
+          .order('name');
+      allClasses = List<Map<String, dynamic>>.from(resp as List);
+    } catch (e) {
+      debugPrint('Load classes for transfer error: $e');
+    }
+
+    if (!mounted) return;
+
+    final isSingle = students.length == 1;
+
+    showDialog(
+      context: ctx,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (dCtx) {
+        String search = '';
+        String? selectedClassId;
+        return StatefulBuilder(builder: (dCtx, setInner) {
+          final filtered = allClasses.where((c) {
+            if (search.isEmpty) return true;
+            final q = search.toLowerCase();
+            final name = c['name']?.toString().toLowerCase() ?? '';
+            final nv = (c['niveaux'] as Map?)?['name']?.toString().toLowerCase() ?? '';
+            return name.contains(q) || nv.contains(q);
+          }).toList();
+
+          // Group by niveau
+          final grouped = <String, List<Map<String, dynamic>>>{};
+          for (final c in filtered) {
+            final nvName = (c['niveaux'] as Map?)?['name']?.toString() ?? 'Autre';
+            grouped.putIfAbsent(nvName, () => []).add(c);
+          }
+
+          return BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 480,
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(dCtx).size.height * 0.8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 30,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      decoration: const BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Color(0xFFF1F1F5))),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEECFB),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF6D4CF6), size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(isSingle ? 'Transférer l\'étudiant' : 'Transférer ${students.length} étudiants', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text(isSingle ? students.first.fullName : '${students.length} étudiants sélectionnés de ${data.className}', style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                        ])),
+                        IconButton(
+                          onPressed: () => Navigator.pop(dCtx),
+                          icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9CA3AF)),
+                          splashRadius: 18,
+                        ),
+                      ]),
+                    ),
+                    // Search
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: TextField(
+                        onChanged: (v) => setInner(() => search = v),
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Rechercher une classe ou un niveau...',
+                          hintStyle: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textTertiary),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E4EA))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E4EA))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6))),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    // From badge
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                      child: Row(children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)),
+                          child: Text('De: ${data.className}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFD97706))),
+                        ),
+                        if (selectedClassId != null) ...[
+                          const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.textTertiary)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(8)),
+                            child: Text('Vers: ${allClasses.firstWhere((c) => c['id'] == selectedClassId)['name']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF059669))),
+                          ),
+                        ],
+                      ]),
+                    ),
+                    const SizedBox(height: 8),
+                    // Class list grouped by niveau
+                    Flexible(
+                      child: filtered.isEmpty
+                          ? const Padding(
+                              padding: EdgeInsets.all(32),
+                              child: Text('Aucune classe trouvée', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                            )
+                          : ListView(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              shrinkWrap: true,
+                              children: grouped.entries.map((entry) {
+                                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    child: Text(
+                                      entry.key.toUpperCase(),
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textTertiary, letterSpacing: 0.5),
+                                    ),
+                                  ),
+                                  ...entry.value.map((c) {
+                                    final isSelected = selectedClassId == c['id'];
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: InkWell(
+                                        onTap: () => setInner(() => selectedClassId = c['id']),
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 150),
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: isSelected ? const Color(0xFFEEECFB) : const Color(0xFFF9F9FC),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: isSelected ? const Color(0xFF6D4CF6).withOpacity(0.4) : const Color(0xFFEAEAF0)),
+                                          ),
+                                          child: Row(children: [
+                                            Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: BoxDecoration(color: isSelected ? const Color(0xFF6D4CF6).withOpacity(0.12) : const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(8)),
+                                              child: Icon(Icons.class_rounded, size: 16, color: isSelected ? const Color(0xFF6D4CF6) : AppColors.textTertiary),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                              Text(c['name'] ?? '', style: TextStyle(fontSize: 13, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600, color: isSelected ? const Color(0xFF6D4CF6) : AppColors.textPrimary)),
+                                              if (c['room'] != null)
+                                                Text('Salle ${c['room']}', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                                            ])),
+                                            if (isSelected)
+                                              const Icon(Icons.check_circle_rounded, size: 20, color: Color(0xFF6D4CF6)),
+                                          ]),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ]);
+                              }).toList(),
+                            ),
+                    ),
+                    // Footer
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                        border: Border(top: BorderSide(color: Color(0xFFF1F1F5))),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          SizedBox(
+                            height: 40,
+                            child: TextButton(
+                              onPressed: () => Navigator.pop(dCtx),
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFF6B7280),
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              onPressed: selectedClassId == null ? null : () async {
+                                Navigator.pop(dCtx);
+                                try {
+                                  final enrollmentIds = students.map((s) => s.enrollmentId).toList();
+                                  await SupabaseConfig.adminClient
+                                      .from('enrollments')
+                                      .update({'class_id': selectedClassId})
+                                      .inFilter('id', enrollmentIds);
+                                  ref.invalidate(classStudentsProvider(data.classId));
+                                  setState(() => _selectedStudentIds.clear());
+                                  final targetName = allClasses.firstWhere((c) => c['id'] == selectedClassId)['name'];
+                                  final msg = isSingle
+                                      ? '${students.first.fullName} transféré(e) vers $targetName'
+                                      : '${students.length} étudiants transférés vers $targetName';
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(msg),
+                                      backgroundColor: const Color(0xFF6D4CF6),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ));
+                                  }
+                                } catch (e) {
+                                  debugPrint('Transfer student error: $e');
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(
+                                        UserFriendlyError.format(
+                                          e,
+                                          fallback: 'Unable to transfer student(s) right now. Please try again.',
+                                        ),
+                                      ),
+                                      backgroundColor: AppColors.error,
+                                      behavior: SnackBarBehavior.floating,
+                                    ));
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                              label: Text(isSingle ? 'Transférer' : 'Transférer (${students.length})', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF6D4CF6),
                                 foregroundColor: Colors.white,
@@ -3059,7 +3721,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
 
         // ── Timeline ──
         timetableAsync.when(
-          loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: IosLoader(color: _brand))),
+          loading: () => const ClassTimetableSkeletonLoader(itemCount: 4),
           error: (_, __) => Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(10)),

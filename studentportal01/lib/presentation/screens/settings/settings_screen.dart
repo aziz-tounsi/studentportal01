@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,18 +66,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     bool obscureNew = true;
     bool obscureConfirm = true;
 
-    showDialog(
+    showGeneralDialog(
       context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
       barrierColor: Colors.black.withValues(alpha: 0.35),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: StatefulBuilder(
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (ctx, animation, secondaryAnimation) {
+        return StatefulBuilder(
           builder: (context, setDialogState) {
             final isAr = Localizations.localeOf(context).languageCode == 'ar';
             return AlertDialog(
               backgroundColor: Colors.white,
               surfaceTintColor: Colors.transparent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
               title: Text(
                 l10n.translate('change_password'),
                 style: isAr
@@ -104,16 +107,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           onPressed: () => setDialogState(() => obscureOld = !obscureOld),
                         ),
                         filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(26),
                           borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(26),
                           borderSide: const BorderSide(color: _navPink, width: 1.5),
                         ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(26)),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -134,16 +138,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           onPressed: () => setDialogState(() => obscureNew = !obscureNew),
                         ),
                         filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(26),
                           borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(26),
                           borderSide: const BorderSide(color: _navPink, width: 1.5),
                         ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(26)),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -164,16 +169,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
                         ),
                         filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(26),
                           borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(26),
                           borderSide: const BorderSide(color: _navPink, width: 1.5),
                         ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(26)),
                       ),
                     ),
                   ],
@@ -290,8 +296,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     backgroundColor: _navPink,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                   ),
                   child: Text(
                     isSaving ? l10n.translate('saving') : l10n.translate('save'),
@@ -303,8 +309,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             );
           },
-        ),
-      ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutBack,
+            reverseCurve: Curves.easeInBack,
+          ),
+        );
+        return BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: 12 * animation.value.clamp(0.0, 1.0),
+            sigmaY: 12 * animation.value.clamp(0.0, 1.0),
+          ),
+          child: ScaleTransition(
+            scale: scaleAnimation,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -324,11 +349,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFFE8D5F2),
-              Color(0xFFD4C4E8),
-              Color(0xFFC9D6F0),
-              Color(0xFFE0EAF5),
-              Color(0xFFF0F5FA),
+              Color(0xFFF8F0FC),
+              Color(0xFFF0E6F8),
+              Color(0xFFEAF0FA),
+              Color(0xFFF4F8FC),
+              Color(0xFFFAFCFD),
             ],
             stops: [0.0, 0.25, 0.5, 0.75, 1.0],
           ),
@@ -812,10 +837,9 @@ class _SettingsSwitchRow extends StatelessWidget {
             },
           ),
         ),
-        Switch(
+        _ElasticIosSwitch(
           value: value,
-          activeThumbColor: _navPink,
-          activeTrackColor: _navPink.withValues(alpha: 0.4),
+          activeColor: _navPink,
           onChanged: onChanged,
         ),
       ],
@@ -843,9 +867,11 @@ class _SettingsActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
-    return InkWell(
+    return BouncingWrapper(
+      shrinkScale: 0.96,
+      overshootScale: 1.02,
+      delayNavigation: true,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
@@ -906,6 +932,137 @@ class _SettingsActionRow extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Custom iOS-style elastic switch with spring movement and horizontal stretch
+class _ElasticIosSwitch extends StatefulWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Color activeColor;
+
+  const _ElasticIosSwitch({
+    required this.value,
+    required this.onChanged,
+    this.activeColor = _navPink,
+  });
+
+  @override
+  State<_ElasticIosSwitch> createState() => _ElasticIosSwitchState();
+}
+
+class _ElasticIosSwitchState extends State<_ElasticIosSwitch>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _thumbPositionAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      value: widget.value ? 1.0 : 0.0,
+    );
+    _thumbPositionAnim = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+      reverseCurve: Curves.easeInBack,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ElasticIosSwitch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) {
+      if (widget.value) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    const double width = 50.0;
+    const double height = 28.0;
+    const double thumbSize = 22.0;
+    const double padding = 3.0;
+    final double maxTravel = width - thumbSize - (padding * 2);
+
+    return GestureDetector(
+      onTap: () => widget.onChanged(!widget.value),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final t = _thumbPositionAnim.value.clamp(0.0, 1.0);
+          final trackColor = Color.lerp(
+            const Color(0xFFE2E8F0),
+            widget.activeColor,
+            _controller.value.clamp(0.0, 1.0),
+          )!;
+
+          final stretch = (math.sin(_controller.value * math.pi) * 3.5);
+          final currentThumbWidth = thumbSize + stretch;
+          final offset = t * (maxTravel - stretch);
+
+          return Container(
+            width: width,
+            height: height,
+            decoration: BoxDecoration(
+              color: trackColor,
+              borderRadius: BorderRadius.circular(height / 2),
+              border: Border.all(
+                color: Color.lerp(
+                  const Color(0xFFCBD5E1),
+                  widget.activeColor.withValues(alpha: 0.3),
+                  _controller.value.clamp(0.0, 1.0),
+                )!,
+                width: 1.0,
+              ),
+            ),
+            child: Stack(
+              alignment: Alignment.centerLeft,
+              children: [
+                Positioned(
+                  left: isRtl ? null : (padding + offset),
+                  right: isRtl ? (padding + offset) : null,
+                  child: Container(
+                    width: currentThumbWidth,
+                    height: thumbSize,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(thumbSize / 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.16),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 1,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

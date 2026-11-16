@@ -13,10 +13,16 @@ import '../../providers/auth_provider.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../providers/school_provider.dart';
-import '../documents/documents_screen.dart' show unreadDocumentsCountProvider;
+import '../documents/documents_screen.dart' show unreadDocumentsCountProvider, DocumentsScreen;
+import '../suggestions/suggestions_screen_new.dart';
+import '../absences/absences_screen.dart';
+import '../resultats/resultats_screen_v2.dart';
+import '../emploi/emploi_screen.dart';
+import '../mon_solde/mon_solde_screen.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/student_card.dart';
 import '../../widgets/student_card_skeleton.dart';
+import '../../widgets/ios_edge_swipe_back.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final bool forceDrawerOpen;
@@ -37,6 +43,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Offset _expandDragOffset = Offset.zero;
   Rect? _cardRect;
   final GlobalKey _cardKey = GlobalKey();
+
+  final List<GlobalKey> _gridCardKeys = List.generate(6, (_) => GlobalKey());
+  late AnimationController _cardExpandCtrl;
+  late Animation<double> _cardExpandAnim;
+  _CardData? _expandingCard;
+  Rect? _expandingCardRect;
+  int? _expandingCardIndex;
+  bool _isExpanding = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -69,6 +83,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
+
+    _cardExpandCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 440),
+      reverseDuration: const Duration(milliseconds: 320),
+    );
+    _cardExpandAnim = CurvedAnimation(
+      parent: _cardExpandCtrl,
+      curve: const Cubic(0.22, 1.0, 0.36, 1.0),
+      reverseCurve: Curves.easeInCubic,
+    );
   }
 
   void _openDrawer() {
@@ -84,6 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
     _scrollController.dispose();
     _expandCtrl.dispose();
+    _cardExpandCtrl.dispose();
     super.dispose();
   }
 
@@ -123,6 +149,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final schoolAsync = ref.watch(schoolProvider);
     final school = schoolAsync.valueOrNull;
     final l10n = AppLocalizations.of(context);
+
+    ref.listen<String>(currentRouteProvider, (prev, next) {
+      if (next == '/') {
+        IosEdgeSwipeBack.didEdgeSwipe = false;
+        if (_expandingCard != null || _isExpanding) {
+          setState(() {
+            _expandingCard = null;
+            _isExpanding = false;
+            _expandingCardIndex = null;
+            _cardExpandCtrl.value = 0.0;
+          });
+        }
+      }
+    });
 
     ref.listen<int>(homeScrollToTopTriggerProvider, (prev, next) {
       if (next > 0) {
@@ -473,6 +513,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     }
                   },
                 ),
+
+              if (_expandingCard != null && _expandingCardRect != null) ...[
+                // Frosted glass backdrop blur across the entire screen behind the expanding card
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedBuilder(
+                      animation: _cardExpandAnim,
+                      builder: (context, _) {
+                        final p = _cardExpandAnim.value.clamp(0.0, 1.0);
+                        return BackdropFilter(
+                          filter: ImageFilter.blur(
+                            sigmaX: 18.0 * p,
+                            sigmaY: 18.0 * p,
+                          ),
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.12 * p),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                _ExpandingDashboardCard(
+                  animation: _cardExpandAnim,
+                  card: _expandingCard!,
+                  originRect: _expandingCardRect!,
+                  destinationScreen:
+                      _getDestinationScreenForRoute(_expandingCard!.route),
+                ),
+              ],
             ],
           );
 
@@ -643,26 +713,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
     ];
 
-    return cards
-        .map(
-          (card) => GlassCard(
-            icon: card.icon,
-            label: card.label,
-            subtitle: card.subtitle,
-            gradientColors: card.gradientColors,
-            iconAlignment: card.iconAlignment,
-            badgeCount: card.badgeCount,
-            onTap: () {
-              if (_scrollController.hasClients && _scrollController.offset > 0) {
-                _savedScrollOffset = _scrollController.offset;
-                ref.read(homeScrollOffsetProvider.notifier).state =
-                    _scrollController.offset;
-              }
-              context.go(card.route);
-            },
+    return List.generate(cards.length, (i) {
+      final card = cards[i];
+      final isBeingExpanded = _isExpanding && _expandingCardIndex == i;
+
+      Widget cardWidget = GlassCard(
+        key: _gridCardKeys[i],
+        icon: card.icon,
+        label: card.label,
+        subtitle: card.subtitle,
+        gradientColors: card.gradientColors,
+        iconAlignment: card.iconAlignment,
+        badgeCount: card.badgeCount,
+        onTap: () => _onCardTap(i, card),
+      );
+
+      if (isBeingExpanded) {
+        cardWidget = ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Opacity(
+            opacity: 0.0,
+            child: cardWidget,
           ),
-        )
-        .toList();
+        );
+      }
+
+      return cardWidget;
+    });
+  }
+
+  void _onCardTap(int index, _CardData card) async {
+    if (_isExpanding || _expanded) return;
+
+    if (_scrollController.hasClients && _scrollController.offset > 0) {
+      _savedScrollOffset = _scrollController.offset;
+      ref.read(homeScrollOffsetProvider.notifier).state =
+          _scrollController.offset;
+    }
+
+    // Allow the tap micro-bounce animation on the card to finish cleanly
+    await Future.delayed(const Duration(milliseconds: 70));
+    if (!mounted) return;
+
+    final key = _gridCardKeys[index];
+    final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+    Rect? cardRect;
+    if (renderBox != null && renderBox.hasSize) {
+      final origin = renderBox.localToGlobal(Offset.zero);
+      cardRect = origin & renderBox.size;
+    }
+
+    final screenSize = MediaQuery.of(context).size;
+    cardRect ??= Rect.fromCenter(
+      center: Offset(screenSize.width / 2, screenSize.height / 2),
+      width: screenSize.width * 0.45,
+      height: 180,
+    );
+
+    setState(() {
+      _expandingCardIndex = index;
+      _expandingCard = card;
+      _expandingCardRect = cardRect;
+      _isExpanding = true;
+    });
+
+    _cardExpandCtrl.forward(from: 0.0).then((_) {
+      if (!mounted) return;
+      context.go(card.route);
+      setState(() {
+        _expandingCard = null;
+        _isExpanding = false;
+        _expandingCardIndex = null;
+        _cardExpandCtrl.value = 0.0;
+      });
+    });
+  }
+
+  Widget _getDestinationScreenForRoute(String route) {
+    switch (route) {
+      case '/suggestions':
+        return const SuggestionsScreen();
+      case '/absences':
+        return const AbsencesScreen();
+      case '/resultats':
+        return const ResultatsScreenV2();
+      case '/emploi':
+        return const EmploiScreen();
+      case '/mon-solde':
+        return const MonSoldeScreen();
+      case '/documents':
+        return const DocumentsScreen();
+      default:
+        return const SizedBox.shrink();
+    }
   }
 }
 
@@ -774,6 +917,165 @@ class _ExpandedStudentCard extends AnimatedWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ExpandingDashboardCard extends AnimatedWidget {
+  final _CardData card;
+  final Rect originRect;
+  final Widget destinationScreen;
+
+  const _ExpandingDashboardCard({
+    required Animation<double> animation,
+    required this.card,
+    required this.originRect,
+    required this.destinationScreen,
+  }) : super(listenable: animation);
+
+  Animation<double> get _anim => listenable as Animation<double>;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _anim.value.clamp(0.0, 1.0);
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    final targetRect = Rect.fromLTWH(0, 0, screenWidth, screenHeight);
+
+    final currentRect = Rect.lerp(originRect, targetRect, progress)!;
+
+    // Apple iOS continuous squircle large radius: stays very rounded throughout expansion ("border too much radius")
+    final double radiusValue;
+    if (progress < 0.88) {
+      // From 32.0 up to 48.0 (continuous large squircle with generous radius)
+      radiusValue = 32.0 + (progress / 0.88) * 16.0;
+    } else {
+      // Only transitions to screen edges at the very final moment (0.88 -> 1.0)
+      final finishProgress = (progress - 0.88) / 0.12;
+      radiusValue = 48.0 * (1.0 - finishProgress);
+    }
+    final currentRadius = BorderRadius.circular(radiusValue);
+
+    // Cross-fade card preview <-> full destination screen
+    // Card preview fades out from 0.0 to 0.22
+    final cardPreviewOpacity = (1.0 - (progress / 0.22)).clamp(0.0, 1.0);
+    // Destination screen fades in smoothly from 0.06 to 0.30
+    final screenOpacity = ((progress - 0.06) / 0.24).clamp(0.0, 1.0);
+    // Subtle content scale for native iOS opening feel
+    final contentScale = 0.93 + (0.07 * progress);
+
+    return Positioned(
+      left: currentRect.left,
+      top: currentRect.top,
+      width: currentRect.width,
+      height: currentRect.height,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: currentRadius,
+          boxShadow: progress < 0.98
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: 0.22 * (1.0 - progress * 0.4),
+                    ),
+                    blurRadius: 36 * (1.0 - progress * 0.2),
+                    offset: Offset(0, 14 * (1.0 - progress)),
+                    spreadRadius: 2.0 * (1.0 - progress),
+                  ),
+                ]
+              : null,
+        ),
+        child: ClipRRect(
+          borderRadius: currentRadius,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 0. Solid background to eliminate any ghosting or transparent edges
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: currentRadius,
+                ),
+              ),
+
+              // 1. Destination Screen rendered in exact screen dimensions
+              if (screenOpacity > 0.0)
+                Opacity(
+                  opacity: screenOpacity,
+                  child: IgnorePointer(
+                    child: Transform.scale(
+                      scale: contentScale,
+                      alignment: Alignment.center,
+                      child: OverflowBox(
+                        minWidth: screenWidth,
+                        maxWidth: screenWidth,
+                        minHeight: screenHeight,
+                        maxHeight: screenHeight,
+                        alignment: Alignment.topCenter,
+                        child: destinationScreen,
+                      ),
+                    ),
+                  ),
+                ),
+
+              // 2. Card Preview placeholder overlay during early zoom phase
+              if (cardPreviewOpacity > 0.0)
+                Opacity(
+                  opacity: cardPreviewOpacity,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: currentRadius,
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: card.gradientColors,
+                            ),
+                          ),
+                          child: Icon(
+                            card.icon,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          card.label,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          card.subtitle,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: const Color(0xFF64748B).withValues(alpha: 0.9),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

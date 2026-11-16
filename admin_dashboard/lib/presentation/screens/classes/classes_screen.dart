@@ -746,6 +746,22 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                 // Stacked student avatars from real data
                 Consumer(builder: (context, ref, _) {
                   final previewAsync = ref.watch(classStudentPreviewsProvider(cls.id));
+                  if (previewAsync.isLoading) {
+                    return ShimmerLoading(
+                      child: Row(
+                        children: List.generate(
+                          (cls.studentCount > 0 ? cls.studentCount : 3).clamp(1, 4),
+                          (i) => Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            child: SkeletonCircle(
+                              size: 32,
+                              color: Colors.white.withOpacity(0.25),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
                   final students = previewAsync.asData?.value ?? [];
                   final hasExtra = cls.studentCount > 4;
                   final count = students.length.clamp(0, 4);
@@ -846,7 +862,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
             const SizedBox(height: 18),
 
             timetableAsync.when(
-              loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: IosLoader())),
+              loading: () => const ClassTimetableSkeletonLoader(),
               error: (_, __) => const Text('Unable to load schedule', style: TextStyle(color: AppColors.error, fontSize: 12)),
               data: (slots) {
                 if (slots.isEmpty) {
@@ -1089,11 +1105,5 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
         ),
       ),
     );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 }

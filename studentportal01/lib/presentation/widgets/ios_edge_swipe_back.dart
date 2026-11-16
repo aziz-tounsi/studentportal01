@@ -30,6 +30,9 @@ class IosEdgeSwipeBack extends StatefulWidget {
     this.onInterceptSwipe,
   });
 
+  /// Tracks whether an edge swipe back gesture was performed to return to Home.
+  static bool didEdgeSwipe = false;
+
   static IosEdgeSwipeBackState? of(BuildContext context) {
     return context.findAncestorStateOfType<IosEdgeSwipeBackState>();
   }
@@ -40,6 +43,9 @@ class IosEdgeSwipeBack extends StatefulWidget {
 
 class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
     with SingleTickerProviderStateMixin {
+  /// Reference to the currently visible IosEdgeSwipeBackState
+  static IosEdgeSwipeBackState? currentActive;
+
   late AnimationController _animCtrl;
   late Animation<double> _progressAnim;
 
@@ -54,6 +60,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
   @override
   void initState() {
     super.initState();
+    currentActive = this;
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -66,7 +73,16 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
   }
 
   @override
+  void didUpdateWidget(IosEdgeSwipeBack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    currentActive = this;
+  }
+
+  @override
   void dispose() {
+    if (currentActive == this) {
+      currentActive = null;
+    }
     _animCtrl.dispose();
     super.dispose();
   }
@@ -153,6 +169,7 @@ class IosEdgeSwipeBackState extends State<IosEdgeSwipeBack>
 
   void _executeReturn() {
     if (!mounted) return;
+    IosEdgeSwipeBack.didEdgeSwipe = true;
     if (widget.onReturn != null) {
       widget.onReturn!();
       return;

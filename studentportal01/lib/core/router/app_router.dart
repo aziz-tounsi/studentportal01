@@ -165,6 +165,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 });
               }
 
+              // Track current and previous route for iOS-style card transitions
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!context.mounted) return;
+                final current = ref.read(currentRouteProvider);
+                if (current != state.matchedLocation) {
+                  ref.read(previousRouteProvider.notifier).state = current;
+                  ref.read(currentRouteProvider.notifier).state = state.matchedLocation;
+                }
+              });
+
               const homeGradient = LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,

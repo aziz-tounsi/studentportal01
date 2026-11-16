@@ -329,7 +329,6 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
   bool _isTyping = false;
 
   // Attach modal
-  bool _showAttachModal = false;
   String? _pendingFileText;   // extracted text from file
   String? _pendingFileName;   // original file name
   XFile? _pendingImage;       // image for display only
@@ -859,7 +858,6 @@ I have **complete** access to your academic data — grades, timetable, absences
 
   // ─── File Attachment ─────────────────────────────────────────────────────────
   Future<void> _pickFile() async {
-    setState(() => _showAttachModal = false);
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
@@ -878,7 +876,6 @@ I have **complete** access to your academic data — grades, timetable, absences
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    setState(() => _showAttachModal = false);
     try {
       final image = await ImagePicker().pickImage(
         source: source,
@@ -1238,8 +1235,6 @@ I have **complete** access to your academic data — grades, timetable, absences
             ),
           ),
 
-          // Attach modal
-          if (_showAttachModal) _buildAttachModal(context),
         ],
       ),
     );
@@ -1559,7 +1554,7 @@ I have **complete** access to your academic data — grades, timetable, absences
                     hitPadding: const EdgeInsets.all(8),
                     onTap: () {
                       FocusScope.of(context).unfocus();
-                      setState(() => _showAttachModal = true);
+                      _showAttachDialog(context);
                     },
                     child: Container(
                       width: 40,
@@ -1630,118 +1625,146 @@ I have **complete** access to your academic data — grades, timetable, absences
     );
   }
 
-  Widget _buildAttachModal(BuildContext ctx) {
+  void _showAttachDialog(BuildContext ctx) {
     final l10n = AppLocalizations.of(ctx);
-    return GestureDetector(
-      onTap: () => setState(() => _showAttachModal = false),
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.3),
-            child: GestureDetector(
-              onTap: () {},
-              child: Material(
-                type: MaterialType.transparency,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: ClipRRect(
+    showGeneralDialog(
+      context: ctx,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (dialogCtx, animation, secondaryAnimation) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Material(
+              type: MaterialType.transparency,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(32),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            borderRadius: BorderRadius.circular(32),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              width: 1.5,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(start: 20),
+                              child: Text(
+                                l10n.translate('attach_title'),
+                                style: ArabicTypography.headerStyle(
+                                  dialogCtx,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF1E293B),
+                                  letterSpacing: -0.3,
+                                ).copyWith(decoration: TextDecoration.none),
+                              ),
                             ),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.only(start: 20),
-                                    child: Text(
-                                      l10n.translate('attach_title'),
-                                      style: ArabicTypography.headerStyle(
-                                        ctx,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF1E293B),
-                                        letterSpacing: -0.3,
-                                      ).copyWith(decoration: TextDecoration.none),
-                                    ),
-                                  ),
-                                GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _showAttachModal = false),
-                                  child: BouncingWrapper(
-                                    shrinkScale: 0.86,
-                                    overshootScale: 1.10,
-                                    delayNavigation: false,
-                                    hitPadding: const EdgeInsets.all(12),
-                                    onTap: () =>
-                                        setState(() => _showAttachModal = false),
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      margin: const EdgeInsetsDirectional.only(end: 12),
-                                      decoration: const BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Color(0xFFF1F5F9),
-                                      ),
-                                      child: const Icon(Icons.close_rounded,
-                                          size: 20, color: Color(0xFF94A3B8)),
-                                    ),
-                                  ),
+                            BouncingWrapper(
+                              shrinkScale: 0.86,
+                              overshootScale: 1.10,
+                              delayNavigation: false,
+                              hitPadding: const EdgeInsets.all(12),
+                              onTap: () => Navigator.of(dialogCtx).pop(),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                margin: const EdgeInsetsDirectional.only(end: 16),
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFFF1F5F9),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            _AttachOption(
-                              icon: Icons.insert_drive_file_outlined,
-                              iconColor: Colors.white,
-                              bgColor: const Color(0xFF6366F1),
-                              title: 'Document / PDF',
-                              subtitle: 'PDF, DOCX, TXT, CSV...',
-                              onTap: _pickFile,
-                            ),
-                            _AttachOption(
-                              icon: Icons.image_outlined,
-                              iconColor: Colors.white,
-                              bgColor: _pink,
-                              title: l10n.translate('photo_library'),
-                              subtitle: l10n.translate('photo_library_desc'),
-                              onTap: () => _pickImage(ImageSource.gallery),
-                            ),
-                            _AttachOption(
-                              icon: Icons.camera_alt_outlined,
-                              iconColor: Colors.white,
-                              bgColor: _pink,
-                              title: l10n.translate('take_photo'),
-                              subtitle: l10n.translate('take_photo_desc'),
-                              onTap: () => _pickImage(ImageSource.camera),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  size: 20,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        _AttachOption(
+                          icon: Icons.insert_drive_file_outlined,
+                          iconColor: Colors.white,
+                          bgColor: const Color(0xFF6366F1),
+                          title: 'Document / PDF',
+                          subtitle: 'PDF, DOCX, TXT, CSV...',
+                          onTap: () {
+                            Navigator.of(dialogCtx).pop();
+                            _pickFile();
+                          },
+                        ),
+                        _AttachOption(
+                          icon: Icons.image_outlined,
+                          iconColor: Colors.white,
+                          bgColor: _pink,
+                          title: l10n.translate('photo_library'),
+                          subtitle: l10n.translate('photo_library_desc'),
+                          onTap: () {
+                            Navigator.of(dialogCtx).pop();
+                            _pickImage(ImageSource.gallery);
+                          },
+                        ),
+                        _AttachOption(
+                          icon: Icons.camera_alt_outlined,
+                          iconColor: Colors.white,
+                          bgColor: _pink,
+                          title: l10n.translate('take_photo'),
+                          subtitle: l10n.translate('take_photo_desc'),
+                          onTap: () {
+                            Navigator.of(dialogCtx).pop();
+                            _pickImage(ImageSource.camera);
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
-    ),
-  );
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutBack,
+            reverseCurve: Curves.easeInBack,
+          ),
+        );
+        return BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: 15 * animation.value.clamp(0.0, 1.0),
+            sigmaY: 15 * animation.value.clamp(0.0, 1.0),
+          ),
+          child: ScaleTransition(
+            scale: scaleAnimation,
+            child: child,
+          ),
+        );
+      },
+    );
   }
 
   // ─── History Panel ────────────────────────────────────────────────────────────
@@ -2549,7 +2572,10 @@ class _MessageBubble extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: actions.take(3).map((act) {
-              return GestureDetector(
+              return BouncingWrapper(
+                shrinkScale: 0.92,
+                overshootScale: 1.06,
+                delayNavigation: true,
                 onTap: () {
                   final safeRoute = resolveSafeStudentRoute(act.route);
                   if (safeRoute == null) return;
