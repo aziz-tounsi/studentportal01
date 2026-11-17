@@ -1205,14 +1205,8 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                       ),
                       const SizedBox(height: 10),
                       Divider(height: 1, color: Colors.grey.shade200),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFF3F4F6)),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                         child: Row(
                           children: [
                             CircleAvatar(

@@ -323,7 +323,7 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                       shrinkScale: 0.86,
                       overshootScale: 1.10,
                       delayNavigation: false,
-                      hitPadding: const EdgeInsets.all(12),
+                      hitPadding: const EdgeInsets.symmetric(vertical: 8),
                       onTap: () {
                         dismissAllOverlaysAndPopups();
                         final swipeBack = IosEdgeSwipeBack.of(context);

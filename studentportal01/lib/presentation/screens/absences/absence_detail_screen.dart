@@ -374,7 +374,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             shrinkScale: 0.86,
             overshootScale: 1.10,
             delayNavigation: false,
-            hitPadding: const EdgeInsets.all(12),
+            hitPadding: const EdgeInsets.symmetric(vertical: 8),
             onTap: () {
               final swipeBack = IosEdgeSwipeBack.of(context);
               if (swipeBack != null) {

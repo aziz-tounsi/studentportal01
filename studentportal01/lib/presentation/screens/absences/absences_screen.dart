@@ -449,18 +449,24 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
         final subtitleSize = (14.0 * (1.0 + (scale - 1.0) * 0.75)).clamp(11.5, 14.0);
         final searchBtnSize = (50.0 * scale).clamp(44.0, 50.0);
         final isAr = l10n.locale.languageCode == 'ar';
+        final headerBlur = slideValue * 14.0;
 
         return SizedBox(
           height: 76,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // Normal header - slides out and fades
+              // Normal header - slides out and blurs on hiding / un-blurs on showing
               Transform.translate(
-                offset: Offset(-80 * slideValue, 0),
-                child: Opacity(
-                  opacity: fadeOut.clamp(0.0, 1.0),
-                  child: Row(
+                offset: Offset(-60 * slideValue, 0),
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: headerBlur,
+                    sigmaY: headerBlur,
+                  ),
+                  child: Opacity(
+                    opacity: fadeOut.clamp(0.0, 1.0),
+                    child: Row(
                     children: [
                       Transform.scale(
                         scale: 1.0 - (0.3 * slideValue),
@@ -559,15 +565,22 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                   ),
                 ),
               ),
-              // Search bar - slides in from right (identical to suggestions)
-              Transform.translate(
-                offset: Offset(
-                  MediaQuery.of(context).size.width * (1 - slideValue),
-                  0,
-                ),
-                child: Opacity(
-                  opacity: fadeIn.clamp(0.0, 1.0),
-                  child: Row(
+            ),
+              // Search bar - starts exactly at search button level and expands across
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final totalWidth = constraints.maxWidth;
+                  final searchOriginOffset = isAr
+                      ? -(totalWidth - searchBtnSize)
+                      : (totalWidth - searchBtnSize);
+                  return Transform.translate(
+                    offset: Offset(
+                      searchOriginOffset * (1.0 - slideValue),
+                      0,
+                    ),
+                    child: Opacity(
+                      opacity: fadeIn.clamp(0.0, 1.0),
+                      child: Row(
                     children: [
                       BouncingWrapper(
                         shrinkScale: 0.86,
@@ -688,7 +701,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                     ],
                   ),
                 ),
-              ),
+              );
+            },
+          ),
             ],
           ),
         );
@@ -1081,22 +1096,6 @@ class _GlassyAbsenceCard extends StatelessWidget {
                               ],
                             ),
                           ],
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.calendar_today, size: 11, color: Colors.grey.shade400),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${absence.weeks} ${AppLocalizations.of(context).weeks}',
-                                style: ArabicTypography.bodyStyle(
-                                  context,
-                                  fontSize: 11,
-                                  color: Colors.grey.shade500,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
                     ),
@@ -1132,6 +1131,27 @@ class _GlassyAbsenceCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 11,
+                      color: Colors.grey.shade500,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${absence.weeks} ${AppLocalizations.of(context).weeks}',
+                      style: ArabicTypography.bodyStyle(
+                        context,
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

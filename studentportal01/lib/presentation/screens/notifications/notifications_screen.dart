@@ -127,18 +127,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         final fadeIn = slideValue;
 
         final searchBtnSize = (50.0 * context.responsiveScale).clamp(44.0, 50.0);
+        final headerBlur = slideValue * 14.0;
 
         return SizedBox(
           height: 76,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // Normal header - slides out to left and fades
+              // Normal header - slides out to left and blurs on hiding / un-blurs on showing
               Transform.translate(
-                offset: Offset(-80 * slideValue, 0),
-                child: Opacity(
-                  opacity: fadeOut.clamp(0.0, 1.0),
-                  child: Row(
+                offset: Offset(-60 * slideValue, 0),
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: headerBlur,
+                    sigmaY: headerBlur,
+                  ),
+                  child: Opacity(
+                    opacity: fadeOut.clamp(0.0, 1.0),
+                    child: Row(
                     children: [
                       // Icon with scale animation
                       Transform.scale(
@@ -239,15 +245,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   ),
                 ),
               ),
-              // Search bar - slides in from right
-              Transform.translate(
-                offset: Offset(
-                  MediaQuery.of(context).size.width * (1 - slideValue),
-                  0,
-                ),
-                child: Opacity(
-                  opacity: fadeIn.clamp(0.0, 1.0),
-                  child: Row(
+            ),
+              // Search bar - starts exactly at search button level and expands across
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final totalWidth = constraints.maxWidth;
+                  final isRtl = Directionality.of(context) == TextDirection.rtl;
+                  final searchOriginOffset = isRtl
+                      ? -(totalWidth - searchBtnSize)
+                      : (totalWidth - searchBtnSize);
+                  return Transform.translate(
+                    offset: Offset(
+                      searchOriginOffset * (1.0 - slideValue),
+                      0,
+                    ),
+                    child: Opacity(
+                      opacity: fadeIn.clamp(0.0, 1.0),
+                      child: Row(
                     children: [
                       // Cancel button
                       BouncingWrapper(
@@ -373,7 +387,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                     ],
                   ),
                 ),
-              ),
+              );
+            },
+          ),
             ],
           ),
         );
