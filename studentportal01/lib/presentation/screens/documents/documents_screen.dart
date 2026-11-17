@@ -18,6 +18,7 @@ import '../../widgets/bouncy_dropdown_selector.dart';
 import '../../widgets/detail_modal_sheet.dart';
 import '../../widgets/documents_skeleton.dart';
 import '../../widgets/semester_navigator.dart';
+import '../../widgets/locked_semester_card.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../../core/utils/file_download_helper.dart';
 import '../../widgets/ios_photo_gallery_viewer.dart';
@@ -343,6 +344,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     final l10n = AppLocalizations.of(context);
     final selectedSemester = ref.watch(docsSemesterProvider);
     final documentsAsync = ref.watch(documentsProvider(selectedSemester));
+    final semesters = ref.watch(semestersProvider).valueOrNull ?? [];
+    final isLocked = isSemesterLocked(selectedSemester, semesters);
 
     ref.watch(allStudentDocumentsProvider).whenData((list) {
       _checkAutoOpenInitial(list);
@@ -380,11 +383,27 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: documentsAsync.when(
-                  data: (documents) => _buildContent(documents, l10n, selectedSemester),
-                  loading: () => _buildLoadingState(l10n),
-                  error: (error, stack) => _buildErrorState(l10n),
-                ),
+                child: isLocked
+                    ? Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: context.horizontalPadding,
+                          ),
+                          child: LockedSemesterCard(
+                            startDate: semesters
+                                .where((s) => s.number == selectedSemester)
+                                .firstOrNull
+                                ?.startDate,
+                            moduleType: LockedModuleType.documents,
+                          ),
+                        ),
+                      )
+                    : documentsAsync.when(
+                        data: (documents) =>
+                            _buildContent(documents, l10n, selectedSemester),
+                        loading: () => _buildLoadingState(l10n),
+                        error: (error, stack) => _buildErrorState(l10n),
+                      ),
               ),
             ],
           ),

@@ -10,6 +10,7 @@ import '../../../core/theme/responsive.dart';
 import '../../../data/models/grade_model.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/resultats_skeleton.dart';
+import '../../widgets/locked_semester_card.dart';
 
 import '../../providers/student_context_provider.dart' show studentContextProvider, semestersProvider;
 // Import providers from the original file
@@ -86,6 +87,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
     final selectedSemester = ref.watch(resultatsSemesterProvider);
     final gradesAsync = ref.watch(gradesProvider(selectedSemester));
     final isRefreshing = ref.watch(resultatsRefreshingProvider);
+    final semesters = ref.watch(semestersProvider).valueOrNull ?? [];
+    final isLocked = isSemesterLocked(selectedSemester, semesters);
 
     return Material(
       type: MaterialType.transparency,
@@ -165,6 +168,24 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
               // Content
               if (isRefreshing)
                 const ResultatsCardsSkeleton()
+              else if (isLocked)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.horizontalPadding,
+                      ),
+                      child: LockedSemesterCard(
+                        startDate: semesters
+                            .where((s) => s.number == selectedSemester)
+                            .firstOrNull
+                            ?.startDate,
+                        moduleType: LockedModuleType.grades,
+                      ),
+                    ),
+                  ),
+                )
               else
               gradesAsync.when(
                 data: (grades) =>

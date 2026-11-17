@@ -612,13 +612,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final cards = [
       _CardData(
-        icon: Icons.lightbulb_rounded,
-        label: l10n.suggestions,
-        subtitle: l10n.homeSubtitleSuggestions,
-        route: '/suggestions',
-        gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+        icon: Icons.calendar_month_rounded,
+        label: l10n.emploi,
+        subtitle: l10n.homeSubtitleTimetable,
+        route: '/emploi',
+        gradientColors: const [Color(0xFF10B981), Color(0xFF14B8A6)],
         iconAlignment: Alignment.topLeft,
-        badgeCount: suggestionBadgeCount,
       ),
       _CardData(
         icon: Icons.event_busy_rounded,
@@ -626,22 +625,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         subtitle: l10n.homeSubtitleAbsences,
         route: '/absences',
         gradientColors: const [Color(0xFFEC4899), Color(0xFFF43F5E)],
-        iconAlignment: Alignment.topLeft,
-      ),
-      _CardData(
-        icon: Icons.bar_chart_rounded,
-        label: l10n.resultats,
-        subtitle: l10n.homeSubtitleResults,
-        route: '/resultats',
-        gradientColors: const [Color(0xFF06B6D4), Color(0xFF3B82F6)],
-        iconAlignment: Alignment.topLeft,
-      ),
-      _CardData(
-        icon: Icons.calendar_month_rounded,
-        label: l10n.emploi,
-        subtitle: l10n.homeSubtitleTimetable,
-        route: '/emploi',
-        gradientColors: const [Color(0xFF10B981), Color(0xFF14B8A6)],
         iconAlignment: Alignment.topLeft,
       ),
       _CardData(
@@ -653,6 +636,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         iconAlignment: Alignment.topLeft,
       ),
       _CardData(
+        icon: Icons.bar_chart_rounded,
+        label: l10n.resultats,
+        subtitle: l10n.homeSubtitleResults,
+        route: '/resultats',
+        gradientColors: const [Color(0xFF06B6D4), Color(0xFF3B82F6)],
+        iconAlignment: Alignment.topLeft,
+      ),
+      _CardData(
         icon: Icons.folder_rounded,
         label: l10n.documents,
         subtitle: l10n.homeSubtitleDocuments,
@@ -660,6 +651,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         gradientColors: const [Color(0xFF7C3AED), Color(0xFF8B5CF6)],
         iconAlignment: Alignment.topLeft,
         badgeCount: unreadDocumentsCount > 0 ? unreadDocumentsCount : null,
+      ),
+      _CardData(
+        icon: Icons.lightbulb_rounded,
+        label: l10n.suggestions,
+        subtitle: l10n.homeSubtitleSuggestions,
+        route: '/suggestions',
+        gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+        iconAlignment: Alignment.topLeft,
+        badgeCount: suggestionBadgeCount,
       ),
     ];
 

@@ -14,6 +14,7 @@ import '../../data/services/core_data_service.dart';
 import '../providers/student_context_provider.dart';
 import 'ios_loader.dart';
 import 'bouncing_wrapper.dart';
+import 'locked_semester_card.dart';
 
 /// Dynamic Semester Navigator - iOS 26 Style
 ///
@@ -203,10 +204,12 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                       final semester = entry.value;
                       final localizedName = semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester);
                       final isSelected = index == currentIndex;
+                      final isLocked = isSemesterLocked(semester.number, semesters);
                       return Expanded(
                         child: _SemesterTab(
                           label: localizedName,
                           isSelected: isSelected,
+                          isLocked: isLocked,
                           onTap: () => widget.onChanged(semester.number),
                         ),
                       );
@@ -237,11 +240,13 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
 class _SemesterTab extends StatelessWidget {
   final String label;
   final bool isSelected;
+  final bool isLocked;
   final VoidCallback onTap;
 
   const _SemesterTab({
     required this.label,
     required this.isSelected,
+    this.isLocked = false,
     required this.onTap,
   });
 
@@ -285,13 +290,27 @@ class _SemesterTab extends StatelessWidget {
                       : null,
                 ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (isLocked) ...[
+                    Icon(
+                      Icons.lock_rounded,
+                      size: 13,
+                      color: isSelected ? Colors.white : Colors.grey[500],
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
           ),
@@ -361,6 +380,7 @@ class SemesterTabBar extends ConsumerWidget {
       child: Row(
         children: semesters.map((semester) {
           final isSelected = selectedNumber == semester.number;
+          final isLocked = isSemesterLocked(semester.number, semesters);
           return Expanded(
             child: BouncingWrapper(
               behavior: HitTestBehavior.opaque,
@@ -379,22 +399,36 @@ class SemesterTabBar extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text(
-                      semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Localizations.localeOf(context).languageCode == 'ar'
-                          ? TextStyle(
-                              fontFamily: GoogleFonts.cairo().fontFamily,
-                              fontSize: 12.5,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                              color: isSelected ? selectedTextColor : Colors.grey[700],
-                            )
-                          : TextStyle(
-                              fontSize: 13,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                              color: isSelected ? selectedTextColor : Colors.grey[700],
-                            ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (isLocked) ...[
+                          Icon(
+                            Icons.lock_rounded,
+                            size: 12,
+                            color: isSelected ? selectedTextColor : Colors.grey[600],
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                        Text(
+                          semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Localizations.localeOf(context).languageCode == 'ar'
+                              ? TextStyle(
+                                  fontFamily: GoogleFonts.cairo().fontFamily,
+                                  fontSize: 12.5,
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                  color: isSelected ? selectedTextColor : Colors.grey[700],
+                                )
+                              : TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                  color: isSelected ? selectedTextColor : Colors.grey[700],
+                                ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

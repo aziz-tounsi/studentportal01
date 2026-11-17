@@ -15,6 +15,7 @@ import '../../../data/services/offline_cache_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/semester_navigator.dart';
+import '../../widgets/locked_semester_card.dart';
 import '../../../data/models/absence_model.dart';
 
 // Selected semester provider (dynamic from DB)
@@ -325,6 +326,8 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
     final selectedTrimester = ref.watch(absencesTrimesterProvider);
     final absencesAsync = ref.watch(absencesProvider(selectedTrimester));
     final isRefreshing = ref.watch(absencesRefreshingProvider);
+    final semesters = ref.watch(ctx.semestersProvider).valueOrNull ?? [];
+    final isLocked = isSemesterLocked(selectedTrimester, semesters);
 
     return Material(
       type: MaterialType.transparency,
@@ -408,6 +411,22 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
 
                 if (isRefreshing)
                   const AbsencesCardsSkeleton()
+                else if (isLocked)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppResponsive.horizontalPadding(context),
+                      ),
+                      child: LockedSemesterCard(
+                        startDate: semesters
+                            .where((s) => s.number == selectedTrimester)
+                            .firstOrNull
+                            ?.startDate,
+                        moduleType: LockedModuleType.absences,
+                      ),
+                    ),
+                  )
                 else
                 absencesAsync.when(
                   data: (absences) => _buildContent(context, absences, l10n),

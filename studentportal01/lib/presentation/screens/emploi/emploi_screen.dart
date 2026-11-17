@@ -17,6 +17,7 @@ import '../../widgets/semester_navigator.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/emploi_skeleton.dart';
 import '../../widgets/ios_bounce_zoom_transition.dart';
+import '../../widgets/locked_semester_card.dart';
 import '../../providers/nav_bar_provider.dart';
 
 final emploiSemesterProvider = StateProvider<int>((ref) => 1);
@@ -402,6 +403,8 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     final isExamPeriodActive = ref.watch(isExamPeriodProvider).valueOrNull ?? false;
     final selectedType = isExamPeriodActive ? 'exam' : 'regular';
     final isRefreshing = ref.watch(emploiRefreshingProvider);
+    final semesters = ref.watch(semestersProvider).valueOrNull ?? [];
+    final isLocked = isSemesterLocked(selectedSemester, semesters);
 
     return Material(
       type: MaterialType.transparency,
@@ -551,34 +554,36 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                                         ],
                                       ),
                                     ),
-                                    SizedBox(width: (12 * scale).clamp(8.0, 12.0)),
-                                    BouncingWrapper(
-                                      shrinkScale: 0.86,
-                                      overshootScale: 1.10,
-                                      onTap: () => _setExpanded(true),
-                                      child: Container(
-                                        width: actionBtnSize,
-                                        height: actionBtnSize,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.white,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.08),
-                                              blurRadius: 16,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Icon(
-                                          Icons.fullscreen_rounded,
-                                          color: selectedType == 'exam'
-                                              ? const Color(0xFFEA580C)
-                                              : const Color(0xFF10B981),
-                                          size: (24 * scale).clamp(20.0, 24.0),
+                                    if (!isLocked) ...[
+                                      SizedBox(width: (12 * scale).clamp(8.0, 12.0)),
+                                      BouncingWrapper(
+                                        shrinkScale: 0.86,
+                                        overshootScale: 1.10,
+                                        onTap: () => _setExpanded(true),
+                                        child: Container(
+                                          width: actionBtnSize,
+                                          height: actionBtnSize,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.white,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.08),
+                                                blurRadius: 16,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            Icons.fullscreen_rounded,
+                                            color: selectedType == 'exam'
+                                                ? const Color(0xFFEA580C)
+                                                : const Color(0xFF10B981),
+                                            size: (24 * scale).clamp(20.0, 24.0),
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -625,21 +630,22 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                             ),
                           ),
                           data: (slots) {
-                            if (slots.isEmpty) {
-                              final semestersAsync = ref.watch(semestersProvider);
-                              final semObj = semestersAsync.valueOrNull
-                                  ?.where((s) => s.number == selectedSemester)
-                                  .firstOrNull;
-                              final now = DateTime.now();
-                              final isFuture = semObj != null &&
-                                  !semObj.isCurrent &&
-                                  semObj.startDate != null &&
-                                  now.isBefore(semObj.startDate!);
+                            final semObj = semesters
+                                .where((s) => s.number == selectedSemester)
+                                .firstOrNull;
 
+                            if (isLocked) {
+                              return LockedSemesterCard(
+                                startDate: semObj?.startDate,
+                                moduleType: LockedModuleType.timetable,
+                              );
+                            }
+
+                            if (slots.isEmpty) {
                               return _buildEmptyState(
                                 context,
                                 isExam: selectedType == 'exam',
-                                isFuture: isFuture,
+                                isFuture: false,
                                 startDate: semObj?.startDate,
                               );
                             }
