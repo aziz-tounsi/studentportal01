@@ -758,41 +758,82 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
   }
 
   Widget _buildEmptySemesterState(int semester, AppLocalizations l10n) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(24),
+    return Align(
+      alignment: const Alignment(0, -0.45),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding, vertical: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
             ),
-            child: Icon(
-              Icons.folder_open_rounded,
-              size: 40,
-              color: const Color(0xFF10B981).withValues(alpha: 0.7),
-            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-          Text(
-            l10n.noData,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF10B981), Color(0xFF059669)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.folder_open_rounded,
+                  size: 34,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                l10n.noData,
+                textAlign: TextAlign.center,
+                style: ArabicTypography.headerStyle(
+                  context,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF1F2937),
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.noDocsForSemester(semester),
+                textAlign: TextAlign.center,
+                style: ArabicTypography.bodyStyle(
+                  context,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF6B7280),
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.noDocsForSemester(semester),
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -803,8 +844,16 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
         padding: const EdgeInsets.only(top: 40),
         child: Column(
           children: [
-            Icon(Icons.filter_list_off_rounded, size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 12),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+              ),
+              child: const Icon(Icons.filter_list_off_rounded, size: 28, color: Color(0xFF10B981)),
+            ),
+            const SizedBox(height: 14),
             Text(
               l10n.noMatchingDocuments,
               style: TextStyle(

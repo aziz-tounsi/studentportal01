@@ -785,7 +785,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                           gradient: LinearGradient(
                             colors: _searchQuery.isNotEmpty
                                 ? const [Color(0xFF64748B), Color(0xFF475569)]
-                                : const [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
+                                : const [Color(0xFFEC4899), Color(0xFFF43F5E)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -793,7 +793,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                             BoxShadow(
                               color: (_searchQuery.isNotEmpty
                                       ? const Color(0xFF64748B)
-                                      : const Color(0xFFFF2D78))
+                                      : const Color(0xFFEC4899))
                                   .withValues(alpha: 0.35),
                               blurRadius: 16,
                               offset: const Offset(0, 6),

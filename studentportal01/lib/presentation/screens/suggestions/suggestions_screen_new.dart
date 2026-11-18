@@ -260,28 +260,49 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(
-                                            Icons.lightbulb_outline,
-                                            size: 40,
-                                            color: const Color(0xFF94A3B8),
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            l10n.noSuggestions,
-                                            style: TextStyle(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w700,
-                                              color: const Color(0xFF94A3B8),
-                                              letterSpacing: -0.3,
+                                          Container(
+                                            width: 72,
+                                            height: 72,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              gradient: const LinearGradient(
+                                                colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: const Color(0xFF06B6D4).withValues(alpha: 0.35),
+                                                  blurRadius: 18,
+                                                  offset: const Offset(0, 8),
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Icon(
+                                              Icons.lightbulb_rounded,
+                                              size: 34,
+                                              color: Colors.white,
                                             ),
                                           ),
-                                          const SizedBox(height: 6),
+                                          const SizedBox(height: 20),
+                                          Text(
+                                            l10n.noSuggestions,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF1F2937),
+                                              letterSpacing: -0.4,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
                                           Text(
                                             l10n.suggestionsSubtitle,
-                                            style: TextStyle(
-                                              fontSize: 12,
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              fontSize: 13,
                                               fontWeight: FontWeight.w500,
-                                              color: const Color(0xFF94A3B8).withValues(alpha: 0.7),
+                                              color: Color(0xFF6B7280),
+                                              height: 1.4,
                                             ),
                                           ),
                                           const SizedBox(height: 20),
@@ -293,12 +314,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                                               decoration: BoxDecoration(
                                                 gradient: const LinearGradient(
-                                                  colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
+                                                  colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
                                                 ),
                                                 borderRadius: BorderRadius.circular(20),
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: const Color(0xFFFF2D78).withValues(alpha: 0.4),
+                                                    color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
                                                     blurRadius: 16,
                                                     offset: const Offset(0, 6),
                                                   ),

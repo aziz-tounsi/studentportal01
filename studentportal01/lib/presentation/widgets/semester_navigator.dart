@@ -210,6 +210,7 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                           label: localizedName,
                           isSelected: isSelected,
                           isLocked: isLocked,
+                          lockColor: widget.accentColor,
                           onTap: () => widget.onChanged(semester.number),
                         ),
                       );
@@ -241,12 +242,14 @@ class _SemesterTab extends StatelessWidget {
   final String label;
   final bool isSelected;
   final bool isLocked;
+  final Color? lockColor;
   final VoidCallback onTap;
 
   const _SemesterTab({
     required this.label,
     required this.isSelected,
     this.isLocked = false,
+    this.lockColor,
     required this.onTap,
   });
 
@@ -301,7 +304,7 @@ class _SemesterTab extends StatelessWidget {
                     Icon(
                       Icons.lock_rounded,
                       size: 13,
-                      color: isSelected ? Colors.white : Colors.grey[500],
+                      color: isSelected ? Colors.white : (lockColor ?? Colors.grey[500]),
                     ),
                     const SizedBox(width: 4),
                   ],
@@ -407,7 +410,7 @@ class SemesterTabBar extends ConsumerWidget {
                           Icon(
                             Icons.lock_rounded,
                             size: 12,
-                            color: isSelected ? selectedTextColor : Colors.grey[600],
+                            color: isSelected ? selectedTextColor : color,
                           ),
                           const SizedBox(width: 3),
                         ],

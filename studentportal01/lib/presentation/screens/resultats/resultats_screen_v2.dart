@@ -627,13 +627,13 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF06B6D4), Color(0xFF2563EB)],
+                    colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),

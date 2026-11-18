@@ -24,13 +24,13 @@ final soldeRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Payment categories for Tunisia
 enum PaymentCategory {
-  scolarite('Scolarité', Icons.school_rounded, Color(0xFF6366F1)),
-  transport('Transport/Bus', Icons.directions_bus_rounded, Color(0xFFF59E0B)),
-  inscription('Inscription', Icons.app_registration_rounded, Color(0xFF10B981)),
-  uniforme('Uniforme', Icons.checkroom_rounded, Color(0xFFEC4899)),
-  cantine('Cantine', Icons.restaurant_rounded, Color(0xFF8B5CF6)),
-  activites('Activités', Icons.sports_soccer_rounded, Color(0xFF06B6D4)),
-  autres('Autres', Icons.more_horiz_rounded, Color(0xFF64748B));
+  scolarite('Scolarité', Icons.school_rounded, Color(0xFF8B5CF6)),
+  transport('Transport/Bus', Icons.directions_bus_rounded, Color(0xFF8B5CF6)),
+  inscription('Inscription', Icons.app_registration_rounded, Color(0xFF6366F1)),
+  uniforme('Uniforme', Icons.checkroom_rounded, Color(0xFF3B82F6)),
+  cantine('Cantine', Icons.restaurant_rounded, Color(0xFF06B6D4)),
+  activites('Activités', Icons.sports_soccer_rounded, Color(0xFF10B981)),
+  autres('Autres', Icons.more_horiz_rounded, Color(0xFFF59E0B));
 
   final String label;
   final IconData icon;
@@ -600,11 +600,27 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           const SizedBox(height: 16),
 
           // Categories excluding scolarite
-          ...nonScolariteCategories.map(
-            (cat) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _GlassyCategoryCard(category: cat, currency: l10n.translate('currency_tnd')),
-            ),
+          ...nonScolariteCategories.mapIndexed(
+            (index, cat) {
+              const palette = [
+                Color(0xFF8B5CF6), // Purple - Mon Solde icon
+                Color(0xFF6366F1), // Indigo
+                Color(0xFF3B82F6), // Royal Blue
+                Color(0xFF06B6D4), // Cyan
+                Color(0xFF10B981), // Emerald Green
+                Color(0xFFF59E0B), // Amber
+                Color(0xFFEC4899), // Pink
+              ];
+              final cardColor = palette[index % palette.length];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _GlassyCategoryCard(
+                  category: cat,
+                  currency: l10n.translate('currency_tnd'),
+                  cardColor: cardColor,
+                ),
+              );
+            },
           ),
         ]),
       ),
@@ -1567,13 +1583,19 @@ class _PaymentCircleCard extends StatelessWidget {
 class _GlassyCategoryCard extends StatelessWidget {
   final PaymentCategoryData category;
   final String currency;
+  final Color? cardColor;
 
-  const _GlassyCategoryCard({required this.category, required this.currency});
+  const _GlassyCategoryCard({
+    required this.category,
+    required this.currency,
+    this.cardColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cat = category.category;
+    final color = cardColor ?? cat.color;
     final isPaid = category.amount > 0 && category.remaining <= 0;
 
     return BouncingWrapper(
@@ -1581,7 +1603,7 @@ class _GlassyCategoryCard extends StatelessWidget {
       shrinkScale: 0.94,
       overshootScale: 1.05,
       delayNavigation: false,
-      onTap: () => _showCategoryDetailsDialog(context, category, currency),
+      onTap: () => _showCategoryDetailsDialog(context, category, currency, color),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Container(
@@ -1600,10 +1622,10 @@ class _GlassyCategoryCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: cat.color.withValues(alpha: 0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(cat.icon, color: cat.color, size: 24),
+                child: Icon(cat.icon, color: color, size: 24),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1664,7 +1686,7 @@ class _GlassyCategoryCard extends StatelessWidget {
                         value: category.progressPercent / 100,
                         minHeight: 6,
                         backgroundColor: Colors.grey.shade200,
-                        valueColor: AlwaysStoppedAnimation<Color>(cat.color),
+                        valueColor: AlwaysStoppedAnimation<Color>(color),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1685,7 +1707,7 @@ class _GlassyCategoryCard extends StatelessWidget {
                             style: ArabicTypography.bodyStyle(
                               context,
                               fontSize: 11,
-                              color: cat.color,
+                              color: color,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1701,12 +1723,12 @@ class _GlassyCategoryCard extends StatelessWidget {
     );
   }
 
-  void _showCategoryDetailsDialog(BuildContext context, PaymentCategoryData catData, String currency) {
+  void _showCategoryDetailsDialog(BuildContext context, PaymentCategoryData catData, String currency, Color effectiveColor) {
     final l10n = AppLocalizations.of(context);
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     final cat = catData.category;
     final isPaid = catData.amount > 0 && catData.remaining <= 0;
-    final statusColor = isPaid ? const Color(0xFF10B981) : cat.color;
+    final statusColor = isPaid ? const Color(0xFF10B981) : effectiveColor;
     final statusText = isPaid
         ? l10n.statusPaid
         : (catData.paid > 0
@@ -1739,10 +1761,10 @@ class _GlassyCategoryCard extends StatelessWidget {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: cat.color.withValues(alpha: 0.15),
+                      color: effectiveColor.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(cat.icon, color: cat.color, size: 36),
+                    child: Icon(cat.icon, color: effectiveColor, size: 36),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -1777,25 +1799,25 @@ class _GlassyCategoryCard extends StatelessWidget {
                     l10n.translate('total_amount'),
                     '${_formatCurrency(catData.amount)} $currency',
                     Icons.account_balance_wallet_rounded,
-                    cat.color,
+                    effectiveColor,
                   ),
                   _buildDetailRow(
                     l10n.translate('paid_amount'),
                     '${_formatCurrency(catData.paid)} $currency',
                     Icons.check_circle_rounded,
-                    cat.color,
+                    effectiveColor,
                   ),
                   _buildDetailRow(
                     l10n.translate('remaining_amount'),
                     '${_formatCurrency(catData.remaining)} $currency',
                     Icons.pending_actions_rounded,
-                    cat.color,
+                    effectiveColor,
                   ),
                   _buildDetailRow(
                     l10n.translate('progress'),
                     '${catData.progressPercent.toStringAsFixed(0)}%',
                     Icons.pie_chart_rounded,
-                    cat.color,
+                    effectiveColor,
                   ),
                   const SizedBox(height: 28),
                   SizedBox(
@@ -1803,7 +1825,7 @@ class _GlassyCategoryCard extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () => Navigator.pop(dialogContext),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: cat.color,
+                        backgroundColor: effectiveColor,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
