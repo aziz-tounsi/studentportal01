@@ -214,29 +214,60 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
           borderRadius: BorderRadius.circular(barHeight / 2),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF7A8698).withValues(alpha: 0.16),
-              blurRadius: 28,
-              offset: const Offset(0, 10),
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(barHeight / 2),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
               padding: EdgeInsets.all(padding),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.78),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.03),
+                    Colors.white.withValues(alpha: 0.005),
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(barHeight / 2),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.90),
-                  width: 1.2,
+                  color: Colors.white.withValues(alpha: 0.25),
+                  width: 0.8,
                 ),
               ),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
+                  // Top specular liquid reflection (curved glass highlight)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: barHeight * 0.44,
+                    child: IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(barHeight / 2),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withValues(alpha: 0.10),
+                              Colors.white.withValues(alpha: 0.0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   // Animated bouncing pink circle with slow iOS elastic effect
                   AnimatedBuilder(
                     animation: _animationController,
@@ -331,7 +362,7 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
         builder: (context, _) {
           final isSelected = _selectedIndex == index;
           final iconColor =
-              isSelected ? Colors.white : const Color(0xFF94A3B8);
+              isSelected ? Colors.white : const Color(0xFF64748B);
 
           return Container(
             width: itemSize,

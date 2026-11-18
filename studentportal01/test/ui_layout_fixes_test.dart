@@ -59,6 +59,7 @@ void main() {
         overrides: [
           allStudentDocumentsProvider.overrideWith((_) async => [stubDoc]),
           semestersProvider.overrideWith((_) async => stubSemesters),
+          readDocumentsProvider.overrideWith((ref) => ReadDocumentsNotifier('test_user')),
         ],
         child: MaterialApp(
           locale: const Locale('en'),
