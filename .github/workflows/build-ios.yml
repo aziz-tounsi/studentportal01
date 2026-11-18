@@ -2,13 +2,23 @@ name: Build unsigned Flutter iOS IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      runner_os:
+        description: 'macOS Runner OS'
+        required: true
+        default: 'macos-15'
+        type: choice
+        options:
+          - 'macos-15'
+          - 'macos-14'
+          - 'macos-latest'
 
 permissions:
   contents: read
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner_os || 'macos-15' }}
     timeout-minutes: 45
 
     defaults:
