@@ -214,24 +214,24 @@ class _BubbleNavBarState extends ConsumerState<BubbleNavBar>
           borderRadius: BorderRadius.circular(barHeight / 2),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF7A8698).withValues(alpha: 0.12),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
+              color: const Color(0xFF7A8698).withValues(alpha: 0.16),
+              blurRadius: 28,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(barHeight / 2),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(
               padding: EdgeInsets.all(padding),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.22),
+                color: Colors.white.withValues(alpha: 0.78),
                 borderRadius: BorderRadius.circular(barHeight / 2),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.40),
-                  width: 1.0,
+                  color: Colors.white.withValues(alpha: 0.90),
+                  width: 1.2,
                 ),
               ),
               child: Stack(
