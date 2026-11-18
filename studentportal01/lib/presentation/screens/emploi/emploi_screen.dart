@@ -483,19 +483,14 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                                       height: iconBoxSize,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        gradient: LinearGradient(
+                                        gradient: const LinearGradient(
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
-                                          colors: selectedType == 'exam'
-                                              ? const [Color(0xFFEA580C), Color(0xFFF97316)]
-                                              : const [Color(0xFF10B981), Color(0xFF059669)],
+                                          colors: [Color(0xFFEA580C), Color(0xFFF97316)],
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: (selectedType == 'exam'
-                                                    ? const Color(0xFFEA580C)
-                                                    : const Color(0xFF10B981))
-                                                .withValues(alpha: 0.4),
+                                            color: const Color(0xFFEA580C).withValues(alpha: 0.4),
                                             blurRadius: 20 * scale,
                                             offset: Offset(0, 8 * scale),
                                           ),
@@ -576,9 +571,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                                           ),
                                           child: Icon(
                                             Icons.fullscreen_rounded,
-                                            color: selectedType == 'exam'
-                                                ? const Color(0xFFEA580C)
-                                                : const Color(0xFF10B981),
+                                            color: const Color(0xFFEA580C),
                                             size: (24 * scale).clamp(20.0, 24.0),
                                           ),
                                         ),
@@ -598,12 +591,8 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                           ),
                           child: DynamicSemesterNav(
                             selectedSemesterNumber: selectedSemester,
-                            accentColor: selectedType == 'exam'
-                                ? const Color(0xFFEA580C)
-                                : const Color(0xFF10B981),
-                            secondaryColor: selectedType == 'exam'
-                                ? const Color(0xFFF97316)
-                                : const Color(0xFF059669),
+                            accentColor: const Color(0xFFEA580C),
+                            secondaryColor: const Color(0xFFF97316),
                             onChanged: (v) => ref
                                 .read(emploiSemesterProvider.notifier)
                                 .state = v,
@@ -854,8 +843,8 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                               begin: Alignment.bottomCenter,
                               end: Alignment.topCenter,
                               colors: [
-                                const Color(0xFF10B981).withValues(alpha: 0.10),
-                                const Color(0xFF10B981).withValues(alpha: 0.03),
+                                const Color(0xFFEA580C).withValues(alpha: 0.10),
+                                const Color(0xFFEA580C).withValues(alpha: 0.03),
                               ],
                             ),
                           ),
@@ -876,7 +865,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: isCurrentHour ? FontWeight.w800 : FontWeight.w600,
-                                color: isCurrentHour ? const Color(0xFF10B981) : Colors.grey.shade600,
+                                color: isCurrentHour ? const Color(0xFFEA580C) : Colors.grey.shade600,
                               ),
                             ),
                           ),
@@ -930,7 +919,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                               style: TextStyle(
                                 fontSize: isFullScreen ? 12 : 13,
                                 fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
-                                color: isToday ? const Color(0xFF10B981) : Colors.grey.shade600,
+                                color: isToday ? const Color(0xFFEA580C) : Colors.grey.shade600,
                               ),
                             ),
                           ),
@@ -1399,7 +1388,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                         ? const [Color(0xFFFF2B6D), Color(0xFFE11D48)]
                         : isExam
                             ? const [Color(0xFFEA580C), Color(0xFFF97316)]
-                            : const [Color(0xFF10B981), Color(0xFF059669)],
+                            : const [Color(0xFFEA580C), Color(0xFFF97316)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -1409,7 +1398,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                               ? const Color(0xFFFF2B6D)
                               : isExam
                                   ? const Color(0xFFEA580C)
-                                  : const Color(0xFF10B981))
+                                  : const Color(0xFFEA580C))
                           .withValues(alpha: 0.3),
                       blurRadius: 16,
                       offset: const Offset(0, 6),

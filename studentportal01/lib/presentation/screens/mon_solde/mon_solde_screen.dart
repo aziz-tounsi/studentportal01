@@ -424,11 +424,11 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFF59E0B), Color(0xFFF97316)],
+              colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -963,12 +963,12 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF59E0B), Color(0xFFF97316)],
+            colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
           ),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFF59E0B).withValues(alpha: 0.5),
+              color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
               blurRadius: 30,
               offset: const Offset(0, 14),
             ),

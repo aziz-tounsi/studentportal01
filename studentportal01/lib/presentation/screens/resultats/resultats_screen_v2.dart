@@ -157,6 +157,8 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                   padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
                   child: DynamicSemesterNav(
                     selectedSemesterNumber: selectedSemester,
+                    accentColor: const Color(0xFF3B82F6),
+                    secondaryColor: const Color(0xFF2563EB),
                     onChanged: (v) =>
                         ref.read(resultatsSemesterProvider.notifier).state = v,
                   ),
@@ -257,11 +259,11 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
                             gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
+                              colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
+                                color: const Color(0xFF3B82F6).withValues(alpha: 0.4),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -696,12 +698,12 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF06B6D4), Color(0xFF3B82F6), Color(0xFF2563EB)],
+            colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
           ),
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF06B6D4).withValues(alpha: 0.5),
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.5),
               blurRadius: 50,
               offset: const Offset(0, 20),
             ),
@@ -852,7 +854,7 @@ class _GlassySemesterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gradientColors = isValidated
-        ? [const Color(0xFF06B6D4), const Color(0xFF2563EB)]
+        ? [const Color(0xFF3B82F6), const Color(0xFF2563EB)]
         : [const Color(0xFFEF4444), const Color(0xFFDC2626)];
 
     return ClipRRect(

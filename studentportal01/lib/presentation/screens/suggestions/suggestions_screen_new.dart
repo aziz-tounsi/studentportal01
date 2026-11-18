@@ -376,12 +376,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                   height: 64,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFFF2D78), Color(0xFFFF5CA0)],
+                      colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF2D78).withValues(alpha: 0.45),
+                        color: const Color(0xFF06B6D4).withValues(alpha: 0.45),
                         blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),
@@ -1707,11 +1707,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                             gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                              colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                                color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
                                 blurRadius: 20 * scale,
                                 offset: Offset(0, 8 * scale),
                               ),

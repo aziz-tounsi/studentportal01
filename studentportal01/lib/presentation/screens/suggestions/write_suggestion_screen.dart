@@ -552,12 +552,12 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFFF2D78).withValues(alpha: 0.1),
+                                        color: const Color(0xFF06B6D4).withValues(alpha: 0.1),
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(
                                         Icons.add_photo_alternate_rounded,
-                                        color: Color(0xFFFF2D78),
+                                        color: Color(0xFF06B6D4),
                                         size: 20,
                                       ),
                                     ),
@@ -677,16 +677,16 @@ class _WriteSuggestionScreenState extends ConsumerState<WriteSuggestionScreen> {
                                       decoration: BoxDecoration(
                                         gradient: const LinearGradient(
                                           colors: [
-                                            Color(0xFFFF2D78),
-                                            Color(0xFFFF5CA0),
+                                            Color(0xFF06B6D4),
+                                            Color(0xFF0284C7),
                                           ],
                                         ),
                                         borderRadius: BorderRadius.circular(24),
                                         boxShadow: [
                                           BoxShadow(
                                             color: const Color(
-                                              0xFFFF2D78,
-                                            ).withValues(alpha: 0.3),
+                                              0xFF06B6D4,
+                                            ).withValues(alpha: 0.35),
                                             blurRadius: 15,
                                             offset: const Offset(0, 8),
                                           ),

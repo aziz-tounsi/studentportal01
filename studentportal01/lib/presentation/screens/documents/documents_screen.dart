@@ -370,8 +370,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                 padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
                 child: DynamicSemesterNav(
                   selectedSemesterNumber: selectedSemester,
-                  accentColor: const Color(0xFF6B5CE7),
-                  secondaryColor: const Color(0xFF8B5CF6),
+                  accentColor: const Color(0xFF10B981),
+                  secondaryColor: const Color(0xFF059669),
                   onChanged: (v) {
                     _hasUserPickedSemester = true;
                     ref.read(docsSemesterProvider.notifier).state = v;
@@ -423,7 +423,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
         title: l10n.documents,
         subtitle: l10n.homeSubtitleDocuments,
         icon: Icons.folder_rounded,
-        gradientColors: const [Color(0xFF6B5CE7), Color(0xFF8B5CF6)],
+        gradientColors: const [Color(0xFF10B981), Color(0xFF059669)],
         isSearching: _isSearching,
       ),
     );
@@ -497,7 +497,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                 ref.invalidate(documentsProvider(selectedSemester));
                 await ref.read(documentsProvider(selectedSemester).future);
               },
-              color: const Color(0xFF6B5CE7),
+              color: const Color(0xFF10B981),
               backgroundColor: Colors.white,
               child: filteredDocs.isEmpty
                   ? SingleChildScrollView(
@@ -539,7 +539,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
         value: catKey,
         label: entry.value,
         icon: isAll ? Icons.dashboard_rounded : getCategoryIcon(catKey),
-        color: isAll ? const Color(0xFF6B5CE7) : getCategoryColor(catKey),
+        color: isAll ? const Color(0xFF10B981) : getCategoryColor(catKey),
       );
     }).toList();
 
@@ -589,7 +589,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6B5CE7).withValues(alpha: 0.08),
+                          color: const Color(0xFF10B981).withValues(alpha: 0.08),
                           blurRadius: 10,
                           offset: const Offset(0, 3),
                         ),
@@ -605,7 +605,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                           size: 15,
                           color: _selectedCategory != null
                               ? getCategoryColor(_selectedCategory!)
-                              : const Color(0xFF6B5CE7),
+                              : const Color(0xFF10B981),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -614,7 +614,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: _selectedCategory != null
-                                ? const Color(0xFF6B5CE7)
+                                ? const Color(0xFF10B981)
                                 : const Color(0xFF1F2937),
                           ),
                         ),
@@ -627,7 +627,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                             Icons.keyboard_arrow_down_rounded,
                             size: 18,
                             color: _selectedCategory != null
-                                ? const Color(0xFF6B5CE7)
+                                ? const Color(0xFF10B981)
                                 : Colors.grey[500],
                           ),
                         ),
@@ -766,13 +766,13 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: const Color(0xFF6B5CE7).withValues(alpha: 0.15),
+              color: const Color(0xFF10B981).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Icon(
               Icons.folder_open_rounded,
               size: 40,
-              color: const Color(0xFF6B5CE7).withValues(alpha: 0.7),
+              color: const Color(0xFF10B981).withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 20),
@@ -882,7 +882,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6B5CE7),
+                  color: const Color(0xFF10B981),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
