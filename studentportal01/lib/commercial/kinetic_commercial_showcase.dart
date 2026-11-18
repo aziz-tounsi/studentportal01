@@ -514,17 +514,17 @@ class _Kinetic3DStageScreenState extends ConsumerState<Kinetic3DStageScreen>
                               child: Stack(
                                 children: [
                                   // ── MOUNTING YOUR ACTUAL FLUTTER APP CODE ──
-                                  if (activeScreen == 0)
-                                    const Positioned.fill(child: HomeScreen()),
-                                  if (activeScreen == 1)
-                                    const Positioned.fill(
-                                        child: EmploiScreen()),
-                                  if (activeScreen == 2)
-                                    const Positioned.fill(
-                                        child: NotificationsScreen()),
-                                  if (activeScreen == 3)
-                                    const Positioned.fill(
-                                        child: AIChatScreen()),
+                                  Positioned.fill(
+                                    child: IndexedStack(
+                                      index: activeScreen.clamp(0, 3),
+                                      children: const [
+                                        HomeScreen(),
+                                        EmploiScreen(),
+                                        NotificationsScreen(),
+                                        AIChatScreen(),
+                                      ],
+                                    ),
+                                  ),
 
                                   // Simulated 3D Bouncing Tile for Scene 3
                                   if (timetablePopped)
