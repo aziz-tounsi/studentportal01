@@ -4862,6 +4862,7 @@ class _SubjectsManagementScreenState
                                                 UserAvatar(
                                                   name:
                                                       teacher?.fullName ?? '?',
+                                                  photoUrl: teacher?.photoUrl,
                                                   radius: 12,
                                                 ),
                                                 const SizedBox(width: 6),
@@ -5170,6 +5171,7 @@ class _SubjectsManagementScreenState
                                       children: [
                                         UserAvatar(
                                           name: t.fullName,
+                                          photoUrl: t.photoUrl,
                                           radius: 16,
                                           backgroundColor: isSel
                                               ? _brand

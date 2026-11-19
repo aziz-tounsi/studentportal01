@@ -231,6 +231,7 @@ class ClassTimetableSlot {
   final String? subjectName;
   final String? subjectCode;
   final String? teacherName;
+  final String? teacherPhotoUrl;
   final String? teacherId;
 
   ClassTimetableSlot({
@@ -242,6 +243,7 @@ class ClassTimetableSlot {
     this.subjectName,
     this.subjectCode,
     this.teacherName,
+    this.teacherPhotoUrl,
     this.teacherId,
   });
 
@@ -277,6 +279,7 @@ class ClassTimetableSlot {
       subjectName: so?['subjects']?['name']?.toString(),
       subjectCode: so?['subjects']?['code']?.toString(),
       teacherName: so?['users']?['full_name']?.toString(),
+      teacherPhotoUrl: so?['users']?['photo_url']?.toString(),
       teacherId: so?['teacher_id']?.toString(),
     );
   }
@@ -298,7 +301,7 @@ final classTimetableTodayProvider =
     // Get all subject_offerings for this class with subject details
     final offeringsResp = await supabase
         .from('subject_offerings')
-        .select('id, subject_id, teacher_id, subjects(name, code)')
+        .select('id, subject_id, teacher_id, subjects(name, code), users(full_name, photo_url)')
         .eq('class_id', classId);
 
     final offerings = offeringsResp as List;
@@ -325,10 +328,11 @@ final classTimetableTodayProvider =
 
     // Resolve teachers from teacher_assignments (subject_offerings.teacher_id may be NULL)
     final Map<String, String> subjectClassTeacherMap = {};
+    final Map<String, String> subjectClassTeacherPhotoMap = {};
     try {
       final teacherAssResp = await supabase
           .from('teacher_assignments')
-          .select('subject_id, class_id, users!teacher_id(full_name)')
+          .select('subject_id, class_id, users!teacher_id(full_name, photo_url)')
           .eq('is_active', true);
 
       for (final ta in (teacherAssResp as List)) {
@@ -337,6 +341,7 @@ final classTimetableTodayProvider =
         final teacherData = ta['users'] as Map<String, dynamic>?;
         if (subjectId != null && clsId != null) {
           subjectClassTeacherMap['${subjectId}_$clsId'] = teacherData?['full_name'] as String? ?? '';
+          subjectClassTeacherPhotoMap['${subjectId}_$clsId'] = teacherData?['photo_url'] as String? ?? '';
         }
       }
     } catch (_) {}
@@ -350,8 +355,10 @@ final classTimetableTodayProvider =
 
       // Resolve teacher from teacher_assignments first, then fallbacks
       String teacherName = subjectClassTeacherMap['${subjectId}_$classId'] ?? '';
+      String? teacherPhoto = subjectClassTeacherPhotoMap['${subjectId}_$classId'];
       if (teacherName.isEmpty) {
-        teacherName = (slot['teacher_name'] as String?) ?? '';
+        teacherName = (slot['teacher_name'] as String?) ?? (offering?['users']?['full_name'] as String?) ?? '';
+        teacherPhoto = offering?['users']?['photo_url'] as String?;
       }
 
       // Clean room: extract just the room name from strings like "Bloc A – Principal · 2ème étage · Salle 204"
@@ -371,6 +378,7 @@ final classTimetableTodayProvider =
         subjectName: subject?['name']?.toString(),
         subjectCode: subject?['code']?.toString(),
         teacherName: teacherName.isNotEmpty ? teacherName : null,
+        teacherPhotoUrl: (teacherPhoto != null && teacherPhoto.isNotEmpty) ? teacherPhoto : null,
         teacherId: offering?['teacher_id']?.toString(),
       ));
     }

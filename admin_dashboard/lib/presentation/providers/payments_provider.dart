@@ -80,6 +80,7 @@ class Payment {
   // Related data
   final String? studentId;
   final String? studentName;
+  final String? studentPhotoUrl;
   final String? studentEmail;
   final String? classId;
   final String? className;
@@ -98,6 +99,7 @@ class Payment {
     required this.createdAt,
     this.studentId,
     this.studentName,
+    this.studentPhotoUrl,
     this.studentEmail,
     this.classId,
     this.className,
@@ -123,6 +125,7 @@ class Payment {
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
       studentId: user?['id']?.toString(),
       studentName: user?['full_name']?.toString(),
+      studentPhotoUrl: user?['photo_url']?.toString(),
       studentEmail: user?['email']?.toString(),
       classId: classData?['id']?.toString(),
       className: classData?['name']?.toString(),
@@ -145,6 +148,7 @@ class Payment {
     DateTime? createdAt,
     String? studentId,
     String? studentName,
+    String? studentPhotoUrl,
     String? studentEmail,
     String? classId,
     String? className,
@@ -163,6 +167,7 @@ class Payment {
       createdAt: createdAt ?? this.createdAt,
       studentId: studentId ?? this.studentId,
       studentName: studentName ?? this.studentName,
+      studentPhotoUrl: studentPhotoUrl ?? this.studentPhotoUrl,
       studentEmail: studentEmail ?? this.studentEmail,
       classId: classId ?? this.classId,
       className: className ?? this.className,
@@ -185,6 +190,7 @@ class PaymentPlan {
   // Related data
   final String? studentId;
   final String? studentName;
+  final String? studentPhotoUrl;
   final String? classId;
   final String? className;
 
@@ -200,6 +206,7 @@ class PaymentPlan {
     this.payments = const [],
     this.studentId,
     this.studentName,
+    this.studentPhotoUrl,
     this.classId,
     this.className,
   });
@@ -221,6 +228,7 @@ class PaymentPlan {
       payments: (json['payments'] as List?)?.map((e) => Payment.fromJson(e)).toList() ?? [],
       studentId: user?['id']?.toString(),
       studentName: user?['full_name']?.toString(),
+      studentPhotoUrl: user?['photo_url']?.toString(),
       classId: classData?['id']?.toString(),
       className: classData?['name']?.toString(),
     );
@@ -238,6 +246,7 @@ class PaymentPlan {
     List<Payment>? payments,
     String? studentId,
     String? studentName,
+    String? studentPhotoUrl,
     String? classId,
     String? className,
   }) {
@@ -253,6 +262,7 @@ class PaymentPlan {
       payments: payments ?? this.payments,
       studentId: studentId ?? this.studentId,
       studentName: studentName ?? this.studentName,
+      studentPhotoUrl: studentPhotoUrl ?? this.studentPhotoUrl,
       classId: classId ?? this.classId,
       className: className ?? this.className,
     );
@@ -275,6 +285,7 @@ class PaymentPlan {
 class StudentPaymentSummary {
   final String studentId;
   final String studentName;
+  final String? studentPhotoUrl;
   final String? studentEmail;
   final String? classId;
   final String? className;
@@ -289,6 +300,7 @@ class StudentPaymentSummary {
   StudentPaymentSummary({
     required this.studentId,
     required this.studentName,
+    this.studentPhotoUrl,
     this.studentEmail,
     this.classId,
     this.className,
@@ -485,7 +497,7 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
                 *,
                 enrollments(
                   id,
-                  users(id, full_name, email, school_id),
+                  users(id, full_name, email, school_id, photo_url),
                   classes(id, name)
                 )
               )
@@ -505,7 +517,7 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
               *,
               enrollments(
                 id,
-                users(id, full_name, email, school_id),
+                users(id, full_name, email, school_id, photo_url),
                 classes(id, name)
               )
             ''');
@@ -547,6 +559,7 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
             studentMap[plan.studentId!] = StudentPaymentSummary(
               studentId: plan.studentId!,
               studentName: plan.studentName ?? 'Inconnu',
+              studentPhotoUrl: plan.studentPhotoUrl,
               studentEmail: null,
               classId: plan.classId,
               className: plan.className,
@@ -564,6 +577,7 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
           studentMap[plan.studentId!] = StudentPaymentSummary(
             studentId: existing.studentId,
             studentName: existing.studentName,
+            studentPhotoUrl: existing.studentPhotoUrl ?? plan.studentPhotoUrl,
             studentEmail: existing.studentEmail,
             classId: existing.classId ?? plan.classId,
             className: existing.className ?? plan.className,

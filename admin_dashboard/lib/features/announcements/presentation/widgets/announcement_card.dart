@@ -129,6 +129,7 @@ class AnnouncementCard extends StatelessWidget {
                   children: [
                     UserAvatar(
                       name: announcement.senderLabel ?? '?',
+                      photoUrl: announcement.senderPhotoUrl,
                       radius: 14,
                     ),
                     const SizedBox(width: 8),

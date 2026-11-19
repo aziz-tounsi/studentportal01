@@ -1588,6 +1588,11 @@ class _PasswordResetRequestsScreenState
     final email = request['email'] as String? ?? '';
     final status = (request['status'] as String? ?? 'pending').toLowerCase();
     final userId = request['user_id'] as String?;
+    final usersState = ref.watch(usersProvider).asData?.value;
+    final matchedUser = usersState?.users
+        .where((u) => (userId != null && u.id == userId) || (email.isNotEmpty && u.email.toLowerCase() == email.toLowerCase()))
+        .firstOrNull;
+    final photoUrl = matchedUser?.photoUrl ?? request['photo_url'] as String?;
 
     DateTime? requestedAt;
     DateTime? processedAt;
@@ -1657,6 +1662,7 @@ class _PasswordResetRequestsScreenState
                 children: [
                   UserAvatar(
                     name: fullName,
+                    photoUrl: photoUrl,
                     radius: 18,
                   ),
                   const SizedBox(width: 12),
@@ -2722,7 +2728,11 @@ class _DirectResetPasswordModalState
                   ),
                   child: Row(
                     children: [
-                      UserAvatar(name: _selectedUser!.fullName, radius: 16),
+                      UserAvatar(
+                        name: _selectedUser!.fullName,
+                        photoUrl: _selectedUser!.photoUrl,
+                        radius: 16,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -2818,7 +2828,11 @@ class _DirectResetPasswordModalState
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 child: Row(
                                   children: [
-                                    UserAvatar(name: u.fullName, radius: 14),
+                                    UserAvatar(
+                                      name: u.fullName,
+                                      photoUrl: u.photoUrl,
+                                      radius: 14,
+                                    ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(

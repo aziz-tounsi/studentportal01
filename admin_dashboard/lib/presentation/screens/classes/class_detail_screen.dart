@@ -3831,7 +3831,11 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                         if (slot.teacherName != null) ...[
                           const SizedBox(height: 6),
                           Row(children: [
-                            UserAvatar(name: slot.teacherName!, radius: 10),
+                            UserAvatar(
+                              name: slot.teacherName!,
+                              photoUrl: slot.teacherPhotoUrl,
+                              radius: 10,
+                            ),
                             const SizedBox(width: 6),
                             Expanded(child: Text(slot.teacherName!, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
                           ]),

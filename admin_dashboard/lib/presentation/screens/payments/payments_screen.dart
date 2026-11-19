@@ -119,7 +119,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       // Load all students with their enrollments
       final studentsResp = await supabase
           .from('users')
-          .select('id, full_name, email, phone')
+          .select('id, full_name, email, phone, photo_url')
           .eq('role', 'student')
           .eq('is_active', true)
           .order('full_name');
@@ -626,6 +626,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                     return ListTile(
                       leading: UserAvatar(
                         name: student['full_name'] ?? '?',
+                        photoUrl: student['photo_url']?.toString(),
                         radius: 20,
                       ),
                       title: Text(
@@ -2554,7 +2555,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                                           padding: const EdgeInsets.symmetric(horizontal: 16),
                                           child: Row(
                                             children: [
-                                              UserAvatar(name: fullName, radius: 17),
+                                              UserAvatar(
+                                                name: fullName,
+                                                photoUrl: s['photo_url']?.toString(),
+                                                radius: 17,
+                                              ),
                                               const SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
@@ -2922,6 +2927,14 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                               children: [
                                 Row(
                                   children: [
+                                    if (payment.studentName != null) ...[
+                                      UserAvatar(
+                                        name: payment.studentName!,
+                                        photoUrl: payment.studentPhotoUrl,
+                                        radius: 12,
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
                                     Expanded(
                                       child: Text(
                                         payment.studentName ?? 'Étudiant inconnu',
@@ -3169,6 +3182,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
               children: [
                 UserAvatar(
                   name: student.studentName,
+                  photoUrl: student.studentPhotoUrl,
                   radius: 20,
                 ),
                 const SizedBox(width: 14),
@@ -3662,6 +3676,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                 children: [
                   UserAvatar(
                     name: student.studentName,
+                    photoUrl: student.studentPhotoUrl,
                     radius: 18,
                   ),
                   const SizedBox(width: 12),
@@ -4601,6 +4616,7 @@ class _StudentPaymentDetailDialogState
         children: [
           UserAvatar(
             name: widget.student.studentName,
+            photoUrl: widget.student.studentPhotoUrl,
             radius: 22,
           ),
           const SizedBox(width: 14),
@@ -7265,6 +7281,7 @@ class _SelectStudentForPaymentDialogState
                 onTap: () => _navigateToStudentProfile(student),
                 child: UserAvatar(
                   name: student['full_name'] ?? '?',
+                  photoUrl: student['photo_url']?.toString(),
                   radius: 22,
                 ),
               ),

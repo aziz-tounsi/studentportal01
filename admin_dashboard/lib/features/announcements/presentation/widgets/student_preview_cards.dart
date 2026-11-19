@@ -374,6 +374,7 @@ class StudentMessagePreviewCard extends StatelessWidget {
   final String? announcementType;
   final String? senderLabel;
   final String? senderAvatarText;
+  final String? senderPhotoUrl;
   final DateTime? publishedAt;
   final bool hasAttachment;
   final String? attachmentName;
@@ -389,6 +390,7 @@ class StudentMessagePreviewCard extends StatelessWidget {
     this.announcementType,
     this.senderLabel,
     this.senderAvatarText,
+    this.senderPhotoUrl,
     this.publishedAt,
     this.hasAttachment = false,
     this.attachmentName,
@@ -444,6 +446,7 @@ class StudentMessagePreviewCard extends StatelessWidget {
                     children: [
                       UserAvatar(
                         name: displaySender,
+                        photoUrl: senderPhotoUrl,
                         radius: 16,
                       ),
                       const SizedBox(width: 8),

@@ -2432,6 +2432,7 @@ onTap: () => _showStudentPaymentsSheet(data),
       builder: (ctx) => _StudentPaymentsSheet(
         studentId: userId,
         studentName: studentName,
+        photoUrl: data.user['photo_url'] as String? ?? data.user['photo'] as String? ?? data.user['avatar_url'] as String?,
         className: className,
         paidAmount: paidAmount,
         totalAmount: totalAmount,
@@ -2447,6 +2448,7 @@ onTap: () => _showStudentPaymentsSheet(data),
 class _StudentPaymentsSheet extends StatefulWidget {
   final String studentId;
   final String studentName;
+  final String? photoUrl;
   final String? className;
   final double paidAmount;
   final double totalAmount;
@@ -2457,6 +2459,7 @@ class _StudentPaymentsSheet extends StatefulWidget {
   const _StudentPaymentsSheet({
     required this.studentId,
     required this.studentName,
+    this.photoUrl,
     required this.className,
     required this.paidAmount,
     required this.totalAmount,
@@ -2824,6 +2827,7 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
         children: [
           UserAvatar(
             name: widget.studentName,
+            photoUrl: widget.photoUrl,
             radius: 22,
           ),
           const SizedBox(width: 14),

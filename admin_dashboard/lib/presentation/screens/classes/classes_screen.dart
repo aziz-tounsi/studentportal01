@@ -975,7 +975,11 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                               ),
                               if (slot.teacherName != null) ...[const SizedBox(height: 3),
                                 Row(children: [
-                                  UserAvatar(name: slot.teacherName!, radius: 8),
+                                  UserAvatar(
+                                    name: slot.teacherName!,
+                                    photoUrl: slot.teacherPhotoUrl,
+                                    radius: 8,
+                                  ),
                                   const SizedBox(width: 5),
                                   Text(slot.teacherName!, style: TextStyle(fontSize: 10, color: isPast ? const Color(0xFFC0C2CC) : const Color(0xFF7B7D8B))),
                                 ]),

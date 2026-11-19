@@ -23,6 +23,7 @@ class Announcement extends Equatable {
   final SenderType senderType;
   final String? senderLabel;
   final String? senderAvatarText;
+  final String? senderPhotoUrl;
   final DateTime? publishedAt;
   final String? attachmentUrl;
   final String? attachmentName;
@@ -45,6 +46,7 @@ class Announcement extends Equatable {
     this.senderType = SenderType.administration,
     this.senderLabel,
     this.senderAvatarText,
+    this.senderPhotoUrl,
     this.publishedAt,
     this.attachmentUrl,
     this.attachmentName,
@@ -79,6 +81,7 @@ class Announcement extends Equatable {
           : SenderType.administration,
       senderLabel: json['sender_label'] as String?,
       senderAvatarText: json['sender_avatar_text'] as String?,
+      senderPhotoUrl: json['sender_photo_url'] as String? ?? payload['sender_photo_url'] as String? ?? payload['teacher_photo_url'] as String? ?? (json['users'] as Map<String, dynamic>?)?['photo_url'] as String?,
       publishedAt: json['published_at'] != null 
           ? DateTime.parse(json['published_at']) 
           : null,

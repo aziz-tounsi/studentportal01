@@ -3580,6 +3580,7 @@ class _AnnouncementComposerDialogState
                                     children: [
                                       UserAvatar(
                                         name: r.name,
+                                        photoUrl: r.teacher.photoUrl,
                                         radius: 15,
                                       ),
                                       const SizedBox(width: 10),
@@ -6912,17 +6913,15 @@ class _AnnouncementComposerDialogState
                     if (_senderType == 'teacher' &&
                         _senderLabelCtrl.text.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      CircleAvatar(
-                        radius: 10,
-                        backgroundColor: AppColors.warning.withOpacity(0.2),
-                        child: Text(
-                          _senderLabelCtrl.text[0].toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: AppColors.warning,
-                          ),
-                        ),
-                      ),
+                      Builder(builder: (context) {
+                        final subjectsState = ref.watch(subjectsManagementProvider).asData?.value;
+                        final tUser = subjectsState?.teachers.where((t) => t.fullName.toLowerCase() == _senderLabelCtrl.text.trim().toLowerCase()).firstOrNull;
+                        return UserAvatar(
+                          name: _senderLabelCtrl.text,
+                          photoUrl: tUser?.photoUrl,
+                          radius: 10,
+                        );
+                      }),
                       const SizedBox(width: 4),
                       Text(
                         _senderLabelCtrl.text,

@@ -1050,7 +1050,11 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         width: nameW,
                         child: Row(
                           children: [
-                            UserAvatar(name: a.studentName, radius: 17),
+                            UserAvatar(
+                              name: a.studentName,
+                              photoUrl: a.studentPhotoUrl,
+                              radius: 17,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -1933,7 +1937,11 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                     ),
                                     child: Row(
                                       children: [
-                                        UserAvatar(name: sel.fullName, radius: 18),
+                                        UserAvatar(
+                                          name: sel.fullName,
+                                          photoUrl: sel.photoUrl,
+                                          radius: 18,
+                                        ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
@@ -2110,7 +2118,11 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                                   ),
                                                   child: Row(
                                                     children: [
-                                                      UserAvatar(name: student.fullName, radius: 16),
+                                                      UserAvatar(
+                                                        name: student.fullName,
+                                                        photoUrl: student.photoUrl,
+                                                        radius: 16,
+                                                      ),
                                                       const SizedBox(width: 12),
                                                       Expanded(
                                                         child: Column(
@@ -2415,6 +2427,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                       selectedTileColor: AppColors.primarySoft,
                                       leading: UserAvatar(
                                         name: student.fullName,
+                                        photoUrl: student.photoUrl,
                                         radius: 20,
                                       ),
                                       title: Text(
@@ -2510,6 +2523,11 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                     .contains(student.enrollmentId);
                                 return CheckboxListTile(
                                   value: isSelected,
+                                  secondary: UserAvatar(
+                                    name: student.fullName,
+                                    photoUrl: student.photoUrl,
+                                    radius: 14,
+                                  ),
                                   onChanged: student.enrollmentId == null
                                       ? null
                                       : (v) {
@@ -2945,9 +2963,27 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
             _SessionTypeChip(type: slot.sessionType),
           ],
         ),
-        subtitle: Text(
-          '${slot.startTime.substring(0, 5)} - ${slot.endTime.substring(0, 5)} • ${slot.hours}h${slot.room != null ? ' • ${slot.room}' : ''}',
-          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        subtitle: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${slot.startTime.substring(0, 5)} - ${slot.endTime.substring(0, 5)} • ${slot.hours}h${slot.room != null ? ' • ${slot.room}' : ''}',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ),
+            if (slot.teacherName != null) ...[
+              UserAvatar(
+                name: slot.teacherName!,
+                photoUrl: slot.teacherPhotoUrl,
+                radius: 10,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                slot.teacherName!,
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
+          ],
         ),
         dense: true,
         controlAffinity: ListTileControlAffinity.leading,

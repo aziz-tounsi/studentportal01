@@ -9,6 +9,7 @@ class AbsenceModel {
   final String? subjectOfferingId;
   final String studentId;
   final String studentName;
+  final String? studentPhotoUrl;
   final String? studentEmail;
   final String? studentPhone;
   final String? studentCode;
@@ -32,6 +33,7 @@ class AbsenceModel {
     this.subjectOfferingId,
     required this.studentId,
     required this.studentName,
+    this.studentPhotoUrl,
     this.studentEmail,
     this.studentPhone,
     this.studentCode,
@@ -65,6 +67,7 @@ class AbsenceModel {
       subjectOfferingId: json['subject_offering_id'] as String?,
       studentId: json['student_id'] as String? ?? users?['id'] as String? ?? '',
       studentName: users?['full_name'] as String? ?? 'Inconnu',
+      studentPhotoUrl: users?['photo_url'] as String? ?? users?['photo'] as String? ?? users?['avatar_url'] as String?,
       studentEmail: users?['email'] as String?,
       studentPhone: users?['phone'] as String?,
       studentCode: users?['student_code'] as String?,
@@ -74,7 +77,7 @@ class AbsenceModel {
       subjectName: subject?['name'] as String?,
       subjectCode: subject?['code'] as String?,
       teacherName: teacher?['full_name'] as String?,
-      teacherPhotoUrl: teacher?['photo_url'] as String?,
+      teacherPhotoUrl: teacher?['photo_url'] as String? ?? teacher?['photo'] as String?,
       date: DateTime.parse(json['date'] as String),
       hoursAbsent: (json['hours_absent'] as num?)?.toDouble() ?? 2.0,
       sessionType: json['session_type'] as String?,
@@ -93,6 +96,7 @@ class AbsenceModel {
     String? sessionType,
     String? teacherName,
     String? teacherPhotoUrl,
+    String? studentPhotoUrl,
   }) {
     return AbsenceModel(
       id: id,
@@ -100,6 +104,7 @@ class AbsenceModel {
       subjectOfferingId: subjectOfferingId,
       studentId: studentId,
       studentName: studentName,
+      studentPhotoUrl: studentPhotoUrl ?? this.studentPhotoUrl,
       studentEmail: studentEmail,
       studentPhone: studentPhone,
       studentCode: studentCode,
@@ -132,6 +137,7 @@ class TimetableSlotInfo {
   final String endTime;
   final String? room;
   final String? teacherName;
+  final String? teacherPhotoUrl;
   final String sessionType;
   final double hours;
 
@@ -146,6 +152,7 @@ class TimetableSlotInfo {
     required this.endTime,
     this.room,
     this.teacherName,
+    this.teacherPhotoUrl,
     required this.sessionType,
     required this.hours,
   });
@@ -176,6 +183,7 @@ class TimetableSlotInfo {
       room: json['room'] as String?,
       teacherName:
           json['teacher_name'] as String? ?? teacher?['full_name'] as String?,
+      teacherPhotoUrl: teacher?['photo_url'] as String? ?? teacher?['photo'] as String?,
       sessionType: json['session_type'] as String? ?? 'CI',
       hours: hours,
     );
@@ -259,6 +267,7 @@ class SubjectOfferingInfo {
 class StudentInfo {
   final String id;
   final String fullName;
+  final String? photoUrl;
   final String? enrollmentId;
   final String? className;
   final String? classId;
@@ -269,6 +278,7 @@ class StudentInfo {
   StudentInfo({
     required this.id,
     required this.fullName,
+    this.photoUrl,
     this.enrollmentId,
     this.className,
     this.classId,
@@ -287,6 +297,7 @@ class StudentInfo {
     return StudentInfo(
       id: json['id'] as String,
       fullName: json['full_name'] as String? ?? 'Inconnu',
+      photoUrl: json['photo_url'] as String? ?? json['photo'] as String? ?? json['avatar_url'] as String?,
       enrollmentId: firstEnrollment?['id'] as String?,
       className: classData?['name'] as String?,
       classId: classData?['id'] as String?,
@@ -514,12 +525,13 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
           *,
           enrollments(
             id,
-            users(id, full_name, email, phone, student_code),
+            users(id, full_name, email, phone, student_code, photo_url),
             classes(id, name, school_id, niveaux(id, name))
           ),
           subject_offerings(
             id,
-            subjects(id, name, code)
+            subjects(id, name, code),
+            users(id, full_name, photo_url)
           )
         ''')
         .order('date', ascending: false)
@@ -544,7 +556,7 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     final studentsData = await supabase
         .from('users')
         .select(
-          'id, full_name, student_code, phone, email, enrollments(id, classes(id, name, school_id))',
+          'id, full_name, student_code, phone, email, photo_url, enrollments(id, classes(id, name, school_id))',
         )
         .eq('role', 'student')
         .eq('school_id', schoolId)
@@ -567,7 +579,7 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
             class_id,
             subjects(id, name),
             classes!inner(id, name, school_id),
-            users(id, full_name)
+            users(id, full_name, photo_url)
           )
         ''')
         .eq('subject_offerings.classes.school_id', schoolId)
@@ -841,7 +853,7 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     final data = await supabase
         .from('users')
         .select(
-          'id, full_name, enrollments!inner(id, class_id, classes(id, name))',
+          'id, full_name, photo_url, enrollments!inner(id, class_id, classes(id, name))',
         )
         .eq('role', 'student')
         .eq('enrollments.class_id', classId)

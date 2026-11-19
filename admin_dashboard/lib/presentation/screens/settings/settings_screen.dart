@@ -96,7 +96,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     try {
       final resp = await Supabase.instance.client
           .from('users')
-          .select('id, full_name, email, role, created_at')
+          .select('id, full_name, email, role, created_at, photo_url')
           .eq('school_id', schoolId)
           .inFilter('role', ['owner', 'admin', 'staff', 'manager'])
           .order('created_at', ascending: true);
@@ -719,7 +719,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   child: Row(
                     children: [
-                      UserAvatar(name: name, radius: 18),
+                      UserAvatar(
+                        name: name,
+                        photoUrl: adm['photo_url']?.toString(),
+                        radius: 18,
+                      ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(

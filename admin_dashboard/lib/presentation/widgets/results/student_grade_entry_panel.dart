@@ -86,6 +86,22 @@ class _StudentGradeEntryPanelState extends State<StudentGradeEntryPanel> {
     return 'N/A';
   }
 
+  /// Get student photo URL
+  String? get _currentStudentPhotoUrl {
+    final photo = _currentStudent['photo_url'] ?? _currentStudent['photo'] ?? _currentStudent['avatar_url'];
+    if (photo != null && photo.toString().isNotEmpty) {
+      return photo.toString();
+    }
+    final users = _currentStudent['users'] as Map<String, dynamic>?;
+    if (users != null) {
+      final userPhoto = users['photo_url'] ?? users['photo'] ?? users['avatar_url'];
+      if (userPhoto != null && userPhoto.toString().isNotEmpty) {
+        return userPhoto.toString();
+      }
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -333,6 +349,7 @@ class _StudentGradeEntryPanelState extends State<StudentGradeEntryPanel> {
                 children: [
                   UserAvatar(
                     name: _currentStudentName,
+                    photoUrl: _currentStudentPhotoUrl,
                     radius: 20,
                   ),
                   const SizedBox(width: 12),
