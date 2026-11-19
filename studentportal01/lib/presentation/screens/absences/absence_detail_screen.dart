@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../providers/auth_provider.dart';
+import '../../providers/student_context_provider.dart';
 import '../../../data/models/absence_model.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
@@ -80,16 +81,25 @@ class AbsenceDetailData {
 
 final absenceDetailProvider = FutureProvider.family<AbsenceDetailData?, String>((ref, offeringId) async {
   final authState = ref.watch(authProvider);
-  if (!authState.isAuthenticated || authState.enrollment == null) return null;
+  final studentCtx = ref.watch(studentContextProvider).valueOrNull;
+  final enrollmentId = authState.enrollment?.id 
+      ?? studentCtx?.enrollmentId
+      ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['id'] as String?)
+      ?? 'default';
+  final userId = authState.user?.id 
+      ?? studentCtx?.userId
+      ?? (OfflineCacheService.instance.getMap('cached_user')?['id'] as String?);
 
   final cacheKey = 'cached_absence_detail_$offeringId';
   final supabase = Supabase.instance.client;
-  final enrollmentId = authState.enrollment!.id;
 
   try {
     final offeringResponse = await supabase
         .from('subject_offerings')
         .select('''
+          id,
+          subject_id,
+          semester_id,
           total_hours,
           weekly_ci_hours,
           weekly_tp_hours,
@@ -108,6 +118,8 @@ final absenceDetailProvider = FutureProvider.family<AbsenceDetailData?, String>(
     }
 
     final subject = offeringResponse['subjects'] as Map<String, dynamic>?;
+    final subjectId = offeringResponse['subject_id'] as String? ?? subject?['id'] as String?;
+    final semesterId = offeringResponse['semester_id'] as String?;
     final subjectName = subject?['name'] as String? ?? 'Matière inconnue';
     final subjectCode = subject?['code'] as String?;
     final totalHours = (offeringResponse['total_hours'] as num?)?.toDouble() ?? 0;
@@ -127,26 +139,112 @@ final absenceDetailProvider = FutureProvider.family<AbsenceDetailData?, String>(
       professorName = teacherResponse?['full_name'] as String?;
     }
 
-    final recordsResponse = await supabase
-        .from('absence_records')
-        .select('''
-          id,
-          enrollment_id,
-          subject_offering_id,
-          date,
-          hours_absent,
-          session_type,
-          reason,
-          justified,
-          created_at
-        ''')
-        .eq('enrollment_id', enrollmentId)
-        .eq('subject_offering_id', offeringId)
-        .order('date', ascending: true);
+    // Get semester date range to filter out-of-semester records
+    DateTime? semesterStart;
+    DateTime? semesterEnd;
+    if (semesterId != null && semesterId.isNotEmpty) {
+      try {
+        final semResp = await supabase
+            .from('semesters')
+            .select('start_date, end_date')
+            .eq('id', semesterId)
+            .maybeSingle();
+        if (semResp != null) {
+          if (semResp['start_date'] != null) {
+            semesterStart = DateTime.tryParse(semResp['start_date'] as String);
+          }
+          if (semResp['end_date'] != null) {
+            semesterEnd = DateTime.tryParse(semResp['end_date'] as String);
+          }
+        }
+      } catch (_) {}
+    }
 
-    final records = (recordsResponse as List)
-        .map((e) => AbsenceRecordModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+    dynamic recordsResponse;
+    if (enrollmentId.isNotEmpty && enrollmentId != 'default' && userId != null && userId.isNotEmpty) {
+      recordsResponse = await supabase
+          .from('absence_records')
+          .select('''
+            id,
+            enrollment_id,
+            student_id,
+            subject_offering_id,
+            date,
+            hours_absent,
+            session_type,
+            reason,
+            justified,
+            created_at,
+            subject_offerings (id, subject_id, semester_id)
+          ''')
+          .or('enrollment_id.eq.$enrollmentId,student_id.eq.$userId')
+          .order('date', ascending: true);
+    } else if (enrollmentId.isNotEmpty && enrollmentId != 'default') {
+      recordsResponse = await supabase
+          .from('absence_records')
+          .select('''
+            id,
+            enrollment_id,
+            student_id,
+            subject_offering_id,
+            date,
+            hours_absent,
+            session_type,
+            reason,
+            justified,
+            created_at,
+            subject_offerings (id, subject_id, semester_id)
+          ''')
+          .eq('enrollment_id', enrollmentId)
+          .order('date', ascending: true);
+    } else if (userId != null && userId.isNotEmpty) {
+      recordsResponse = await supabase
+          .from('absence_records')
+          .select('''
+            id,
+            enrollment_id,
+            student_id,
+            subject_offering_id,
+            date,
+            hours_absent,
+            session_type,
+            reason,
+            justified,
+            created_at,
+            subject_offerings (id, subject_id, semester_id)
+          ''')
+          .eq('student_id', userId)
+          .order('date', ascending: true);
+    }
+
+    final rawList = (recordsResponse as List? ?? []);
+    final List<AbsenceRecordModel> records = [];
+
+    for (final r in rawList) {
+      final map = r as Map<String, dynamic>;
+      final soId = map['subject_offering_id'] as String?;
+      final relSubjectId = (map['subject_offerings'] as Map<String, dynamic>?)?['subject_id'] as String?;
+
+      // Check subject match
+      final isMatch = (soId == offeringId) || (subjectId != null && relSubjectId == subjectId);
+      if (!isMatch) continue;
+
+      // Filter by semester date range
+      final rawDate = map['date'] as String?;
+      if (rawDate != null && rawDate.isNotEmpty) {
+        final parsedDate = DateTime.tryParse(rawDate);
+        if (parsedDate != null) {
+          if (semesterStart != null && parsedDate.isBefore(DateTime(semesterStart.year, semesterStart.month, semesterStart.day))) {
+            continue;
+          }
+          if (semesterEnd != null && parsedDate.isAfter(DateTime(semesterEnd.year, semesterEnd.month, semesterEnd.day, 23, 59, 59))) {
+            continue;
+          }
+        }
+      }
+
+      records.add(AbsenceRecordModel.fromJson(map));
+    }
 
     final timetableResponse = await supabase
         .from('timetable_slots')
@@ -257,9 +355,33 @@ class _DetailBody extends ConsumerStatefulWidget {
 }
 
 class _DetailBodyState extends ConsumerState<_DetailBody> {
-  DateTime _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  late DateTime _currentMonth;
   bool _showWeekView = false;
   int _currentWeekIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initMonth();
+  }
+
+  @override
+  void didUpdateWidget(_DetailBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
+      _initMonth();
+    }
+  }
+
+  void _initMonth() {
+    final d = widget.data;
+    if (d != null && d.records.isNotEmpty) {
+      final latestDate = d.records.map((r) => r.date).reduce((a, b) => a.isAfter(b) ? a : b);
+      _currentMonth = DateTime(latestDate.year, latestDate.month);
+    } else {
+      _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +403,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             .fold<double>(0, (s, r) => s + r.hoursAbsent)
         : 0.0;
     final overallPct =
-        (d != null && d.totalHours > 0) ? totalAbsent / d.totalHours : 0.0;
+        (d != null && d.totalHours > 0) ? (totalAbsent / d.totalHours).clamp(0.0, 1.0) : 0.0;
 
     return SafeArea(
       child: Align(

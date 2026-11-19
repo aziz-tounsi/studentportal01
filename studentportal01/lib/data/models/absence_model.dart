@@ -22,16 +22,28 @@ class AbsenceRecordModel {
   });
 
   factory AbsenceRecordModel.fromJson(Map<String, dynamic> json) {
+    DateTime parsedDate;
+    try {
+      parsedDate = json['date'] != null ? DateTime.parse(json['date'] as String) : DateTime.now();
+    } catch (_) {
+      parsedDate = DateTime.now();
+    }
+    DateTime parsedCreatedAt;
+    try {
+      parsedCreatedAt = json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : DateTime.now();
+    } catch (_) {
+      parsedCreatedAt = DateTime.now();
+    }
     return AbsenceRecordModel(
-      id: json['id'] as String,
-      enrollmentId: json['enrollment_id'] as String,
-      subjectOfferingId: json['subject_offering_id'] as String,
-      date: DateTime.parse(json['date'] as String),
-      hoursAbsent: (json['hours_absent'] as num).toDouble(),
+      id: json['id'] as String? ?? '',
+      enrollmentId: json['enrollment_id'] as String? ?? '',
+      subjectOfferingId: json['subject_offering_id'] as String? ?? '',
+      date: parsedDate,
+      hoursAbsent: (json['hours_absent'] as num?)?.toDouble() ?? 0.0,
       sessionType: json['session_type'] as String?,
       reason: json['reason'] as String?,
       justified: json['justified'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parsedCreatedAt,
     );
   }
 

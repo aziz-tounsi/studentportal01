@@ -12,6 +12,7 @@ import '../../../core/theme/arabic_typography.dart';
 import '../../../core/theme/responsive.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../data/services/offline_cache_service.dart';
+import '../../../data/services/core_data_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/semester_navigator.dart';
@@ -35,6 +36,8 @@ final absencesSemestersProvider = FutureProvider<List<Map<String, dynamic>>>((re
     'name': s.name,
     'number': s.number,
     'is_current': s.isCurrent,
+    'start_date': s.startDate?.toIso8601String(),
+    'end_date': s.endDate?.toIso8601String(),
   }).toList();
 });
 
@@ -96,6 +99,15 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     onTimeout: () => <Map<String, dynamic>>[],
   );
 
+  final allSemesters = await ref.watch(ctx.semestersProvider.future).timeout(
+    const Duration(seconds: 4),
+    onTimeout: () => <SemesterInfo>[],
+  );
+  if (isSemesterLocked(semesterNumber, allSemesters)) {
+    debugPrint('absencesProvider: Semester $semesterNumber is locked, returning empty');
+    return [];
+  }
+
   final schoolId = authState.user?.schoolId 
       ?? studentCtxAsync?.schoolId 
       ?? (OfflineCacheService.instance.getMap('cached_user')?['school_id'] as String?)
@@ -113,6 +125,21 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     if (cachedList != null) return cachedList;
     return [];
   }
+
+  // Parse semester date bounds to filter absences strictly to this semester
+  DateTime? semesterStart;
+  DateTime? semesterEnd;
+  final semInfo = allSemesters.where((s) => s.number == semesterNumber).firstOrNull;
+  if (semInfo?.startDate != null) {
+    semesterStart = semInfo!.startDate;
+  } else if (semester['start_date'] != null) {
+    semesterStart = DateTime.tryParse(semester['start_date'] as String);
+  }
+  if (semInfo?.endDate != null) {
+    semesterEnd = semInfo!.endDate;
+  } else if (semester['end_date'] != null) {
+    semesterEnd = DateTime.tryParse(semester['end_date'] as String);
+  }
   
   final supabase = Supabase.instance.client;
   
@@ -120,9 +147,9 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     double warningPercent = 20.0;
     double criticalPercent = 30.0;
     double eliminationPercent = 50.0;
-    String warningMessage = 'Attention! Vous approchez du seuil d\'absences autorisÃƒÂ©.';
-    String criticalMessage = 'Attention! Vous avez dÃƒÂ©passÃƒÂ© le seuil critique d\'absences.';
-    String eliminationMessage = 'Vous avez ÃƒÂ©tÃƒÂ© ÃƒÂ©liminÃƒÂ© de la session principale des examens.';
+    String warningMessage = 'Attention! Vous approchez du seuil d\'absences autorisé.';
+    String criticalMessage = 'Attention! Vous avez dépassé le seuil critique d\'absences.';
+    String eliminationMessage = 'Vous avez été éliminé de la session principale des examens.';
     
     if (schoolId != null) {
       final thresholdResponse = await supabase
@@ -207,19 +234,19 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
       if (enrollmentId.isNotEmpty && enrollmentId != 'default' && userId != null && userId.isNotEmpty) {
         resp = await supabase
             .from('absence_records')
-            .select('subject_offering_id, hours_absent, student_id, enrollment_id, subject_offerings(id, subject_id)')
+            .select('subject_offering_id, hours_absent, student_id, enrollment_id, date, subject_offerings(id, subject_id, semester_id)')
             .or('enrollment_id.eq.$enrollmentId,student_id.eq.$userId')
             .timeout(const Duration(seconds: 4));
       } else if (enrollmentId.isNotEmpty && enrollmentId != 'default') {
         resp = await supabase
             .from('absence_records')
-            .select('subject_offering_id, hours_absent, student_id, enrollment_id, subject_offerings(id, subject_id)')
+            .select('subject_offering_id, hours_absent, student_id, enrollment_id, date, subject_offerings(id, subject_id, semester_id)')
             .eq('enrollment_id', enrollmentId)
             .timeout(const Duration(seconds: 4));
       } else if (userId != null && userId.isNotEmpty) {
         resp = await supabase
             .from('absence_records')
-            .select('subject_offering_id, hours_absent, student_id, enrollment_id, subject_offerings(id, subject_id)')
+            .select('subject_offering_id, hours_absent, student_id, enrollment_id, date, subject_offerings(id, subject_id, semester_id)')
             .eq('student_id', userId)
             .timeout(const Duration(seconds: 4));
       }
@@ -231,7 +258,7 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
       try {
         final fallback = await supabase
             .from('absence_records')
-            .select('subject_offering_id, hours_absent')
+            .select('subject_offering_id, hours_absent, date')
             .eq('enrollment_id', enrollmentId)
             .timeout(const Duration(seconds: 4));
         absenceRecords = List<Map<String, dynamic>>.from(fallback);
@@ -247,6 +274,20 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     
     final absencesBySubject = <String, double>{};
     for (final record in absenceRecords) {
+      // Filter out absences outside of this semester's date range
+      final rawDate = record['date'] as String?;
+      if (rawDate != null && rawDate.isNotEmpty) {
+        final parsedDate = DateTime.tryParse(rawDate);
+        if (parsedDate != null) {
+          if (semesterStart != null && parsedDate.isBefore(DateTime(semesterStart.year, semesterStart.month, semesterStart.day))) {
+            continue;
+          }
+          if (semesterEnd != null && parsedDate.isAfter(DateTime(semesterEnd.year, semesterEnd.month, semesterEnd.day, 23, 59, 59))) {
+            continue;
+          }
+        }
+      }
+
       final soId = record['subject_offering_id'] as String?;
       final hours = (record['hours_absent'] as num?)?.toDouble() ?? 0;
       if (soId != null) {
@@ -274,7 +315,8 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
       final weeks = (so['weeks'] as num?)?.toInt() ?? 14;
       
       final absentHours = absencesBySubject[soId] ?? 0;
-      final absencePercent = totalHours > 0 ? (absentHours / totalHours) * 100.0 : 0.0;
+      final rawPercent = totalHours > 0 ? (absentHours / totalHours) * 100.0 : 0.0;
+      final absencePercent = rawPercent.clamp(0.0, 100.0);
       
       AbsenceLevel level = AbsenceLevel.normal;
       String? message;
@@ -504,33 +546,27 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
 
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-                if (isRefreshing)
+                if (isLocked)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppResponsive.horizontalPadding(context),
+                      ),
+                      child: LockedSemesterCard(
+                        startDate: semesters
+                            .where((s) => s.number == selectedTrimester)
+                            .firstOrNull
+                            ?.startDate,
+                        moduleType: LockedModuleType.absences,
+                      ),
+                    ),
+                  )
+                else if (isRefreshing)
                   const AbsencesCardsSkeleton()
                 else
                 absencesAsync.when(
-                  data: (absences) {
-                    if (absences.isNotEmpty) {
-                      return _buildContent(context, absences, l10n);
-                    }
-                    if (isLocked) {
-                      return SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppResponsive.horizontalPadding(context),
-                          ),
-                          child: LockedSemesterCard(
-                            startDate: semesters
-                                .where((s) => s.number == selectedTrimester)
-                                .firstOrNull
-                                ?.startDate,
-                            moduleType: LockedModuleType.absences,
-                          ),
-                        ),
-                      );
-                    }
-                    return _buildContent(context, absences, l10n);
-                  },
+                  data: (absences) => _buildContent(context, absences, l10n),
                   loading: () => const AbsencesCardsSkeleton(),
                   error: (error, stack) {
                     final cached = getCachedAbsencesForScreen(
@@ -852,7 +888,8 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
 
     final totalAbsent = absences.fold<double>(0, (s, a) => s + a.totalAbsentHours);
     final totalHours = absences.fold<double>(0, (s, a) => s + a.totalHours);
-    final overallPercent = totalHours > 0 ? (totalAbsent / totalHours) * 100.0 : 0.0;
+    final rawPercent = totalHours > 0 ? (totalAbsent / totalHours) * 100.0 : 0.0;
+    final overallPercent = rawPercent.clamp(0.0, 100.0);
     final criticalCount = absences.where((a) => a.level == AbsenceLevel.critical || a.level == AbsenceLevel.eliminated).length;
 
     return SliverToBoxAdapter(
@@ -1038,15 +1075,13 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                   ),
                   if (criticalCount > 0) ...[
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '$criticalCount ${l10n.critical}${criticalCount > 1 ? 's' : ''}',
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    Text(
+                      '$criticalCount ${l10n.critical}${criticalCount > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
                       ),
                     ),
                   ],
@@ -1236,13 +1271,9 @@ class _GlassyAbsenceCard extends StatelessWidget {
                   ],
                 ),
                 if (absence.warningMessage != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: levelColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
