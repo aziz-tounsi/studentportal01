@@ -1933,7 +1933,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                     ),
                                     child: Row(
                                       children: [
-                                        UserAvatar(name: sel.fullName, size: 36),
+                                        UserAvatar(name: sel.fullName, radius: 18),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
@@ -2110,7 +2110,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                                   ),
                                                   child: Row(
                                                     children: [
-                                                      UserAvatar(name: student.fullName, size: 32),
+                                                      UserAvatar(name: student.fullName, radius: 16),
                                                       const SizedBox(width: 12),
                                                       Expanded(
                                                         child: Column(

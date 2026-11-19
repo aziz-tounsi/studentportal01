@@ -326,7 +326,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
         child: SafeArea(
           bottom: false,
           child: RefreshIndicator(
-            color: const Color(0xFFFF2D78),
+            color: const Color(0xFF8B5CF6),
             backgroundColor: Colors.white,
             onRefresh: () async {
               ref.read(soldeRefreshingProvider.notifier).state = true;

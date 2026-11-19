@@ -12,6 +12,7 @@ import '../../../data/services/offline_cache_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/ios_loader.dart';
+import '../../widgets/locked_semester_card.dart';
 
 // Results repository provider
 final resultsRepositoryProvider = Provider<StudentResultsRepository>((ref) {
@@ -43,11 +44,16 @@ final resultatsSemesterProvider = StateProvider<int>((ref) => 1);
 // Loading state for resultats refresh
 final resultatsRefreshingProvider = StateProvider<bool>((ref) => false);
 
-// Grades provider - fetches real data
 final gradesProvider = FutureProvider.family<List<SubjectGradesSummary>, int>((ref, semesterNumber) async {
+  try {
+    final allSemesters = await ref.watch(ctx.semestersProvider.future);
+    if (isSemesterLocked(semesterNumber, allSemesters)) {
+      return [];
+    }
+  } catch (_) {}
+
   List<SubjectGradesSummary>? getCachedGrades() {
-    final cached = OfflineCacheService.instance.getListOfMaps('cached_grades_sem_$semesterNumber')
-        ?? OfflineCacheService.instance.getListOfMaps('cached_grades_latest');
+    final cached = OfflineCacheService.instance.getListOfMaps('cached_grades_sem_$semesterNumber');
     if (cached != null && cached.isNotEmpty) {
       try {
         return cached.map((m) => SubjectGradesSummary.fromJson(m)).toList();

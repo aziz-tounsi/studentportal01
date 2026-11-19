@@ -45,12 +45,12 @@ class ResultatsCardsSkeleton extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF06B6D4), Color(0xFF3B82F6), Color(0xFF2563EB)],
+            colors: [Color(0xFF3B82F6), Color(0xFF2563EB), Color(0xFF1D4ED8)],
           ),
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF06B6D4).withValues(alpha: 0.5),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.4),
               blurRadius: 50,
               offset: const Offset(0, 20),
             ),

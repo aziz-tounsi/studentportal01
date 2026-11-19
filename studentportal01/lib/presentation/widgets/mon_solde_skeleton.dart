@@ -57,12 +57,12 @@ class MonSoldeSkeleton extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF59E0B), Color(0xFFF97316)],
+            colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
           ),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFF59E0B).withValues(alpha: 0.5),
+              color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
               blurRadius: 30,
               offset: const Offset(0, 14),
             ),
@@ -284,7 +284,7 @@ class MonSoldeSkeleton extends StatelessWidget {
           ),
           if (isCenter)
             BoxShadow(
-              color: const Color(0xFFFF6B9D).withValues(alpha: 0.08),
+              color: const Color(0xFF8B5CF6).withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, 2),
             ),
@@ -372,17 +372,17 @@ class MonSoldeSkeleton extends StatelessWidget {
             right: 0,
             child: Center(
               child: Shimmer.fromColors(
-                baseColor: const Color(0xFFFFD1E1),
-                highlightColor: const Color(0xFFFFEFF5),
+                baseColor: const Color(0xFFDDD6FE),
+                highlightColor: const Color(0xFFEDE9FE),
                 child: Container(
                   width: 62,
                   height: 20,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFD1E1),
+                    color: const Color(0xFFDDD6FE),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF6B9D).withValues(alpha: 0.25),
+                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),

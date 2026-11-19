@@ -197,8 +197,14 @@ final allStudentDocumentsProvider = FutureProvider<List<DocumentModel>>((ref) as
 /// Documents filtered for the currently selected period/semester.
 final documentsProvider =
     FutureProvider.family<List<DocumentModel>, int>((ref, semester) async {
+  try {
+    final allSemesters = await ref.watch(semestersProvider.future);
+    if (isSemesterLocked(semester, allSemesters)) {
+      return [];
+    }
+  } catch (_) {}
   final docs = await ref.watch(allStudentDocumentsProvider.future);
-  return docs.where((doc) => doc.matchesSemester(semester)).toList();
+  return docs.where((doc) => doc.effectiveSemester == semester).toList();
 });
 
 /// Unread documents counter provider for the current student
@@ -405,13 +411,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: documentsAsync.when(
-                  data: (documents) {
-                    if (documents.isNotEmpty) {
-                      return _buildContent(documents, l10n, selectedSemester);
-                    }
-                    if (isLocked) {
-                      return Center(
+                child: isLocked
+                    ? Center(
                         child: Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: context.horizontalPadding,
@@ -424,20 +425,19 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                             moduleType: LockedModuleType.documents,
                           ),
                         ),
-                      );
-                    }
-                    return _buildContent(documents, l10n, selectedSemester);
-                  },
-                  loading: () => _buildLoadingState(l10n),
-                  error: (error, stack) {
-                    final allDocs = ref.watch(allStudentDocumentsProvider).valueOrNull ?? [];
-                    final semDocs = allDocs.where((d) => d.matchesSemester(selectedSemester)).toList();
-                    if (semDocs.isNotEmpty) {
-                      return _buildContent(semDocs, l10n, selectedSemester);
-                    }
-                    return _buildErrorState(l10n);
-                  },
-                ),
+                      )
+                    : documentsAsync.when(
+                        data: (documents) => _buildContent(documents, l10n, selectedSemester),
+                        loading: () => _buildLoadingState(l10n),
+                        error: (error, stack) {
+                          final allDocs = ref.watch(allStudentDocumentsProvider).valueOrNull ?? [];
+                          final semDocs = allDocs.where((d) => d.effectiveSemester == selectedSemester).toList();
+                          if (semDocs.isNotEmpty) {
+                            return _buildContent(semDocs, l10n, selectedSemester);
+                          }
+                          return _buildErrorState(l10n);
+                        },
+                      ),
               ),
             ],
           ),

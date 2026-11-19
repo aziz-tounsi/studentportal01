@@ -111,7 +111,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
         child: SafeArea(
           bottom: false,
           child: RefreshIndicator(
-            color: const Color(0xFFFF2D78),
+            color: const Color(0xFF2563EB),
             backgroundColor: Colors.white,
             onRefresh: () async {
               ref.read(resultatsRefreshingProvider.notifier).state = true;
@@ -169,39 +169,34 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
               // Content
-              if (isRefreshing)
+              if (isLocked)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.horizontalPadding,
+                      ),
+                      child: LockedSemesterCard(
+                        startDate: semesters
+                            .where((s) => s.number == selectedSemester)
+                            .firstOrNull
+                            ?.startDate,
+                        moduleType: LockedModuleType.grades,
+                      ),
+                    ),
+                  ),
+                )
+              else if (isRefreshing)
                 const ResultatsCardsSkeleton()
               else
               gradesAsync.when(
                 data: (grades) {
-                  if (grades.isNotEmpty) {
-                    return _buildContent(context, grades, selectedSemester, l10n);
-                  }
-                  if (isLocked) {
-                    return SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: context.horizontalPadding,
-                          ),
-                          child: LockedSemesterCard(
-                            startDate: semesters
-                                .where((s) => s.number == selectedSemester)
-                                .firstOrNull
-                                ?.startDate,
-                            moduleType: LockedModuleType.grades,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
                   return _buildContent(context, grades, selectedSemester, l10n);
                 },
                 loading: () => const ResultatsCardsSkeleton(),
                 error: (error, stack) {
-                  final cached = OfflineCacheService.instance.getListOfMaps('cached_grades_sem_$selectedSemester')
-                      ?? OfflineCacheService.instance.getListOfMaps('cached_grades_latest');
+                  final cached = OfflineCacheService.instance.getListOfMaps('cached_grades_sem_$selectedSemester');
                   if (cached != null && cached.isNotEmpty) {
                     try {
                       final cachedGrades = cached.map((m) => SubjectGradesSummary.fromJson(m)).toList();

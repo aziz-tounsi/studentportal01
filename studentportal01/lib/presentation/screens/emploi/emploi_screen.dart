@@ -154,6 +154,14 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
   final isExamPeriodActive = await ref.watch(isExamPeriodProvider.future);
   final selectedType = isExamPeriodActive ? 'exam' : 'regular';
   final selectedSemesterNumber = ref.watch(emploiSemesterProvider);
+
+  try {
+    final allSemesters = await ref.watch(semestersProvider.future);
+    if (isSemesterLocked(selectedSemesterNumber, allSemesters)) {
+      return [];
+    }
+  } catch (_) {}
+
   final cacheKey = classId != null 
       ? 'timetable_screen_${classId}_${selectedType}_$selectedSemesterNumber'
       : 'timetable_screen_${selectedType}_$selectedSemesterNumber';
@@ -468,7 +476,7 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
               SafeArea(
                 bottom: false,
                 child: RefreshIndicator(
-                  color: const Color(0xFFFF2D78),
+                  color: const Color(0xFFEA580C),
                   backgroundColor: Colors.white,
                   onRefresh: () async {
                     ref.read(emploiRefreshingProvider.notifier).state = true;
@@ -633,9 +641,17 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                       const SliverToBoxAdapter(child: SizedBox(height: 16)),
                       SliverFillRemaining(
                         hasScrollBody: false,
-                        child: isRefreshing
-                            ? const EmploiSkeleton()
-                            : timetableAsync.when(
+                        child: isLocked
+                            ? LockedSemesterCard(
+                                startDate: semesters
+                                    .where((s) => s.number == selectedSemester)
+                                    .firstOrNull
+                                    ?.startDate,
+                                moduleType: LockedModuleType.timetable,
+                              )
+                            : isRefreshing
+                                ? const EmploiSkeleton()
+                                : timetableAsync.when(
                           loading: () => const EmploiSkeleton(),
                           error: (e, _) {
                             final cachedSlots = getCachedTimetableForScreen(
@@ -666,13 +682,6 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
 
                             if (slots.isNotEmpty) {
                               return _buildScrollableTimetable(context, slots);
-                            }
-
-                            if (isLocked) {
-                              return LockedSemesterCard(
-                                startDate: semObj?.startDate,
-                                moduleType: LockedModuleType.timetable,
-                              );
                             }
 
                             return _buildEmptyState(
