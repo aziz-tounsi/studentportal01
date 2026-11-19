@@ -13,6 +13,7 @@ import '../../core/config/supabase_config.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import 'ios_loader.dart';
+import 'photo_cutout_screen.dart';
 
 class StudentCard extends ConsumerStatefulWidget {
   final UserModel user;
@@ -40,15 +41,105 @@ class _StudentCardState extends ConsumerState<StudentCard> {
 
   bool _uploadingPhoto = false;
 
-  Future<void> _pickAndUploadPhoto() async {
+  void _showPhotoSourceSheet() {
+    if (_uploadingPhoto) return;
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded,
+                      color: Color(0xFF2563EB)),
+                ),
+                title: Text(
+                  l10n.translate('take_photo_desc'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickAndUploadPhoto(ImageSource.camera);
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded,
+                      color: Color(0xFF8B5CF6)),
+                ),
+                title: Text(
+                  l10n.translate('photo_library'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickAndUploadPhoto(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadPhoto([ImageSource source = ImageSource.gallery]) async {
     if (_uploadingPhoto) return;
     final picker = ImagePicker();
     final image = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
+      source: source,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 92,
     );
     if (image == null) return;
+
+    final rawBytes = await image.readAsBytes();
+    if (!mounted) return;
+
+    // Launch interactive photo cutout and alignment screen
+    final croppedBytes = await PhotoCutoutScreen.show(
+      context: context,
+      rawImageBytes: rawBytes,
+      initialShape: 'card',
+    );
+    if (croppedBytes == null) return; // Student cancelled
 
     setState(() => _uploadingPhoto = true);
     try {
@@ -56,16 +147,17 @@ class _StudentCardState extends ConsumerState<StudentCard> {
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      final bytes = await image.readAsBytes();
-      final ext = _extensionFromFile(image);
-      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.png';
       final storagePath = 'avatars/$fileName';
-      final mimeType = image.mimeType ?? 'image/jpeg';
 
       await supabase.storage
           .from(SupabaseConfig.profileBucket)
-          .uploadBinary(storagePath, bytes,
-              fileOptions: FileOptions(contentType: mimeType));
+          .uploadBinary(
+            storagePath,
+            croppedBytes,
+            fileOptions:
+                const FileOptions(contentType: 'image/png', upsert: true),
+          );
 
       final publicUrl = supabase.storage
           .from(SupabaseConfig.profileBucket)
@@ -89,19 +181,6 @@ class _StudentCardState extends ConsumerState<StudentCard> {
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
-  }
-
-  String _extensionFromFile(XFile file) {
-    final path = file.path;
-    final mimeType = file.mimeType;
-    if (path.contains('.')) {
-      final dotExt = path.split('.').last;
-      if (!dotExt.contains('/')) return dotExt;
-    }
-    if (mimeType != null && mimeType.contains('/')) {
-      return mimeType.split('/').last;
-    }
-    return 'jpg';
   }
 
   @override
@@ -135,7 +214,7 @@ class _StudentCardState extends ConsumerState<StudentCard> {
                 classText: classText,
                 dobText: dobText,
                 uploadingPhoto: _uploadingPhoto,
-                onPhotoTap: _pickAndUploadPhoto,
+                onPhotoTap: _showPhotoSourceSheet,
                 onMenuTap: widget.onMenuTap,
                 l10n: l10n,
               ),

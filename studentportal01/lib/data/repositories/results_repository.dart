@@ -15,10 +15,11 @@ class StudentResultsRepository {
     final userId = _client.auth.currentUser?.id;
     const cacheKey = 'cached_results_enrollment';
 
-    if (userId == null) {
-      final cached = OfflineCacheService.instance.getMap(cacheKey);
+    if (ConnectivityService.instance.isOffline || userId == null) {
+      final cached = OfflineCacheService.instance.getMap(cacheKey)
+          ?? OfflineCacheService.instance.getMap('cached_enrollment');
       if (cached != null) return cached;
-      return null;
+      if (userId == null) return null;
     }
 
     try {
@@ -57,7 +58,8 @@ class StudentResultsRepository {
           .eq('is_active', true)
           .order('created_at', ascending: false)
           .limit(1)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 4));
 
       if (response != null) {
         await OfflineCacheService.instance.setJson(cacheKey, response);
@@ -75,7 +77,8 @@ class StudentResultsRepository {
             .eq('is_active', true)
             .order('created_at', ascending: false)
             .limit(1)
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 4));
         if (response != null) {
           await OfflineCacheService.instance.setJson(cacheKey, response);
           ConnectivityService.instance.reportNetworkSuccess();
@@ -87,7 +90,8 @@ class StudentResultsRepository {
     }
 
     // Offline / error fallback
-    final cached = OfflineCacheService.instance.getMap(cacheKey);
+    final cached = OfflineCacheService.instance.getMap(cacheKey)
+        ?? OfflineCacheService.instance.getMap('cached_enrollment');
     if (cached != null) return cached;
     return null;
   }
@@ -133,6 +137,11 @@ class StudentResultsRepository {
       return null;
     }
 
+    if (ConnectivityService.instance.isOffline) {
+      final cachedList = getCachedGrades();
+      if (cachedList != null && cachedList.isNotEmpty) return cachedList;
+    }
+
     try {
       // Get all subject assignments for the student's grade level and section
       final enrollment = await _client
@@ -145,7 +154,8 @@ class StudentResultsRepository {
           )
         ''')
         .eq('id', enrollmentId)
-        .single();
+        .single()
+        .timeout(const Duration(seconds: 4));
 
     final classData = enrollment['classes'] as Map<String, dynamic>?;
     final gradeLevelId = classData?['niveau_id'] ?? classData?['grade_level_id'];

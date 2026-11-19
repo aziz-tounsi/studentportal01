@@ -56,6 +56,7 @@ void main() {
       // Initialize Supabase with correlated security & tracing client
       await Supabase.initialize(
         url: SupabaseConfig.url,
+        // ignore: deprecated_member_use
         anonKey: SupabaseConfig.anonKey,
         httpClient: SecurityTraceHttpClient(
           appSurface: 'student_portal',

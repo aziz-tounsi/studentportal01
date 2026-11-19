@@ -1,4 +1,7 @@
+import '../data/models/absence_model.dart';
+import '../data/models/document_model.dart';
 import '../data/models/enrollment_model.dart';
+import '../data/models/grade_model.dart';
 import '../data/models/school_model.dart';
 import '../data/models/timetable_model.dart';
 import '../data/models/user_model.dart';
@@ -81,8 +84,10 @@ class CommercialMobileDemoData {
     isCurrentYear: true,
   );
 
+  // ─────────────────────────────────────────────────────────────
+  // 1. TIMETABLE DATA (Full 6 Days)
+  // ─────────────────────────────────────────────────────────────
   static final List<TimetableSlotModel> demoTimetableSlots = [
-    // Lundi
     TimetableSlotModel(
       id: 'slot-01',
       subjectOfferingId: 'off-01',
@@ -122,7 +127,6 @@ class CommercialMobileDemoData {
       subjectName: 'Informatique & Algorithmique',
       subjectCode: 'INFO',
     ),
-    // Mardi
     TimetableSlotModel(
       id: 'slot-04',
       subjectOfferingId: 'off-04',
@@ -162,7 +166,6 @@ class CommercialMobileDemoData {
       subjectName: 'Français Littérature',
       subjectCode: 'FR',
     ),
-    // Mercredi
     TimetableSlotModel(
       id: 'slot-07',
       subjectOfferingId: 'off-07',
@@ -189,7 +192,6 @@ class CommercialMobileDemoData {
       subjectName: 'Physique - Chimie',
       subjectCode: 'PHYS',
     ),
-    // Jeudi
     TimetableSlotModel(
       id: 'slot-09',
       subjectOfferingId: 'off-09',
@@ -216,7 +218,6 @@ class CommercialMobileDemoData {
       subjectName: 'Mathématiques Approfondies',
       subjectCode: 'MATH',
     ),
-    // Vendredi
     TimetableSlotModel(
       id: 'slot-11',
       subjectOfferingId: 'off-11',
@@ -245,6 +246,431 @@ class CommercialMobileDemoData {
     ),
   ];
 
+  // ─────────────────────────────────────────────────────────────
+  // 2. ABSENCES DATA
+  // ─────────────────────────────────────────────────────────────
+  static final List<SubjectAbsenceSummary> demoAbsences = [
+    SubjectAbsenceSummary(
+      subjectOfferingId: 'off-01',
+      subjectName: 'Mathématiques',
+      subjectCode: 'MATH',
+      totalHours: 56.0,
+      weeklyCiHours: 4.0,
+      weeklyTpHours: 0.0,
+      weeks: 14,
+      totalAbsentHours: 0.0,
+      absencePercent: 0.0,
+      level: AbsenceLevel.normal,
+      teacherName: 'M. Mansour',
+    ),
+    SubjectAbsenceSummary(
+      subjectOfferingId: 'off-02',
+      subjectName: 'Physique - Chimie',
+      subjectCode: 'PHYS',
+      totalHours: 56.0,
+      weeklyCiHours: 3.0,
+      weeklyTpHours: 1.0,
+      weeks: 14,
+      totalAbsentHours: 2.0,
+      absencePercent: 3.5,
+      level: AbsenceLevel.normal,
+      teacherName: 'Mme Ben Amor',
+    ),
+    SubjectAbsenceSummary(
+      subjectOfferingId: 'off-04',
+      subjectName: 'Sciences de la Vie et de la Terre',
+      subjectCode: 'SVT',
+      totalHours: 42.0,
+      weeklyCiHours: 2.0,
+      weeklyTpHours: 1.0,
+      weeks: 14,
+      totalAbsentHours: 2.0,
+      absencePercent: 4.7,
+      level: AbsenceLevel.normal,
+      teacherName: 'Mme Kallel',
+    ),
+    SubjectAbsenceSummary(
+      subjectOfferingId: 'off-03',
+      subjectName: 'Informatique & Algorithmique',
+      subjectCode: 'INFO',
+      totalHours: 28.0,
+      weeklyCiHours: 1.0,
+      weeklyTpHours: 1.0,
+      weeks: 14,
+      totalAbsentHours: 0.0,
+      absencePercent: 0.0,
+      level: AbsenceLevel.normal,
+      teacherName: 'M. Trabelsi',
+    ),
+    SubjectAbsenceSummary(
+      subjectOfferingId: 'off-05',
+      subjectName: 'Anglais Avancé',
+      subjectCode: 'ANG',
+      totalHours: 28.0,
+      weeklyCiHours: 2.0,
+      weeklyTpHours: 0.0,
+      weeks: 14,
+      totalAbsentHours: 0.0,
+      absencePercent: 0.0,
+      level: AbsenceLevel.normal,
+      teacherName: 'M. Smith',
+    ),
+    SubjectAbsenceSummary(
+      subjectOfferingId: 'off-06',
+      subjectName: 'Français Littérature',
+      subjectCode: 'FR',
+      totalHours: 28.0,
+      weeklyCiHours: 2.0,
+      weeklyTpHours: 0.0,
+      weeks: 14,
+      totalAbsentHours: 0.0,
+      absencePercent: 0.0,
+      level: AbsenceLevel.normal,
+      teacherName: 'Mme Garnier',
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 3. RESULTS / GRADES DATA
+  // ─────────────────────────────────────────────────────────────
+  static final List<SubjectGradesSummary> demoGrades = [
+    SubjectGradesSummary(
+      subjectOfferingId: 'off-01',
+      subjectName: 'Mathématiques',
+      subjectCode: 'MATH',
+      coefficient: 4.0,
+      weightsDisplay: 'DC1: 25% | DC2: 25% | DS: 50%',
+      average: 19.62,
+      teacherName: 'M. Mansour',
+      components: [
+        ComponentGrade(
+          componentId: 'cg-01',
+          componentName: 'Devoir de Contrôle N°1',
+          weightPercent: 25,
+          grade: 19.0,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-02',
+          componentName: 'Devoir de Contrôle N°2',
+          weightPercent: 25,
+          grade: 19.5,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-03',
+          componentName: 'Devoir de Synthèse',
+          weightPercent: 50,
+          grade: 20.0,
+          status: 'OK',
+        ),
+      ],
+    ),
+    SubjectGradesSummary(
+      subjectOfferingId: 'off-02',
+      subjectName: 'Physique - Chimie',
+      subjectCode: 'PHYS',
+      coefficient: 4.0,
+      weightsDisplay: 'DC: 25% | TP: 25% | DS: 50%',
+      average: 18.0,
+      teacherName: 'Mme Ben Amor',
+      components: [
+        ComponentGrade(
+          componentId: 'cg-04',
+          componentName: 'Devoir de Contrôle',
+          weightPercent: 25,
+          grade: 17.5,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-05',
+          componentName: 'Travaux Pratiques',
+          weightPercent: 25,
+          grade: 18.5,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-06',
+          componentName: 'Devoir de Synthèse',
+          weightPercent: 50,
+          grade: 18.0,
+          status: 'OK',
+        ),
+      ],
+    ),
+    SubjectGradesSummary(
+      subjectOfferingId: 'off-04',
+      subjectName: 'Sciences de la Vie et de la Terre',
+      subjectCode: 'SVT',
+      coefficient: 2.0,
+      weightsDisplay: 'DC: 25% | TP: 25% | DS: 50%',
+      average: 17.12,
+      teacherName: 'Mme Kallel',
+      components: [
+        ComponentGrade(
+          componentId: 'cg-07',
+          componentName: 'Devoir de Contrôle',
+          weightPercent: 25,
+          grade: 16.5,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-08',
+          componentName: 'TP Évaluation',
+          weightPercent: 25,
+          grade: 18.0,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-09',
+          componentName: 'Devoir de Synthèse',
+          weightPercent: 50,
+          grade: 17.0,
+          status: 'OK',
+        ),
+      ],
+    ),
+    SubjectGradesSummary(
+      subjectOfferingId: 'off-03',
+      subjectName: 'Informatique & Algorithmique',
+      subjectCode: 'INFO',
+      coefficient: 1.5,
+      weightsDisplay: 'TP: 40% | DS: 60%',
+      average: 19.2,
+      teacherName: 'M. Trabelsi',
+      components: [
+        ComponentGrade(
+          componentId: 'cg-10',
+          componentName: 'TP Python & SQL',
+          weightPercent: 40,
+          grade: 19.5,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-11',
+          componentName: 'Devoir de Synthèse',
+          weightPercent: 60,
+          grade: 19.0,
+          status: 'OK',
+        ),
+      ],
+    ),
+    SubjectGradesSummary(
+      subjectOfferingId: 'off-06',
+      subjectName: 'Français Littérature',
+      subjectCode: 'FR',
+      coefficient: 1.0,
+      weightsDisplay: 'DC: 25% | Oral: 25% | DS: 50%',
+      average: 16.75,
+      teacherName: 'Mme Garnier',
+      components: [
+        ComponentGrade(
+          componentId: 'cg-12',
+          componentName: 'Dissertation',
+          weightPercent: 25,
+          grade: 16.0,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-13',
+          componentName: 'Oral',
+          weightPercent: 25,
+          grade: 17.5,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-14',
+          componentName: 'Devoir de Synthèse',
+          weightPercent: 50,
+          grade: 16.75,
+          status: 'OK',
+        ),
+      ],
+    ),
+    SubjectGradesSummary(
+      subjectOfferingId: 'off-05',
+      subjectName: 'Anglais Avancé',
+      subjectCode: 'ANG',
+      coefficient: 1.0,
+      weightsDisplay: 'DC: 25% | Oral: 25% | DS: 50%',
+      average: 18.5,
+      teacherName: 'M. Smith',
+      components: [
+        ComponentGrade(
+          componentId: 'cg-15',
+          componentName: 'Writing & Essay',
+          weightPercent: 25,
+          grade: 18.0,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-16',
+          componentName: 'Speaking Test',
+          weightPercent: 25,
+          grade: 19.0,
+          status: 'OK',
+        ),
+        ComponentGrade(
+          componentId: 'cg-17',
+          componentName: 'Devoir de Synthèse',
+          weightPercent: 50,
+          grade: 18.5,
+          status: 'OK',
+        ),
+      ],
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 4. MON SOLDE / PAYMENT PLANS DATA
+  // ─────────────────────────────────────────────────────────────
+  static final List<PaymentPlanInfo> demoPaymentPlans = [
+    PaymentPlanInfo(
+      planId: 'plan-01',
+      planType: 'Scolarité Annuelle',
+      amountTotal: 3600.0,
+      currency: 'TND',
+      category: 'scolarite',
+      description: 'Frais de scolarité Baccalauréat 2026-2027',
+      academicYear: '2026-2027',
+      totalPaid: 2700.0,
+      remaining: 900.0,
+      payments: [
+        PaymentInfo(
+          id: 'pay-01',
+          amount: 1350.0,
+          status: 'completed',
+          method: 'Virement bancaire',
+          reference: 'VIR-2026-0041',
+          paidAt: DateTime(2026, 9, 5),
+        ),
+        PaymentInfo(
+          id: 'pay-02',
+          amount: 1350.0,
+          status: 'completed',
+          method: 'Carte Bancaire',
+          reference: 'CB-2026-0892',
+          paidAt: DateTime(2026, 11, 2),
+        ),
+        PaymentInfo(
+          id: 'pay-03',
+          amount: 900.0,
+          status: 'pending',
+          dueDate: DateTime(2027, 2, 1),
+        ),
+      ],
+    ),
+    PaymentPlanInfo(
+      planId: 'plan-02',
+      planType: 'Transport Scolaire',
+      amountTotal: 800.0,
+      currency: 'TND',
+      category: 'transport',
+      description: 'Ligne Express Lac 2 - La Marsa',
+      academicYear: '2026-2027',
+      totalPaid: 800.0,
+      remaining: 0.0,
+      payments: [
+        PaymentInfo(
+          id: 'pay-04',
+          amount: 800.0,
+          status: 'completed',
+          method: 'Carte Bancaire',
+          paidAt: DateTime(2026, 9, 3),
+        ),
+      ],
+    ),
+    PaymentPlanInfo(
+      planId: 'plan-03',
+      planType: 'Frais d\'Inscription & Numérique',
+      amountTotal: 400.0,
+      currency: 'TND',
+      category: 'inscription',
+      description: 'Licence plateforme & badge NFC',
+      academicYear: '2026-2027',
+      totalPaid: 400.0,
+      remaining: 0.0,
+      payments: [
+        PaymentInfo(
+          id: 'pay-05',
+          amount: 400.0,
+          status: 'completed',
+          method: 'Carte Bancaire',
+          paidAt: DateTime(2026, 9, 1),
+        ),
+      ],
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 5. OFFICIAL DOCUMENTS DATA
+  // ─────────────────────────────────────────────────────────────
+  static final List<DocumentModel> demoDocuments = [
+    DocumentModel(
+      id: 'doc-01',
+      schoolId: 'carthage-01',
+      classId: 'cls-bac-math-1',
+      title: 'Attestation de Scolarité Officielle 2026-2027',
+      description: 'Certifiée avec QR code et signature numérique du Proviseur',
+      category: 'attestation',
+      semester: 1,
+      fileUrl: 'https://example.com/attestation.pdf',
+      fileName: 'Attestation_Scolarite_Yasmine_Ben_Salem.pdf',
+      fileSize: 245000,
+      mimeType: 'application/pdf',
+      uploadedBy: 'Administration Centrale',
+      createdAt: DateTime(2026, 9, 10),
+    ),
+    DocumentModel(
+      id: 'doc-02',
+      schoolId: 'carthage-01',
+      classId: 'cls-bac-math-1',
+      title: 'Relevé de Notes Certifié - Premier Trimestre',
+      description: 'Moyenne générale 18.42/20 - Mention Très Bien',
+      category: 'releve_notes',
+      semester: 1,
+      fileUrl: 'https://example.com/bulletin_t1.pdf',
+      fileName: 'Releve_Notes_T1_Bac_Maths.pdf',
+      fileSize: 380000,
+      mimeType: 'application/pdf',
+      uploadedBy: 'Secrétariat Pédagogique',
+      createdAt: DateTime(2026, 11, 14),
+    ),
+    DocumentModel(
+      id: 'doc-03',
+      schoolId: 'carthage-01',
+      classId: 'cls-bac-math-1',
+      title: 'Calendrier Officiel des Épreuves du Bac Blanc',
+      description: 'Planning détaillé des salles, surveillants et horaires',
+      category: 'exams',
+      semester: 1,
+      fileUrl: 'https://example.com/bac_blanc.pdf',
+      fileName: 'Planning_Bac_Blanc_LIC_2026.pdf',
+      fileSize: 520000,
+      mimeType: 'application/pdf',
+      uploadedBy: 'Direction des Examens',
+      createdAt: DateTime(2026, 11, 12),
+    ),
+    DocumentModel(
+      id: 'doc-04',
+      schoolId: 'carthage-01',
+      classId: 'cls-bac-math-1',
+      title: 'Polycopié d\'exercices : Analyse & Fonctions Exponentielles',
+      description: 'Exercices d\'approfondissement préparés par M. Mansour',
+      category: 'courses',
+      semester: 1,
+      fileUrl: 'https://example.com/maths_poly.pdf',
+      fileName: 'Analyse_Approfondie_Bac_Maths_2026.pdf',
+      fileSize: 1450000,
+      mimeType: 'application/pdf',
+      uploadedBy: 'M. Mansour',
+      createdAt: DateTime(2026, 10, 20),
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 6. ANNOUNCEMENTS / NOTIFICATIONS DATA
+  // ─────────────────────────────────────────────────────────────
   static final List<StudentAnnouncement> demoAnnouncements = [
     StudentAnnouncement(
       id: 'notif-01',

@@ -9,9 +9,12 @@ const corsHeaders = {
 
 // Priority candidate models for educational queries
 const CANDIDATE_MODELS = [
-  'google/gemini-2.0-flash-exp:free',
-  'poolside/laguna-s-2.1:free',
-  'nvidia/nemotron-3.5-lightning:free',
+  'openrouter/free',
+  'google/gemma-2-9b-it:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'mistralai/mistral-7b-instruct:free',
+  'qwen/qwen-2.5-7b-instruct:free',
   'deepseek/deepseek-chat',
 ];
 

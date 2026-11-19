@@ -585,13 +585,24 @@ class CoreDataService {
   /// Get student context (user, enrollment, class, niveau, section, academic_year)
   Future<StudentContext?> getStudentContext(String userId) async {
     final cacheKey = 'student_context_$userId';
+
+    // 1. Instant offline retrieval if offline
+    if (ConnectivityService.instance.isOffline) {
+      final cached = OfflineCacheService.instance.getMap(cacheKey)
+          ?? OfflineCacheService.instance.getMap('cached_student_context');
+      if (cached != null) {
+        return StudentContext.fromJson(cached);
+      }
+    }
+
     try {
       final result = await _client.rpc('get_student_context', params: {
         'p_user_id': userId,
-      });
+      }).timeout(const Duration(seconds: 4));
       if (result != null) {
         final ctx = StudentContext.fromJson(result as Map<String, dynamic>);
         OfflineCacheService.instance.setJson(cacheKey, ctx.toJson());
+        OfflineCacheService.instance.setJson('cached_student_context', ctx.toJson());
         ConnectivityService.instance.reportNetworkSuccess();
         return ctx;
       }
@@ -600,15 +611,22 @@ class CoreDataService {
       // Fallback to direct query if RPC not available
     }
 
-    final fallback = await _getStudentContextFallback(userId);
-    if (fallback != null) {
-      OfflineCacheService.instance.setJson(cacheKey, fallback.toJson());
-      ConnectivityService.instance.reportNetworkSuccess();
-      return fallback;
+    try {
+      final fallback = await _getStudentContextFallback(userId)
+          .timeout(const Duration(seconds: 4));
+      if (fallback != null) {
+        OfflineCacheService.instance.setJson(cacheKey, fallback.toJson());
+        OfflineCacheService.instance.setJson('cached_student_context', fallback.toJson());
+        ConnectivityService.instance.reportNetworkSuccess();
+        return fallback;
+      }
+    } catch (e) {
+      ConnectivityService.instance.reportNetworkError(e);
     }
 
     // Offline / Server down fallback from cache
-    final cached = OfflineCacheService.instance.getMap(cacheKey);
+    final cached = OfflineCacheService.instance.getMap(cacheKey)
+        ?? OfflineCacheService.instance.getMap('cached_student_context');
     if (cached != null) {
       return StudentContext.fromJson(cached);
     }
@@ -978,10 +996,20 @@ class CoreDataService {
   /// Get payments for student
   Future<List<PaymentPlanInfo>> getPaymentsForStudent(String userId) async {
     final cacheKey = 'payments_$userId';
+
+    // 1. Instant offline retrieval if offline
+    if (ConnectivityService.instance.isOffline) {
+      final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+          ?? OfflineCacheService.instance.getListOfMaps('payments_latest');
+      if (cached != null && cached.isNotEmpty) {
+        return cached.map((e) => PaymentPlanInfo.fromJson(e)).toList();
+      }
+    }
+
     try {
       final result = await _client.rpc('get_payments_for_student', params: {
         'p_user_id': userId,
-      });
+      }).timeout(const Duration(seconds: 4));
       if (result is List && result.isNotEmpty) {
         final list = result
             .map((e) => PaymentPlanInfo.fromJson(e as Map<String, dynamic>))
@@ -1006,7 +1034,8 @@ class CoreDataService {
       final enrollmentsResp = await _client
           .from('enrollments')
           .select('id')
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .timeout(const Duration(seconds: 4));
       final enrollmentIds = (enrollmentsResp as List)
           .map((e) => e['id']?.toString() ?? '')
           .where((id) => id.isNotEmpty)
@@ -1016,7 +1045,8 @@ class CoreDataService {
         final plansResp = await _client
             .from('payment_plans')
             .select('*, payments(*)')
-            .filter('enrollment_id', 'in', enrollmentIds);
+            .filter('enrollment_id', 'in', enrollmentIds)
+            .timeout(const Duration(seconds: 4));
 
         final list = (plansResp as List).map((p) {
           final paymentsRaw = (p['payments'] as List?) ?? [];

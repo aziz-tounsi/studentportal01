@@ -38,29 +38,46 @@ final absencesSemestersProvider = FutureProvider<List<Map<String, dynamic>>>((re
   }).toList();
 });
 
+List<SubjectAbsenceSummary>? getCachedAbsencesForScreen({
+  String? enrollmentId,
+  String? userId,
+  required int semesterNumber,
+}) {
+  final cacheKey = 'absences_screen_${enrollmentId ?? 'default'}_$semesterNumber';
+  final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+      ?? (userId != null ? OfflineCacheService.instance.getListOfMaps('absences_screen_${userId}_$semesterNumber') : null)
+      ?? OfflineCacheService.instance.getListOfMaps('absences_screen_latest_$semesterNumber')
+      ?? OfflineCacheService.instance.getListOfMaps('absences_screen_latest');
+  if (cached != null && cached.isNotEmpty) {
+    return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
+  }
+  return null;
+}
+
 // Real absences provider - fetches from database
 final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>((ref, semesterNumber) async {
   final authState = ref.watch(authProvider);
-  final studentCtx = await ref.watch(ctx.studentContextProvider.future);
-  final semesters = await ref.watch(absencesSemestersProvider.future);
+  final studentCtx = ref.watch(ctx.studentContextProvider).valueOrNull;
   
   final enrollmentId = authState.enrollment?.id 
       ?? studentCtx?.enrollmentId 
+      ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['id'] as String?)
       ?? 'default';
   final userId = authState.user?.id 
       ?? studentCtx?.userId
       ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
   final cacheKey = 'absences_screen_${enrollmentId}_$semesterNumber';
 
-  List<SubjectAbsenceSummary>? getCachedAbsences() {
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
-        ?? (userId != null ? OfflineCacheService.instance.getListOfMaps('absences_screen_${userId}_$semesterNumber') : null)
-        ?? OfflineCacheService.instance.getListOfMaps('absences_screen_latest_$semesterNumber')
-        ?? OfflineCacheService.instance.getListOfMaps('absences_screen_latest');
-    if (cached != null && cached.isNotEmpty) {
-      return cached.map((s) => SubjectAbsenceSummary.fromJson(s)).toList();
-    }
-    return null;
+  List<SubjectAbsenceSummary>? getCachedAbsences() => getCachedAbsencesForScreen(
+    enrollmentId: enrollmentId,
+    userId: userId,
+    semesterNumber: semesterNumber,
+  );
+
+  // Fast offline return
+  if (ConnectivityService.instance.isOffline) {
+    final cachedList = getCachedAbsences();
+    if (cachedList != null && cachedList.isNotEmpty) return cachedList;
   }
 
   if (!authState.isAuthenticated && studentCtx == null) {
@@ -70,8 +87,18 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
     return [];
   }
   
+  final studentCtxAsync = await ref.watch(ctx.studentContextProvider.future).timeout(
+    const Duration(seconds: 4),
+    onTimeout: () => null,
+  );
+  final semesters = await ref.watch(absencesSemestersProvider.future).timeout(
+    const Duration(seconds: 4),
+    onTimeout: () => <Map<String, dynamic>>[],
+  );
+
   final schoolId = authState.user?.schoolId 
-      ?? studentCtx?.schoolId 
+      ?? studentCtxAsync?.schoolId 
+      ?? (OfflineCacheService.instance.getMap('cached_user')?['school_id'] as String?)
       ?? authState.enrollment?.classInfo?.schoolId;
   
   final semester = semesters.firstWhere(
@@ -102,7 +129,8 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
           .from('absence_thresholds')
           .select()
           .eq('school_id', schoolId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 3));
       
       if (thresholdResponse != null) {
         warningPercent = (thresholdResponse['warning_percent'] as num?)?.toDouble() ?? 20.0;
@@ -114,7 +142,15 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
       }
     }
     
-    final classId = authState.enrollment!.classId;
+    final classId = studentCtxAsync?.classId 
+        ?? authState.enrollment?.classId 
+        ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['class_id'] as String?);
+    
+    if (classId == null || classId.isEmpty) {
+      final cachedList = getCachedAbsences();
+      if (cachedList != null) return cachedList;
+      return [];
+    }
     
     final subjectOfferingsResponse = await supabase
         .from('subject_offerings')
@@ -245,6 +281,10 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
         'absences_screen_latest_$semesterNumber',
         summaries.map((s) => s.toJson()).toList(),
       );
+      OfflineCacheService.instance.setJson(
+        'absences_screen_latest',
+        summaries.map((s) => s.toJson()).toList(),
+      );
     }
     ConnectivityService.instance.reportNetworkSuccess();
     return summaries;
@@ -328,6 +368,15 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
     final isRefreshing = ref.watch(absencesRefreshingProvider);
     final semesters = ref.watch(ctx.semestersProvider).valueOrNull ?? [];
     final isLocked = isSemesterLocked(selectedTrimester, semesters);
+    final studentCtx = ref.watch(ctx.studentContextProvider).valueOrNull;
+    final authState = ref.watch(authProvider);
+    final userId = authState.user?.id 
+        ?? studentCtx?.userId
+        ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
+    final enrollmentId = authState.enrollment?.id 
+        ?? studentCtx?.enrollmentId 
+        ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['id'] as String?)
+        ?? 'default';
 
     return Material(
       type: MaterialType.transparency,
@@ -411,38 +460,54 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
 
                 if (isRefreshing)
                   const AbsencesCardsSkeleton()
-                else if (isLocked)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppResponsive.horizontalPadding(context),
-                      ),
-                      child: LockedSemesterCard(
-                        startDate: semesters
-                            .where((s) => s.number == selectedTrimester)
-                            .firstOrNull
-                            ?.startDate,
-                        moduleType: LockedModuleType.absences,
-                      ),
-                    ),
-                  )
                 else
                 absencesAsync.when(
-                  data: (absences) => _buildContent(context, absences, l10n),
+                  data: (absences) {
+                    if (absences.isNotEmpty) {
+                      return _buildContent(context, absences, l10n);
+                    }
+                    if (isLocked) {
+                      return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppResponsive.horizontalPadding(context),
+                          ),
+                          child: LockedSemesterCard(
+                            startDate: semesters
+                                .where((s) => s.number == selectedTrimester)
+                                .firstOrNull
+                                ?.startDate,
+                            moduleType: LockedModuleType.absences,
+                          ),
+                        ),
+                      );
+                    }
+                    return _buildContent(context, absences, l10n);
+                  },
                   loading: () => const AbsencesCardsSkeleton(),
-                  error: (error, stack) => SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-                          const SizedBox(height: 16),
-                          Text('Erreur: $error'),
-                        ],
+                  error: (error, stack) {
+                    final cached = getCachedAbsencesForScreen(
+                      enrollmentId: enrollmentId,
+                      userId: userId,
+                      semesterNumber: selectedTrimester,
+                    );
+                    if (cached != null && cached.isNotEmpty) {
+                      return _buildContent(context, cached, l10n);
+                    }
+                    return SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                            const SizedBox(height: 16),
+                            Text('Erreur: $error'),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ],
             ),

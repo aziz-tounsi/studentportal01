@@ -89,9 +89,15 @@ final allStudentDocumentsProvider = FutureProvider<List<DocumentModel>>((ref) as
   final authState = ref.watch(authProvider);
   final supabase = Supabase.instance.client;
 
-  final schoolId = studentCtx?.schoolId ?? authState.user?.schoolId;
-  final userId = studentCtx?.userId ?? authState.user?.id;
-  final classId = studentCtx?.classId ?? authState.enrollment?.classId;
+  final schoolId = studentCtx?.schoolId 
+      ?? authState.user?.schoolId 
+      ?? (OfflineCacheService.instance.getMap('cached_user')?['school_id']?.toString());
+  final userId = studentCtx?.userId 
+      ?? authState.user?.id 
+      ?? (OfflineCacheService.instance.getMap('cached_user')?['id']?.toString());
+  final classId = studentCtx?.classId 
+      ?? authState.enrollment?.classId 
+      ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['class_id']?.toString());
 
   final primaryCacheKey =
       'documents_school_${schoolId ?? 'none'}_user_${userId ?? 'anon'}';
@@ -100,15 +106,30 @@ final allStudentDocumentsProvider = FutureProvider<List<DocumentModel>>((ref) as
   List<DocumentModel> readCachedDocuments() {
     for (final key in [primaryCacheKey, latestCacheKey]) {
       final cached = OfflineCacheService.instance.getListOfMaps(key);
-      if (cached != null) {
-        return parseVisibleStudentDocuments(
+      if (cached != null && cached.isNotEmpty) {
+        final parsed = parseVisibleStudentDocuments(
           cached,
           userId: userId,
           classId: classId,
         );
+        if (parsed.isNotEmpty) return parsed;
+        // Safety net: if filtering by userId/classId filtered out all documents offline, return all valid docs from cache
+        final fallback = cached.map((r) {
+          try {
+            return DocumentModel.fromJson(r);
+          } catch (_) {
+            return null;
+          }
+        }).whereType<DocumentModel>().toList();
+        if (fallback.isNotEmpty) return fallback;
       }
     }
     return [];
+  }
+
+  // 0. Fast return when offline
+  if (ConnectivityService.instance.isOffline) {
+    return readCachedDocuments();
   }
 
   // Listen for new/updated/deleted admin documents in real time when enabled.
@@ -143,7 +164,8 @@ final allStudentDocumentsProvider = FutureProvider<List<DocumentModel>>((ref) as
           'id, school_id, class_id, title, description, category, file_url, file_name, file_size, mime_type, uploaded_by, created_at',
         )
         .eq('school_id', schoolId)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(const Duration(seconds: 4));
 
     final rawRows = List<Map<String, dynamic>>.from(response as List);
     final visibleRows = <Map<String, dynamic>>[];
@@ -383,8 +405,13 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: isLocked
-                    ? Center(
+                child: documentsAsync.when(
+                  data: (documents) {
+                    if (documents.isNotEmpty) {
+                      return _buildContent(documents, l10n, selectedSemester);
+                    }
+                    if (isLocked) {
+                      return Center(
                         child: Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: context.horizontalPadding,
@@ -397,13 +424,20 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                             moduleType: LockedModuleType.documents,
                           ),
                         ),
-                      )
-                    : documentsAsync.when(
-                        data: (documents) =>
-                            _buildContent(documents, l10n, selectedSemester),
-                        loading: () => _buildLoadingState(l10n),
-                        error: (error, stack) => _buildErrorState(l10n),
-                      ),
+                      );
+                    }
+                    return _buildContent(documents, l10n, selectedSemester);
+                  },
+                  loading: () => _buildLoadingState(l10n),
+                  error: (error, stack) {
+                    final allDocs = ref.watch(allStudentDocumentsProvider).valueOrNull ?? [];
+                    final semDocs = allDocs.where((d) => d.matchesSemester(selectedSemester)).toList();
+                    if (semDocs.isNotEmpty) {
+                      return _buildContent(semDocs, l10n, selectedSemester);
+                    }
+                    return _buildErrorState(l10n);
+                  },
+                ),
               ),
             ],
           ),

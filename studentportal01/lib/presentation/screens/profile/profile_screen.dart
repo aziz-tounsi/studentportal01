@@ -25,6 +25,7 @@ import '../../widgets/profile_skeleton.dart';
 import '../../widgets/ios_bounce_zoom_transition.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
+import '../../widgets/photo_cutout_screen.dart';
 import '../../providers/nav_bar_provider.dart';
 
 const Color _navPink = Color(0xFFFF2D78);
@@ -45,12 +46,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final picker = ImagePicker();
     final image = await picker.pickImage(
       source: source,
-      maxWidth: 600,
-      maxHeight: 600,
-      imageQuality: 85,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 92,
     );
 
     if (image == null) return;
+
+    final rawBytes = await image.readAsBytes();
+    if (!mounted) return;
+
+    // Launch interactive photo cutout and alignment screen
+    final croppedBytes = await PhotoCutoutScreen.show(
+      context: context,
+      rawImageBytes: rawBytes,
+      initialShape: 'avatar',
+    );
+    if (croppedBytes == null) return; // Student cancelled
 
     setState(() => _isUploadingPhoto = true);
 
@@ -59,19 +71,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) throw Exception('user_not_connected');
 
-      final bytes = await image.readAsBytes();
-      final ext = image.name.split('.').last.toLowerCase();
-      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.png';
       final storagePath = 'avatars/$fileName';
-      final mimeType = image.mimeType ?? 'image/jpeg';
 
-      // Upload to Supabase Storage
+      // Upload cropped square PNG to Supabase Storage
       await supabase.storage
           .from(SupabaseConfig.profileBucket)
           .uploadBinary(
             storagePath,
-            bytes,
-            fileOptions: FileOptions(contentType: mimeType, upsert: true),
+            croppedBytes,
+            fileOptions:
+                const FileOptions(contentType: 'image/png', upsert: true),
           );
 
       final publicUrl = supabase.storage

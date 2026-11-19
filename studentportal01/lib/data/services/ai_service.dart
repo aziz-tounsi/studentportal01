@@ -417,10 +417,17 @@ class FileTextExtractor {
 
 /// Saves conversations to local storage
 Future<Directory> getConversationDir() async {
-  final appDir = await getApplicationDocumentsDirectory();
-  final dir = Directory('${appDir.path}/nova_conversations');
-  if (!dir.existsSync()) dir.createSync(recursive: true);
-  return dir;
+  if (kIsWeb) {
+    return Directory('/tmp');
+  }
+  try {
+    final appDir = await getApplicationDocumentsDirectory();
+    final dir = Directory('${appDir.path}/nova_conversations');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir;
+  } catch (_) {
+    return Directory('/tmp');
+  }
 }
 
 /// Format a message for the OpenRouter API
@@ -443,12 +450,12 @@ Map<String, dynamic> formatMessageForAPI({
 
 /// Candidate free models to try on OpenRouter in order of priority (tested and verified)
 const List<String> _freeModels = [
-  'nvidia/nemotron-3-ultra-550b-a55b:free',
-  'nvidia/nemotron-3.5-lightning:free',
-  'nvidia/nemotron-3.5-super-vl:free',
-  'google/gemma-4-31b-it:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'poolside/laguna-s-2.1:free',
+  'openrouter/free',
+  'google/gemma-2-9b-it:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'mistralai/mistral-7b-instruct:free',
+  'qwen/qwen-2.5-7b-instruct:free',
 ];
 
 /// Call OpenRouter API with multi-model fallback.
@@ -596,7 +603,7 @@ Future<String> callOpenRouter({
   throw Exception(
     lastError ??
         (languageCode == 'ar'
-            ? 'تعذر الاتصال بالمساعد الذكي حالياً. يرجى التحقق من اتصال الإنترنت.'
-            : 'Impossible de joindre le modèle IA actuellement. Vérifie ta connexion internet.'),
+            ? 'تعذر الاتصال بالمساعد الذكي حالياً. يرجى إعادة المحاولة لاحقاً.'
+            : 'Impossible de joindre le modèle IA actuellement. Veuillez réessayer dans un instant.'),
   );
 }

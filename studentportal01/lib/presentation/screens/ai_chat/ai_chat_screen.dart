@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,6 +23,7 @@ import '../../../core/utils/file_download_helper.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
 import '../../widgets/ios_photo_gallery_viewer.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../widgets/ios_bounce_zoom_transition.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -32,8 +34,8 @@ const String _openRouterApiKey = String.fromEnvironment(
   defaultValue: kDefaultOpenRouterApiKey,
 );
 
-// Free OpenRouter model (poolside laguna 2.1 fast responder, tested and verified)
-const String _freeModel = 'poolside/laguna-s-2.1:free';
+// Free OpenRouter model (universal auto-fallback router, 99.9% uptime)
+const String _freeModel = 'openrouter/free';
 
 // ─── Arabic Typography & Gender Helpers ────────────────────────────────────────
 bool _isArabicText(String text) {
@@ -492,20 +494,24 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
   // ─── Conversation Persistence ───────────────────────────────────────────────
   Future<void> _loadConversations() async {
-    final dir = await getConversationDir();
-    final files = dir.listSync().whereType<File>().toList();
-    final convs = <_Conversation>[];
-    for (final f in files) {
-      try {
-        final data = jsonDecode(await f.readAsString());
-        convs.add(_Conversation.fromJson(data as Map<String, dynamic>));
-      } catch (_) {}
-    }
-    convs.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    if (mounted) setState(() => _conversations = convs);
+    if (kIsWeb) return;
+    try {
+      final dir = await getConversationDir();
+      final files = dir.listSync().whereType<File>().toList();
+      final convs = <_Conversation>[];
+      for (final f in files) {
+        try {
+          final data = jsonDecode(await f.readAsString());
+          convs.add(_Conversation.fromJson(data as Map<String, dynamic>));
+        } catch (_) {}
+      }
+      convs.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      if (mounted) setState(() => _conversations = convs);
+    } catch (_) {}
   }
 
   Future<void> _saveCurrentConversation() async {
+    if (kIsWeb) return;
     if (_messages.isEmpty) return;
     final convId = _currentConversationId ??
         DateTime.now().millisecondsSinceEpoch.toString();
@@ -776,11 +782,42 @@ I have **complete** access to your academic data — grades, timetable, absences
     } catch (e, st) {
       debugPrint('Error calling AI service: $e\n$st');
       if (!mounted) return;
-      final errorMessage = effectiveLang == 'ar'
-          ? '⚠️ تعذر الاتصال بالمساعد الذكي حالياً. يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.'
-          : (effectiveLang == 'fr'
-              ? '⚠️ Impossible de joindre l\'assistant IA pour le moment. Vérifie ta connexion internet et réessaie.'
-              : '⚠️ Unable to connect to the AI assistant right now. Please check your internet connection and try again.');
+      final errStr = e.toString().toLowerCase();
+      final isOffline = ConnectivityService.instance.isOffline ||
+          errStr.contains('socketexception') ||
+          errStr.contains('failed host lookup') ||
+          errStr.contains('network is unreachable');
+      final isQuota = errStr.contains('429') ||
+          errStr.contains('quota') ||
+          errStr.contains('limite');
+      final isMaintenance = errStr.contains('maintenance');
+
+      String errorMessage;
+      if (isOffline) {
+        errorMessage = effectiveLang == 'ar'
+            ? '⚠️ لا يوجد اتصال بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.'
+            : (effectiveLang == 'fr'
+                ? '⚠️ Pas de connexion internet. Vérifie ta connexion et réessaie.'
+                : '⚠️ No internet connection. Please check your network and try again.');
+      } else if (isQuota) {
+        errorMessage = effectiveLang == 'ar'
+            ? '⏳ تم بلوغ الحد اليومي لرسائل المساعد الذكي. نلتقي غداً!'
+            : (effectiveLang == 'fr'
+                ? '⏳ Quota de messages IA atteint. Rendez-vous demain !'
+                : '⏳ Daily AI message limit reached. See you tomorrow!');
+      } else if (isMaintenance) {
+        errorMessage = effectiveLang == 'ar'
+            ? '🛠️ خدمة المساعد الذكي في صيانة حالياً. يرجى المحاولة لاحقاً.'
+            : (effectiveLang == 'fr'
+                ? '🛠️ Le service IA NOVA est temporairement en maintenance. Merci de réessayer plus tard.'
+                : '🛠️ AI service is temporarily undergoing maintenance. Please try again later.');
+      } else {
+        errorMessage = effectiveLang == 'ar'
+            ? '⚠️ تعذر على المساعد الذكي الإجابة حالياً. يرجى إعادة المحاولة في لحظات.'
+            : (effectiveLang == 'fr'
+                ? '⚠️ Impossible d\'obtenir une réponse du modèle IA pour le moment. Veuillez réessayer dans un instant.'
+                : '⚠️ Unable to get a response from the AI model at this moment. Please try again shortly.');
+      }
 
       final ts = DateTime.now();
       setState(() {

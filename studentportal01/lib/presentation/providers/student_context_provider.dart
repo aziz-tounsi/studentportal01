@@ -30,35 +30,55 @@ final studentContextProvider = FutureProvider<StudentContext?>((ref) async {
       ?? authState.user?.id 
       ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
   if (userId == null) return null;
+
+  StudentContext? getCachedStudentContext() {
+    final cached = OfflineCacheService.instance.getMap('student_context_$userId')
+        ?? OfflineCacheService.instance.getMap('cached_student_context');
+    if (cached != null) {
+      return StudentContext.fromJson(cached);
+    }
+
+    // Synthesize from cached_user and cached_enrollment if direct context wasn't saved
+    final cachedUser = OfflineCacheService.instance.getMap('cached_user');
+    final cachedEnrollment = OfflineCacheService.instance.getMap('cached_enrollment');
+    if (cachedUser != null) {
+      final classMap = cachedEnrollment?['class'] as Map?;
+      final niveauMap = classMap?['niveaux'] as Map? ?? cachedEnrollment?['niveau'] as Map?;
+      return StudentContext(
+        userId: userId,
+        schoolId: cachedUser['school_id']?.toString() ?? '',
+        fullName: cachedUser['full_name']?.toString(),
+        email: cachedUser['email']?.toString(),
+        studentCode: cachedUser['student_code']?.toString() ?? cachedEnrollment?['student_code']?.toString(),
+        enrollmentId: cachedEnrollment?['id']?.toString(),
+        classId: cachedEnrollment?['class_id']?.toString() ?? classMap?['id']?.toString(),
+        groupId: cachedEnrollment?['group_id']?.toString(),
+        academicYearId: cachedEnrollment?['academic_year_id']?.toString(),
+        className: classMap?['name']?.toString(),
+        niveauId: classMap?['niveau_id']?.toString() ?? niveauMap?['id']?.toString(),
+        niveauCode: niveauMap?['code']?.toString(),
+        niveauName: niveauMap?['name']?.toString(),
+        cycle: niveauMap?['cycle']?.toString(),
+      );
+    }
+    return null;
+  }
+
+  // Fast offline return
+  if (ConnectivityService.instance.isOffline) {
+    final cached = getCachedStudentContext();
+    if (cached != null) return cached;
+  }
   
   final service = ref.watch(coreDataServiceProvider);
-  final ctx = await service.getStudentContext(userId);
-  if (ctx != null) return ctx;
-
-  // Synthesize from cached_user and cached_enrollment if direct context wasn't saved
-  final cachedUser = OfflineCacheService.instance.getMap('cached_user');
-  final cachedEnrollment = OfflineCacheService.instance.getMap('cached_enrollment');
-  if (cachedUser != null) {
-    final classMap = cachedEnrollment?['class'] as Map?;
-    final niveauMap = classMap?['niveaux'] as Map? ?? cachedEnrollment?['niveau'] as Map?;
-    return StudentContext(
-      userId: userId,
-      schoolId: cachedUser['school_id']?.toString() ?? '',
-      fullName: cachedUser['full_name']?.toString(),
-      email: cachedUser['email']?.toString(),
-      studentCode: cachedUser['student_code']?.toString() ?? cachedEnrollment?['student_code']?.toString(),
-      enrollmentId: cachedEnrollment?['id']?.toString(),
-      classId: cachedEnrollment?['class_id']?.toString() ?? classMap?['id']?.toString(),
-      groupId: cachedEnrollment?['group_id']?.toString(),
-      academicYearId: cachedEnrollment?['academic_year_id']?.toString(),
-      className: classMap?['name']?.toString(),
-      niveauId: classMap?['niveau_id']?.toString() ?? niveauMap?['id']?.toString(),
-      niveauCode: niveauMap?['code']?.toString(),
-      niveauName: niveauMap?['name']?.toString(),
-      cycle: niveauMap?['cycle']?.toString(),
-    );
+  try {
+    final ctx = await service.getStudentContext(userId).timeout(const Duration(seconds: 4));
+    if (ctx != null) return ctx;
+  } catch (e) {
+    ConnectivityService.instance.reportNetworkError(e);
   }
-  return null;
+
+  return getCachedStudentContext();
 });
 
 // ============================================================
@@ -133,6 +153,33 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
   final enrolledYearId =
       context?.academicYearId ?? authState.enrollment?.academicYearId;
 
+  List<SemesterInfo>? getCachedSemesters() {
+    final candidateYearIds = prioritizeAcademicYearIds(
+      activeCurrentYearId: null,
+      enrolledYearId: enrolledYearId,
+    );
+    final cacheKeys = <String>[
+      if (schoolId != null && schoolId.isNotEmpty) 'semesters_school_$schoolId',
+      for (final yearId in candidateYearIds) 'semesters_$yearId',
+      'semesters_latest',
+    ];
+    for (final key in cacheKeys) {
+      final cached = OfflineCacheService.instance.getListOfMaps(key);
+      if (cached != null && cached.isNotEmpty) {
+        return normalizeSemesterList(
+          cached.map((e) => SemesterInfo.fromJson(e)).toList(),
+        );
+      }
+    }
+    return null;
+  }
+
+  // 0. Fast return when offline
+  if (ConnectivityService.instance.isOffline) {
+    final cached = getCachedSemesters();
+    if (cached != null && cached.isNotEmpty) return cached;
+  }
+
   // Listen for live period/year edits in Supabase if Realtime is enabled on the project.
   RealtimeChannel? channel;
   try {
@@ -172,7 +219,6 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
   // 1. Always resolve the school's active (`is_current = true`) academic year FIRST,
   // because admin_dashboard Period Management always operates on the active school year.
   String? activeYearId;
-  var hadNetworkError = false;
   try {
     var query = supabase
         .from('academic_years')
@@ -184,10 +230,10 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
     final activeYearResp = await query
         .order('start_date', ascending: false)
         .limit(1)
-        .maybeSingle();
+        .maybeSingle()
+        .timeout(const Duration(seconds: 4));
     activeYearId = activeYearResp?['id'] as String?;
   } catch (e) {
-    hadNetworkError = true;
     ConnectivityService.instance.reportNetworkError(e);
   }
 
@@ -205,7 +251,8 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
             'id, school_id, academic_year_id, name, number, start_date, end_date, is_current',
           )
           .eq('academic_year_id', yearId)
-          .order('number');
+          .order('number')
+          .timeout(const Duration(seconds: 4));
       final rows = List<Map<String, dynamic>>.from(response as List);
       final parsed = normalizeSemesterList(
         rows.map((e) => SemesterInfo.fromJson(e)).toList(),
@@ -222,26 +269,14 @@ final semestersProvider = FutureProvider<List<SemesterInfo>>((ref) async {
         return parsed;
       }
     } catch (e) {
-      hadNetworkError = true;
       ConnectivityService.instance.reportNetworkError(e);
     }
   }
 
   // 3. Offline/network-failure fallback: restore last known semesters from persistent cache.
-  if (hadNetworkError) {
-    final cacheKeys = <String>[
-      if (schoolId != null && schoolId.isNotEmpty) 'semesters_school_$schoolId',
-      for (final yearId in candidateYearIds) 'semesters_$yearId',
-      'semesters_latest',
-    ];
-    for (final key in cacheKeys) {
-      final cached = OfflineCacheService.instance.getListOfMaps(key);
-      if (cached != null && cached.isNotEmpty) {
-        return normalizeSemesterList(
-          cached.map((e) => SemesterInfo.fromJson(e)).toList(),
-        );
-      }
-    }
+  final cached = getCachedSemesters();
+  if (cached != null && cached.isNotEmpty) {
+    return cached;
   }
 
   // 4. Last resort fallback when the school has zero periods configured anywhere yet.
@@ -350,9 +385,30 @@ final paymentsDataProvider = FutureProvider<List<PaymentPlanInfo>>((ref) async {
       ?? authState.user?.id 
       ?? OfflineCacheService.instance.getMap('cached_user')?['id'] as String?;
   if (userId == null) return [];
+
+  List<PaymentPlanInfo>? getCachedPayments() {
+    final cached = OfflineCacheService.instance.getListOfMaps('payments_$userId')
+        ?? OfflineCacheService.instance.getListOfMaps('payments_latest');
+    if (cached != null && cached.isNotEmpty) {
+      return cached.map((e) => PaymentPlanInfo.fromJson(e)).toList();
+    }
+    return null;
+  }
+
+  if (ConnectivityService.instance.isOffline) {
+    final cached = getCachedPayments();
+    if (cached != null) return cached;
+  }
   
   final service = ref.watch(coreDataServiceProvider);
-  return service.getPaymentsForStudent(userId);
+  try {
+    final list = await service.getPaymentsForStudent(userId);
+    if (list.isNotEmpty) return list;
+  } catch (e) {
+    ConnectivityService.instance.reportNetworkError(e);
+  }
+
+  return getCachedPayments() ?? [];
 });
 
 // ============================================================

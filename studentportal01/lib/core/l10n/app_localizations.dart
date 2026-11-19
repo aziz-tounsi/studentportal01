@@ -9,7 +9,8 @@ class AppLocalizations {
   AppLocalizations(this.locale);
 
   static AppLocalizations of(BuildContext context) {
-    return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
+    return Localizations.of<AppLocalizations>(context, AppLocalizations) ??
+        AppLocalizations(const Locale('fr'));
   }
 
   static const LocalizationsDelegate<AppLocalizations> delegate =
@@ -572,6 +573,15 @@ class AppLocalizations {
       'cache_cleared_success': 'Cache cleared successfully! (14.8 MB freed)',
       'photo_updated_success': 'Profile photo updated successfully!',
       'photo_upload_error': 'Failed to upload photo. Please try again',
+      'adjust_photo': 'Adjust Photo',
+      'crop_photo_hint': 'Drag and pinch to frame the photo in the square',
+      'crop_card_shape': 'Student Card',
+      'crop_avatar_shape': 'Avatar Circle',
+      'crop_rotate': 'Rotate',
+      'crop_reset': 'Reset',
+      'crop_center': 'Center',
+      'crop_done': 'Done',
+      'cropping_photo': 'Cropping...',
       'user_not_connected': 'User not connected',
       'base_education': 'Basic Education',
       'general_branch': 'Common Core',
@@ -1175,6 +1185,15 @@ class AppLocalizations {
       'cache_cleared_success': 'Cache vidé avec succès ! (14.8 Mo libérés)',
       'photo_updated_success': 'Photo de profil mise à jour avec succès !',
       'photo_upload_error': 'Échec de l\'envoi de la photo. Veuillez réessayer',
+      'adjust_photo': 'Ajuster la photo',
+      'crop_photo_hint': 'Glissez et pincez pour cadrer le visage dans le carré',
+      'crop_card_shape': 'Carte Étudiant',
+      'crop_avatar_shape': 'Cercle Profil',
+      'crop_rotate': 'Pivoter',
+      'crop_reset': 'Réinitialiser',
+      'crop_center': 'Centrer',
+      'crop_done': 'Valider',
+      'cropping_photo': 'Recadrage...',
       'user_not_connected': 'Utilisateur non connecté',
       'base_education': 'Enseignement de Base',
       'general_branch': 'Tronc Commun',
@@ -1770,6 +1789,15 @@ class AppLocalizations {
       'cache_cleared_success': 'تم تفريغ الذاكرة المؤقتة بنجاح! (تم تحرير 14.8 ميغابايت)',
       'photo_updated_success': 'تم تحديث الصورة الشخصية بنجاح!',
       'photo_upload_error': 'فشل تحميل الصورة الشخصية. يرجى المحاولة مرة أخرى',
+      'adjust_photo': 'تعديل وتوسيط الصورة',
+      'crop_photo_hint': 'اسحب وقرّب لتوسيط الوجه داخل الإطار المربع',
+      'crop_card_shape': 'بطاقة الطالب',
+      'crop_avatar_shape': 'صورة الحساب',
+      'crop_rotate': 'تدوير',
+      'crop_reset': 'إعادة ضبط',
+      'crop_center': 'توسيط',
+      'crop_done': 'تأكيد',
+      'cropping_photo': 'جارٍ القص...',
       'user_not_connected': 'المستخدم غير متصل',
       'base_education': 'التعليم الأساسي',
       'general_branch': 'جذع مشترك',

@@ -11,6 +11,7 @@ import '../../../data/models/grade_model.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/resultats_skeleton.dart';
 import '../../widgets/locked_semester_card.dart';
+import '../../../data/services/offline_cache_service.dart';
 
 import '../../providers/student_context_provider.dart' show studentContextProvider, semestersProvider;
 // Import providers from the original file
@@ -170,45 +171,60 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
               // Content
               if (isRefreshing)
                 const ResultatsCardsSkeleton()
-              else if (isLocked)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: context.horizontalPadding,
-                      ),
-                      child: LockedSemesterCard(
-                        startDate: semesters
-                            .where((s) => s.number == selectedSemester)
-                            .firstOrNull
-                            ?.startDate,
-                        moduleType: LockedModuleType.grades,
-                      ),
-                    ),
-                  ),
-                )
               else
               gradesAsync.when(
-                data: (grades) =>
-                    _buildContent(context, grades, selectedSemester, l10n),
-                loading: () => const ResultatsCardsSkeleton(),
-                error: (error, stack) => SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 48,
-                          color: Colors.red.shade300,
+                data: (grades) {
+                  if (grades.isNotEmpty) {
+                    return _buildContent(context, grades, selectedSemester, l10n);
+                  }
+                  if (isLocked) {
+                    return SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: context.horizontalPadding,
+                          ),
+                          child: LockedSemesterCard(
+                            startDate: semesters
+                                .where((s) => s.number == selectedSemester)
+                                .firstOrNull
+                                ?.startDate,
+                            moduleType: LockedModuleType.grades,
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        Text('Erreur: $error'),
-                      ],
+                      ),
+                    );
+                  }
+                  return _buildContent(context, grades, selectedSemester, l10n);
+                },
+                loading: () => const ResultatsCardsSkeleton(),
+                error: (error, stack) {
+                  final cached = OfflineCacheService.instance.getListOfMaps('cached_grades_sem_$selectedSemester')
+                      ?? OfflineCacheService.instance.getListOfMaps('cached_grades_latest');
+                  if (cached != null && cached.isNotEmpty) {
+                    try {
+                      final cachedGrades = cached.map((m) => SubjectGradesSummary.fromJson(m)).toList();
+                      return _buildContent(context, cachedGrades, selectedSemester, l10n);
+                    } catch (_) {}
+                  }
+                  return SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text('Erreur: $error'),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ],
           ),

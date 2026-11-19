@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../core/theme/responsive.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../data/services/core_data_service.dart';
 import '../../../data/services/offline_cache_service.dart';
 import '../../providers/student_context_provider.dart';
@@ -171,6 +172,13 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
   ref,
 ) async {
   const cacheKey = 'cached_payment_pricing';
+  if (ConnectivityService.instance.isOffline) {
+    final cached = OfflineCacheService.instance.getMap(cacheKey);
+    if (cached != null) {
+      return cached.map((k, v) => MapEntry(k, (v as num).toDouble()));
+    }
+    return {};
+  }
   try {
     final context = await ref.watch(studentContextProvider.future);
     if (context == null) {
@@ -385,22 +393,21 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                   }
                 },
                 loading: () => const MonSoldeSkeleton(),
-                error: (error, stack) => SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 48,
-                          color: Colors.red.shade300,
-                        ),
-                        const SizedBox(height: 16),
-                        Text('Erreur: $error'),
-                      ],
-                    ),
-                  ),
-                ),
+                error: (error, stack) {
+                  final cached = OfflineCacheService.instance.getListOfMaps('payments_latest');
+                  final cachedPlans = (cached != null && cached.isNotEmpty)
+                      ? cached.map((e) => PaymentPlanInfo.fromJson(e)).toList()
+                      : <PaymentPlanInfo>[];
+                  return _buildContent(
+                    context,
+                    cachedPlans,
+                    categories,
+                    l10n,
+                    semestersAsync.asData?.value ?? [],
+                    yearDates.asData?.value,
+                    pricingAsync.asData?.value ?? {},
+                  );
+                },
               ),
             ],
           ),

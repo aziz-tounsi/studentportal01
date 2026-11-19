@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../data/models/grade_model.dart';
 import '../../../data/repositories/results_repository.dart';
 import '../../../data/services/offline_cache_service.dart';
@@ -44,31 +45,63 @@ final resultatsRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Grades provider - fetches real data
 final gradesProvider = FutureProvider.family<List<SubjectGradesSummary>, int>((ref, semesterNumber) async {
-  final authState = ref.watch(authProvider);
-  final studentCtx = await ref.watch(ctx.studentContextProvider.future);
-  final enrollment = await ref.watch(currentEnrollmentProvider.future);
-  final semesters = await ref.watch(semestersProvider.future);
-  
-  final enrollmentId = studentCtx?.enrollmentId 
-      ?? enrollment?['id'] as String? 
-      ?? authState.enrollment?.id 
-      ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['id'] as String?)
-      ?? 'default';
-  
-  // Find the semester by number
-  final semester = semesters.firstWhere(
-    (s) => s['number'] == semesterNumber,
-    orElse: () => <String, dynamic>{},
-  );
-  
-  final semesterId = (semester['id'] as String?) ?? '$semesterNumber';
-  
-  final repo = ref.watch(resultsRepositoryProvider);
-  return repo.getStudentGrades(
-    enrollmentId: enrollmentId,
-    semesterId: semesterId,
-    semesterNumber: semesterNumber,
-  );
+  List<SubjectGradesSummary>? getCachedGrades() {
+    final cached = OfflineCacheService.instance.getListOfMaps('cached_grades_sem_$semesterNumber')
+        ?? OfflineCacheService.instance.getListOfMaps('cached_grades_latest');
+    if (cached != null && cached.isNotEmpty) {
+      try {
+        return cached.map((m) => SubjectGradesSummary.fromJson(m)).toList();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  if (ConnectivityService.instance.isOffline) {
+    final cached = getCachedGrades();
+    if (cached != null) return cached;
+  }
+
+  try {
+    final authState = ref.watch(authProvider);
+    final studentCtx = await ref.watch(ctx.studentContextProvider.future).timeout(
+      const Duration(seconds: 4),
+      onTimeout: () => null,
+    );
+    final enrollment = await ref.watch(currentEnrollmentProvider.future).timeout(
+      const Duration(seconds: 4),
+      onTimeout: () => null,
+    );
+    final semesters = await ref.watch(semestersProvider.future).timeout(
+      const Duration(seconds: 4),
+      onTimeout: () => <Map<String, dynamic>>[],
+    );
+    
+    final enrollmentId = studentCtx?.enrollmentId 
+        ?? enrollment?['id'] as String? 
+        ?? authState.enrollment?.id 
+        ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['id'] as String?)
+        ?? 'default';
+    
+    // Find the semester by number
+    final semester = semesters.firstWhere(
+      (s) => s['number'] == semesterNumber,
+      orElse: () => <String, dynamic>{},
+    );
+    
+    final semesterId = (semester['id'] as String?) ?? '$semesterNumber';
+    
+    final repo = ref.watch(resultsRepositoryProvider);
+    final grades = await repo.getStudentGrades(
+      enrollmentId: enrollmentId,
+      semesterId: semesterId,
+      semesterNumber: semesterNumber,
+    );
+    if (grades.isNotEmpty) return grades;
+  } catch (e) {
+    debugPrint('gradesProvider error: $e');
+  }
+
+  return getCachedGrades() ?? [];
 });
 
 // ignore: unused_element

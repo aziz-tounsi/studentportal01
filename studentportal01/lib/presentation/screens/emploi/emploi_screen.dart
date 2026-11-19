@@ -30,8 +30,12 @@ final emploiRefreshingProvider = StateProvider<bool>((ref) => false);
 
 // Detect if currently in an exam period
 final isExamPeriodProvider = FutureProvider<bool>((ref) async {
+  if (ConnectivityService.instance.isOffline) return false;
   try {
-    final contextAsync = await ref.watch(studentContextProvider.future);
+    final contextAsync = await ref.watch(studentContextProvider.future).timeout(
+      const Duration(seconds: 3),
+      onTimeout: () => null,
+    );
     if (contextAsync == null || contextAsync.schoolId.isEmpty) return false;
 
     final today = DateTime.now();
@@ -42,7 +46,7 @@ final isExamPeriodProvider = FutureProvider<bool>((ref) async {
         .rpc('get_active_exam_period', params: {
       'p_school_id': contextAsync.schoolId,
       'p_date': todayStr,
-    });
+    }).timeout(const Duration(seconds: 3));
     if (examCheck != null) return true;
 
     // Fallback direct query on exam_periods table
@@ -51,7 +55,8 @@ final isExamPeriodProvider = FutureProvider<bool>((ref) async {
         .select('id')
         .eq('school_id', contextAsync.schoolId)
         .or('is_active.eq.true,and(start_date.lte.$todayStr,end_date.gte.$todayStr)')
-        .maybeSingle();
+        .maybeSingle()
+        .timeout(const Duration(seconds: 3));
 
     return directCheck != null;
   } catch (_) {
@@ -119,6 +124,25 @@ Color _getSubjectColor(String subjectCode) {
   return _appColorPalette[hash % _appColorPalette.length];
 }
 
+List<TimetableSlotModel>? getCachedTimetableForScreen({
+  String? classId,
+  String selectedType = 'regular',
+  int selectedSemesterNumber = 1,
+}) {
+  final cacheKey = classId != null 
+      ? 'timetable_screen_${classId}_${selectedType}_$selectedSemesterNumber'
+      : 'timetable_screen_${selectedType}_$selectedSemesterNumber';
+
+  final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
+      ?? (classId != null ? OfflineCacheService.instance.getListOfMaps('timetable_screen_${classId}_regular_$selectedSemesterNumber') : null)
+      ?? OfflineCacheService.instance.getListOfMaps('timetable_screen_latest_$selectedSemesterNumber')
+      ?? OfflineCacheService.instance.getListOfMaps('timetable_screen_latest');
+  if (cached != null && cached.isNotEmpty) {
+    return cached.map((s) => TimetableSlotModel.fromJson(s)).toList();
+  }
+  return null;
+}
+
 final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
   final authState = ref.watch(authProvider);
   final contextAsync = await ref.watch(studentContextProvider.future);
@@ -134,15 +158,16 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
       ? 'timetable_screen_${classId}_${selectedType}_$selectedSemesterNumber'
       : 'timetable_screen_${selectedType}_$selectedSemesterNumber';
 
-  List<TimetableSlotModel>? getCachedTimetable() {
-    final cached = OfflineCacheService.instance.getListOfMaps(cacheKey)
-        ?? (classId != null ? OfflineCacheService.instance.getListOfMaps('timetable_screen_${classId}_regular_$selectedSemesterNumber') : null)
-        ?? OfflineCacheService.instance.getListOfMaps('timetable_screen_latest_$selectedSemesterNumber')
-        ?? OfflineCacheService.instance.getListOfMaps('timetable_screen_latest');
-    if (cached != null && cached.isNotEmpty) {
-      return cached.map((s) => TimetableSlotModel.fromJson(s)).toList();
-    }
-    return null;
+  List<TimetableSlotModel>? getCachedTimetable() => getCachedTimetableForScreen(
+    classId: classId,
+    selectedType: selectedType,
+    selectedSemesterNumber: selectedSemesterNumber,
+  );
+
+  // Instant offline return
+  if (ConnectivityService.instance.isOffline) {
+    final cachedList = getCachedTimetable();
+    if (cachedList != null && cachedList.isNotEmpty) return cachedList;
   }
 
   if (classId == null) {
@@ -175,7 +200,8 @@ final timetableProvider = FutureProvider<List<TimetableSlotModel>>((ref) async {
 
     final slotsResp = await query
         .order('day_of_week')
-        .order('start_time');
+        .order('start_time')
+        .timeout(const Duration(seconds: 4));
 
     final allSlotsList = slotsResp as List;
     if (allSlotsList.isEmpty) {
@@ -405,6 +431,11 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
     final isRefreshing = ref.watch(emploiRefreshingProvider);
     final semesters = ref.watch(semestersProvider).valueOrNull ?? [];
     final isLocked = isSemesterLocked(selectedSemester, semesters);
+    final studentCtx = ref.watch(studentContextProvider).valueOrNull;
+    final authState = ref.watch(authProvider);
+    final classId = studentCtx?.classId 
+        ?? authState.enrollment?.classId 
+        ?? (OfflineCacheService.instance.getMap('cached_enrollment')?['class_id'] as String?);
 
     return Material(
       type: MaterialType.transparency,
@@ -606,22 +637,36 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                             ? const EmploiSkeleton()
                             : timetableAsync.when(
                           loading: () => const EmploiSkeleton(),
-                          error: (e, _) => Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.error_outline,
-                                    size: 48, color: Colors.red.shade300),
-                                const SizedBox(height: 16),
-                                Text('Erreur: $e',
-                                    style: TextStyle(color: Colors.grey.shade600)),
-                              ],
-                            ),
-                          ),
+                          error: (e, _) {
+                            final cachedSlots = getCachedTimetableForScreen(
+                              classId: classId,
+                              selectedType: selectedType,
+                              selectedSemesterNumber: selectedSemester,
+                            );
+                            if (cachedSlots != null && cachedSlots.isNotEmpty) {
+                              return _buildScrollableTimetable(context, cachedSlots);
+                            }
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline,
+                                      size: 48, color: Colors.red.shade300),
+                                  const SizedBox(height: 16),
+                                  Text('Erreur: $e',
+                                      style: TextStyle(color: Colors.grey.shade600)),
+                                ],
+                              ),
+                            );
+                          },
                           data: (slots) {
                             final semObj = semesters
                                 .where((s) => s.number == selectedSemester)
                                 .firstOrNull;
+
+                            if (slots.isNotEmpty) {
+                              return _buildScrollableTimetable(context, slots);
+                            }
 
                             if (isLocked) {
                               return LockedSemesterCard(
@@ -630,15 +675,12 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                               );
                             }
 
-                            if (slots.isEmpty) {
-                              return _buildEmptyState(
-                                context,
-                                isExam: selectedType == 'exam',
-                                isFuture: false,
-                                startDate: semObj?.startDate,
-                              );
-                            }
-                            return _buildScrollableTimetable(context, slots);
+                            return _buildEmptyState(
+                              context,
+                              isExam: selectedType == 'exam',
+                              isFuture: false,
+                              startDate: semObj?.startDate,
+                            );
                           },
                         ),
                       ),
