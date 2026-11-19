@@ -1110,17 +1110,50 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                       maxLines: 1,
                     ),
                   ],
-                  // 3. Teacher Name (THIRD, if present)
+                  // 3. Teacher Name + Avatar (THIRD, if present)
                   if (teacherText != null && teacherText.isNotEmpty) ...[
-                    const SizedBox(height: 1),
-                    Text(
-                      teacherText,
-                      style: TextStyle(
-                        fontSize: 8.5,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
-                      maxLines: 1,
+                    const SizedBox(height: 1.5),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.3),
+                            image: (slot.teacherPhotoUrl != null && slot.teacherPhotoUrl!.isNotEmpty)
+                                ? DecorationImage(
+                                    image: NetworkImage(slot.teacherPhotoUrl!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: (slot.teacherPhotoUrl == null || slot.teacherPhotoUrl!.isEmpty)
+                              ? const Center(
+                                  child: Icon(
+                                    Icons.person_rounded,
+                                    size: 8,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 3.5),
+                        Flexible(
+                          child: Text(
+                            teacherText,
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.white.withValues(alpha: 0.90),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                   // 4. Time Range (FOURTH / BOTTOM)

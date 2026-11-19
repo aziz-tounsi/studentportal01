@@ -173,7 +173,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
               _buildStudentInfoCard(context, data),
               const SizedBox(height: 32),
               SizedBox(
-                height: 460,
+                height: 495,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -531,7 +531,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
           Expanded(child: _buildCalendarGrid(data, targetDate)),
           const SizedBox(height: 12),
           Row(

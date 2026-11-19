@@ -359,6 +359,7 @@ class AppLocalizations {
       'enrolled_and_active': 'Enrolled & Active',
       'personal_info_title': 'Personal Information',
       'student_code_copied': 'Student code copied!',
+      'email_copied': 'Email copied to clipboard!',
       'settings_subtitle': 'Preferences & Customization',
       'notifications_alerts': 'Notifications & Alerts',
       'notif_grades_title': 'Grades & Evaluations',
@@ -971,6 +972,7 @@ class AppLocalizations {
       'enrolled_and_active': 'Inscrit & Actif',
       'personal_info_title': 'Informations Personnelles',
       'student_code_copied': 'Code étudiant copié !',
+      'email_copied': 'Email copié dans le presse-papiers !',
       'settings_subtitle': 'Préférences et personnalisation',
       'notifications_alerts': 'Notifications & Alertes',
       'notif_grades_title': 'Notes & Évaluations',
@@ -1575,6 +1577,7 @@ class AppLocalizations {
       'enrolled_and_active': 'مسجل ونشط',
       'personal_info_title': 'المعلومات الشخصية',
       'student_code_copied': 'تم نسخ رمز الطالب!',
+      'email_copied': 'تم نسخ البريد الإلكتروني!',
       'settings_subtitle': 'التفضيلات والتخصيص',
       'notifications_alerts': 'الإشعارات والتنبيهات',
       'notif_grades_title': 'النقاط والتقييمات',
@@ -2126,6 +2129,7 @@ class AppLocalizations {
   String get enrolledAndActive => translate('enrolled_and_active');
   String get personalInfoTitle => translate('personal_info_title');
   String get studentCodeCopied => translate('student_code_copied');
+  String get emailCopied => translate('email_copied');
 
   // Settings new
   String get settingsSubtitle => translate('settings_subtitle');

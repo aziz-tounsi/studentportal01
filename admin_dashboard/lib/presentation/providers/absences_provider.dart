@@ -262,6 +262,9 @@ class StudentInfo {
   final String? enrollmentId;
   final String? className;
   final String? classId;
+  final String? studentCode;
+  final String? phone;
+  final String? email;
 
   StudentInfo({
     required this.id,
@@ -269,6 +272,9 @@ class StudentInfo {
     this.enrollmentId,
     this.className,
     this.classId,
+    this.studentCode,
+    this.phone,
+    this.email,
   });
 
   factory StudentInfo.fromJson(Map<String, dynamic> json) {
@@ -284,6 +290,9 @@ class StudentInfo {
       enrollmentId: firstEnrollment?['id'] as String?,
       className: classData?['name'] as String?,
       classId: classData?['id'] as String?,
+      studentCode: json['student_code'] as String?,
+      phone: json['phone'] as String?,
+      email: json['email'] as String?,
     );
   }
 }
@@ -534,7 +543,9 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     // Fetch students with enrollments for this school
     final studentsData = await supabase
         .from('users')
-        .select('id, full_name, enrollments(id, classes(id, name, school_id))')
+        .select(
+          'id, full_name, student_code, phone, email, enrollments(id, classes(id, name, school_id))',
+        )
         .eq('role', 'student')
         .eq('school_id', schoolId)
         .order('full_name');

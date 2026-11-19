@@ -201,19 +201,65 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
       debugPrint('absencesProvider: Error fetching teacher_assignments: $e');
     }
     
-    final absenceResponse = await supabase
-        .from('absence_records')
-        .select('subject_offering_id, hours_absent')
-        .eq('enrollment_id', enrollmentId);
-    
-    final absenceRecords = List<Map<String, dynamic>>.from(absenceResponse);
+    List<Map<String, dynamic>> absenceRecords = [];
+    try {
+      dynamic resp;
+      if (enrollmentId.isNotEmpty && enrollmentId != 'default' && userId != null && userId.isNotEmpty) {
+        resp = await supabase
+            .from('absence_records')
+            .select('subject_offering_id, hours_absent, student_id, enrollment_id, subject_offerings(id, subject_id)')
+            .or('enrollment_id.eq.$enrollmentId,student_id.eq.$userId')
+            .timeout(const Duration(seconds: 4));
+      } else if (enrollmentId.isNotEmpty && enrollmentId != 'default') {
+        resp = await supabase
+            .from('absence_records')
+            .select('subject_offering_id, hours_absent, student_id, enrollment_id, subject_offerings(id, subject_id)')
+            .eq('enrollment_id', enrollmentId)
+            .timeout(const Duration(seconds: 4));
+      } else if (userId != null && userId.isNotEmpty) {
+        resp = await supabase
+            .from('absence_records')
+            .select('subject_offering_id, hours_absent, student_id, enrollment_id, subject_offerings(id, subject_id)')
+            .eq('student_id', userId)
+            .timeout(const Duration(seconds: 4));
+      }
+      if (resp != null) {
+        absenceRecords = List<Map<String, dynamic>>.from(resp);
+      }
+    } catch (e) {
+      debugPrint('absencesProvider: Error fetching absence_records with or filter: $e');
+      try {
+        final fallback = await supabase
+            .from('absence_records')
+            .select('subject_offering_id, hours_absent')
+            .eq('enrollment_id', enrollmentId)
+            .timeout(const Duration(seconds: 4));
+        absenceRecords = List<Map<String, dynamic>>.from(fallback);
+      } catch (_) {}
+    }
+
+    final subjectIdToOfferingId = <String, String>{};
+    for (final so in subjectOfferings) {
+      final sId = so['subject_id'] as String?;
+      final soId = so['id'] as String;
+      if (sId != null) subjectIdToOfferingId[sId] = soId;
+    }
     
     final absencesBySubject = <String, double>{};
     for (final record in absenceRecords) {
       final soId = record['subject_offering_id'] as String?;
       final hours = (record['hours_absent'] as num?)?.toDouble() ?? 0;
       if (soId != null) {
-        absencesBySubject[soId] = (absencesBySubject[soId] ?? 0) + hours;
+        if (subjectOfferings.any((so) => so['id'] == soId)) {
+          absencesBySubject[soId] = (absencesBySubject[soId] ?? 0) + hours;
+        } else {
+          // Check if subject_id matches an offering for this class/semester
+          final relSubjectId = (record['subject_offerings'] as Map<String, dynamic>?)?['subject_id'] as String?;
+          if (relSubjectId != null && subjectIdToOfferingId.containsKey(relSubjectId)) {
+            final targetSoId = subjectIdToOfferingId[relSubjectId]!;
+            absencesBySubject[targetSoId] = (absencesBySubject[targetSoId] ?? 0) + hours;
+          }
+        }
       }
     }
     

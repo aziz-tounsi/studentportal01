@@ -47,6 +47,8 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to select a profile picture.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Authentification biométrique pour sécuriser votre espace élève.</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>https</string>

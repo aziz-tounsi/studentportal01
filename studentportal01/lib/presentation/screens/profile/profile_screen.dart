@@ -332,6 +332,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     label: l10n.email,
                     value: user.email,
                     color: const Color(0xFF10B981),
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: user.email));
+                      HapticFeedback.lightImpact();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.emailCopied),
+                          duration: const Duration(seconds: 1),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                    },
+                    trailing: GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: user.email));
+                        HapticFeedback.lightImpact();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.emailCopied),
+                            duration: const Duration(seconds: 1),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF10B981)),
+                      ),
+                    ),
                   ),
                   if (user.phone != null && user.phone!.isNotEmpty)
                     _InfoItem(
@@ -744,6 +778,7 @@ class _ProfileHeroCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final avatarState = ref.watch(avatarProvider);
     final initials = user.fullName
         .split(' ')
@@ -842,16 +877,43 @@ class _ProfileHeroCard extends ConsumerWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
-          // Email
-          Text(
-            user.email,
-            style: ArabicTypography.bodyStyle(
-              context,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w400,
-              color: Colors.grey.shade600,
+          // Email (copyable)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: user.email));
+              HapticFeedback.lightImpact();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(l10n.emailCopied),
+                  duration: const Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  user.email,
+                  style: ArabicTypography.bodyStyle(
+                    context,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.copy_rounded,
+                  size: 13,
+                  color: Colors.grey.shade400,
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -976,48 +1038,52 @@ class _UnifiedSectionCard extends StatelessWidget {
 
             return Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: item.color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: item.onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: item.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(item.icon, color: item.color, size: 20),
                         ),
-                        child: Icon(item.icon, color: item.color, size: 20),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.label,
-                              style: ArabicTypography.bodyStyle(
-                                context,
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                                fontWeight: FontWeight.w400,
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.label,
+                                style: ArabicTypography.bodyStyle(
+                                  context,
+                                  fontSize: 12,
+                                  color: Colors.grey.shade500,
+                                  fontWeight: FontWeight.w400,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              item.value,
-                              style: ArabicTypography.bodyStyle(
-                                context,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF1F2937),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.value,
+                                style: ArabicTypography.bodyStyle(
+                                  context,
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1F2937),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      if (item.trailing != null) item.trailing!,
-                    ],
+                        if (item.trailing != null) item.trailing!,
+                      ],
+                    ),
                   ),
                 ),
                 if (!isLast)
@@ -1037,6 +1103,7 @@ class _InfoItem {
   final String value;
   final Color color;
   final Widget? trailing;
+  final VoidCallback? onTap;
 
   const _InfoItem({
     required this.icon,
@@ -1044,6 +1111,7 @@ class _InfoItem {
     required this.value,
     required this.color,
     this.trailing,
+    this.onTap,
   });
 }
 

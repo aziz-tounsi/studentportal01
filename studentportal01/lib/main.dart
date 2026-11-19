@@ -18,6 +18,7 @@ import 'data/services/offline_cache_service.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/locale_provider.dart';
 import 'presentation/widgets/offline_indicator_banner.dart';
+import 'presentation/widgets/biometric_lock_overlay.dart';
 
 void main() {
   // runZonedGuarded must wrap EVERYTHING including ensureInitialized so that
@@ -216,19 +217,21 @@ class StudentPortalApp extends ConsumerWidget {
 
           return MediaQuery(
             data: mediaQuery.copyWith(textScaler: clampedTextScaler),
-            child: Stack(
-              children: [
-                body,
-                const Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: SafeArea(
-                    bottom: false,
-                    child: OfflineIndicatorBanner(),
+            child: BiometricLockOverlay(
+              child: Stack(
+                children: [
+                  body,
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SafeArea(
+                      bottom: false,
+                      child: OfflineIndicatorBanner(),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },

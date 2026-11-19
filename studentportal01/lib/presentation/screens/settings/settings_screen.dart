@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../core/theme/responsive.dart';
 import '../../providers/auth_provider.dart';
@@ -33,6 +34,71 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _biometricLock = false;
   bool _autoDownloadWifi = true;
   bool _cacheCleared = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricSetting();
+  }
+
+  Future<void> _loadBiometricSetting() async {
+    final enabled = await BiometricService.instance.isBiometricLockEnabled();
+    if (mounted) setState(() => _biometricLock = enabled);
+  }
+
+  Future<void> _onBiometricToggled(bool value) async {
+    final l10n = AppLocalizations.of(context);
+    if (value) {
+      final available = await BiometricService.instance.isBiometricsAvailable();
+      if (!available) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              l10n.translate('biometric_not_available') != 'biometric_not_available'
+                  ? l10n.translate('biometric_not_available')
+                  : 'Authentification biométrique non disponible ou non configurée sur cet appareil.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+        return;
+      }
+
+      final authenticated = await BiometricService.instance.authenticate(
+        reason: 'Confirmez votre identité pour activer le verrouillage biométrique',
+      );
+
+      if (authenticated) {
+        await BiometricService.instance.setBiometricLockEnabled(true);
+        if (mounted) {
+          setState(() => _biometricLock = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                l10n.translate('biometric_enabled_success') != 'biometric_enabled_success'
+                    ? l10n.translate('biometric_enabled_success')
+                    : 'Verrouillage biométrique activé avec succès.',
+              ),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+        }
+      } else {
+        if (mounted) setState(() => _biometricLock = false);
+      }
+    } else {
+      final authenticated = await BiometricService.instance.authenticate(
+        reason: 'Confirmez votre identité pour désactiver le verrouillage biométrique',
+      );
+      if (authenticated) {
+        await BiometricService.instance.setBiometricLockEnabled(false);
+        if (mounted) setState(() => _biometricLock = false);
+      }
+    }
+  }
 
   void _clearAppCache() {
     final l10n = AppLocalizations.of(context);
@@ -553,7 +619,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         title: l10n.biometricLock,
                         subtitle: l10n.biometricLockSubtitle,
                         value: _biometricLock,
-                        onChanged: (v) => setState(() => _biometricLock = v),
+                        onChanged: _onBiometricToggled,
                       ),
                     ],
                   ),
@@ -618,15 +684,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         trailing: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: _navPink.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
                           child: const Text(
                             'v1.2.0',
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: _navPink,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF64748B),
                             ),
                           ),
                         ),

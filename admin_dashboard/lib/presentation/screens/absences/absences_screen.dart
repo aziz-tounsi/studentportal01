@@ -1804,11 +1804,13 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
 
   /// Get filtered students for search
   List<StudentInfo> _getFilteredStudents(List<StudentInfo> allStudents) {
-    if (_studentSearchQuery.isEmpty) return allStudents;
+    if (_studentSearchQuery.trim().isEmpty) return const [];
 
-    final query = _studentSearchQuery.toLowerCase();
+    final query = _studentSearchQuery.toLowerCase().trim();
     return allStudents.where((s) {
       return s.fullName.toLowerCase().contains(query) ||
+          (s.studentCode?.toLowerCase().contains(query) ?? false) ||
+          (s.phone?.toLowerCase().contains(query) ?? false) ||
           (s.className?.toLowerCase().contains(query) ?? false);
     }).toList();
   }
@@ -1908,27 +1910,282 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                           if (!_isBulkMode) ...[
                             _fieldLabel('Rechercher un étudiant'),
                             const SizedBox(height: 8),
+
+                            // Selected student card (if chosen)
+                            if (_selectedStudentEnrollmentId != null) ...[
+                              Builder(
+                                builder: (context) {
+                                  final sel = state.students
+                                          .where((s) => s.enrollmentId == _selectedStudentEnrollmentId)
+                                          .firstOrNull ??
+                                      _classStudents
+                                          .where((s) => s.enrollmentId == _selectedStudentEnrollmentId)
+                                          .firstOrNull;
+                                  if (sel == null) return const SizedBox.shrink();
+
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF6D4CF6).withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFF6D4CF6).withOpacity(0.25)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        UserAvatar(name: sel.fullName, size: 36),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                sel.fullName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                  color: AppColors.textPrimary,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Row(
+                                                children: [
+                                                  if (sel.className != null) ...[
+                                                    Text(
+                                                      sel.className!,
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: Color(0xFF6D4CF6),
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                  ],
+                                                  if (sel.studentCode != null)
+                                                    Text(
+                                                      sel.studentCode!,
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                        color: AppColors.textTertiary,
+                                                        fontFamily: 'monospace',
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.close, size: 18, color: AppColors.textTertiary),
+                                          onPressed: () {
+                                            setState(() {
+                                              _selectedStudentEnrollmentId = null;
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+
+                            // Search textfield
                             Container(
                               decoration: BoxDecoration(
-                                color: AppColors.slate50, borderRadius: BorderRadius.circular(10),
+                                color: AppColors.slate50,
+                                borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: AppColors.borderLight),
                               ),
                               child: TextField(
                                 controller: _studentSearchController,
                                 style: const TextStyle(fontSize: 14),
                                 decoration: InputDecoration(
-                                  hintText: 'Nom, code, téléphone...',
-                                  hintStyle: const TextStyle(color: AppColors.textTertiary),
+                                  hintText: 'Rechercher par nom, téléphone, code...',
+                                  hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                                   prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textTertiary),
                                   suffixIcon: _studentSearchQuery.isNotEmpty
-                                    ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() { _studentSearchController.clear(); _studentSearchQuery = ''; }))
-                                    : null,
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear, size: 16),
+                                          onPressed: () => setState(() {
+                                            _studentSearchController.clear();
+                                            _studentSearchQuery = '';
+                                          }),
+                                        )
+                                      : null,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                  border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
                                 ),
                                 onChanged: (v) => setState(() => _studentSearchQuery = v),
                               ),
                             ),
+
+                            // Result count & interactive student list
+                            if (_studentSearchQuery.trim().isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: filteredStudents.isNotEmpty
+                                          ? const Color(0xFF6D4CF6).withOpacity(0.1)
+                                          : AppColors.slate100,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      filteredStudents.isEmpty
+                                          ? 'Aucun résultat'
+                                          : '${filteredStudents.length} résultat(s)',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: filteredStudents.isNotEmpty
+                                            ? const Color(0xFF6D4CF6)
+                                            : AppColors.slate500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                constraints: const BoxConstraints(maxHeight: 240),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.borderLight),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.06),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: filteredStudents.isEmpty
+                                    ? Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.search_off, size: 32, color: AppColors.slate300),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'Aucun élève trouvé pour "$_studentSearchQuery"',
+                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: ListView.separated(
+                                          shrinkWrap: true,
+                                          itemCount: filteredStudents.length,
+                                          separatorBuilder: (_, __) =>
+                                              const Divider(height: 1, color: AppColors.slate100),
+                                          itemBuilder: (context, index) {
+                                            final student = filteredStudents[index];
+                                            final isSelected =
+                                                _selectedStudentEnrollmentId == student.enrollmentId;
+
+                                            return Material(
+                                              color: isSelected
+                                                  ? const Color(0xFF6D4CF6).withOpacity(0.08)
+                                                  : Colors.transparent,
+                                              child: InkWell(
+                                                onTap: () => _selectStudentFromSearch(
+                                                  student,
+                                                  state.classes,
+                                                ),
+                                                child: Padding(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      UserAvatar(name: student.fullName, size: 32),
+                                                      const SizedBox(width: 12),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Text(
+                                                              student.fullName,
+                                                              style: const TextStyle(
+                                                                fontSize: 13,
+                                                                fontWeight: FontWeight.w600,
+                                                                color: AppColors.textPrimary,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 2),
+                                                            Row(
+                                                              children: [
+                                                                if (student.className != null) ...[
+                                                                  Container(
+                                                                    padding: const EdgeInsets.symmetric(
+                                                                      horizontal: 6,
+                                                                      vertical: 2,
+                                                                    ),
+                                                                    decoration: BoxDecoration(
+                                                                      color: AppColors.slate100,
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(4),
+                                                                    ),
+                                                                    child: Text(
+                                                                      student.className!,
+                                                                      style: const TextStyle(
+                                                                        fontSize: 11,
+                                                                        color: AppColors.textSecondary,
+                                                                        fontWeight: FontWeight.w500,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  const SizedBox(width: 6),
+                                                                ],
+                                                                if (student.studentCode != null)
+                                                                  Text(
+                                                                    student.studentCode!,
+                                                                    style: const TextStyle(
+                                                                      fontSize: 11,
+                                                                      color: AppColors.textTertiary,
+                                                                      fontFamily: 'monospace',
+                                                                    ),
+                                                                  ),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      if (isSelected)
+                                                        const Icon(
+                                                          Icons.check_circle,
+                                                          size: 18,
+                                                          color: Color(0xFF6D4CF6),
+                                                        )
+                                                      else
+                                                        const Icon(
+                                                          Icons.arrow_forward_ios,
+                                                          size: 12,
+                                                          color: AppColors.slate300,
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                              ),
+                            ],
                             const SizedBox(height: 16),
                           ],
 
@@ -2780,6 +3037,35 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
       if (d.weekday <= 6) count++; // Mon-Sat
     }
     return count;
+  }
+
+  Future<void> _selectStudentFromSearch(StudentInfo student, List<ClassModel> classes) async {
+    final classModel = classes.where((c) => c.id == student.classId).firstOrNull;
+    setState(() {
+      if (classModel != null) {
+        _selectedNiveauId = classModel.gradeLevelId;
+        _selectedSectionId = classModel.sectionId;
+        _selectedClassId = student.classId;
+      }
+      _selectedStudentEnrollmentId = student.enrollmentId;
+      _studentSearchController.clear();
+      _studentSearchQuery = '';
+    });
+    if (student.classId != null) {
+      setState(() => _isLoading = true);
+      final students = await widget.ref
+          .read(absencesProvider.notifier)
+          .getStudentsForClass(student.classId!);
+      final slots = widget.ref
+          .read(absencesProvider.notifier)
+          .getTimetableSlotsForClass(student.classId!);
+      setState(() {
+        _classStudents = students;
+        _classTimetableSlots = slots;
+        _updateTimetableSlotsForPeriod();
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _onClassChanged(String? classId) async {

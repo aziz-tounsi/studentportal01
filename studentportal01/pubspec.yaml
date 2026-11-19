@@ -51,6 +51,7 @@ dependencies:
   http: ^1.2.0
   syncfusion_flutter_pdf: ^35.1.43
   archive: ^4.7.1
+  local_auth: ^3.0.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
