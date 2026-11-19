@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/grading_config_model.dart';
 import '../../providers/results_provider.dart';
+import '../modern_animated_switch.dart';
 
 /// Dialog for configuring grading formulas and exam types
 class GradingConfigDialog extends StatefulWidget {
@@ -284,13 +285,36 @@ class _GradingConfigDialogState extends State<GradingConfigDialog>
 
             const SizedBox(height: 16),
 
-            SwitchListTile(
-              title: const Text('Calculer la moyenne des DC'),
-              subtitle: Text(_dcAverageMode
-                  ? 'Les DC sont moyennés puis pondérés'
-                  : 'Chaque DC a un poids individuel'),
-              value: _dcAverageMode,
-              onChanged: (v) => setState(() => _dcAverageMode = v),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Calculer la moyenne des DC', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        const SizedBox(height: 2),
+                        Text(
+                          _dcAverageMode
+                              ? 'Les DC sont moyennés puis pondérés'
+                              : 'Chaque DC a un poids individuel',
+                          style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ModernAnimatedSwitch(
+                    value: _dcAverageMode,
+                    onChanged: (v) => setState(() => _dcAverageMode = v),
+                  ),
+                ],
+              ),
             ),
           ],
 

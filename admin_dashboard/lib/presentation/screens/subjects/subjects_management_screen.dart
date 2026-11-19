@@ -12,6 +12,7 @@ import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/modern_animated_switch.dart';
 import '../../../data/models/academic_models.dart';
 import '../../../data/models/school_models.dart';
 import '../../../data/models/user_model.dart';
@@ -5817,11 +5818,10 @@ class _SubjectsManagementScreenState
                                           ],
                                         ),
                                       ),
-                                      Switch(
+                                      ModernAnimatedSwitch(
                                         value: isMainSubject,
                                         onChanged: (v) => setState(() => isMainSubject = v),
-                                        activeColor: Colors.white,
-                                        activeTrackColor: _brand,
+                                        activeColor: _brand,
                                       ),
                                     ],
                                   ),

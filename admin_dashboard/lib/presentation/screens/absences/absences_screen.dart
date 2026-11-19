@@ -12,6 +12,7 @@ import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../../data/models/class_model.dart';
+import '../../widgets/modern_animated_switch.dart';
 
 class AbsencesScreen extends ConsumerStatefulWidget {
   const AbsencesScreen({super.key});
@@ -1485,10 +1486,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                           Row(
                             children: [
                               const Expanded(child: Text('Justifiée', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary))),
-                              Switch(
+                              ModernAnimatedSwitch(
                                 value: justified,
                                 onChanged: (v) => setDialogState(() => justified = v),
-                                activeColor: const Color(0xFF6D4CF6),
                               ),
                             ],
                           ),
@@ -1933,7 +1933,6 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF6D4CF6).withOpacity(0.08),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFF6D4CF6).withOpacity(0.25)),
                                     ),
                                     child: Row(
                                       children: [
@@ -2201,60 +2200,91 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                             const SizedBox(height: 16),
                           ],
 
-                          // Niveau selection
-                          _fieldLabel('Niveau *'),
-                          const SizedBox(height: 8),
-                          _premiumDropdown<String>(
-                            value: _selectedNiveauId,
-                            hint: 'Sélectionner un niveau',
-                            prefixIcon: Icons.school_outlined,
-                      items: niveaux
-                          .map(
-                            (n) => DropdownMenuItem(
-                              value: n['id'],
-                              child: Text(n['name']!),
-                            ),
-                          )
-                          .toList(),
-                            onChanged: (v) {
-                              setState(() {
-                                _selectedNiveauId = v;
-                                _selectedSectionId = null;
-                                _selectedClassId = null;
-                                _classStudents.clear();
-                                _selectedStudentEnrollmentIds.clear();
-                              });
-                            },
+                          // Niveau, Filière (if applicable), and Classe on the same row
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Niveau
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _fieldLabel('Niveau *'),
+                                    const SizedBox(height: 8),
+                                    _premiumDropdown<String>(
+                                      value: _selectedNiveauId,
+                                      hint: 'Sélectionner un niveau',
+                                      prefixIcon: Icons.school_outlined,
+                                      items: niveaux
+                                          .map(
+                                            (n) => DropdownMenuItem(
+                                              value: n['id'],
+                                              child: Text(n['name']!, overflow: TextOverflow.ellipsis),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (v) {
+                                        setState(() {
+                                          _selectedNiveauId = v;
+                                          _selectedSectionId = null;
+                                          _selectedClassId = null;
+                                          _classStudents.clear();
+                                          _selectedStudentEnrollmentIds.clear();
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (_selectedNiveauId != null && hasSections) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      _fieldLabel('Filière'),
+                                      const SizedBox(height: 8),
+                                      _premiumDropdown<String>(
+                                        value: _selectedSectionId,
+                                        hint: 'Sélectionner filière',
+                                        prefixIcon: Icons.category_outlined,
+                                        items: sections
+                                            .map((s) => DropdownMenuItem(value: s['id'], child: Text(s['name']!, overflow: TextOverflow.ellipsis)))
+                                            .toList(),
+                                        onChanged: (v) => setState(() {
+                                          _selectedSectionId = v;
+                                          _selectedClassId = null;
+                                          _classStudents.clear();
+                                          _selectedStudentEnrollmentIds.clear();
+                                        }),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(width: 12),
+                              // Classe
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _fieldLabel('Classe *'),
+                                    const SizedBox(height: 8),
+                                    _premiumDropdown<String>(
+                                      value: _selectedClassId,
+                                      hint: _selectedNiveauId == null ? 'Choisir un niveau' : 'Sélectionner classe',
+                                      prefixIcon: Icons.class_outlined,
+                                      items: filteredClasses
+                                          .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis)))
+                                          .toList(),
+                                      onChanged: _selectedNiveauId == null ? null : _onClassChanged,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 16),
-
-                          // Section/Filière selection (only if niveau has sections)
-                          if (_selectedNiveauId != null && hasSections) ...[
-                            _fieldLabel('Filière'),
-                            const SizedBox(height: 8),
-                            _premiumDropdown<String>(
-                              value: _selectedSectionId,
-                              hint: 'Sélectionner une filière',
-                              prefixIcon: Icons.category_outlined,
-                              items: sections.map((s) => DropdownMenuItem(value: s['id'], child: Text(s['name']!))).toList(),
-                              onChanged: (v) => setState(() { _selectedSectionId = v; _selectedClassId = null; _classStudents.clear(); _selectedStudentEnrollmentIds.clear(); }),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-
-                          // Class selection
-                          if (_selectedNiveauId != null && (!hasSections || _selectedSectionId != null || filteredClasses.isNotEmpty)) ...[
-                            _fieldLabel('Classe *'),
-                            const SizedBox(height: 8),
-                            _premiumDropdown<String>(
-                              value: _selectedClassId,
-                              hint: 'Sélectionner une classe',
-                              prefixIcon: Icons.class_outlined,
-                              items: filteredClasses.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                              onChanged: _onClassChanged,
-                            ),
-                            const SizedBox(height: 16),
-                          ],
 
                     // Period selection (for bulk mode)
                     if (_isBulkMode) ...[
@@ -2365,205 +2395,122 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Student selection (for single mode) - searchable list
-                    if (!_isBulkMode && _selectedClassId != null) ...[
-                      if (_isLoading)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: IosLoader(),
-                          ),
-                        )
-                      else ...[
-                        // Show filtered students based on search
-                        Text(
-                          'Sélectionner un étudiant (${_classStudents.length} élèves)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.slate700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          height: 180,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.slate300),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: _classStudents.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'Aucun étudiant dans cette classe',
-                                  ),
-                                )
-                              : ListView.builder(
-                                  itemCount: _studentSearchQuery.isEmpty
-                                      ? _classStudents.length
-                                      : _classStudents.where((s) {
-                                          final query = _studentSearchQuery
-                                              .toLowerCase();
-                                          return s.fullName
-                                              .toLowerCase()
-                                              .contains(query);
-                                        }).length,
-                                  itemBuilder: (ctx, i) {
-                                    final students = _studentSearchQuery.isEmpty
-                                        ? _classStudents
-                                        : _classStudents.where((s) {
-                                            final query = _studentSearchQuery
-                                                .toLowerCase();
-                                            return s.fullName
-                                                .toLowerCase()
-                                                .contains(query);
-                                          }).toList();
-                                    if (i >= students.length)
-                                      return const SizedBox.shrink();
-                                    final student = students[i];
-                                    final isSelected =
-                                        _selectedStudentEnrollmentId ==
-                                        student.enrollmentId;
-                                    return ListTile(
-                                      selected: isSelected,
-                                      selectedTileColor: AppColors.primarySoft,
-                                      leading: UserAvatar(
-                                        name: student.fullName,
-                                        photoUrl: student.photoUrl,
-                                        radius: 20,
-                                      ),
-                                      title: Text(
-                                        student.fullName,
-                                        style: TextStyle(
-                                          fontWeight: isSelected
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
-                                      subtitle: student.className != null
-                                          ? Text(student.className!)
-                                          : null,
-                                      trailing: isSelected
-                                          ? const Icon(
-                                              Icons.check_circle,
-                                              color: AppColors.primary,
-                                            )
-                                          : null,
-                                      onTap: student.enrollmentId == null
-                                          ? null
-                                          : () => setState(
-                                              () =>
-                                                  _selectedStudentEnrollmentId =
-                                                      student.enrollmentId,
-                                            ),
-                                    );
-                                  },
+                          // Student selection (for single mode) - searchable list (only if no student selected yet)
+                          if (!_isBulkMode && _selectedClassId != null && _selectedStudentEnrollmentId == null) ...[
+                            if (_isLoading)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: IosLoader(),
                                 ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Timetable slots for the selected day - SMART VIEW
-                    if (_selectedClassId != null && !_isLoading) ...[
-                      _buildTimetableSection(),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Student list (for bulk mode - collapsible)
-                    if (_isBulkMode &&
-                        _selectedClassId != null &&
-                        !_isLoading) ...[
-                      ExpansionTile(
-                        title: Text(
-                          'Étudiants (${_selectedStudentEnrollmentIds.length}/${_classStudents.length})',
-                        ),
-                        leading: const Icon(Icons.people),
-                        initiallyExpanded: false,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton.icon(
-                                onPressed: () => setState(() {
-                                  if (_selectedStudentEnrollmentIds.length ==
-                                      _classStudents.length) {
-                                    _selectedStudentEnrollmentIds.clear();
-                                  } else {
-                                    _selectedStudentEnrollmentIds =
-                                        _classStudents
-                                            .where(
-                                              (s) => s.enrollmentId != null,
-                                            )
-                                            .map((s) => s.enrollmentId!)
-                                            .toSet();
-                                  }
-                                }),
-                                icon: Icon(
-                                  _selectedStudentEnrollmentIds.length ==
-                                          _classStudents.length
-                                      ? Icons.deselect
-                                      : Icons.select_all,
-                                  size: 18,
-                                ),
-                                label: Text(
-                                  _selectedStudentEnrollmentIds.length ==
-                                          _classStudents.length
-                                      ? 'Désélectionner'
-                                      : 'Tout',
+                              )
+                            else ...[
+                              // Show filtered students based on search
+                              Text(
+                                'Sélectionner un étudiant (${_classStudents.length} élèves)',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.slate700,
                                 ),
                               ),
-                            ],
-                          ),
-                          SizedBox(
-                            height: 150,
-                            child: ListView.builder(
-                              itemCount: _classStudents.length,
-                              itemBuilder: (ctx, i) {
-                                final student = _classStudents[i];
-                                final isSelected = _selectedStudentEnrollmentIds
-                                    .contains(student.enrollmentId);
-                                return CheckboxListTile(
-                                  value: isSelected,
-                                  secondary: UserAvatar(
-                                    name: student.fullName,
-                                    photoUrl: student.photoUrl,
-                                    radius: 14,
-                                  ),
-                                  onChanged: student.enrollmentId == null
-                                      ? null
-                                      : (v) {
-                                          setState(() {
-                                            if (v == true) {
-                                              _selectedStudentEnrollmentIds.add(
-                                                student.enrollmentId!,
-                                              );
-                                            } else {
-                                              _selectedStudentEnrollmentIds
-                                                  .remove(student.enrollmentId);
-                                            }
-                                          });
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 180,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.slate300),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: _classStudents.isEmpty
+                                    ? const Center(
+                                        child: Text(
+                                          'Aucun étudiant dans cette classe',
+                                        ),
+                                      )
+                                    : ListView.builder(
+                                        itemCount: _studentSearchQuery.isEmpty
+                                            ? _classStudents.length
+                                            : _classStudents.where((s) {
+                                                final query = _studentSearchQuery
+                                                    .toLowerCase();
+                                                return s.fullName
+                                                    .toLowerCase()
+                                                    .contains(query);
+                                              }).length,
+                                        itemBuilder: (ctx, i) {
+                                          final students = _studentSearchQuery.isEmpty
+                                              ? _classStudents
+                                              : _classStudents.where((s) {
+                                                  final query = _studentSearchQuery
+                                                      .toLowerCase();
+                                                  return s.fullName
+                                                      .toLowerCase()
+                                                      .contains(query);
+                                                }).toList();
+                                          if (i >= students.length)
+                                            return const SizedBox.shrink();
+                                          final student = students[i];
+                                          final isSelected =
+                                              _selectedStudentEnrollmentId ==
+                                              student.enrollmentId;
+                                          return ListTile(
+                                            selected: isSelected,
+                                            selectedTileColor: AppColors.primarySoft,
+                                            leading: UserAvatar(
+                                              name: student.fullName,
+                                              photoUrl: student.photoUrl,
+                                              radius: 20,
+                                            ),
+                                            title: Text(
+                                              student.fullName,
+                                              style: TextStyle(
+                                                fontWeight: isSelected
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                            subtitle: student.className != null
+                                                ? Text(student.className!)
+                                                : null,
+                                            trailing: isSelected
+                                                ? const Icon(
+                                                    Icons.check_circle,
+                                                    color: AppColors.primary,
+                                                  )
+                                                : null,
+                                            onTap: student.enrollmentId == null
+                                                ? null
+                                                : () => setState(
+                                                    () =>
+                                                        _selectedStudentEnrollmentId =
+                                                            student.enrollmentId,
+                                                  ),
+                                          );
                                         },
-                                  title: Text(
-                                    student.fullName,
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                  dense: true,
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                    ],
+                                      ),
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Student selector row (for bulk mode) - placed BEFORE timetable
+                          if (_isBulkMode && _selectedClassId != null && !_isLoading) ...[
+                            _buildClassStudentsSelectorRow(context),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Timetable slots for the selected day - SMART VIEW
+                          if (_selectedClassId != null && !_isLoading) ...[
+                            _buildTimetableSection(),
+                            const SizedBox(height: 16),
+                          ],
 
                           // Reason
                           _fieldLabel('Motif (optionnel)'),
                           const SizedBox(height: 8),
                           Container(
                             decoration: BoxDecoration(
-                              color: AppColors.slate50, borderRadius: BorderRadius.circular(10),
+                              color: AppColors.slate50,
+                              borderRadius: BorderRadius.circular(10),
                               border: Border.all(color: AppColors.borderLight),
                             ),
                             child: TextField(
@@ -2573,9 +2520,10 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                               decoration: const InputDecoration(
                                 hintText: 'Ex: Maladie, RDV médical...',
                                 hintStyle: TextStyle(color: AppColors.textTertiary),
-                                prefixIcon: Icon(Icons.comment_outlined, size: 18, color: AppColors.textTertiary),
                                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
                               ),
                             ),
                           ),
@@ -2584,17 +2532,22 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                           // Justified toggle
                           Row(
                             children: [
-                              const Expanded(child: Text('Absence justifiée', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary))),
-                              Switch(
+                              const Expanded(
+                                child: Text(
+                                  'Absence justifiée',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              ModernAnimatedSwitch(
                                 value: _justified,
                                 onChanged: (v) => setState(() => _justified = v),
-                                activeColor: const Color(0xFF6D4CF6),
                               ),
                             ],
                           ),
-
-                          // Summary
-                          if (_canSubmit()) _buildSummary(),
                         ],
                       ),
                     ),
@@ -2684,33 +2637,36 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
 
   Widget _modePill(bool value, IconData icon, String label) {
     final isActive = _isBulkMode == value;
-    return GestureDetector(
-      onTap: () => setState(() {
-        _isBulkMode = value;
-        _selectedStudentEnrollmentId = null;
-        _selectedStudentEnrollmentIds.clear();
-        if (_isBulkMode && _classStudents.isNotEmpty) {
-          _selectedStudentEnrollmentIds = _classStudents
-              .where((s) => s.enrollmentId != null)
-              .map((s) => s.enrollmentId!)
-              .toSet();
-        }
-      }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))] : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: isActive ? const Color(0xFF6D4CF6) : AppColors.textTertiary),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isActive ? const Color(0xFF6D4CF6) : AppColors.textTertiary)),
-          ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _isBulkMode = value;
+          _selectedStudentEnrollmentId = null;
+          _selectedStudentEnrollmentIds.clear();
+          if (_isBulkMode && _classStudents.isNotEmpty) {
+            _selectedStudentEnrollmentIds = _classStudents
+                .where((s) => s.enrollmentId != null)
+                .map((s) => s.enrollmentId!)
+                .toSet();
+          }
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))] : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: isActive ? const Color(0xFF6D4CF6) : AppColors.textTertiary),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isActive ? const Color(0xFF6D4CF6) : AppColors.textTertiary)),
+            ],
+          ),
         ),
       ),
     );
@@ -2718,30 +2674,125 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
 
   Widget _periodChip(AbsencePeriod period, IconData icon, String label) {
     final isSelected = _period == period;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _period = period;
-          _endDate = null;
-          _updateTimetableSlotsForPeriod();
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6D4CF6) : AppColors.slate100,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isSelected ? [BoxShadow(color: const Color(0xFF6D4CF6).withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))] : null,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _period = period;
+            _endDate = null;
+            _updateTimetableSlotsForPeriod();
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF1E293B) : AppColors.slate100,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 3, offset: const Offset(0, 1))] : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: isSelected ? Colors.white : AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : AppColors.slate700)),
+            ],
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: isSelected ? Colors.white : AppColors.textSecondary),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : AppColors.slate600)),
-          ],
+      ),
+    );
+  }
+
+  Widget _buildClassStudentsSelectorRow(BuildContext context) {
+    final total = _classStudents.length;
+    final selected = _selectedStudentEnrollmentIds.length;
+    final allSelected = selected == total && total > 0;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        onTap: () => _showStudentSelectionDialog(context),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.slate50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.borderLight),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6D4CF6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.people_alt_outlined, color: Color(0xFF6D4CF6), size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Étudiants concernés',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      total == 0
+                          ? 'Aucun étudiant dans cette classe'
+                          : allSelected
+                              ? 'Tous les étudiants ($total) sélectionnés'
+                              : '$selected sur $total étudiant(s) sélectionné(s)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: selected > 0 ? const Color(0xFF6D4CF6) : AppColors.textTertiary,
+                        fontWeight: selected > 0 ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text('Modifier', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6D4CF6))),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios, size: 11, color: Color(0xFF6D4CF6)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _showStudentSelectionDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.3),
+      builder: (ctx) => _StudentSelectionModal(
+        students: _classStudents,
+        initialSelectedIds: _selectedStudentEnrollmentIds,
+        onConfirmed: (newIds) {
+          setState(() {
+            _selectedStudentEnrollmentIds = newIds;
+          });
+        },
       ),
     );
   }
@@ -2750,12 +2801,18 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
     final dayIndex = _selectedDate.weekday; // 1=Mon, 7=Sun
     final slotsForDay = _classTimetableSlots
         .where((s) => s.dayIndex == dayIndex)
-        .toList();
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
-    // For multi-day periods, show all slots
+    // For multi-day periods, show all slots sorted by day and time
     final List<TimetableSlotInfo> displaySlots;
     if (_isBulkMode && _period != AbsencePeriod.day) {
-      displaySlots = _classTimetableSlots;
+      displaySlots = List<TimetableSlotInfo>.from(_classTimetableSlots)
+        ..sort((a, b) {
+          final dayCmp = a.dayIndex.compareTo(b.dayIndex);
+          if (dayCmp != 0) return dayCmp;
+          return a.startTime.compareTo(b.startTime);
+        });
     } else {
       displaySlots = slotsForDay;
     }
@@ -2764,16 +2821,19 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.warningSoft,
+          color: AppColors.slate50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.warning),
+          border: Border.all(color: AppColors.borderLight),
         ),
         child: Row(
-          children: [
-            Icon(Icons.warning_amber, color: AppColors.warning),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Aucun emploi du temps trouvé pour cette classe.'),
+          children: const [
+            Icon(Icons.info_outline, color: AppColors.slate600, size: 18),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Aucun emploi du temps trouvé pour cette classe.',
+                style: TextStyle(color: AppColors.slate700, fontSize: 13),
+              ),
             ),
           ],
         ),
@@ -2784,17 +2844,18 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.primarySoft,
+          color: AppColors.slate50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.borderLight),
         ),
         child: Row(
           children: [
-            Icon(Icons.info, color: AppColors.primary),
+            const Icon(Icons.info_outline, color: AppColors.slate600, size: 18),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Pas de cours le ${DateFormat('EEEE', 'fr_FR').format(_selectedDate)}.',
+                style: const TextStyle(color: AppColors.slate700, fontSize: 13),
               ),
             ),
           ],
@@ -2812,11 +2873,11 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
       children: [
         Row(
           children: [
-            Icon(Icons.schedule, color: AppColors.warning, size: 20),
+            const Icon(Icons.schedule, color: AppColors.slate600, size: 18),
             const SizedBox(width: 8),
             Text(
               'Emploi du temps - ${DateFormat('EEEE dd/MM', 'fr_FR').format(_selectedDate)}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate800),
             ),
             const Spacer(),
             TextButton.icon(
@@ -2864,11 +2925,11 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
       children: [
         Row(
           children: [
-            Icon(Icons.schedule, color: AppColors.warning, size: 20),
+            const Icon(Icons.schedule, color: AppColors.slate600, size: 18),
             const SizedBox(width: 8),
             const Text(
               'Séances à marquer absentes',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate800),
             ),
             const Spacer(),
             TextButton.icon(
@@ -2907,14 +2968,15 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                     padding: const EdgeInsets.only(top: 8, bottom: 4),
                     child: Text(
                       _dayName(day),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.slate700,
                         fontSize: 12,
                       ),
                     ),
                   ),
-                  ...byDay[day]!.map((slot) => _buildSlotTile(slot)),
+                  ...(byDay[day]!..sort((a, b) => a.startTime.compareTo(b.startTime)))
+                      .map((slot) => _buildSlotTile(slot)),
                 ],
             ],
           ),
@@ -2939,11 +3001,19 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
 
   Widget _buildSlotTile(TimetableSlotInfo slot) {
     final isSelected = _selectedTimetableSlotIds.contains(slot.id);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 4),
-      color: isSelected ? AppColors.warningSoft : null,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFFF8FAFC) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isSelected ? const Color(0xFFCBD5E1) : AppColors.borderLight,
+        ),
+      ),
       child: CheckboxListTile(
         value: isSelected,
+        activeColor: const Color(0xFF6D4CF6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         onChanged: (v) {
           setState(() {
             if (v == true) {
@@ -2957,7 +3027,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
           children: [
             Text(
               slot.subjectName,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
             ),
             const SizedBox(width: 8),
             _SessionTypeChip(type: slot.sessionType),
@@ -2968,7 +3038,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
             Expanded(
               child: Text(
                 '${slot.startTime.substring(0, 5)} - ${slot.endTime.substring(0, 5)} • ${slot.hours}h${slot.room != null ? ' • ${slot.room}' : ''}',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ),
             if (slot.teacherName != null) ...[
@@ -2980,7 +3050,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
               const SizedBox(width: 5),
               Text(
                 slot.teacherName!,
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
               ),
             ],
           ],
@@ -2991,89 +3061,6 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
     );
   }
 
-  Widget _buildSummary() {
-    final totalHours = _calculateTotalHours();
-    final studentCount = _isBulkMode ? _selectedStudentEnrollmentIds.length : 1;
-    final sessionCount = _selectedTimetableSlotIds.length;
-
-    int daysCount = 1;
-    if (_isBulkMode) {
-      switch (_period) {
-        case AbsencePeriod.week:
-          daysCount = 5; // Weekdays only
-          break;
-        case AbsencePeriod.month:
-          daysCount = _countWeekdaysInMonth(_selectedDate);
-          break;
-        case AbsencePeriod.custom:
-          if (_endDate != null) {
-            daysCount = _countWeekdaysBetween(_selectedDate, _endDate!);
-          }
-          break;
-        default:
-          daysCount = 1;
-      }
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.successSoft,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.success),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.summarize, color: AppColors.success, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                'Résumé',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '• $studentCount étudiant(s) × $sessionCount séance(s)${daysCount > 1 ? ' × $daysCount jours' : ''} = ${studentCount * sessionCount * daysCount} absence(s)',
-            style: const TextStyle(fontSize: 13),
-          ),
-          Text(
-            '• Total: ${totalHours * studentCount * daysCount} heures d\'absence',
-            style: const TextStyle(fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-
-  double _calculateTotalHours() {
-    double total = 0;
-    for (final slotId in _selectedTimetableSlotIds) {
-      final slot = _classTimetableSlots.firstWhere(
-        (s) => s.id == slotId,
-        orElse: () => _classTimetableSlots.first,
-      );
-      total += slot.hours;
-    }
-    return total;
-  }
-
-  int _countWeekdaysInMonth(DateTime date) {
-    final firstDay = DateTime(date.year, date.month, 1);
-    final lastDay = DateTime(date.year, date.month + 1, 0);
-    return _countWeekdaysBetween(firstDay, lastDay);
-  }
-
-  int _countWeekdaysBetween(DateTime start, DateTime end) {
-    int count = 0;
-    for (var d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
-      if (d.weekday <= 6) count++; // Mon-Sat
-    }
-    return count;
-  }
 
   Future<void> _selectStudentFromSearch(StudentInfo student, List<ClassModel> classes) async {
     final classModel = classes.where((c) => c.id == student.classId).firstOrNull;
@@ -3130,24 +3117,16 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
               .map((s) => s.enrollmentId!)
               .toSet();
         }
-        // Auto-select all slots for the current day
-        _updateTimetableSlotsForPeriod();
+        // Keep slots unchecked by default (student is present by default)
+        _selectedTimetableSlotIds.clear();
         _isLoading = false;
       });
     }
   }
 
   void _updateTimetableSlotsForPeriod() {
-    if (_period == AbsencePeriod.day) {
-      final dayIndex = _selectedDate.weekday;
-      _selectedTimetableSlotIds = _classTimetableSlots
-          .where((s) => s.dayIndex == dayIndex)
-          .map((s) => s.id)
-          .toSet();
-    } else {
-      // For week/month, select all by default
-      _selectedTimetableSlotIds = _classTimetableSlots.map((s) => s.id).toSet();
-    }
+    // Keep timetable slots unchecked by default - user checks if absent
+    _selectedTimetableSlotIds.clear();
   }
 
   Future<void> _pickDate({required bool isStart}) async {
@@ -3359,6 +3338,366 @@ class _JustifiedBadge extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Floating student selection dialog matching users screen table style
+class _StudentSelectionModal extends StatefulWidget {
+  final List<StudentInfo> students;
+  final Set<String> initialSelectedIds;
+  final ValueChanged<Set<String>> onConfirmed;
+
+  const _StudentSelectionModal({
+    required this.students,
+    required this.initialSelectedIds,
+    required this.onConfirmed,
+  });
+
+  @override
+  State<_StudentSelectionModal> createState() => _StudentSelectionModalState();
+}
+
+class _StudentSelectionModalState extends State<_StudentSelectionModal> {
+  late Set<String> _selectedIds;
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIds = Set<String>.from(widget.initialSelectedIds);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<StudentInfo> get _filteredStudents {
+    if (_searchQuery.trim().isEmpty) return widget.students;
+    final q = _searchQuery.toLowerCase().trim();
+    return widget.students.where((s) {
+      return s.fullName.toLowerCase().contains(q) ||
+          (s.studentCode?.toLowerCase().contains(q) ?? false);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filteredStudents;
+    final allFilteredSelected = filtered.isNotEmpty &&
+        filtered.every((s) => s.enrollmentId != null && _selectedIds.contains(s.enrollmentId));
+
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+        child: Container(
+          width: 580,
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 40,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 18, 16, 18),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppColors.slate100)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6D4CF6).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.groups, color: Color(0xFF6D4CF6), size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Sélectionner les étudiants',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_selectedIds.length} sur ${widget.students.length} sélectionné(s)',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18, color: AppColors.textTertiary),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              // Search & Select All Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                child: Column(
+                  children: [
+                    // Search bar
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.slate50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.borderLight),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Rechercher un élève par nom ou code...',
+                          hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                          prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textTertiary),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 16),
+                                  onPressed: () => setState(() {
+                                    _searchController.clear();
+                                    _searchQuery = '';
+                                  }),
+                                )
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Table Header / Select All bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.slate50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.slate100),
+                      ),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: allFilteredSelected,
+                            tristate: !allFilteredSelected && filtered.any((s) => s.enrollmentId != null && _selectedIds.contains(s.enrollmentId)),
+                            activeColor: const Color(0xFF6D4CF6),
+                            onChanged: (v) {
+                              setState(() {
+                                if (allFilteredSelected) {
+                                  for (final s in filtered) {
+                                    if (s.enrollmentId != null) {
+                                      _selectedIds.remove(s.enrollmentId!);
+                                    }
+                                  }
+                                } else {
+                                  for (final s in filtered) {
+                                    if (s.enrollmentId != null) {
+                                      _selectedIds.add(s.enrollmentId!);
+                                    }
+                                  }
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            allFilteredSelected ? 'Tout désélectionner' : 'Tout sélectionner (${filtered.length})',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.slate700),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${_selectedIds.length} sélectionné(s)',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6D4CF6)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Student List
+              Flexible(
+                child: filtered.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.person_search_outlined, size: 40, color: AppColors.slate300),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.students.isEmpty
+                                  ? 'Aucun étudiant dans cette classe'
+                                  : 'Aucun élève trouvé pour "$_searchQuery"',
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.slate100),
+                        itemBuilder: (ctx, i) {
+                          final student = filtered[i];
+                          final isSelected = student.enrollmentId != null &&
+                              _selectedIds.contains(student.enrollmentId);
+
+                          return InkWell(
+                            onTap: student.enrollmentId == null
+                                ? null
+                                : () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        _selectedIds.remove(student.enrollmentId!);
+                                      } else {
+                                        _selectedIds.add(student.enrollmentId!);
+                                      }
+                                    });
+                                  },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Checkbox(
+                                    value: isSelected,
+                                    activeColor: const Color(0xFF6D4CF6),
+                                    onChanged: student.enrollmentId == null
+                                        ? null
+                                        : (v) {
+                                            setState(() {
+                                              if (v == true) {
+                                                _selectedIds.add(student.enrollmentId!);
+                                              } else {
+                                                _selectedIds.remove(student.enrollmentId!);
+                                              }
+                                            });
+                                          },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  UserAvatar(
+                                    name: student.fullName,
+                                    photoUrl: student.photoUrl,
+                                    radius: 16,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          student.fullName,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        if (student.studentCode != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            student.studentCode!,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textTertiary,
+                                              fontFamily: 'monospace',
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF6D4CF6).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Sélectionné',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF6D4CF6)),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              // Footer
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.slate100)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    SizedBox(
+                      height: 38,
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF6B7280),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        child: const Text('Annuler', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      height: 38,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          widget.onConfirmed(_selectedIds);
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.check_rounded, size: 16),
+                        label: Text('Confirmer (${_selectedIds.length})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6D4CF6),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
