@@ -1192,14 +1192,14 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           Container(
             width: 48, height: 48,
             decoration: BoxDecoration(
-              color: (allJustified ? _blueCI : _redAbsence).withValues(alpha: 0.1),
+              color: dotColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('${date.day}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: allJustified ? _blueCI : _redAbsence)),
-                Text(shortDayName, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: allJustified ? _blueCI : _redAbsence)),
+                Text('${date.day}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: dotColor)),
+                Text(shortDayName, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: dotColor)),
               ],
             ),
           ),

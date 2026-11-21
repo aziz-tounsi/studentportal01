@@ -29,6 +29,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   String _selectedInterval = 'Mensuel'; // 'Hebdomadaire', 'Mensuel', 'Annuel'
   int? _selectedChartIndex;
   int? _selectedFiliereIndex;
+  int? _selectedCategoryIndex;
 
   @override
   void initState() {
@@ -923,6 +924,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final categories = state.categories;
     final totalDue = state.kpis.totalPaymentsDue;
 
+    final selectedCategory = (_selectedCategoryIndex != null &&
+            _selectedCategoryIndex! < categories.length)
+        ? categories[_selectedCategoryIndex!]
+        : null;
+
+    final displayAmount = selectedCategory != null ? selectedCategory.amount : totalDue;
+
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -979,77 +987,184 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Total Due & Trend
+          // Total Due & Trend / Selected Category Info
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                currencyFormat.format(totalDue),
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: -0.5,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    currencyFormat.format(displayAmount),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: selectedCategory != null
+                          ? Color(selectedCategory.colorValue)
+                          : const Color(0xFF0F172A),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  if (selectedCategory != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Color(selectedCategory.colorValue).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${selectedCategory.percentage.toInt()}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(selectedCategory.colorValue),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _selectedCategoryIndex = null;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.close_rounded, size: 14, color: Color(0xFF94A3B8)),
+                            SizedBox(width: 2),
+                            Text(
+                              'Réinitialiser',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Icon(
-                    state.kpis.recoveryRate >= 50 ? Icons.arrow_upward_rounded : Icons.trending_flat_rounded,
-                    size: 13,
-                    color: state.kpis.recoveryRate >= 50 ? const Color(0xFF10B981) : const Color(0xFF6D4CF6),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${state.kpis.recoveryRate.toStringAsFixed(0)}% recouvré sur le total prévu',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
+                  if (selectedCategory != null) ...[
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: Color(selectedCategory.colorValue),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      selectedCategory.label,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(selectedCategory.colorValue),
+                      ),
+                    ),
+                    const Text(
+                      ' • Catégorie sélectionnée',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ] else ...[
+                    Icon(
+                      state.kpis.recoveryRate >= 50 ? Icons.arrow_upward_rounded : Icons.trending_flat_rounded,
+                      size: 13,
                       color: state.kpis.recoveryRate >= 50 ? const Color(0xFF10B981) : const Color(0xFF6D4CF6),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${state.kpis.recoveryRate.toStringAsFixed(0)}% recouvré sur le total prévu',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: state.kpis.recoveryRate >= 50 ? const Color(0xFF10B981) : const Color(0xFF6D4CF6),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
           ),
           const SizedBox(height: 18),
 
-          // Segmented Progress Bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              height: 14,
-              child: Row(
-                children: categories.isEmpty
-                    ? [
-                        Expanded(
-                          child: Container(
+          // Segmented Progress Bar (Interactive with Zoom-In on Click)
+          SizedBox(
+            height: 26,
+            child: Row(
+              children: categories.isEmpty
+                  ? [
+                      Expanded(
+                        child: Container(
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                    ]
+                  : categories.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final cat = entry.value;
+                      final isSelected = _selectedCategoryIndex == idx;
+                      final hasSelection = _selectedCategoryIndex != null;
+
+                      return Expanded(
+                        flex: (cat.percentage.toInt()).clamp(5, 100),
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategoryIndex = (_selectedCategoryIndex == idx) ? null : idx;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            height: isSelected ? 24 : 14, // Zooms in when clicked!
+                            margin: EdgeInsets.symmetric(horizontal: isSelected ? 2 : 1.5),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(4),
+                              color: isSelected
+                                  ? Color(cat.colorValue)
+                                  : (hasSelection
+                                      ? Color(cat.colorValue).withValues(alpha: 0.35)
+                                      : Color(cat.colorValue)),
+                              borderRadius: BorderRadius.circular(6),
+                              border: isSelected
+                                  ? Border.all(color: Colors.white, width: 2)
+                                  : null,
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: Color(cat.colorValue).withValues(alpha: 0.45),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ]
+                                  : null,
                             ),
                           ),
                         ),
-                      ]
-                    : categories.map((cat) {
-                        return Expanded(
-                          flex: (cat.percentage.toInt()).clamp(5, 100),
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                            decoration: BoxDecoration(
-                              color: Color(cat.colorValue),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-              ),
+                      );
+                    }).toList(),
             ),
           ),
           const SizedBox(height: 20),
 
-          // Category Item Rows
+          // Category Item Rows (Clickable with selection feedback)
           if (categories.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
@@ -1062,41 +1177,66 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             )
           else
             Column(
-              children: categories.map((cat) {
+              children: categories.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final cat = entry.value;
+                final isSelected = _selectedCategoryIndex == idx;
+
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: Color(cat.colorValue),
-                          shape: BoxShape.circle,
-                        ),
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedCategoryIndex = (_selectedCategoryIndex == idx) ? null : idx;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Color(cat.colorValue).withValues(alpha: 0.12)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: isSelected
+                            ? Border.all(color: Color(cat.colorValue).withValues(alpha: 0.4))
+                            : null,
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          cat.label,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF475569),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Color(cat.colorValue),
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              cat.label,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF475569),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '${currencyFormat.format(cat.amount)} (${cat.percentage.toInt()}%)',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                              color: isSelected ? Color(cat.colorValue) : const Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        '${currencyFormat.format(cat.amount)} (${cat.percentage.toInt()}%)',
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 );
               }).toList(),

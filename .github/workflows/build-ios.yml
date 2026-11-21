@@ -44,12 +44,13 @@ jobs:
         run: flutter pub get
 
       - name: Prepare iOS build configuration
-        run: flutter build ios --config-only --no-codesign
+        run: |
+          flutter build ios --config-only --no-codesign || (cd ios && pod install --repo-update && cd .. && flutter build ios --config-only --no-codesign)
 
       - name: Install iOS dependencies
         run: |
           cd ios
-          pod install || pod install --repo-update
+          pod install --repo-update
 
       - name: Build iOS app without signing
         run: flutter build ios --release --no-codesign

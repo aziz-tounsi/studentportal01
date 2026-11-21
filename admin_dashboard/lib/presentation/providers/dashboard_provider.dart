@@ -559,10 +559,32 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       }
 
       if (grandTotal > 0) {
-        const colors = [0xFF6D4CF6, 0xFF8B5CF6, 0xFFC4B5FD, 0xFF10B981, 0xFFF59E0B, 0xFF0284C7];
+        int getCategoryColor(String key, int index) {
+          final k = key.toLowerCase();
+          if (k.contains('scolarite') || k.contains('scolaire')) return 0xFF6D4CF6; // Royal Purple
+          if (k.contains('cantine') || k.contains('repas') || k.contains('restauration')) return 0xFFF59E0B; // Amber Orange
+          if (k.contains('transport') || k.contains('bus')) return 0xFF0284C7; // Ocean Blue
+          if (k.contains('inscription') || k.contains('matricule')) return 0xFF10B981; // Emerald Green
+          if (k.contains('uniforme') || k.contains('tenue')) return 0xFFEC4899; // Rose Pink
+          if (k.contains('activite') || k.contains('sport') || k.contains('club')) return 0xFF8B5CF6; // Violet
+
+          const distinctCategoryPalette = [
+            0xFF6D4CF6, // Purple
+            0xFFF59E0B, // Amber Orange
+            0xFF0284C7, // Ocean Blue
+            0xFF10B981, // Emerald Green
+            0xFFEC4899, // Rose Pink
+            0xFF06B6D4, // Cyan
+            0xFF8B5CF6, // Violet
+            0xFFE11D48, // Crimson
+            0xFF84CC16, // Lime
+          ];
+          return distinctCategoryPalette[index % distinctCategoryPalette.length];
+        }
+
         int cIdx = 0;
         return categoryTotals.entries.map((e) {
-          final col = colors[cIdx % colors.length];
+          final col = getCategoryColor(e.key, cIdx);
           cIdx++;
           String label;
           switch (e.key) {
