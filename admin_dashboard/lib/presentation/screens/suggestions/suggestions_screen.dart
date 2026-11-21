@@ -131,7 +131,7 @@ String _getRelativeTime(DateTime dt) {
   if (diff.inDays == 1) return "Reçu hier";
   if (diff.inDays < 7) return "Reçu il y a ${diff.inDays} j";
   if (diff.inDays < 30) return "Reçu il y a ${(diff.inDays / 7).floor()} sem";
-  return "Reçu le ${DateFormat('dd/MM/yyyy').format(dt)}";
+  return "Reçu le ${DateFormat('d MMM yyyy', 'fr_FR').format(dt)}";
 }
 
 /// Convert abbreviated level code (e.g. 9B, 7B) to full French name
@@ -452,6 +452,13 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             ],
           ),
           if (_showFilters) _buildFilterPanel(suggestionsAsync),
+          if (_selectedIds.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(child: _buildFloatingSelectionBar(context)),
+            ),
         ],
       ),
     );
@@ -461,10 +468,6 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     BuildContext context,
     AsyncValue<SuggestionsState> suggestionsAsync,
   ) {
-    if (_selectionMode) {
-      return _buildSelectionBar(context, suggestionsAsync);
-    }
-    
     final unreadCount = suggestionsAsync.whenOrNull(data: (s) => s.unreadCount) ?? 0;
     final pendingCount = suggestionsAsync.whenOrNull(data: (s) => s.pendingCount) ?? 0;
     final totalCount = suggestionsAsync.whenOrNull(data: (s) => s.suggestions.length) ?? 0;
@@ -583,67 +586,108 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     );
   }
 
-  Widget _buildSelectionBar(
-    BuildContext context,
-    AsyncValue<SuggestionsState> suggestionsAsync,
-  ) {
+  Widget _buildFloatingSelectionBar(BuildContext context) {
     final count = _selectedIds.length;
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        border: Border(bottom: BorderSide(color: AppColors.primary.withOpacity(0.2))),
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Sélectionnés',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Actions
+            _buildSelectionAction(
+              Icons.mark_email_read_outlined,
+              'Marquer lu',
+              Colors.white70,
+              () async {
+                for (final id in _selectedIds.toList()) {
+                  await ref.read(suggestionsProvider.notifier).markAsRead(id);
+                }
+                _clearSelection();
+              },
+            ),
+            _buildSelectionAction(
+              Icons.delete_outline,
+              'Supprimer',
+              const Color(0xFFFCA5A5),
+              () => _deleteSelected(),
+            ),
+            // Close button
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: _clearSelection,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: _clearSelection,
-            tooltip: 'Annuler',
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '$count sélectionné(s)',
-            style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 15),
-          ),
-          const Spacer(),
-          suggestionsAsync.whenOrNull(
-            data: (state) => OutlinedButton.icon(
-              onPressed: () => _selectAll(state.filtered),
-              icon: Icon(
-                _selectedIds.length == state.filtered.length ? Icons.deselect : Icons.select_all,
-                size: 16,
-              ),
-              label: Text(
-                _selectedIds.length == state.filtered.length ? 'Désélectionner tout' : 'Sélectionner tout',
-              ),
-              style: OutlinedButton.styleFrom(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              ),
-            ),
-          ) ?? const SizedBox.shrink(),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: count == 0 ? null : _deleteSelected,
-            icon: const Icon(Icons.delete, size: 16),
-            label: const Text('Supprimer'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: AppColors.textOnPrimary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              elevation: 0,
-            ),
-          ),
-        ],
+    );
+  }
+
+  Widget _buildSelectionAction(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: color)),
+          ],
+        ),
       ),
     );
   }
@@ -689,38 +733,31 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     required ValueChanged<T?> onChanged,
   }) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: value != defaultValue ? AppColors.primary : AppColors.border,
-        ),
+        color: AppColors.slate50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
       ),
-      child: DropdownButtonFormField<T>(
-        value: value,
-        decoration: const InputDecoration(
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          border: InputBorder.none,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          items: items,
+          onChanged: onChanged,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          borderRadius: BorderRadius.circular(8),
+          dropdownColor: Colors.white,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
         ),
-        isExpanded: true,
-        borderRadius: BorderRadius.circular(12),
-        icon: Icon(
-          value != defaultValue
-              ? Icons.keyboard_arrow_up_rounded
-              : Icons.keyboard_arrow_down_rounded,
-          color: AppColors.primary,
-        ),
-        dropdownColor: AppColors.surface,
-        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
-        items: items,
-        onChanged: onChanged,
       ),
     );
   }
 
   Widget _buildFilterDateField(
       String label, DateTime? value, ValueChanged<DateTime?> onChanged) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final dateFormat = DateFormat('d MMM yyyy', 'fr_FR');
     return InkWell(
       onTap: () async {
         final picked = await showDatePicker(
@@ -733,11 +770,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.slate50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.borderLight),
         ),
         child: Row(
           children: [
@@ -748,12 +785,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   fontSize: 13,
                   color: value != null
                       ? AppColors.textPrimary
-                      : AppColors.slate400,
+                      : AppColors.textTertiary,
                 ),
               ),
             ),
             const Icon(Icons.calendar_today_rounded,
-                size: 14, color: AppColors.slate400),
+                size: 14, color: AppColors.textTertiary),
           ],
         ),
       ),
@@ -902,36 +939,6 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 28),
-                                const Text('TRI', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.slate400)),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildStyledDropdown<String>(
-                                        value: state.sortBy,
-                                        defaultValue: 'date',
-                                        items: const [
-                                          DropdownMenuItem(value: 'date', child: Text('Date')),
-                                          DropdownMenuItem(value: 'class', child: Text('Classe')),
-                                          DropdownMenuItem(value: 'type', child: Text('Type')),
-                                          DropdownMenuItem(value: 'status', child: Text('Statut')),
-                                        ],
-                                        onChanged: (v) => ref.read(suggestionsProvider.notifier).setSortBy(v!),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: Icon(state.sortAscending ? Icons.arrow_upward : Icons.arrow_downward),
-                                      style: IconButton.styleFrom(
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.border)),
-                                        padding: const EdgeInsets.all(12),
-                                      ),
-                                      onPressed: () => ref.read(suggestionsProvider.notifier).setSortBy(state.sortBy),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
                               ],
                             ),
                           ),
@@ -1099,6 +1106,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
           borderRadius: BorderRadius.circular(16),
           child: Column(
             children: [
+              _buildSelectAllBar(list),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -1120,6 +1128,57 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSelectAllBar(List<Suggestion> list) {
+    final allSelected =
+        _selectedIds.length == list.length && list.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.slate50,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border.withOpacity(0.5)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: allSelected,
+            tristate: _selectedIds.isNotEmpty && !allSelected,
+            onChanged: (_) => _selectAll(list),
+            activeColor: const Color(0xFF655DD5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () => _selectAll(list),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Text(
+                allSelected ? 'Tout désélectionner' : 'Tout sélectionner',
+                style: const TextStyle(
+                  color: AppColors.slate700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '${list.length} suggestion(s)',
+            style: const TextStyle(
+              color: AppColors.slate500,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1579,18 +1638,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Big Type Suggestion in Black placed above student
-                      Text(
-                        s.typeLabel.isNotEmpty ? s.typeLabel : 'Suggestion',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Student Header: Avatar, Name, Pills & Profile Link
+                      // Student Header: Avatar, Name, Combined Pill & plain category text (click to view profile)
                       Builder(
                         builder: (context) {
                           final classesList = ref.read(classesProvider).value?.classes ?? [];
@@ -1606,113 +1654,68 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                           final effectiveLevel = _getFullNiveauName(rawLevel);
                           final effectiveField = (s.studentField?.isNotEmpty == true) ? s.studentField! : (matchedClass?.sectionName ?? matchedClass?.section ?? '');
 
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              UserAvatar(
-                                name: (s.studentName?.isNotEmpty == true)
-                                    ? s.studentName!
-                                    : 'Étudiant',
-                                photoUrl: s.studentPhotoUrl,
-                                gender: s.studentGender,
-                                radius: 22,
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      s.studentName ?? 'Étudiant inconnu',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                        color: AppColors.textPrimary,
-                                      ),
+                          final combinedPill = [
+                            if (effectiveClass.isNotEmpty) effectiveClass,
+                            if (effectiveLevel.isNotEmpty) effectiveLevel,
+                            if (effectiveField.isNotEmpty) effectiveField,
+                          ].join(' • ');
+
+                          return MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.pop(ctx);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => UserProfileScreen(
+                                      userId: s.studentId,
+                                      userName: s.studentName,
                                     ),
-                                    if (effectiveClass.isNotEmpty || effectiveLevel.isNotEmpty || effectiveField.isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 4,
-                                        children: [
-                                          if (effectiveClass.isNotEmpty)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFEDE9FE),
-                                                borderRadius: BorderRadius.circular(100),
-                                              ),
-                                              child: Text(
-                                                effectiveClass,
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF6D28D9),
-                                                ),
-                                              ),
+                                  ),
+                                );
+                              },
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  UserAvatar(
+                                    name: (s.studentName?.isNotEmpty == true)
+                                        ? s.studentName!
+                                        : 'Étudiant',
+                                    photoUrl: s.studentPhotoUrl,
+                                    gender: s.studentGender,
+                                    radius: 22,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          s.studentName ?? 'Étudiant inconnu',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        if (combinedPill.isNotEmpty) ...[
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            combinedPill,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: Color(0xFF64748B),
                                             ),
-                                          if (effectiveLevel.isNotEmpty)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF1F5F9),
-                                                borderRadius: BorderRadius.circular(100),
-                                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                              ),
-                                              child: Text(
-                                                effectiveLevel,
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF475569),
-                                                ),
-                                              ),
-                                            ),
-                                          if (effectiveField.isNotEmpty)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF1F5F9),
-                                                borderRadius: BorderRadius.circular(100),
-                                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                              ),
-                                              child: Text(
-                                                effectiveField,
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF475569),
-                                                ),
-                                              ),
-                                            ),
+                                          ),
                                         ],
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => UserProfileScreen(
-                                        userId: s.studentId,
-                                        userName: s.studentName,
-                                      ),
+                                      ],
                                     ),
-                                  );
-                                },
-                                icon: const Icon(Icons.person_outline, size: 16),
-                                label: const Text('Voir le profil'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFF6D4CF6),
-                                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           );
                         },
                       ),
@@ -1747,11 +1750,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                         _AttachmentsGrid(attachments: s.attachments),
                       ],
 
-                      // Bottom Sent Date (Neutral color, no duplicate, no Fermé pill)
-                      const SizedBox(height: 24),
-                      const Divider(color: AppColors.slate100, height: 1),
-                      const SizedBox(height: 16),
+                      // Bottom Sent Date (Neutral color, aligned right, no line above)
+                      const SizedBox(height: 20),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           const Icon(Icons.schedule, size: 14, color: AppColors.slate400),
                           const SizedBox(width: 6),
@@ -1813,7 +1815,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                                   ),
                                   const Spacer(),
                                   Text(
-                                    DateFormat('dd/MM/yyyy HH:mm').format(reply.createdAt),
+                                    DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR').format(reply.createdAt),
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: AppColors.slate500,
@@ -1903,17 +1905,6 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                       },
                     ),
                     const Spacer(),
-                    SizedBox(
-                      height: 40,
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF6B7280),
-                        ),
-                        child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     if (!s.isRead) ...[
                       SizedBox(
                         height: 40,
@@ -2088,25 +2079,33 @@ class _SuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    final dateFormat = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
     final s = suggestion;
     final typeColor = _getTypeColor(s.suggestionType);
     final typeLabel = _getTypeLabel(s.suggestionType);
 
     final dateStr = dateFormat.format(s.createdAt);
 
+    final effectiveClass = (s.className != null && s.className!.isNotEmpty) ? s.className! : '';
+    final rawLevel = (s.studentLevel != null && s.studentLevel!.isNotEmpty) ? s.studentLevel! : '';
+    final effectiveLevel = _getFullNiveauName(rawLevel);
+    final combinedPill = [
+      if (effectiveClass.isNotEmpty) effectiveClass,
+      if (effectiveLevel.isNotEmpty) effectiveLevel,
+    ].join(' • ');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: isSelected
-            ? AppColors.primarySoft
+            ? const Color(0xFFF5F3FF)
             : AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isSelected
-              ? AppColors.primary
+              ? const Color(0xFFDDD6FE)
               : AppColors.border,
-          width: isSelected ? 1.5 : 1,
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -2122,263 +2121,257 @@ class _SuggestionCard extends StatelessWidget {
         onLongPress: onSelect,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (selectionMode) ...[
-                Checkbox(
-                  value: isSelected,
-                  onChanged: (_) => onSelect(),
-                  activeColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => onSelect(),
+                    activeColor: const Color(0xFF655DD5),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
+                  ),
                 ),
                 const SizedBox(width: 8),
-              ],
-              // User profile pic
-              UserAvatar(
-                name: (s.studentName != null && s.studentName!.isNotEmpty)
-                    ? s.studentName!
-                    : 'Étudiant',
-                photoUrl: s.studentPhotoUrl,
-                gender: s.studentGender,
-                radius: 16,
-              ),
-              const SizedBox(width: 14),
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title row + badges
-                    Row(
-                      children: [
-                        Flexible(
-                          child: searchQuery.isNotEmpty
-                              ? _highlightText(
-                                  (s.studentName != null && s.studentName!.isNotEmpty)
-                                      ? s.studentName!
-                                      : 'Étudiant',
-                                  searchQuery,
-                                  const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                      color:
-                                          AppColors.textPrimary),
-                                )
-                              : Text(
-                                  (s.studentName != null && s.studentName!.isNotEmpty)
-                                      ? s.studentName!
-                                      : 'Étudiant',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                      color:
-                                          AppColors.textPrimary),
-                                  maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                ),
-                        ),
-                        // Space after subject
-                        const SizedBox(width: 10),
-                        // Class badge
-                        if (s.className != null && s.className!.isNotEmpty) ...[
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFECFDF5),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              s.className!,
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF15803D)),
-                            ),
-                          ),
-                        ],
-                        // Type badge
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: typeColor.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            typeLabel,
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: typeColor),
-                          ),
-                        ),
-                        // Pièce jointe badge
-                        if (s.hasAttachment || s.attachments.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 9, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3E8FF),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.attach_file_rounded,
-                                    size: 12, color: Color(0xFF9333EA)),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Pièce jointe',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF9333EA),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Description
-                    searchQuery.isNotEmpty
-                        ? _highlightText(
-                            s.content,
-                            searchQuery,
-                            TextStyle(
-                                fontSize: 13,
-                                color: AppColors.slate500,
-                                height: 1.5),
-                          )
-                        : Text(
-                            s.content.isNotEmpty ? s.content : '(Aucun contenu)',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.slate500,
-                                height: 1.5),
-                          ),
-                  ],
+                // User profile pic
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: UserAvatar(
+                    name: (s.studentName != null && s.studentName!.isNotEmpty)
+                        ? s.studentName!
+                        : 'Étudiant',
+                    photoUrl: s.studentPhotoUrl,
+                    gender: s.studentGender,
+                    radius: 16,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 24),
-              // Right side: 3-dot menu top, date bottom
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (!selectionMode)
-                    PopupMenuButton<String>(
-                      onSelected: (v) => onAction(v == 'unread' || v == 'read' ? v : v),
-                      icon: Icon(Icons.more_horiz,
-                          size: 18, color: AppColors.slate400),
-                      padding: EdgeInsets.zero,
-                      tooltip: 'Actions',
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      elevation: 8,
-                      offset: const Offset(-160, 40),
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: 'view',
-                          height: 40,
-                          child: Row(children: [
-                            Icon(Icons.visibility_outlined,
-                                size: 18, color: AppColors.slate600),
-                            const SizedBox(width: 12),
-                            Text('Consulter',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.slate600)),
-                          ]),
-                        ),
-                        PopupMenuItem(
-                          value: s.isRead ? 'unread' : 'read',
-                          height: 40,
-                          child: Row(children: [
-                            Icon(s.isRead ? Icons.mark_email_unread_outlined : Icons.mark_email_read_outlined,
-                                size: 18, color: AppColors.slate600),
-                            const SizedBox(width: 12),
-                            Text(s.isRead ? 'Marquer non lu' : 'Marquer lu',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.slate600)),
-                          ]),
-                        ),
-                        PopupMenuItem(
-                          value: 'reply',
-                          height: 40,
-                          child: Row(children: [
-                            Icon(Icons.reply_outlined,
-                                size: 18, color: AppColors.slate600),
-                            const SizedBox(width: 12),
-                            Text('Répondre',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.slate600)),
-                          ]),
-                        ),
-                        const PopupMenuDivider(),
-                        PopupMenuItem(
-                          value: 'delete',
-                          height: 40,
-                          child: Row(children: [
-                            Icon(Icons.delete_outline_rounded,
-                                size: 18,
-                                color: AppColors.error),
-                            const SizedBox(width: 12),
-                            Text('Supprimer',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.error)),
-                          ]),
+                const SizedBox(width: 14),
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title: student name
+                      searchQuery.isNotEmpty
+                          ? _highlightText(
+                              (s.studentName != null && s.studentName!.isNotEmpty)
+                                  ? s.studentName!
+                                  : 'Étudiant',
+                              searchQuery,
+                              const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary),
+                            )
+                          : Text(
+                              (s.studentName != null && s.studentName!.isNotEmpty)
+                                  ? s.studentName!
+                                  : 'Étudiant',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                      // Under student name: neutral text for class + niveau, and - category
+                      if (combinedPill.isNotEmpty || typeLabel.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            if (combinedPill.isNotEmpty)
+                              Text(
+                                combinedPill,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            if (combinedPill.isNotEmpty && typeLabel.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 6),
+                                child: Text('—', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                              ),
+                            if (typeLabel.isNotEmpty)
+                              Text(
+                                typeLabel,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
-                    ),
-                  if (selectionMode) const SizedBox(height: 38), // space filler if no menu
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.access_time_rounded,
-                          size: 13, color: AppColors.slate400),
-                      const SizedBox(width: 4),
-                      Text(_getRelativeTime(s.createdAt),
-                          style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.slate600)),
-                      const SizedBox(width: 6),
-                      Text('($dateStr)',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.slate400)),
-                      const SizedBox(width: 8),
-                      if (s.status == 'replied')
-                        const Icon(Icons.done_all, size: 16, color: AppColors.success)
-                      else if (s.isRead)
-                        const Icon(Icons.done_all, size: 16, color: AppColors.primary)
-                      else
-                        const Icon(Icons.check, size: 16, color: AppColors.slate400),
+                      const SizedBox(height: 6),
+                      // Description
+                      searchQuery.isNotEmpty
+                          ? _highlightText(
+                              s.content,
+                              searchQuery,
+                              TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.slate500,
+                                  height: 1.5),
+                            )
+                          : Text(
+                              s.content.isNotEmpty ? s.content : '(Aucun contenu)',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.slate500,
+                                  height: 1.5),
+                            ),
+                      // Pièce jointe pill at bottom left of content space
+                      if (s.hasAttachment || s.attachments.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3E8FF),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.attach_file_rounded,
+                                      size: 12, color: Color(0xFF9333EA)),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Pièce jointe',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF9333EA),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(width: 24),
+                // Right side: 3-dot menu top, date pinned to bottom
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (!selectionMode)
+                      PopupMenuButton<String>(
+                        onSelected: (v) => onAction(v == 'unread' || v == 'read' ? v : v),
+                        icon: Icon(Icons.more_horiz,
+                            size: 18, color: AppColors.slate400),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'Actions',
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        elevation: 8,
+                        offset: const Offset(-160, 40),
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'view',
+                            height: 40,
+                            child: Row(children: [
+                              Icon(Icons.visibility_outlined,
+                                  size: 18, color: AppColors.slate600),
+                              const SizedBox(width: 12),
+                              Text('Consulter',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.slate600)),
+                            ]),
+                          ),
+                          PopupMenuItem(
+                            value: s.isRead ? 'unread' : 'read',
+                            height: 40,
+                            child: Row(children: [
+                              Icon(s.isRead ? Icons.mark_email_unread_outlined : Icons.mark_email_read_outlined,
+                                  size: 18, color: AppColors.slate600),
+                              const SizedBox(width: 12),
+                              Text(s.isRead ? 'Marquer non lu' : 'Marquer lu',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.slate600)),
+                            ]),
+                          ),
+                          PopupMenuItem(
+                            value: 'reply',
+                            height: 40,
+                            child: Row(children: [
+                              Icon(Icons.reply_outlined,
+                                  size: 18, color: AppColors.slate600),
+                              const SizedBox(width: 12),
+                              Text('Répondre',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.slate600)),
+                            ]),
+                          ),
+                          const PopupMenuDivider(),
+                          PopupMenuItem(
+                            value: 'delete',
+                            height: 40,
+                            child: Row(children: [
+                              Icon(Icons.delete_outline_rounded,
+                                  size: 18,
+                                  color: AppColors.error),
+                              const SizedBox(width: 12),
+                              Text('Supprimer',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.error)),
+                            ]),
+                          ),
+                        ],
+                      )
+                    else
+                      const SizedBox(height: 24),
+                    const Spacer(),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.access_time_rounded,
+                            size: 13, color: AppColors.slate400),
+                        const SizedBox(width: 4),
+                        Text(_getRelativeTime(s.createdAt),
+                            style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate600)),
+                        const SizedBox(width: 6),
+                        Text('($dateStr)',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.slate400)),
+                        const SizedBox(width: 8),
+                        if (s.status == 'replied')
+                          const Icon(Icons.done_all, size: 16, color: AppColors.success)
+                        else if (s.isRead)
+                          const Icon(Icons.done_all, size: 16, color: AppColors.primary)
+                        else
+                          const Icon(Icons.check, size: 16, color: AppColors.slate400),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2766,29 +2759,38 @@ class _AttachmentsGrid extends StatelessWidget {
         // File list
         if (files.isNotEmpty)
           ...files.map(
-            (f) => ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.slate100,
-                  borderRadius: BorderRadius.circular(AppRadius.xs),
+            (f) => MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.slate100,
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
+                  ),
+                  child: const Icon(Icons.insert_drive_file, color: AppColors.textTertiary),
                 ),
-                child: const Icon(Icons.insert_drive_file, color: AppColors.textTertiary),
-              ),
-              title: Text(f.fileName),
-              subtitle: f.fileSize != null
-                  ? Text(_formatFileSize(f.fileSize!))
-                  : null,
-              trailing: IconButton(
-                icon: const Icon(Icons.download),
-                onPressed: () async {
+                title: Text(f.fileName),
+                subtitle: f.fileSize != null
+                    ? Text(_formatFileSize(f.fileSize!))
+                    : null,
+                trailing: IconButton(
+                  icon: const Icon(Icons.download),
+                  onPressed: () async {
+                    final uri = Uri.parse(f.fileUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+                contentPadding: EdgeInsets.zero,
+                onTap: () async {
                   final uri = Uri.parse(f.fileUrl);
                   if (await canLaunchUrl(uri)) {
                     await launchUrl(uri);
                   }
                 },
               ),
-              contentPadding: EdgeInsets.zero,
             ),
           ),
       ],
@@ -2808,9 +2810,11 @@ class _ImageThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _showFullImage(context),
-      child: Container(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _showFullImage(context),
+        child: Container(
         width: 150,
         height: 150,
         decoration: BoxDecoration(
@@ -2877,6 +2881,7 @@ class _ImageThumbnail extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 

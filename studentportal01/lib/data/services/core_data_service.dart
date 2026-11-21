@@ -200,6 +200,26 @@ class SemesterInfo {
     );
   }
 
+  SemesterInfo copyWith({
+    String? id,
+    String? name,
+    int? number,
+    bool? isCurrent,
+    String? schoolId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) {
+    return SemesterInfo(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      number: number ?? this.number,
+      isCurrent: isCurrent ?? this.isCurrent,
+      schoolId: schoolId ?? this.schoolId,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -210,6 +230,43 @@ class SemesterInfo {
       'start_date': startDate?.toIso8601String(),
       'end_date': endDate?.toIso8601String(),
     };
+  }
+
+  static String getPeriodUnitName(int count) {
+    switch (count) {
+      case 2:
+        return 'Semestre';
+      case 3:
+        return 'Trimestre';
+      case 4:
+        return 'Quadrimestre';
+      case 6:
+        return 'Bimestre';
+      default:
+        return 'Période';
+    }
+  }
+
+  static String formatDynamicPeriodName(String rawName, int totalCount, int number) {
+    final unit = getPeriodUnitName(totalCount);
+    final regex = RegExp(
+      r'^(Semestre|Trimestre|Quadrimestre|Bimestre|P[eé]riode|Sem\.|Trim\.)\s*(\d*)',
+      caseSensitive: false,
+    );
+    final trimmed = rawName.trim();
+    if (regex.hasMatch(trimmed)) {
+      return trimmed.replaceFirstMapped(regex, (m) {
+        final numPart = m.group(2);
+        if (numPart != null && numPart.isNotEmpty) {
+          return '$unit $numPart';
+        }
+        return '$unit $number';
+      });
+    }
+    if (trimmed.isEmpty) {
+      return '$unit $number';
+    }
+    return rawName;
   }
 }
 

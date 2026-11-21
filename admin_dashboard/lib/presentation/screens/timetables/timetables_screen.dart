@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 import 'dart:convert';
 import '../../../core/config/supabase_config.dart';
 import '../../../data/models/tunisian_coefficients.dart';
@@ -103,7 +104,9 @@ class ClassInfo {
   final String? gradeLevelId;
   final String? gradeLevelCode;
   final String? gradeLevelName;
+  final String? sectionId;
   final String? sectionCode;
+  final String? sectionName;
   final String? cycle; // 'base' or 'secondaire'
   final bool? hasSections;
 
@@ -113,7 +116,9 @@ class ClassInfo {
     this.gradeLevelId,
     this.gradeLevelCode,
     this.gradeLevelName,
+    this.sectionId,
     this.sectionCode,
+    this.sectionName,
     this.cycle,
     this.hasSections,
   });
@@ -129,7 +134,10 @@ class ClassInfo {
     gradeLevelName:
         json['niveaux']?['name']?.toString() ??
         json['grade_levels']?['name']?.toString(),
+    sectionId:
+        json['section_id']?.toString() ?? json['sections']?['id']?.toString(),
     sectionCode: json['sections']?['code']?.toString(),
+    sectionName: json['sections']?['name']?.toString(),
     cycle: json['niveaux']?['cycle']?.toString(),
     hasSections: json['niveaux']?['has_sections'] as bool?,
   );
@@ -187,7 +195,7 @@ final classesListProvider = FutureProvider.autoDispose<List<ClassInfo>>((ref) as
     final data = await supabase
         .from('classes')
         .select(
-          'id, name, niveau_id, niveaux(name, code, cycle, has_sections), sections(code)',
+          'id, name, niveau_id, section_id, niveaux(name, code, cycle, has_sections), sections(id, name, code)',
         )
         .eq('school_id', schoolId)
         .order('name');
@@ -918,6 +926,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
   bool _showFilterDrawer = false;
   bool _showTimetableFilterDrawer = false;
   String? _expandedNiveauId;
+  String? _expandedSectionKey;
 
   // Timetable type: 'regular' or 'exam'
   String _timetableType = 'regular';
@@ -1064,6 +1073,21 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         ],
       ),
     );
+  }
+
+  int _getNiveauSortOrder(String? str) {
+    if (str == null || str.trim().isEmpty) return 999;
+    final s = str.toLowerCase().trim();
+
+    if (s.contains('7') || s.startsWith('7b') || s.contains('sept')) return 10;
+    if (s.contains('8') || s.startsWith('8b') || s.contains('huit')) return 20;
+    if (s.contains('9') || s.startsWith('9b') || s.contains('neuf')) return 30;
+    if (s.contains('1') || s.startsWith('1s') || s.contains('prem')) return 40;
+    if (s.contains('2') || s.startsWith('2s') || s.contains('deux')) return 50;
+    if (s.contains('3') || s.startsWith('3s') || s.contains('trois')) return 60;
+    if (s.contains('4') || s.startsWith('4s') || s.contains('bac') || s.contains('quatre')) return 70;
+
+    return 999;
   }
 
   Widget _buildClassSelector(
@@ -1225,9 +1249,17 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                 groupedClasses.putIfAbsent(key, () => []).add(cls);
               }
 
+              final sortedEntries = groupedClasses.entries.toList()
+                ..sort((a, b) {
+                  final orderA = _getNiveauSortOrder(a.value.firstOrNull?.gradeLevelName ?? a.key);
+                  final orderB = _getNiveauSortOrder(b.value.firstOrNull?.gradeLevelName ?? b.key);
+                  if (orderA != orderB) return orderA.compareTo(orderB);
+                  return a.key.compareTo(b.key);
+                });
+
               return ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                children: groupedClasses.entries.map((entry) {
+                children: sortedEntries.map((entry) {
                   final niveauCode = entry.key;
                   final niveauClasses = entry.value;
                   final isExpanded = _expandedNiveauId == niveauCode;
@@ -1255,6 +1287,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                           InkWell(
                             onTap: () => setState(() {
                               _expandedNiveauId = isExpanded ? null : niveauCode;
+                              _expandedSectionKey = null;
                             }),
                             borderRadius: BorderRadius.circular(16),
                             hoverColor: _brandLight.withOpacity(0.3),
@@ -1292,104 +1325,166 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                           ),
                           // ── Expanded class list with connecting line ──
                           if (isExpanded)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 14, right: 14, bottom: 14),
-                              child: IntrinsicHeight(
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Container(
-                                      width: 2,
-                                      margin: const EdgeInsets.only(top: 4, bottom: 4),
-                                      decoration: BoxDecoration(
-                                        color: _brand.withOpacity(0.18),
-                                        borderRadius: BorderRadius.circular(1),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        children: niveauClasses.map((cls) {
-                                          final isSelected = selectedClass?.id == cls.id;
-                                          return Consumer(
-                                            builder: (context, ref, _) {
-                                              final studentCountAsync = ref.watch(classStudentCountProvider(cls.id));
-                                              final studentCount = studentCountAsync.whenOrNull(data: (c) => c);
-                                              return Padding(
-                                                padding: const EdgeInsets.only(bottom: 6),
-                                                child: Material(
-                                                  color: Colors.transparent,
-                                                  child: InkWell(
-                                                    onTap: () => ref.read(selectedClassProvider.notifier).state = cls,
-                                                    borderRadius: BorderRadius.circular(12),
-                                                    hoverColor: Colors.white.withOpacity(0.8),
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                                      decoration: BoxDecoration(
-                                                        color: isSelected ? Colors.white : Colors.white.withOpacity(0.6),
-                                                        borderRadius: BorderRadius.circular(12),
-                                                        boxShadow: isSelected ? [
-                                                          BoxShadow(color: _brand.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2)),
-                                                        ] : null,
-                                                        border: isSelected
-                                                            ? Border.all(color: _brand.withOpacity(0.2))
-                                                            : Border.all(color: Colors.transparent),
-                                                      ),
-                                                      child: Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: Column(
-                                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                                              children: [
-                                                                Text(
-                                                                  cls.name,
-                                                                  style: TextStyle(
-                                                                    fontSize: 13,
-                                                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                                                    color: isSelected ? _brand : const Color(0xFF5A5B6A),
+                            Builder(
+                              builder: (context) {
+                                final hasSections = niveauClasses.any((c) =>
+                                    (c.sectionName != null && c.sectionName!.isNotEmpty) ||
+                                    (c.sectionCode != null && c.sectionCode!.isNotEmpty));
+
+                                final sectionsMap = <String, List<ClassInfo>>{};
+                                final unassignedClasses = <ClassInfo>[];
+
+                                if (hasSections) {
+                                  for (final cls in niveauClasses) {
+                                    final secName = cls.sectionName ?? cls.sectionCode;
+                                    if (secName != null && secName.isNotEmpty) {
+                                      sectionsMap.putIfAbsent(secName, () => []).add(cls);
+                                    } else {
+                                      unassignedClasses.add(cls);
+                                    }
+                                  }
+                                }
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(left: 14, right: 14, bottom: 14),
+                                  child: IntrinsicHeight(
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        Container(
+                                          width: 2,
+                                          margin: const EdgeInsets.only(top: 4, bottom: 4),
+                                          decoration: BoxDecoration(
+                                            color: _brand.withOpacity(0.18),
+                                            borderRadius: BorderRadius.circular(1),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: hasSections
+                                              ? Column(
+                                                  children: [
+                                                    ...sectionsMap.entries.map((entry) {
+                                                      final secKey = entry.key;
+                                                      final secClasses = entry.value;
+                                                      final isSecExpanded = _expandedSectionKey == secKey;
+
+                                                      return Padding(
+                                                        padding: const EdgeInsets.only(bottom: 6),
+                                                        child: Column(
+                                                          children: [
+                                                            Material(
+                                                              color: Colors.transparent,
+                                                              child: InkWell(
+                                                                onTap: () => setState(() {
+                                                                  _expandedSectionKey = isSecExpanded ? null : secKey;
+                                                                }),
+                                                                borderRadius: BorderRadius.circular(12),
+                                                                hoverColor: Colors.white.withOpacity(0.8),
+                                                                child: Container(
+                                                                  width: double.infinity,
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                                                  decoration: BoxDecoration(
+                                                                    color: isSecExpanded ? Colors.white : Colors.white.withOpacity(0.65),
+                                                                    borderRadius: BorderRadius.circular(12),
+                                                                    boxShadow: isSecExpanded
+                                                                        ? [
+                                                                            BoxShadow(
+                                                                              color: _brand.withOpacity(0.08),
+                                                                              blurRadius: 8,
+                                                                              offset: const Offset(0, 2),
+                                                                            ),
+                                                                          ]
+                                                                        : null,
+                                                                    border: isSecExpanded
+                                                                        ? Border.all(color: _brand.withOpacity(0.25))
+                                                                        : Border.all(color: Colors.transparent),
+                                                                  ),
+                                                                  child: Row(
+                                                                    children: [
+                                                                      Expanded(
+                                                                        child: Text(
+                                                                          secKey,
+                                                                          style: TextStyle(
+                                                                            fontSize: 13,
+                                                                            fontWeight: isSecExpanded ? FontWeight.w600 : FontWeight.w500,
+                                                                            color: isSecExpanded ? _brand : const Color(0xFF2D2D3A),
+                                                                          ),
+                                                                          maxLines: 1,
+                                                                          overflow: TextOverflow.ellipsis,
+                                                                        ),
+                                                                      ),
+                                                                      const SizedBox(width: 8),
+                                                                      Container(
+                                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                                        decoration: BoxDecoration(
+                                                                          borderRadius: BorderRadius.circular(9999),
+                                                                          color: isSecExpanded ? _brand : const Color(0xFFE9EAF0),
+                                                                        ),
+                                                                        child: Text(
+                                                                          '${secClasses.length}',
+                                                                          style: TextStyle(
+                                                                            fontSize: 11,
+                                                                            fontWeight: FontWeight.w700,
+                                                                            color: isSecExpanded ? Colors.white : const Color(0xFF7B7D8B),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ],
                                                                   ),
                                                                 ),
-                                                                if (cls.sectionCode != null || studentCount != null)
-                                                                  Padding(
-                                                                    padding: const EdgeInsets.only(top: 2),
-                                                                    child: Row(
-                                                                      children: [
-                                                                        if (cls.sectionCode != null)
-                                                                          Text(cls.sectionCode!, style: TextStyle(fontSize: 11, color: isSelected ? _brand.withOpacity(0.6) : const Color(0xFF9B9DAB))),
-                                                                        if (cls.sectionCode != null && studentCount != null)
-                                                                          Text(' • ', style: TextStyle(fontSize: 11, color: const Color(0xFF9B9DAB))),
-                                                                        if (studentCount != null)
-                                                                          Row(
-                                                                            mainAxisSize: MainAxisSize.min,
-                                                                            children: [
-                                                                              Icon(Icons.people_outline, size: 11, color: isSelected ? _brand.withOpacity(0.6) : const Color(0xFF9B9DAB)),
-                                                                              const SizedBox(width: 3),
-                                                                              Text('$studentCount', style: TextStyle(fontSize: 11, color: isSelected ? _brand.withOpacity(0.6) : const Color(0xFF9B9DAB))),
-                                                                            ],
-                                                                          ),
-                                                                      ],
-                                                                    ),
-                                                                  ),
-                                                              ],
+                                                              ),
                                                             ),
-                                                          ),
-                                                          if (isSelected)
-                                                            Icon(Icons.check_circle, color: _brand, size: 18),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
+                                                            if (isSecExpanded)
+                                                              Padding(
+                                                                padding: const EdgeInsets.only(left: 10, top: 6),
+                                                                child: IntrinsicHeight(
+                                                                  child: Row(
+                                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                                    children: [
+                                                                      Container(
+                                                                        width: 2,
+                                                                        margin: const EdgeInsets.only(top: 2, bottom: 2),
+                                                                        decoration: BoxDecoration(
+                                                                          color: _brand.withOpacity(0.15),
+                                                                          borderRadius: BorderRadius.circular(1),
+                                                                        ),
+                                                                      ),
+                                                                      const SizedBox(width: 10),
+                                                                      Expanded(
+                                                                        child: Column(
+                                                                          children: secClasses.map((cls) {
+                                                                            final isSelected = selectedClass?.id == cls.id;
+                                                                            return _buildTimetableSidebarClassCard(cls, isSelected);
+                                                                          }).toList(),
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                    }),
+                                                    ...unassignedClasses.map((cls) {
+                                                      final isSelected = selectedClass?.id == cls.id;
+                                                      return _buildTimetableSidebarClassCard(cls, isSelected);
+                                                    }),
+                                                  ],
+                                                )
+                                              : Column(
+                                                  children: niveauClasses.map((cls) {
+                                                    final isSelected = selectedClass?.id == cls.id;
+                                                    return _buildTimetableSidebarClassCard(cls, isSelected);
+                                                  }).toList(),
                                                 ),
-                                              );
-                                            },
-                                          );
-                                        }).toList(),
-                                      ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                              },
                             ),
                         ],
                       ),
@@ -1401,6 +1496,93 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTimetableSidebarClassCard(ClassInfo cls, bool isSelected) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final studentCountAsync = ref.watch(classStudentCountProvider(cls.id));
+        final studentCount = studentCountAsync.whenOrNull(data: (c) => c);
+        final secLabel = cls.sectionName ?? cls.sectionCode;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => ref.read(selectedClassProvider.notifier).state = cls,
+              borderRadius: BorderRadius.circular(12),
+              hoverColor: Colors.white.withOpacity(0.8),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : Colors.white.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: isSelected ? [
+                    BoxShadow(color: _brand.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2)),
+                  ] : null,
+                  border: isSelected
+                      ? Border.all(color: _brand.withOpacity(0.2))
+                      : Border.all(color: Colors.transparent),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            cls.name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              color: isSelected ? _brand : const Color(0xFF5A5B6A),
+                            ),
+                          ),
+                          if (secLabel != null || studentCount != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Row(
+                                children: [
+                                  if (secLabel != null) ...[
+                                    Flexible(
+                                      child: Text(
+                                        secLabel,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isSelected ? _brand.withOpacity(0.6) : const Color(0xFF9B9DAB),
+                                        ),
+                                      ),
+                                    ),
+                                    if (studentCount != null)
+                                      const Text(' • ', style: TextStyle(fontSize: 11, color: Color(0xFF9B9DAB))),
+                                  ],
+                                  if (studentCount != null)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.people_outline, size: 11, color: isSelected ? _brand.withOpacity(0.6) : const Color(0xFF9B9DAB)),
+                                        const SizedBox(width: 3),
+                                        Text('$studentCount', style: TextStyle(fontSize: 11, color: isSelected ? _brand.withOpacity(0.6) : const Color(0xFF9B9DAB))),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (isSelected)
+                      Icon(Icons.check_circle, color: _brand, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2781,21 +2963,24 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       return const SizedBox.shrink();
     }
 
-    return GestureDetector(
-      onTap: () => _showAddSlotDialogForCell(
-        selectedClass,
-        offerings,
-        dayNum,
-        timeStart,
-      ),
-      child: Container(
-        margin: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: AppColors.slate50,
-          borderRadius: BorderRadius.circular(4),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _showAddSlotDialogForCell(
+          selectedClass,
+          offerings,
+          dayNum,
+          timeStart,
         ),
-        child: Center(
-          child: Icon(Icons.add, size: 14, color: AppColors.slate300),
+        child: Container(
+          margin: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: AppColors.slate50,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Center(
+            child: Icon(Icons.add, size: 14, color: AppColors.slate300),
+          ),
         ),
       ),
     );
@@ -2837,13 +3022,15 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       top: 3,
       width: slotWidth,
       height: rowHeight - 6,
-      child: GestureDetector(
-        onTapDown: (details) => _showSlotOptions(
-          slot,
-          details.globalPosition,
-          isEditable: isEditable,
-        ),
-        child: Container(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTapDown: (details) => _showSlotOptions(
+            slot,
+            details.globalPosition,
+            isEditable: isEditable,
+          ),
+          child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -2925,6 +3112,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -4398,8 +4586,8 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                       itemCount: examPeriods.length,
                       itemBuilder: (ctx, i) {
                         final ep = examPeriods[i];
-                        final startStr = '${ep.startDate.day}/${ep.startDate.month}/${ep.startDate.year}';
-                        final endStr = '${ep.endDate.day}/${ep.endDate.month}/${ep.endDate.year}';
+                        final startStr = DateFormat('d MMM yyyy', 'fr_FR').format(ep.startDate);
+                        final endStr = DateFormat('d MMM yyyy', 'fr_FR').format(ep.endDate);
                         return ListTile(
                           leading: Container(
                             padding: const EdgeInsets.all(8),
@@ -4731,64 +4919,83 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                   },
                                 ),
                                 const SizedBox(height: 14),
-                                // ÉTAGE
-                                const Text('ÉTAGE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
-                                const SizedBox(height: 8),
-                                Builder(
-                                  builder: (context) {
-                                    final floors = selectedBuilding?.floors.where((f) => f.isActive).toList() ?? [];
-                                    return DropdownButtonFormField<FloorModel>(
-                                      value: selectedFloor,
-                                      isExpanded: true, menuMaxHeight: 300,
-                                      borderRadius: BorderRadius.circular(12),
-                                      icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF9CA3AF), size: 20),
-                                      decoration: InputDecoration(
-                                        hintText: selectedBuilding == null ? 'Sélectionnez d\'abord un bloc' : 'Sélectionner un étage',
-                                        hintStyle: const TextStyle(color: Color(0xFFBCC3CE), fontSize: 13),
-                                        prefixIcon: const Icon(Icons.layers_outlined, size: 17, color: Color(0xFF9CA3AF)),
-                                        filled: true, fillColor: const Color(0xFFF8F9FB),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAF0))),
-                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5)),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // ÉTAGE
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('ÉTAGE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
+                                          const SizedBox(height: 8),
+                                          Builder(
+                                            builder: (context) {
+                                              final floors = selectedBuilding?.floors.where((f) => f.isActive).toList() ?? [];
+                                              return DropdownButtonFormField<FloorModel>(
+                                                value: selectedFloor,
+                                                isExpanded: true, menuMaxHeight: 300,
+                                                borderRadius: BorderRadius.circular(12),
+                                                icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF9CA3AF), size: 20),
+                                                decoration: InputDecoration(
+                                                  hintText: selectedBuilding == null ? 'Choisir bloc' : 'Sélectionner un étage',
+                                                  hintStyle: const TextStyle(color: Color(0xFFBCC3CE), fontSize: 13),
+                                                  prefixIcon: const Icon(Icons.layers_outlined, size: 17, color: Color(0xFF9CA3AF)),
+                                                  filled: true, fillColor: const Color(0xFFF8F9FB),
+                                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAF0))),
+                                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5)),
+                                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                                                ),
+                                                items: floors.map((f) => DropdownMenuItem<FloorModel>(
+                                                  value: f,
+                                                  child: Text(f.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Color(0xFF1F2937))),
+                                                )).toList(),
+                                                onChanged: selectedBuilding == null ? null : (v) => setDialogState(() { selectedFloor = v; selectedRoom = null; }),
+                                              );
+                                            },
+                                          ),
+                                        ],
                                       ),
-                                      items: floors.map((f) => DropdownMenuItem<FloorModel>(
-                                        value: f,
-                                        child: Text(f.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Color(0xFF1F2937))),
-                                      )).toList(),
-                                      onChanged: selectedBuilding == null ? null : (v) => setDialogState(() { selectedFloor = v; selectedRoom = null; }),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(height: 14),
-                                // SALLE
-                                const Text('SALLE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
-                                const SizedBox(height: 8),
-                                Builder(
-                                  builder: (context) {
-                                    final rooms = selectedFloor?.rooms.where((r) => r.isActive).toList() ?? [];
-                                    return DropdownButtonFormField<RoomModel>(
-                                      value: selectedRoom,
-                                      isExpanded: true, menuMaxHeight: 300,
-                                      borderRadius: BorderRadius.circular(12),
-                                      icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF9CA3AF), size: 20),
-                                      decoration: InputDecoration(
-                                        hintText: selectedFloor == null ? 'Sélectionnez d\'abord un étage' : 'Sélectionner une salle',
-                                        hintStyle: const TextStyle(color: Color(0xFFBCC3CE), fontSize: 13),
-                                        prefixIcon: const Icon(Icons.meeting_room_outlined, size: 17, color: Color(0xFF9CA3AF)),
-                                        filled: true, fillColor: const Color(0xFFF8F9FB),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAF0))),
-                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5)),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    // SALLE
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('SALLE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
+                                          const SizedBox(height: 8),
+                                          Builder(
+                                            builder: (context) {
+                                              final rooms = selectedFloor?.rooms.where((r) => r.isActive).toList() ?? [];
+                                              return DropdownButtonFormField<RoomModel>(
+                                                value: selectedRoom,
+                                                isExpanded: true, menuMaxHeight: 300,
+                                                borderRadius: BorderRadius.circular(12),
+                                                icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF9CA3AF), size: 20),
+                                                decoration: InputDecoration(
+                                                  hintText: selectedFloor == null ? 'Choisir étage' : 'Sélectionner une salle',
+                                                  hintStyle: const TextStyle(color: Color(0xFFBCC3CE), fontSize: 13),
+                                                  prefixIcon: const Icon(Icons.meeting_room_outlined, size: 17, color: Color(0xFF9CA3AF)),
+                                                  filled: true, fillColor: const Color(0xFFF8F9FB),
+                                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAF0))),
+                                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5)),
+                                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                                                ),
+                                                items: rooms.map((r) => DropdownMenuItem<RoomModel>(
+                                                  value: r,
+                                                  child: Text(r.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Color(0xFF1F2937))),
+                                                )).toList(),
+                                                onChanged: selectedFloor == null ? null : (v) => setDialogState(() => selectedRoom = v),
+                                              );
+                                            },
+                                          ),
+                                        ],
                                       ),
-                                      items: rooms.map((r) => DropdownMenuItem<RoomModel>(
-                                        value: r,
-                                        child: Text(r.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Color(0xFF1F2937))),
-                                      )).toList(),
-                                      onChanged: selectedFloor == null ? null : (v) => setDialogState(() => selectedRoom = v),
-                                    );
-                                  },
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 24),
                               ],

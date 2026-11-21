@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as rp;
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_theme.dart';
@@ -69,6 +71,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
     setState(() {
       _selectedStudentForGradeEntry = student;
       _viewState = ResultsViewState.gradeEntry;
+      _searchController.clear();
+      providerRef?.setSearchQuery('');
     });
   }
 
@@ -78,7 +82,24 @@ class _ResultsScreenState extends State<ResultsScreen> {
       _bulkStudentObjects = [];
       _selectedStudentsForBulk.clear();
       _viewState = ResultsViewState.overview;
+      _searchController.clear();
+      providerRef?.setSearchQuery('');
     });
+  }
+
+  int _getNiveauSortOrder(String? str) {
+    if (str == null || str.trim().isEmpty) return 999;
+    final s = str.toLowerCase().trim();
+
+    if (s.contains('7') || s.startsWith('7b') || s.contains('sept')) return 10;
+    if (s.contains('8') || s.startsWith('8b') || s.contains('huit')) return 20;
+    if (s.contains('9') || s.startsWith('9b') || s.contains('neuf')) return 30;
+    if (s.contains('1') || s.startsWith('1s') || s.contains('prem')) return 40;
+    if (s.contains('2') || s.startsWith('2s') || s.contains('deux')) return 50;
+    if (s.contains('3') || s.startsWith('3s') || s.contains('trois')) return 60;
+    if (s.contains('4') || s.startsWith('4s') || s.contains('bac') || s.contains('quatre')) return 70;
+
+    return 999;
   }
 
   bool get _hasActiveFilters => false;
@@ -93,50 +114,59 @@ class _ResultsScreenState extends State<ResultsScreen> {
         provider.initialize();
         return provider;
       },
-      child: Consumer<ResultsProvider>(
-        builder: (context, provider, _) {
-          providerRef = provider;
-          return Scaffold(
-            backgroundColor: AppColors.background,
-            body: Stack(
-              children: [
-                Row(
+      child: rp.Consumer(
+        builder: (context, ref, _) {
+          final activeSemesterId = ref.watch(currentActiveSemesterIdProvider);
+          return Consumer<ResultsProvider>(
+            builder: (context, provider, _) {
+              providerRef = provider;
+              if (activeSemesterId != null && provider.selectedSemesterId != activeSemesterId) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  provider.setSemester(activeSemesterId);
+                });
+              }
+              return Scaffold(
+                backgroundColor: AppColors.background,
+                body: Stack(
                   children: [
-                    const AdminSidebar(currentRoute: '/results'),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _buildHeader(context, provider),
-                          _buildTabBar(context, provider),
-                          Expanded(
-                            child: _buildMainContent(context, provider),
+                    Row(
+                      children: [
+                        const AdminSidebar(currentRoute: '/results'),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _buildHeader(context, provider),
+                              Expanded(
+                                child: _buildMainContent(context, provider),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
+                    // Filter drawer overlay — full-app blur
+                    if (_showFilterDrawer) ...[
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: _toggleFilters,
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                            child: Container(color: Colors.black.withOpacity(0.28)),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 370,
+                        child: _buildFilterDrawer(context, provider),
+                      ),
+                    ],
                   ],
                 ),
-                // Filter drawer overlay — full-app blur
-                if (_showFilterDrawer) ...[
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: _toggleFilters,
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                        child: Container(color: Colors.black.withOpacity(0.28)),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 370,
-                    child: _buildFilterDrawer(context, provider),
-                  ),
-                ],
-              ],
-            ),
+              );
+            },
           );
         },
       ),
@@ -172,11 +202,15 @@ class _ResultsScreenState extends State<ResultsScreen> {
                 padding: EdgeInsets.zero,
                 icon: const Icon(Icons.arrow_back, size: 18, color: Color(0xFF4B5563)),
                 onPressed: () {
-                  setState(() {
-                    provider.setClass(null);
-                    _selectedStudentForGradeEntry = null;
-                    _viewState = ResultsViewState.overview;
-                  });
+                  if (_viewState == ResultsViewState.gradeEntry || _selectedStudentForGradeEntry != null) {
+                    _backToOverview();
+                  } else {
+                    setState(() {
+                      provider.setClass(null);
+                      _selectedStudentForGradeEntry = null;
+                      _viewState = ResultsViewState.overview;
+                    });
+                  }
                 },
               ),
             ),
@@ -201,7 +235,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
             ],
           ),
           const Spacer(),
-          _buildSemesterDropdown(context, provider),
           // Toolbar: pinned far right
           SizedBox(
             width: 320,
@@ -211,7 +244,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
               onChanged: provider.setSearchQuery,
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'Rechercher un élève...',
+                hintText: (_viewState == ResultsViewState.gradeEntry && _selectedStudentForGradeEntry != null)
+                    ? 'Rechercher une matière...'
+                    : 'Rechercher un élève...',
                 hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
                 prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textTertiary),
                 suffixIcon: !isSearching
@@ -271,129 +306,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
     );
   }
 
-  Widget _buildSemesterDropdown(BuildContext context, ResultsProvider provider) {
-    return rp.Consumer(
-      builder: (context, ref, _) {
-        final semestersAsync = ref.watch(semestersProvider);
-        final activeSemesterId = ref.watch(currentActiveSemesterIdProvider);
-        final currentSelectedId = provider.selectedSemesterId;
-
-        return semestersAsync.when(
-          data: (semestersState) {
-            final rawSemesters = semestersState.filteredSemesters.isNotEmpty
-                ? semestersState.filteredSemesters
-                : semestersState.semesters;
-
-            if (rawSemesters.isEmpty) return const SizedBox.shrink();
-
-            final Map<String, SemesterModel> uniqueMap = {};
-            for (final sem in rawSemesters) {
-              uniqueMap[sem.id] = sem;
-            }
-            final semesters = uniqueMap.values.toList()
-              ..sort((a, b) => a.number.compareTo(b.number));
-
-            String? effectiveSelectedId;
-            if (currentSelectedId != null && uniqueMap.containsKey(currentSelectedId)) {
-              effectiveSelectedId = currentSelectedId;
-            } else if (activeSemesterId != null && uniqueMap.containsKey(activeSemesterId)) {
-              effectiveSelectedId = activeSemesterId;
-            } else if (semesters.isNotEmpty) {
-              effectiveSelectedId = semesters.first.id;
-            }
-
-            // Sync with provider if not initialized or mismatched
-            if (effectiveSelectedId != null && provider.selectedSemesterId != effectiveSelectedId) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                provider.setSemester(effectiveSelectedId);
-              });
-            }
-
-            final periodLabel = semestersState.periodLabel;
-
-            return Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                color: AppColors.slate100,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.borderLight),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String?>(
-                  value: effectiveSelectedId,
-                  borderRadius: BorderRadius.circular(16),
-                  dropdownColor: Colors.white,
-                  elevation: 6,
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: Color(0xFF8B5CF6),
-                    size: 18,
-                  ),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                  items: semesters.map((sem) {
-                    final now = DateTime.now();
-                    final isSemCurrent = sem.id == activeSemesterId ||
-                        sem.isCurrent ||
-                        (!now.isBefore(sem.startDate) && !now.isAfter(sem.endDate));
-
-                    return DropdownMenuItem<String?>(
-                      value: sem.id,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            sem.name.isNotEmpty
-                                ? sem.name
-                                : '$periodLabel ${sem.number}',
-                            style: TextStyle(
-                              fontWeight: isSemCurrent ? FontWeight.bold : FontWeight.w500,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          if (isSemCurrent) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3F0FF),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'En cours',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF6D4CF6),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      provider.setSemester(val);
-                    }
-                  },
-                ),
-              ),
-            );
-          },
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
-        );
-      },
-    );
-  }
-
   Widget _buildHeaderIconButton({
     required IconData icon,
     required String tooltip,
@@ -413,91 +325,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ),
       ),
       constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════
-  // TAB BAR
-  // ═══════════════════════════════════════════════════
-  Widget _buildTabBar(BuildContext context, ResultsProvider provider) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
-      ),
-      padding: const EdgeInsets.only(left: 24, top: 4),
-      child: Row(
-        children: [
-          _buildTab(
-            icon: Icons.visibility,
-            label: 'Aperçu',
-            isActive: _viewState == ResultsViewState.overview,
-            onTap: () {
-              _searchController.clear();
-              provider.setSearchQuery('');
-              setState(() => _viewState = ResultsViewState.overview);
-            },
-            activeColor: const Color(0xFF655DD5),
-          ),
-          const SizedBox(width: 24),
-          _buildTab(
-            icon: Icons.edit_note,
-            label: 'Saisie',
-            isActive: _viewState == ResultsViewState.gradeEntry ||
-                _viewState == ResultsViewState.bulkGradeEntry,
-            onTap: (provider.selectedClassId != null && provider.selectedSemesterId != null) ? () {
-              _searchController.clear();
-              provider.setSearchQuery('');
-              setState(() => _viewState = ResultsViewState.gradeEntry);
-            } : () {
-               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez sélectionner une classe et un semestre pour saisir des notes')));
-            },
-            activeColor: const Color(0xFF655DD5),
-          ),
-
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTab({
-    required IconData icon,
-    required String label,
-    required bool isActive,
-    required VoidCallback onTap,
-    required Color activeColor,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.only(bottom: 12, top: 8),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isActive ? activeColor : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isActive ? activeColor : AppColors.textTertiary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? activeColor : AppColors.textTertiary,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -538,37 +365,28 @@ class _ResultsScreenState extends State<ResultsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (provider.semesters.isNotEmpty) ...[
-                      _buildFilterLabel('SEMESTRE'),
-                      const SizedBox(height: 8),
-                      _buildFilterDropdown<String?>(
-                        value: provider.selectedSemesterId,
-                        hint: 'Sélectionner un semestre',
-                        items: provider.semesters.map((s) {
-                          final name = s['name']?.toString() ?? '';
-                          final number = s['number']?.toString() ?? '1';
-                          final label = name.isNotEmpty ? name : 'Semestre $number';
-                          return DropdownMenuItem(
-                            value: s['id']?.toString(),
-                            child: Text(label),
-                          );
-                        }).toList(),
-                        onChanged: (v) => provider.setSemester(v),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-
                     _buildFilterLabel('NIVEAU'),
                     const SizedBox(height: 8),
-                    _buildFilterDropdown<String?>(
-                      value: provider.selectedNiveauId,
-                      hint: 'Tous les niveaux',
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('Tous les niveaux')),
-                        ...provider.niveaux.map((n) => DropdownMenuItem(value: n['id'].toString(), child: Text(n['name']))),
-                      ],
-                      onChanged: (v) => provider.setNiveau(v),
-                    ),
+                    Builder(builder: (context) {
+                      final sortedNiveaux = List<Map<String, dynamic>>.from(provider.niveaux)
+                        ..sort((a, b) {
+                          final nameA = a['name']?.toString() ?? a['code']?.toString();
+                          final nameB = b['name']?.toString() ?? b['code']?.toString();
+                          final orderA = _getNiveauSortOrder(nameA);
+                          final orderB = _getNiveauSortOrder(nameB);
+                          if (orderA != orderB) return orderA.compareTo(orderB);
+                          return (nameA ?? '').compareTo(nameB ?? '');
+                        });
+                      return _buildFilterDropdown<String?>(
+                        value: provider.selectedNiveauId,
+                        hint: 'Tous les niveaux',
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Tous les niveaux')),
+                          ...sortedNiveaux.map((n) => DropdownMenuItem(value: n['id'].toString(), child: Text(n['name']))),
+                        ],
+                        onChanged: (v) => provider.setNiveau(v),
+                      );
+                    }),
                     const SizedBox(height: 20),
 
                     if (provider.selectedNiveauHasSections) ...[
@@ -588,12 +406,16 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
                     _buildFilterLabel('CLASSE'),
                     const SizedBox(height: 8),
-                    _buildFilterDropdown<String?>(
-                      value: provider.selectedClassId,
-                      hint: 'Toutes les classes',
-                      items: provider.filteredClasses.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
-                      onChanged: (v) => provider.setClass(v),
-                    ),
+                    Builder(builder: (context) {
+                      final sortedClasses = List<Map<String, dynamic>>.from(provider.filteredClasses)
+                        ..sort((a, b) => (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? ''));
+                      return _buildFilterDropdown<String?>(
+                        value: provider.selectedClassId,
+                        hint: 'Toutes les classes',
+                        items: sortedClasses.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
+                        onChanged: (v) => provider.setClass(v),
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -768,7 +590,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _buildMainContent(BuildContext context, ResultsProvider provider) {
     if (provider.isLoading) return _buildLoadingState(provider);
 
-    if (provider.searchQuery.isNotEmpty) {
+    final isInSingleGradeEntry = _viewState == ResultsViewState.gradeEntry && _selectedStudentForGradeEntry != null;
+    if (provider.searchQuery.isNotEmpty && !isInSingleGradeEntry) {
       return _buildSearchResults(context, provider);
     }
 
@@ -831,6 +654,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       subjectOfferings: provider.subjectOfferings,
       levelId: provider.selectedNiveauId,
       semesterId: provider.selectedSemesterId,
+      externalSearchQuery: provider.searchQuery,
       onSaveGrades: (grades) async {
         for (final grade in grades) {
           await provider.saveGrade(
@@ -941,214 +765,282 @@ class _ResultsScreenState extends State<ResultsScreen> {
           builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
             const checkboxW = 44.0;
-            const indexW = 40.0;
-            const codeW = 120.0;
-            const classeW = 85.0;
-            const actionsW = 44.0;
+            const niveauW = 130.0;
+            const classeW = 95.0;
+            const codeW = 130.0;
+            const createdW = 120.0;
+            const actionsW = 48.0;
 
-            final fixedW = checkboxW + indexW + codeW + classeW + actionsW;
-            final nameW = (availableWidth - fixedW).clamp(180.0, 350.0);
+            final totalFixed = checkboxW + niveauW + classeW + codeW + createdW + actionsW;
+            final nameW = (availableWidth - totalFixed).clamp(240.0, 500.0);
+            final minTotalW = totalFixed + nameW;
 
             return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: availableWidth),
-                child: DataTable(
-                  columnSpacing: 0,
-                  horizontalMargin: 0,
-                  dataRowMinHeight: 60,
-                  dataRowMaxHeight: 64,
-                  headingRowHeight: 44,
-                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
-                  headingTextStyle: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textTertiary,
-                    fontSize: 11,
-                    letterSpacing: 0.5,
-                  ),
-                  showCheckboxColumn: false,
-                  columns: [
-                    DataColumn(
-                      label: SizedBox(
-                        width: checkboxW,
-                        child: Center(
-                          child: SizedBox(
-                            width: 16, height: 16,
-                            child: Checkbox(
-                              value: allPageSelected && pageStudents.isNotEmpty,
-                              tristate: false,
-                              onChanged: (val) {
-                                setState(() {
-                                  if (allPageSelected) {
-                                    for (final s in pageStudents) _selectedStudentsForBulk.remove(s['id'].toString());
-                                  } else {
-                                    for (final s in pageStudents) _selectedStudentsForBulk.add(s['id'].toString());
-                                  }
-                                });
-                              },
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-                              side: BorderSide(color: AppColors.slate300, width: 1.5),
-                              activeColor: const Color(0xFF655DD5),
+              scrollDirection: Axis.vertical,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: availableWidth > minTotalW ? availableWidth : minTotalW),
+                  child: DataTable(
+                    columnSpacing: 0,
+                    horizontalMargin: 0,
+                    dataRowMinHeight: 60,
+                    dataRowMaxHeight: 64,
+                    headingRowHeight: 44,
+                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                    headingTextStyle: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                    ),
+                    showCheckboxColumn: false,
+                    columns: [
+                      DataColumn(
+                        label: SizedBox(
+                          width: checkboxW,
+                          child: Center(
+                            child: SizedBox(
+                              width: 16, height: 16,
+                              child: Checkbox(
+                                value: allPageSelected && pageStudents.isNotEmpty,
+                                tristate: false,
+                                onChanged: (val) {
+                                  setState(() {
+                                    if (allPageSelected) {
+                                      for (final s in pageStudents) _selectedStudentsForBulk.remove(s['id'].toString());
+                                    } else {
+                                      for (final s in pageStudents) _selectedStudentsForBulk.add(s['id'].toString());
+                                    }
+                                  });
+                                },
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                side: BorderSide(color: AppColors.slate300, width: 1.5),
+                                activeColor: const Color(0xFF655DD5),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    DataColumn(label: SizedBox(width: indexW, child: _headerLabel('#'))),
-                    DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
-                    DataColumn(label: SizedBox(width: codeW, child: _headerLabel('MATRICULE'))),
-                    DataColumn(label: SizedBox(width: classeW, child: _headerLabel('CLASSE'))),
-                    DataColumn(label: SizedBox(width: actionsW, child: Container())),
-                  ],
-                  rows: List.generate(pageStudents.length, (i) {
-                    final student = pageStudents[i];
-                    final studentId = student['id'].toString();
-                    final isSelected = _selectedStudentsForBulk.contains(studentId);
-                    final user = student['users'] as Map<String, dynamic>? ?? {};
-                    final fullName = user['full_name']?.toString() ?? 'Nom inconnu';
-                    final email = user['email']?.toString() ?? 'Élève';
-                    final code = (student['student_code'] ?? user['student_code'] ?? '—').toString();
-                    final className = student['classes']?['name']?.toString() ?? _getSelectedClassName(provider);
-                    final globalIndex = startIndex + i + 1;
+                      DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
+                      DataColumn(label: SizedBox(width: niveauW, child: _headerLabel('NIVEAU'))),
+                      DataColumn(label: SizedBox(width: classeW, child: _headerLabel('CLASSE'))),
+                      DataColumn(label: SizedBox(width: codeW, child: _headerLabel('CODE ÉTUD.'))),
+                      DataColumn(label: SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE'))),
+                      DataColumn(label: SizedBox(width: actionsW, child: Container())),
+                    ],
+                    rows: List.generate(pageStudents.length, (i) {
+                      final student = pageStudents[i];
+                      final studentId = student['id'].toString();
+                      final isSelected = _selectedStudentsForBulk.contains(studentId);
+                      final user = student['users'] as Map<String, dynamic>? ?? {};
+                      final fullName = user['full_name']?.toString() ?? 'Nom inconnu';
+                      final email = user['email']?.toString() ?? '—';
+                      final gender = user['gender']?.toString();
+                      final niveauName = student['classes']?['niveaux']?['name']?.toString() ??
+                          student['classes']?['niveaux']?['code']?.toString() ??
+                          _getSelectedNiveauName(provider);
+                      final className = student['classes']?['name']?.toString() ?? _getSelectedClassName(provider);
+                      final code = (student['student_code'] ?? user['student_code'] ?? '—').toString();
+                      final createdAtRaw = user['created_at']?.toString();
+                      final createdAt = createdAtRaw != null ? DateTime.tryParse(createdAtRaw) : null;
 
-                    return DataRow(
-                      color: WidgetStateProperty.resolveWith<Color?>((states) {
-                        if (isSelected) return const Color(0xFFF5F3FF).withOpacity(0.4);
-                        if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
-                        return null;
-                      }),
-                      cells: [
-                        // Checkbox
-                        DataCell(
-                          SizedBox(
-                            width: checkboxW,
-                            child: Center(
-                              child: SizedBox(
-                                width: 16, height: 16,
-                                child: Checkbox(
-                                  value: isSelected,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      if (val == true) {
-                                        _selectedStudentsForBulk.add(studentId);
-                                      } else {
-                                        _selectedStudentsForBulk.remove(studentId);
-                                      }
-                                    });
-                                  },
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-                                  side: BorderSide(color: AppColors.slate300, width: 1.5),
-                                  activeColor: const Color(0xFF655DD5),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Index #
-                        DataCell(
-                          SizedBox(
-                            width: indexW,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text('$globalIndex', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
-                            ),
-                          ),
-                          onTap: () => _navigateToStudentGradeEntry(provider, student),
-                        ),
-                        // Name + Subtitle
-                        DataCell(
-                          SizedBox(
-                            width: nameW,
-                            child: Row(
-                              children: [
-                                UserAvatar(name: fullName, photoUrl: user['photo_url']?.toString(), radius: 17),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        fullName,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        email,
-                                        style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                      return DataRow(
+                        color: WidgetStateProperty.resolveWith<Color?>((states) {
+                          if (isSelected) return const Color(0xFFF5F3FF).withOpacity(0.4);
+                          if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                          return null;
+                        }),
+                        cells: [
+                          // Checkbox
+                          DataCell(
+                            SizedBox(
+                              width: checkboxW,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 16, height: 16,
+                                  child: Checkbox(
+                                    value: isSelected,
+                                    onChanged: (val) {
+                                      setState(() {
+                                        if (val == true) {
+                                          _selectedStudentsForBulk.add(studentId);
+                                        } else {
+                                          _selectedStudentsForBulk.remove(studentId);
+                                        }
+                                      });
+                                    },
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                    side: BorderSide(color: AppColors.slate300, width: 1.5),
+                                    activeColor: const Color(0xFF655DD5),
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                          onTap: () => _navigateToStudentGradeEntry(provider, student),
-                        ),
-                        // Matricule
-                        DataCell(
-                          SizedBox(
-                            width: codeW,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.slate50,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  code,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontFamily: 'monospace',
-                                    color: AppColors.textSecondary,
+                          // Name + Email with avatar
+                          DataCell(
+                            SizedBox(
+                              width: nameW,
+                              child: Row(
+                                children: [
+                                  UserAvatar(
+                                    name: fullName,
+                                    photoUrl: user['photo_url']?.toString(),
+                                    gender: gender,
+                                    radius: 17,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          fullName,
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          email,
+                                          style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            onTap: () => _navigateToStudentGradeEntry(provider, student),
+                          ),
+                          // Niveau
+                          DataCell(
+                            SizedBox(
+                              width: niveauW,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF5F3FF),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    niveauName.isNotEmpty ? niveauName : '—',
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF7C3AED)),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ),
                             ),
+                            onTap: () => _navigateToStudentGradeEntry(provider, student),
                           ),
-                          onTap: () => _navigateToStudentGradeEntry(provider, student),
-                        ),
-                        // Classe
-                        DataCell(
-                          SizedBox(
-                            width: classeW,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFECFDF5),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  className,
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF059669)),
-                                  overflow: TextOverflow.ellipsis,
+                          // Classe
+                          DataCell(
+                            SizedBox(
+                              width: classeW,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFECFDF5),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    className,
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF059669)),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ),
                             ),
+                            onTap: () => _navigateToStudentGradeEntry(provider, student),
                           ),
-                          onTap: () => _navigateToStudentGradeEntry(provider, student),
-                        ),
-                        // Chevron Action
-                        DataCell(
-                          SizedBox(
-                            width: actionsW,
-                            child: Center(
-                              child: Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.textTertiary),
+                          // Student Code
+                          DataCell(
+                            SizedBox(
+                              width: codeW,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: InkWell(
+                                  onTap: code != '—' ? () {
+                                    Clipboard.setData(ClipboardData(text: code));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Code étudiant copié!'), duration: Duration(seconds: 1)),
+                                    );
+                                  } : null,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.slate50,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      code,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontFamily: 'monospace',
+                                        color: AppColors.textSecondary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            onTap: () => _navigateToStudentGradeEntry(provider, student),
+                          ),
+                          // Créé le
+                          DataCell(
+                            SizedBox(
+                              width: createdW,
+                              child: Text(
+                                createdAt != null ? DateFormat('d MMM yyyy', 'fr_FR').format(createdAt) : '—',
+                                style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            onTap: () => _navigateToStudentGradeEntry(provider, student),
+                          ),
+                          // Actions (3-dots popup menu)
+                          DataCell(
+                            SizedBox(
+                              width: actionsW,
+                              child: PopupMenuButton<String>(
+                                icon: Icon(Icons.more_horiz, size: 18, color: AppColors.textTertiary),
+                                tooltip: 'Actions',
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 8,
+                                offset: const Offset(-160, 40),
+                                onSelected: (action) {
+                                  if (action == 'enter_grades') {
+                                    _navigateToStudentGradeEntry(provider, student);
+                                  }
+                                },
+                                itemBuilder: (ctx) => [
+                                  PopupMenuItem(
+                                    value: 'enter_grades',
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.edit_note_rounded, size: 18, color: Color(0xFF6D4CF6)),
+                                        const SizedBox(width: 8),
+                                        const Text('Saisir les notes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          onTap: () => _navigateToStudentGradeEntry(provider, student),
-                        ),
-                      ],
-                    );
-                  }),
+                        ],
+                      );
+                    }),
+                  ),
                 ),
               ),
             );
@@ -1249,9 +1141,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   Widget _headerLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Text(
         text,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -1454,33 +1347,46 @@ class _ResultsScreenState extends State<ResultsScreen> {
                       ],
                     ),
                   ),
-                  // Niveau rows — exact _HoverableGradeRow pattern
+                  // Niveau rows — sorted from 7ème to Bac
                   Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: provider.niveaux.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final niveau = entry.value;
-                        final niveauClasses = provider.classes
-                            .where((c) => c['niveau_id'] == niveau['id'])
-                            .toList();
-                        return Column(
-                          children: [
-                            _HoverableNiveauRow(
-                              niveau: niveau,
-                              classes: niveauClasses,
-                              onClassTap: (classId) {
-                                provider.setClass(classId);
-                                provider.setSearchQuery('');
-                                _searchController.clear();
-                                setState(() => _viewState = ResultsViewState.overview);
-                              },
-                            ),
-                            if (idx < provider.niveaux.length - 1) const SizedBox(height: 16),
-                          ],
-                        );
-                      }).toList(),
-                    ),
+                    child: Builder(builder: (context) {
+                      final sortedNiveaux = List<Map<String, dynamic>>.from(provider.niveaux)
+                        ..sort((a, b) {
+                          final nameA = a['name']?.toString() ?? a['code']?.toString();
+                          final nameB = b['name']?.toString() ?? b['code']?.toString();
+                          final orderA = _getNiveauSortOrder(nameA);
+                          final orderB = _getNiveauSortOrder(nameB);
+                          if (orderA != orderB) return orderA.compareTo(orderB);
+                          return (nameA ?? '').compareTo(nameB ?? '');
+                        });
+
+                      return Column(
+                        children: sortedNiveaux.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final niveau = entry.value;
+                          final niveauClasses = provider.classes
+                              .where((c) => c['niveau_id'] == niveau['id'])
+                              .toList()
+                            ..sort((a, b) => (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? ''));
+                          return Column(
+                            children: [
+                              _HoverableNiveauRow(
+                                niveau: niveau,
+                                classes: niveauClasses,
+                                onClassTap: (classId) {
+                                  provider.setClass(classId);
+                                  provider.setSearchQuery('');
+                                  _searchController.clear();
+                                  setState(() => _viewState = ResultsViewState.overview);
+                                },
+                              ),
+                              if (idx < sortedNiveaux.length - 1) const SizedBox(height: 16),
+                            ],
+                          );
+                        }).toList(),
+                      );
+                    }),
                   ),
                 ],
               ),
@@ -1530,6 +1436,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
         .where((c) => c['id'] == provider.selectedClassId)
         .firstOrNull;
     return cls?['name'] ?? '';
+  }
+
+  String _getSelectedNiveauName(ResultsProvider provider) {
+    final niv = provider.niveaux
+        .where((n) => n['id'] == provider.selectedNiveauId)
+        .firstOrNull;
+    return niv?['name'] ?? '';
   }
 
   // ignore: unused_element

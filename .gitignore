@@ -7,6 +7,8 @@ skills-lock.json
 **/.gradle/
 **/local.properties
 
+/studentportal01/dart_define.json
+
 .DS_Store
 Thumbs.db
 supabase/.temp/

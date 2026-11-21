@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/subscription_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -171,7 +172,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Période active jusqu\'au ${periodEnd != null ? "${periodEnd.day}/${periodEnd.month}/${periodEnd.year}" : "N/A"} (${daysRemaining >= 0 ? "$daysRemaining jours restants" : "Expiré"})',
+                        'Période active jusqu\'au ${periodEnd != null ? DateFormat('d MMMM yyyy', 'fr_FR').format(periodEnd) : "N/A"} (${daysRemaining >= 0 ? "$daysRemaining jours restants" : "Expiré"})',
                         style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
                       ),
                     ],

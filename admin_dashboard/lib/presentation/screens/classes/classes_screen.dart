@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/class_model.dart';
+import '../../../data/models/academic_models.dart';
 import '../../providers/classes_provider.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -243,7 +244,15 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
           ),
 
           // ── Niveau cards ──
-          ...glState.gradeLevels.map((gl) {
+          ...(() {
+            final sortedGL = List<GradeLevelModel>.from(glState.gradeLevels)
+              ..sort((a, b) {
+                final orderA = _getNiveauSortOrder(a.name);
+                final orderB = _getNiveauSortOrder(b.name);
+                if (orderA != orderB) return orderA.compareTo(orderB);
+                return a.name.compareTo(b.name);
+              });
+            return sortedGL.map((gl) {
             final isExpanded = _expandedNiveauId == gl.id;
             final niveauClasses = allClasses.where((c) => c.gradeLevelId == gl.id).toList();
             final niveauCount = gl.sections.isNotEmpty ? gl.sections.length : niveauClasses.length;
@@ -479,10 +488,26 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                 ),
               ),
             );
-          }),
-        ],
-      ),
-    );
+          });
+        })(),
+      ],
+    ),
+  );
+}
+
+  int _getNiveauSortOrder(String? str) {
+    if (str == null || str.trim().isEmpty) return 999;
+    final s = str.toLowerCase().trim();
+
+    if (s.contains('7') || s.startsWith('7b') || s.contains('sept')) return 10;
+    if (s.contains('8') || s.startsWith('8b') || s.contains('huit')) return 20;
+    if (s.contains('9') || s.startsWith('9b') || s.contains('neuf')) return 30;
+    if (s.contains('1') || s.startsWith('1s') || s.contains('prem')) return 40;
+    if (s.contains('2') || s.startsWith('2s') || s.contains('deux')) return 50;
+    if (s.contains('3') || s.startsWith('3s') || s.contains('trois')) return 60;
+    if (s.contains('4') || s.startsWith('4s') || s.contains('bac') || s.contains('quatre')) return 70;
+
+    return 999;
   }
 
   // ── CENTER HEADER ──

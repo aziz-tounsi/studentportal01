@@ -26,11 +26,11 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   final _searchController = TextEditingController();
   final Set<String> _collapsedCycles = {};
   bool _showFilterPanel = false;
-  String? _filterCycle;
   String? _filterGradeId;
   String? _filterSectionId;
   String? _filterExamTypeId;
-  final _teacherSearchCtrl = TextEditingController();
+  final Set<String> _selectedSectionIds = {};
+  final Set<String> _selectedExamTypeIds = {};
 
   @override
   void initState() {
@@ -43,7 +43,6 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
-    _teacherSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -75,6 +74,34 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
               ),
             ],
           ),
+          // Floating selection bar for Filières
+          if (_tabController.index == 1 && _selectedSectionIds.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildFloatingSelectionBar(
+                  count: _selectedSectionIds.length,
+                  onDelete: _confirmBulkDeleteSections,
+                  onClear: () => setState(() => _selectedSectionIds.clear()),
+                ),
+              ),
+            ),
+          // Floating selection bar for Types d'examen
+          if (_tabController.index == 2 && _selectedExamTypeIds.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildFloatingSelectionBar(
+                  count: _selectedExamTypeIds.length,
+                  onDelete: _confirmBulkDeleteExamTypes,
+                  onClear: () => setState(() => _selectedExamTypeIds.clear()),
+                ),
+              ),
+            ),
           // Filter panel overlay — full-app blur
           if (_showFilterPanel) ...[
             Positioned.fill(
@@ -202,11 +229,9 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   }
 
   Widget _buildFilterButton() {
-    final hasFilters = _filterCycle != null ||
-        _filterGradeId != null ||
+    final hasFilters = _filterGradeId != null ||
         _filterSectionId != null ||
-        _filterExamTypeId != null ||
-        _teacherSearchCtrl.text.isNotEmpty;
+        _filterExamTypeId != null;
     // Same height & matching the others
     return SizedBox(
       height: 40,
@@ -228,31 +253,34 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   }
 
   Widget _buildAddButton() {
-    return PopupMenuButton<String>(
-      onSelected: (v) => _showAddDialog(v),
-      offset: const Offset(0, 48),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      itemBuilder: (ctx) => [
-        _popupItem('grade', Icons.layers_outlined, 'Ajouter Niveau'),
-        _popupItem('section', Icons.account_tree_outlined, 'Ajouter Filière'),
-        const PopupMenuDivider(),
-        _popupItem('exam', Icons.description_outlined, 'Ajouter Type d\'examen'),
-      ],
-      child: SizedBox(
-        height: 40,
-        child: ElevatedButton.icon(
-          onPressed: null, // onPressed is handled by PopupMenuButton catching taps on the child
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Ajouter', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF6D4CF6),
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFF6D4CF6),
-            disabledForegroundColor: Colors.white,
-            elevation: 2,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: PopupMenuButton<String>(
+        onSelected: (v) => _showAddDialog(v),
+        offset: const Offset(0, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        itemBuilder: (ctx) => [
+          _popupItem('grade', Icons.layers_outlined, 'Ajouter Niveau'),
+          _popupItem('section', Icons.account_tree_outlined, 'Ajouter Filière'),
+          const PopupMenuDivider(),
+          _popupItem('exam', Icons.description_outlined, 'Ajouter Type d\'examen'),
+        ],
+        child: IgnorePointer(
+          child: SizedBox(
+            height: 40,
+            child: ElevatedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Ajouter', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6D4CF6),
+                foregroundColor: Colors.white,
+                elevation: 2,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+              ),
+            ),
           ),
         ),
       ),
@@ -397,10 +425,6 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
     var college = state.collegeGrades;
     var secondaire = state.secondaireGrades;
 
-    // Filter by cycle
-    final showCollege = _filterCycle == null || _filterCycle == 'college';
-    final showSecondaire = _filterCycle == null || _filterCycle == 'secondaire';
-
     // Filter by specific grade
     if (_filterGradeId != null) {
       college = college.where((g) => g.id == _filterGradeId).toList();
@@ -413,18 +437,8 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
       secondaire = secondaire.where((g) => g.sections.any((s) => s.id == _filterSectionId)).toList();
     }
 
-    // Filter by teacher / class name search
-    final teacherQuery = _teacherSearchCtrl.text.trim().toLowerCase();
-    if (teacherQuery.isNotEmpty) {
-      bool matchesGrade(GradeLevelModel g) =>
-          g.name.toLowerCase().contains(teacherQuery) ||
-          g.classes.any((c) => c.name.toLowerCase().contains(teacherQuery));
-      college = college.where(matchesGrade).toList();
-      secondaire = secondaire.where(matchesGrade).toList();
-    }
-
-    final visibleCollege = showCollege ? college : <GradeLevelModel>[];
-    final visibleSecondaire = showSecondaire ? secondaire : <GradeLevelModel>[];
+    final visibleCollege = college;
+    final visibleSecondaire = secondaire;
 
     return SingleChildScrollView(
       child: Column(
@@ -666,6 +680,10 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
 
   // ==================== SECTIONS TAB ====================
   Widget _buildSectionsTab(BuildContext context, GradeLevelsState state) {
+    final sections = state.filteredSections;
+    final allSelected = sections.isNotEmpty && sections.every((s) => _selectedSectionIds.contains(s.id));
+    final someSelected = _selectedSectionIds.isNotEmpty && !allSelected;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -691,6 +709,22 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             ),
             child: Row(
               children: [
+                Checkbox(
+                  value: allSelected,
+                  tristate: someSelected,
+                  onChanged: sections.isEmpty ? null : (v) {
+                    setState(() {
+                      if (_selectedSectionIds.length == sections.length) {
+                        _selectedSectionIds.clear();
+                      } else {
+                        _selectedSectionIds.addAll(sections.map((s) => s.id));
+                      }
+                    });
+                  },
+                  activeColor: const Color(0xFF655DD5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                const SizedBox(width: 8),
                 Container(
                   width: 36,
                   height: 36,
@@ -715,7 +749,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    '${state.sections.length} FILIÈRES',
+                    '${sections.length} FILIÈRES',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.slate600, letterSpacing: 0.5),
                   ),
                 ),
@@ -723,7 +757,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             ),
           ),
           Expanded(
-            child: state.sections.isEmpty
+            child: sections.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -758,9 +792,9 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: state.sections.length,
+                    itemCount: sections.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) => _buildSectionTile(state.sections[i]),
+                    itemBuilder: (ctx, i) => _buildSectionTile(sections[i]),
                   ),
           ),
         ],
@@ -769,14 +803,31 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   }
 
   Widget _buildSectionTile(SectionModel section) {
+    final isSelected = _selectedSectionIds.contains(section.id);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.slate100),
+        color: isSelected ? const Color(0xFF655DD5).withOpacity(0.04) : Colors.white,
+        border: Border.all(color: isSelected ? const Color(0xFF655DD5).withOpacity(0.4) : AppColors.slate100),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
+          Checkbox(
+            value: isSelected,
+            onChanged: (v) {
+              setState(() {
+                if (v == true) {
+                  _selectedSectionIds.add(section.id);
+                } else {
+                  _selectedSectionIds.remove(section.id);
+                }
+              });
+            },
+            activeColor: const Color(0xFF655DD5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+          const SizedBox(width: 8),
           Container(
             width: 44,
             height: 44,
@@ -814,6 +865,10 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
 
   // ==================== EXAM TYPES TAB ====================
   Widget _buildExamTypesTab(BuildContext context, GradeLevelsState state) {
+    final examTypes = state.filteredExamTypes;
+    final allSelected = examTypes.isNotEmpty && examTypes.every((e) => _selectedExamTypeIds.contains(e.id));
+    final someSelected = _selectedExamTypeIds.isNotEmpty && !allSelected;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -839,6 +894,22 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             ),
             child: Row(
               children: [
+                Checkbox(
+                  value: allSelected,
+                  tristate: someSelected,
+                  onChanged: examTypes.isEmpty ? null : (v) {
+                    setState(() {
+                      if (_selectedExamTypeIds.length == examTypes.length) {
+                        _selectedExamTypeIds.clear();
+                      } else {
+                        _selectedExamTypeIds.addAll(examTypes.map((e) => e.id));
+                      }
+                    });
+                  },
+                  activeColor: const Color(0xFF655DD5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                const SizedBox(width: 8),
                 Container(
                   width: 36,
                   height: 36,
@@ -863,7 +934,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    '${state.examTypes.length} TYPES',
+                    '${examTypes.length} TYPES',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.slate600, letterSpacing: 0.5),
                   ),
                 ),
@@ -871,7 +942,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             ),
           ),
           Expanded(
-            child: state.examTypes.isEmpty
+            child: examTypes.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -906,9 +977,9 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: state.examTypes.length,
+                    itemCount: examTypes.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) => _buildExamTypeCard(state.examTypes[i]),
+                    itemBuilder: (ctx, i) => _buildExamTypeCard(examTypes[i]),
                   ),
           ),
         ],
@@ -917,14 +988,31 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   }
 
   Widget _buildExamTypeCard(ExamTypeModel examType) {
+    final isSelected = _selectedExamTypeIds.contains(examType.id);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.slate100),
+        color: isSelected ? const Color(0xFF655DD5).withOpacity(0.04) : Colors.white,
+        border: Border.all(color: isSelected ? const Color(0xFF655DD5).withOpacity(0.4) : AppColors.slate100),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
+          Checkbox(
+            value: isSelected,
+            onChanged: (v) {
+              setState(() {
+                if (v == true) {
+                  _selectedExamTypeIds.add(examType.id);
+                } else {
+                  _selectedExamTypeIds.remove(examType.id);
+                }
+              });
+            },
+            activeColor: const Color(0xFF655DD5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+          const SizedBox(width: 8),
           Container(
             width: 44,
             height: 44,
@@ -961,23 +1049,16 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
 
   // ==================== SHARED ACTION BUTTON ====================
   Widget _gradeActionButton(IconData icon, VoidCallback onTap, {bool isDelete = false}) {
+    final color = isDelete ? AppColors.error : AppColors.slate500;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
+      hoverColor: color.withOpacity(0.1),
       child: Container(
         width: 32,
         height: 32,
-        decoration: BoxDecoration(
-          color: AppColors.slate100,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Icon(
-            icon,
-            size: 16,
-            color: isDelete ? AppColors.error : AppColors.slate600,
-          ),
-        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }
@@ -1295,21 +1376,10 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
 
   void _showGradeDialog([GradeLevelModel? grade]) {
     final nameCtrl = TextEditingController(text: grade?.name);
-    final codeCtrl = TextEditingController(text: grade?.code);
     final descCtrl = TextEditingController(text: grade?.description);
-    final orderCtrl = TextEditingController(text: (grade?.orderIndex ?? 1).toString());
     String levelType = grade?.levelType ?? 'college';
-    String? codeError;
     
     final existingCodes = _getExistingGradeCodes(excludeId: grade?.id);
-
-    nameCtrl.addListener(() {
-      if (grade == null || codeCtrl.text.isEmpty ||
-          codeCtrl.text == _generateCode(nameCtrl.text.substring(0, nameCtrl.text.length > 1 ? nameCtrl.text.length - 1 : 0))) {
-        final baseCode = _generateCode(nameCtrl.text);
-        codeCtrl.text = _generateUniqueCode(baseCode, existingCodes);
-      }
-    });
 
     _showBlurDialog(
       builder: (ctx) => StatefulBuilder(
@@ -1322,20 +1392,18 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
           isEdit: grade != null,
           submitLabel: grade == null ? 'Ajouter le niveau' : 'Enregistrer',
           onSubmit: () async {
-            if (nameCtrl.text.isEmpty || codeCtrl.text.isEmpty) return;
-            // Block submit if code is a duplicate
-            if (existingCodes.contains(codeCtrl.text.toUpperCase())) {
-              setDialogState(() => codeError = 'Ce code existe déjà');
-              return;
-            }
-            if (codeError != null) return;
+            if (nameCtrl.text.trim().isEmpty) return;
+            final code = (grade != null && grade.code.isNotEmpty)
+                ? grade.code
+                : _generateUniqueCode(_generateCode(nameCtrl.text.trim()), existingCodes);
+            final order = grade?.orderIndex ?? ((ref.read(gradeLevelsProvider).value?.gradeLevels.length ?? 0) + 1);
             final newGrade = GradeLevelModel(
               id: grade?.id ?? '',
-              name: nameCtrl.text,
-              code: codeCtrl.text,
+              name: nameCtrl.text.trim(),
+              code: code.isEmpty ? 'NIV' : code,
               levelType: levelType,
-              orderIndex: int.tryParse(orderCtrl.text) ?? 0,
-              description: descCtrl.text.isEmpty ? null : descCtrl.text,
+              orderIndex: order,
+              description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
             );
             try {
               if (grade == null) {
@@ -1354,40 +1422,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
               controller: nameCtrl,
               label: 'Nom',
               hint: 'Ex: Collège Enseignement de Base',
-              required: true,
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _styledField(
-                    controller: codeCtrl,
-                    label: 'Code',
-                    hint: 'Ex: CEB-01',
-                    required: true,
-                    errorText: codeError,
-                    suffixIcon: Icon(Icons.auto_awesome, size: 16, color: const Color(0xFF655DD5).withOpacity(0.5)),
-                    onChanged: (v) {
-                      if (existingCodes.contains(v.toUpperCase())) {
-                        setDialogState(() => codeError = 'Ce code existe déjà');
-                      } else {
-                        setDialogState(() => codeError = null);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 2,
-                  child: _styledField(
-                    controller: orderCtrl,
-                    label: 'Ordre d\'affichage',
-                    hint: '1',
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-              ],
+              required: false,
             ),
             const SizedBox(height: 18),
             _styledDropdown<String>(
@@ -1600,49 +1635,132 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
       return;
     }
 
+    SectionModel? selectedSection = available.first;
+
     _showBlurDialog(
-      builder: (ctx) => AlertDialog(
-        title: const Text('Assigner une Filière'),
-        content: SizedBox(
-          width: 300,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: available
-                .map(
-                  (section) => ListTile(
-                    title: Text(section.name),
-                    subtitle: Text(section.code),
-                    onTap: () async {
-                      try {
-                        await ref
-                            .read(gradeLevelsProvider.notifier)
-                            .assignSectionToGrade(grade.id, section.id);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        _showSuccess('Filière assignée');
-                      } catch (e) {
-                        _showError(UserFriendlyError.format(e));
-                      }
-                    },
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: OutlinedButton(
-              onPressed: () => Navigator.pop(ctx),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFE8EAF0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => _dialogShell(
+          title: 'Assigner une Filière',
+          subtitle: 'Sélectionnez la filière à assigner au niveau ${grade.name}',
+          ctx: ctx,
+          submitLabel: 'Assigner',
+          onSubmit: () async {
+            if (selectedSection == null) return;
+            try {
+              await ref
+                  .read(gradeLevelsProvider.notifier)
+                  .assignSectionToGrade(grade.id, selectedSection!.id);
+              if (ctx.mounted) Navigator.pop(ctx);
+              _showSuccess('Filière assignée');
+            } catch (e) {
+              _showError(UserFriendlyError.format(e));
+            }
+          },
+          children: [
+            const Text(
+              'FILIÈRES DISPONIBLES',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF64748B),
+                letterSpacing: 0.5,
               ),
-              child: const Text('Fermer', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: available.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final section = available[index];
+                  final isSelected = selectedSection?.id == section.id;
+                  return InkWell(
+                    onTap: () => setDialogState(() => selectedSection = section),
+                    borderRadius: BorderRadius.circular(10),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF655DD5).withOpacity(0.06) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF655DD5) : const Color(0xFFE2E8F0),
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF655DD5).withOpacity(0.12) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.account_tree_outlined,
+                              size: 16,
+                              color: isSelected ? const Color(0xFF655DD5) : const Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  section.name,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                    color: const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                if (section.description != null && section.description!.isNotEmpty)
+                                  Text(
+                                    section.description!,
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF655DD5).withOpacity(0.1) : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF655DD5).withOpacity(0.3) : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Text(
+                              section.code,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isSelected ? const Color(0xFF655DD5) : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                            size: 18,
+                            color: isSelected ? const Color(0xFF655DD5) : const Color(0xFFCBD5E1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1658,170 +1776,351 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
     }
   }
 
-  void _confirmDeleteGrade(GradeLevelModel grade) {
-    _showBlurDialog(
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text('Voulez-vous vraiment supprimer "${grade.name}" ?'),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
+  void _showConfirmDeleteDialog({
+    required BuildContext context,
+    required String itemType,
+    required String itemName,
+    required Future<void> Function() onConfirm,
+  }) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                  ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
+              Text('Supprimer $itemType ?', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Voulez-vous vraiment supprimer "$itemName" ? Cette action est irréversible.'),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
                   child: ElevatedButton.icon(
                     onPressed: () async {
-                      try {
-                        await ref
-                            .read(gradeLevelsProvider.notifier)
-                            .deleteGradeLevel(grade.id);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        _showSuccess('Niveau supprimé');
-                      } catch (e) {
-                        _showError(UserFriendlyError.format(e));
-                      }
+                      Navigator.pop(ctx);
+                      await onConfirm();
                     },
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
+                      backgroundColor: AppColors.error,
                       foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showBulkDeleteDialog({
+    required BuildContext context,
+    required String itemType,
+    required int count,
+    required Future<void> Function() onConfirm,
+  }) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Supprimer en masse ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Voulez-vous vraiment supprimer $count $itemType ?'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.error.withOpacity(0.2)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Cette action est irréversible !', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ],
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await onConfirm();
+                    },
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  void _confirmDeleteGrade(GradeLevelModel grade) {
+    _showConfirmDeleteDialog(
+      context: context,
+      itemType: 'niveau',
+      itemName: grade.name,
+      onConfirm: () async {
+        try {
+          await ref.read(gradeLevelsProvider.notifier).deleteGradeLevel(grade.id);
+          _showSuccess('Niveau supprimé');
+        } catch (e) {
+          _showError(UserFriendlyError.format(e));
+        }
+      },
     );
   }
 
   void _confirmDeleteSection(SectionModel section) {
-    _showBlurDialog(
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text('Voulez-vous vraiment supprimer "${section.name}" ?'),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      try {
-                        await ref
-                            .read(gradeLevelsProvider.notifier)
-                            .deleteSection(section.id);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        _showSuccess('Filière supprimée');
-                      } catch (e) {
-                        _showError(UserFriendlyError.format(e));
-                      }
-                    },
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+    _showConfirmDeleteDialog(
+      context: context,
+      itemType: 'filière',
+      itemName: section.name,
+      onConfirm: () async {
+        try {
+          await ref.read(gradeLevelsProvider.notifier).deleteSection(section.id);
+          _showSuccess('Filière supprimée');
+        } catch (e) {
+          _showError(UserFriendlyError.format(e));
+        }
+      },
     );
   }
 
   void _confirmDeleteExamType(ExamTypeModel examType) {
-    _showBlurDialog(
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text('Voulez-vous vraiment supprimer "${examType.name}" ?'),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    _showConfirmDeleteDialog(
+      context: context,
+      itemType: 'type d\'examen',
+      itemName: examType.name,
+      onConfirm: () async {
+        try {
+          await ref.read(gradeLevelsProvider.notifier).deleteExamType(examType.id);
+          _showSuccess('Type d\'examen supprimé');
+        } catch (e) {
+          _showError(UserFriendlyError.format(e));
+        }
+      },
+    );
+  }
+
+  void _confirmBulkDeleteSections() {
+    final count = _selectedSectionIds.length;
+    _showBulkDeleteDialog(
+      context: context,
+      itemType: 'filière(s)',
+      count: count,
+      onConfirm: () async {
+        try {
+          for (final id in _selectedSectionIds.toList()) {
+            await ref.read(gradeLevelsProvider.notifier).deleteSection(id);
+          }
+          setState(() => _selectedSectionIds.clear());
+          _showSuccess('$count filière(s) supprimée(s)');
+        } catch (e) {
+          _showError(UserFriendlyError.format(e));
+        }
+      },
+    );
+  }
+
+  void _confirmBulkDeleteExamTypes() {
+    final count = _selectedExamTypeIds.length;
+    _showBulkDeleteDialog(
+      context: context,
+      itemType: 'type(s) d\'examen',
+      count: count,
+      onConfirm: () async {
+        try {
+          for (final id in _selectedExamTypeIds.toList()) {
+            await ref.read(gradeLevelsProvider.notifier).deleteExamType(id);
+          }
+          setState(() => _selectedExamTypeIds.clear());
+          _showSuccess('$count type(s) d\'examen supprimé(s)');
+        } catch (e) {
+          _showError(UserFriendlyError.format(e));
+        }
+      },
+    );
+  }
+
+  Widget _buildFloatingSelectionBar({
+    required int count,
+    required VoidCallback onDelete,
+    required VoidCallback onClear,
+  }) {
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Sélectionnés',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.delete_outline, size: 16, color: Color(0xFFFCA5A5)),
+                    SizedBox(width: 6),
+                    Text('Supprimer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFFCA5A5))),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      try {
-                        await ref
-                            .read(gradeLevelsProvider.notifier)
-                            .deleteExamType(examType.id);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        _showSuccess('Type supprimé');
-                      } catch (e) {
-                        _showError(UserFriendlyError.format(e));
-                      }
-                    },
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
+            ),
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: Colors.white.withOpacity(0.15))),
               ),
-            ],
-          ),
-        ],
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: onClear,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1856,17 +2155,6 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
     final sections = state?.sections ?? [];
     final examTypes = state?.examTypes ?? [];
 
-    // Cascade: filter grades by cycle
-    final filteredGrades = _filterCycle != null
-        ? allGrades.where((g) => g.levelType == _filterCycle).toList()
-        : allGrades;
-
-    // Cascade: filter classes by selected grade
-    final selectedGrade = _filterGradeId != null
-        ? allGrades.where((g) => g.id == _filterGradeId).firstOrNull
-        : null;
-    final filteredClasses = selectedGrade?.classes ?? [];
-
     return Material(
       elevation: 16,
       shadowColor: Colors.black.withOpacity(0.15),
@@ -1898,7 +2186,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                   ),
                   const SizedBox(width: 12),
                   const Text(
-                    'Filtres avancés',
+                    'Filtres',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                   ),
                   const Spacer(),
@@ -1925,113 +2213,59 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // CYCLE toggle
-                    _filterLabel('Cycle'),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _cycleChip('Collège', 'college'),
-                        const SizedBox(width: 8),
-                        _cycleChip('Secondaire', 'secondaire'),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
                     // NIVEAU dropdown
                     _filterLabel('Niveau'),
                     const SizedBox(height: 8),
-                    _filterDropdown<String>(
+                    _filterDropdown<String?>(
                       value: _filterGradeId,
                       hint: 'Tous les niveaux',
-                      items: filteredGrades.map((g) => DropdownMenuItem(
-                        value: g.id,
-                        child: Text(g.name, style: const TextStyle(fontSize: 13)),
-                      )).toList(),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Tous les niveaux')),
+                        ...allGrades.map((g) => DropdownMenuItem(
+                          value: g.id,
+                          child: Text(g.name),
+                        )),
+                      ],
                       onChanged: (v) => setState(() {
                         _filterGradeId = v;
-                        // Reset class when grade changes
+                        _filterSectionId = null;
                       }),
                     ),
 
-                    const SizedBox(height: 24),
-
-                    // CLASSE dropdown (cascading from Niveau)
-                    _filterLabel('Classe'),
-                    const SizedBox(height: 8),
-                    _filterDropdown<String>(
-                      value: null,
-                      hint: filteredClasses.isEmpty
-                          ? 'Sélectionnez un niveau d\'abord'
-                          : 'Toutes les classes',
-                      items: filteredClasses.map((c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text(c.name, style: const TextStyle(fontSize: 13)),
-                      )).toList(),
-                      onChanged: filteredClasses.isEmpty ? null : (v) {},
-                    ),
-
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // FILIÈRE dropdown
                     _filterLabel('Filière'),
                     const SizedBox(height: 8),
-                    _filterDropdown<String>(
+                    _filterDropdown<String?>(
                       value: _filterSectionId,
                       hint: 'Toutes les filières',
-                      items: sections.map((s) => DropdownMenuItem(
-                        value: s.id,
-                        child: Text(s.name, style: const TextStyle(fontSize: 13)),
-                      )).toList(),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Toutes les filières')),
+                        ...sections.map((s) => DropdownMenuItem(
+                          value: s.id,
+                          child: Text(s.name),
+                        )),
+                      ],
                       onChanged: (v) => setState(() => _filterSectionId = v),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // TYPE D'EXAMEN dropdown
                     _filterLabel('Type d\'examen'),
                     const SizedBox(height: 8),
-                    _filterDropdown<String>(
+                    _filterDropdown<String?>(
                       value: _filterExamTypeId,
                       hint: 'Tous les types',
-                      items: examTypes.map((e) => DropdownMenuItem(
-                        value: e.id,
-                        child: Text(e.name, style: const TextStyle(fontSize: 13)),
-                      )).toList(),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Tous les types')),
+                        ...examTypes.map((e) => DropdownMenuItem(
+                          value: e.id,
+                          child: Text(e.name),
+                        )),
+                      ],
                       onChanged: (v) => setState(() => _filterExamTypeId = v),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // ENSEIGNANT search
-                    _filterLabel('Enseignant'),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.slate200),
-                      ),
-                      child: TextField(
-                        controller: _teacherSearchCtrl,
-                        style: const TextStyle(fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'Rechercher un enseignant...',
-                          hintStyle: TextStyle(color: AppColors.slate400, fontSize: 13),
-                          prefixIcon: Icon(Icons.person_search, color: AppColors.slate400, size: 18),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                          suffixIcon: _teacherSearchCtrl.text.isNotEmpty
-                              ? IconButton(
-                                  onPressed: () => setState(() => _teacherSearchCtrl.clear()),
-                                  icon: Icon(Icons.close, size: 16, color: AppColors.slate400),
-                                  padding: EdgeInsets.zero,
-                                )
-                              : null,
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
                     ),
                   ],
                 ),
@@ -2052,11 +2286,9 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                       height: 48,
                       child: OutlinedButton(
                         onPressed: () => setState(() {
-                          _filterCycle = null;
                           _filterGradeId = null;
                           _filterSectionId = null;
                           _filterExamTypeId = null;
-                          _teacherSearchCtrl.clear();
                         }),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF374151),
@@ -2113,74 +2345,41 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
 
   Widget _filterLabel(String text) {
     return Text(
-      text,
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        color: AppColors.slate500,
-        letterSpacing: 0.3,
-      ),
-    );
-  }
-
-  Widget _cycleChip(String label, String value) {
-    final isSelected = _filterCycle == value;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() {
-          _filterCycle = isSelected ? null : value;
-          _filterGradeId = null; // Reset cascading
-        }),
-        borderRadius: BorderRadius.circular(8),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: 40,
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF655DD5).withOpacity(0.1) : Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF655DD5) : AppColors.slate200,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? const Color(0xFF655DD5) : AppColors.slate500,
-              ),
-            ),
-          ),
-        ),
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textTertiary,
+        letterSpacing: 1.0,
       ),
     );
   }
 
   Widget _filterDropdown<T>({
-    required T? value,
+    required T value,
     required String hint,
     required List<DropdownMenuItem<T>> items,
     required void Function(T?)? onChanged,
   }) {
     return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: onChanged == null ? AppColors.slate100.withOpacity(0.5) : Colors.white,
+        color: onChanged == null ? AppColors.slate100.withOpacity(0.5) : AppColors.slate50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.slate200),
+        border: Border.all(color: AppColors.borderLight),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
-          hint: Text(hint, style: TextStyle(fontSize: 13, color: AppColors.slate400)),
+          hint: Text(hint, style: const TextStyle(fontSize: 13, color: AppColors.textTertiary)),
           isExpanded: true,
-          icon: Icon(Icons.expand_more, size: 18, color: AppColors.slate400),
-          style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B)),
-          borderRadius: BorderRadius.circular(12),
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
           items: items,
           onChanged: onChanged,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          borderRadius: BorderRadius.circular(8),
+          dropdownColor: Colors.white,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
         ),
       ),
     );
@@ -2474,25 +2673,16 @@ class _HoverableGradeRowState extends State<_HoverableGradeRow> {
   }
 
   Widget _actionButton(IconData icon, VoidCallback onTap, {bool isDelete = false}) {
+    final color = isDelete ? AppColors.error : AppColors.slate500;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
+      hoverColor: color.withOpacity(0.1),
       child: Container(
         width: 32,
         height: 32,
-        decoration: BoxDecoration(
-          color: isDelete
-              ? AppColors.slate100
-              : AppColors.slate100,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Icon(
-            icon,
-            size: 16,
-            color: isDelete ? AppColors.error : AppColors.slate600,
-          ),
-        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }

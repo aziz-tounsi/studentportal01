@@ -11,6 +11,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
 import '../../providers/curriculum_provider.dart';
+import '../../../models/curriculum_models.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import 'user_form_dialog.dart';
@@ -38,6 +39,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   String _sortKey = 'date_desc';
   String? _classFilter;
   String? _levelFilter;
+  String? _sectionFilter;
   String? _genderFilter;
   DateTime? _dateFromFilter;
   DateTime? _dateToFilter;
@@ -77,6 +79,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
       _sortKey = 'date_desc';
       _classFilter = null;
       _levelFilter = null;
+      _sectionFilter = null;
       _genderFilter = null;
       _dateFromFilter = null;
       _dateToFilter = null;
@@ -93,6 +96,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   bool get _hasActiveFilters =>
       _levelFilter != null ||
+      _sectionFilter != null ||
       _classFilter != null ||
       _genderFilter != null ||
       _dateFromFilter != null ||
@@ -520,6 +524,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
         onRemove: () => setState(() { _levelFilter = null; _classFilter = null; }),
       ));
     }
+    if (_sectionFilter != null) {
+      final currState = ref.read(curriculumProvider);
+      final sectionName = currState.whenOrNull(data: (s) {
+        try { return s.sections.firstWhere((sec) => sec.id == _sectionFilter).name; } catch (_) { return _sectionFilter; }
+      }) ?? _sectionFilter;
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Filière: $sectionName',
+        onRemove: () => setState(() { _sectionFilter = null; _classFilter = null; }),
+      ));
+    }
     if (_classFilter != null) {
       activeFilterChips.add(_buildActiveFilterChip(
         label: 'Classe: $_classFilter',
@@ -535,14 +549,14 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     }
     if (_dateFromFilter != null) {
       activeFilterChips.add(_buildActiveFilterChip(
-        label: 'Du ${DateFormat('dd/MM').format(_dateFromFilter!)}',
+        label: 'Du ${DateFormat('d MMM', 'fr_FR').format(_dateFromFilter!)}',
         onRemove: () => setState(() => _dateFromFilter = null),
         color: AppColors.warning,
       ));
     }
     if (_dateToFilter != null) {
       activeFilterChips.add(_buildActiveFilterChip(
-        label: 'Au ${DateFormat('dd/MM').format(_dateToFilter!)}',
+        label: 'Au ${DateFormat('d MMM', 'fr_FR').format(_dateToFilter!)}',
         onRemove: () => setState(() => _dateToFilter = null),
         color: AppColors.warning,
       ));
@@ -590,36 +604,39 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   }
 
   Widget _buildStatusChip(String label, int count, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] : null,
-        ),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] : null,
+          ),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                  color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: isActive ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.6),
+              const SizedBox(width: 6),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                  color: isActive ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.6),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -898,7 +915,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   DataCell(SizedBox(
                     width: dobW,
                     child: Text(
-                      u.dateOfBirth != null ? DateFormat('dd/MM/yyyy').format(u.dateOfBirth!) : '-',
+                      u.dateOfBirth != null ? DateFormat('d MMM yyyy', 'fr_FR').format(u.dateOfBirth!) : '-',
                       style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                     ),
                   )),
@@ -998,7 +1015,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 DataCell(SizedBox(
                   width: createdW,
                   child: Text(
-                    DateFormat('dd/MM/yy').format(u.createdAt),
+                    DateFormat('d MMM yyyy', 'fr_FR').format(u.createdAt),
                     style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
                   ),
                 )),
@@ -1271,13 +1288,44 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     final allNiveaux = curriculumState.whenOrNull(data: (s) => s.niveaux) ?? [];
 
     // Filter classes based on selected niveau code
-    final filteredClasses = _levelFilter != null
-        ? allClasses.where((c) {
-            final niveauMatch = allNiveaux.where((n) => n.code == _levelFilter);
-            if (niveauMatch.isEmpty) return false;
-            return c.gradeLevelId == niveauMatch.first.id || c.gradeLevelName == niveauMatch.first.name;
-          }).toList()
-        : allClasses;
+    final niveauMatch = allNiveaux.where((n) => n.code == _levelFilter);
+    final selectedNiveau = niveauMatch.isNotEmpty ? niveauMatch.first : null;
+
+    // Sections (filières) for selected niveau
+    final allSections = curriculumState.whenOrNull(data: (s) => s.sections) ?? [];
+    final Map<String, String> sectionsForNiveau = {};
+    if (selectedNiveau != null) {
+      for (final c in allClasses) {
+        final matchesNiveau = (selectedNiveau.id.isNotEmpty && c.gradeLevelId == selectedNiveau.id) ||
+            c.gradeLevelName?.toLowerCase() == selectedNiveau.name.toLowerCase() ||
+            c.gradeLevelName?.toLowerCase() == selectedNiveau.shortName.toLowerCase();
+        if (matchesNiveau && c.sectionId != null && c.sectionName != null) {
+          sectionsForNiveau[c.sectionId!] = c.sectionName!;
+        }
+      }
+      if (selectedNiveau.hasSections) {
+        for (final sec in allSections) {
+          sectionsForNiveau[sec.id] = sec.name;
+        }
+      }
+    }
+    final hasSections = selectedNiveau != null && (selectedNiveau.hasSections || sectionsForNiveau.isNotEmpty);
+
+    // Filter classes based on selected niveau and section
+    final filteredClasses = allClasses.where((c) {
+      if (selectedNiveau != null) {
+        final matchesNiveau = (selectedNiveau.id.isNotEmpty && c.gradeLevelId == selectedNiveau.id) ||
+            c.gradeLevelName?.toLowerCase() == selectedNiveau.name.toLowerCase() ||
+            c.gradeLevelName?.toLowerCase() == selectedNiveau.shortName.toLowerCase();
+        if (!matchesNiveau) return false;
+      }
+      if (hasSections && _sectionFilter != null) {
+        if (c.sectionId != _sectionFilter && c.sectionName != sectionsForNiveau[_sectionFilter]) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
 
     return Material(
       elevation: 16,
@@ -1324,19 +1372,44 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       ],
                       onChanged: (v) => setState(() {
                         _levelFilter = v;
+                        _sectionFilter = null;
                         _classFilter = null;
                         _currentPage = 1;
                       }),
                     ),
                     const SizedBox(height: 20),
+
+                    // Filière (if exists)
+                    if (hasSections) ...[
+                      _buildFilterLabel('FILIÈRE'),
+                      const SizedBox(height: 8),
+                      _buildFilterDropdown<String?>(
+                        value: _sectionFilter,
+                        hint: 'Toutes les filières',
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Toutes les filières')),
+                          ...sectionsForNiveau.entries.map((s) => DropdownMenuItem(value: s.key, child: Text(s.value))),
+                        ],
+                        onChanged: (v) => setState(() {
+                          _sectionFilter = v;
+                          _classFilter = null;
+                          _currentPage = 1;
+                        }),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     // Classe
                     _buildFilterLabel('CLASSE'),
                     const SizedBox(height: 8),
                     _buildFilterDropdown<String?>(
                       value: _classFilter,
-                      hint: 'Toutes les classes',
+                      hint: _levelFilter != null ? 'Classes (${filteredClasses.length})' : 'Toutes les classes',
                       items: [
-                        const DropdownMenuItem(value: null, child: Text('Toutes les classes')),
+                        DropdownMenuItem(
+                          value: null,
+                          child: Text(_levelFilter != null ? 'Toutes (${filteredClasses.length})' : 'Toutes les classes'),
+                        ),
                         ...filteredClasses.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))),
                       ],
                       onChanged: (v) => setState(() {
@@ -1547,7 +1620,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           children: [
             Expanded(
               child: Text(
-                value != null ? DateFormat('dd/MM/yyyy').format(value) : hint,
+                value != null ? DateFormat('d MMM yyyy', 'fr_FR').format(value) : hint,
                 style: TextStyle(
                   fontSize: 13,
                   color: value != null ? AppColors.textPrimary : AppColors.textTertiary,
@@ -1633,6 +1706,40 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     // Apply class filter
     if (_classFilter != null) {
       users = users.where((u) => u.className == _classFilter).toList();
+    }
+
+    // Apply section filter
+    if (_sectionFilter != null) {
+      final usersState = ref.read(usersProvider);
+      final allClasses = usersState.whenOrNull(data: (s) => s.classes) ?? [];
+      final curriculumState = ref.read(curriculumProvider);
+      final allSections = curriculumState.whenOrNull(data: (s) => s.sections) ?? [];
+      final secModel = allSections.cast<SectionModel?>().firstWhere(
+        (s) => s?.id == _sectionFilter || s?.code == _sectionFilter,
+        orElse: () => null,
+      );
+      final targetSecName = secModel?.name.toLowerCase();
+      final targetSecCode = secModel?.code.toLowerCase();
+
+      users = users.where((u) {
+        if (u.sectionCode != null) {
+          final uSec = u.sectionCode!.toLowerCase();
+          if (uSec == _sectionFilter?.toLowerCase() || (targetSecCode != null && uSec == targetSecCode)) {
+            return true;
+          }
+        }
+        if (u.className != null) {
+          final c = allClasses.where((cl) => cl.name == u.className);
+          if (c.isNotEmpty) {
+            final classSecId = c.first.sectionId;
+            final classSecName = c.first.sectionName?.toLowerCase();
+            if (classSecId == _sectionFilter) return true;
+            if (targetSecName != null && classSecName == targetSecName) return true;
+            if (targetSecCode != null && classSecName == targetSecCode) return true;
+          }
+        }
+        return false;
+      }).toList();
     }
 
     // Apply niveau filter (by niveauCode e.g. '7B', '8B', '1S' etc.)

@@ -562,6 +562,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       spots: spots,
       isCurved: true,
       curveSmoothness: 0.35,
+      preventCurveOverShooting: true,
       color: const Color(0xFF6D4CF6),
       barWidth: 2.5,
       isStrokeCapRound: true,
@@ -640,16 +641,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                'Remboursé ${currencyFormat.format(activeData.reimbursedAmount)}',
+                'Collecté ${currencyFormat.format(activeData.totalCollected)}',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF64748B),
                 ),
               ),
+              if (activeData.reimbursedAmount > 0) ...[
+                const SizedBox(width: 12),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Remboursé ${currencyFormat.format(activeData.reimbursedAmount)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
               const Spacer(),
 
-              // Interval Selector: MODERN PILL DESIGN
+              // Interval Selector: BORDERLESS MODERN PILL DESIGN
               PopupMenuButton<String>(
                 onSelected: (val) {
                   setState(() {
@@ -659,7 +680,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 },
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
-                  side: const BorderSide(color: Color(0xFFF1F5F9)),
                 ),
                 elevation: 8,
                 shadowColor: Colors.black.withValues(alpha: 0.08),
@@ -675,8 +695,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(20), // Pill!
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(20), // Borderless Pill!
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -716,7 +735,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Live Line Chart Area — CLICK ANY PIXEL TO SHOW DETAILS
+          // Live Line Chart Area — CLICK ANY PIXEL TO SHOW DETAILS (EXACT PIXEL CALCULATED)
           SizedBox(
             height: 230,
             child: spots.isEmpty
@@ -731,9 +750,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       return GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapDown: (details) {
-                          // Clicking ANYWHERE on the chart computes the closest point
-                          final w = chartConstraints.maxWidth;
-                          final fraction = (details.localPosition.dx / w).clamp(0.0, 1.0);
+                          // Clicking ANYWHERE on the chart computes the exact closest point
+                          const reservedLeft = 46.0;
+                          final plotW = chartConstraints.maxWidth - reservedLeft;
+                          if (plotW <= 0 || points.length <= 1) return;
+                          final localX = (details.localPosition.dx - reservedLeft).clamp(0.0, plotW);
+                          final fraction = (localX / plotW).clamp(0.0, 1.0);
                           final idx = (fraction * (points.length - 1)).round();
                           setState(() {
                             _selectedChartIndex = idx;
@@ -773,8 +795,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   return touchedSpots.map((spot) {
                                     final idx = spot.spotIndex;
                                     final point = (idx >= 0 && idx < points.length) ? points[idx] : null;
+                                    final amt = point?.amount ?? spot.y;
                                     return LineTooltipItem(
-                                      '${currencyFormat.format(point?.amount ?? (spot.y * 1000))}\n',
+                                      '${currencyFormat.format(amt)}\n',
                                       const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
@@ -798,7 +821,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             gridData: FlGridData(
                               show: true,
                               drawVerticalLine: false,
-                              horizontalInterval: (activeData.maxY / 4).clamp(1.0, 100.0),
+                              horizontalInterval: (activeData.maxY / 4).clamp(1.0, double.infinity),
                               getDrawingHorizontalLine: (value) => const FlLine(
                                 color: Color(0xFFF1F5F9),
                                 strokeWidth: 1,
@@ -809,11 +832,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               leftTitles: AxisTitles(
                                 sideTitles: SideTitles(
                                   showTitles: true,
-                                  reservedSize: 42,
-                                  interval: (activeData.maxY / 4).clamp(1.0, 100.0),
+                                  reservedSize: 46,
+                                  interval: (activeData.maxY / 4).clamp(1.0, double.infinity),
                                   getTitlesWidget: (value, meta) {
+                                    if (value == 0) {
+                                      return const Text(
+                                        '0',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF94A3B8),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      );
+                                    }
+                                    final String formatted;
+                                    if (value >= 1000000) {
+                                      final v = value / 1000000;
+                                      formatted = '${v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 1)}M';
+                                    } else if (value >= 1000) {
+                                      final v = value / 1000;
+                                      formatted = '${v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 1)}k';
+                                    } else {
+                                      formatted = value.toStringAsFixed(0);
+                                    }
                                     return Text(
-                                      '${value.toInt()}K',
+                                      formatted,
                                       style: const TextStyle(
                                         fontSize: 11,
                                         color: Color(0xFF94A3B8),

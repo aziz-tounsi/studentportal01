@@ -21,7 +21,7 @@ class AnnouncementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    final dateFormat = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

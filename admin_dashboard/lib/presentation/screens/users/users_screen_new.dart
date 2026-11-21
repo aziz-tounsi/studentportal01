@@ -637,7 +637,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   ),
                 if (_dateFromFilter != null)
                   _FilterChipTag(
-                    label: 'Du ${DateFormat('dd/MM/yyyy').format(_dateFromFilter!)}',
+                    label: 'Du ${DateFormat('d MMM yyyy', 'fr_FR').format(_dateFromFilter!)}',
                     color: AppColors.warning,
                     onRemove: () => setState(() {
                       _dateFromFilter = null;
@@ -646,7 +646,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   ),
                 if (_dateToFilter != null)
                   _FilterChipTag(
-                    label: 'Au ${DateFormat('dd/MM/yyyy').format(_dateToFilter!)}',
+                    label: 'Au ${DateFormat('d MMM yyyy', 'fr_FR').format(_dateToFilter!)}',
                     color: AppColors.warning,
                     onRemove: () => setState(() {
                       _dateToFilter = null;
@@ -1344,7 +1344,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 // Créé le
                 DataCell(
                   Text(
-                    DateFormat('dd/MM/yy').format(u.createdAt),
+                    DateFormat('d MMM yyyy', 'fr_FR').format(u.createdAt),
                     style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
                   ),
                 ),
@@ -1483,7 +1483,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 // Créé le
                 DataCell(
                   Text(
-                    DateFormat('dd/MM/yy').format(u.createdAt),
+                    DateFormat('d MMM yyyy', 'fr_FR').format(u.createdAt),
                     style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
                   ),
                 ),
@@ -2687,6 +2687,7 @@ class _StatusPill extends StatelessWidget {
       shadowColor: Colors.black.withOpacity(0.08),
       child: InkWell(
         onTap: onTap,
+        mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(AppRadius.xs),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -2908,6 +2909,7 @@ class _FilterDrawerContent extends StatefulWidget {
 
 class _FilterDrawerContentState extends State<_FilterDrawerContent> {
   late String? _level;
+  String? _section;
   late String? _class;
   late String? _gender;
   late DateTime? _dateFrom;
@@ -2932,9 +2934,20 @@ class _FilterDrawerContentState extends State<_FilterDrawerContent> {
         niveauxFromClasses[c.gradeLevelId!] = c.gradeLevelName!;
       }
     }
-    final filteredClasses = _level != null
-        ? allClasses.where((c) => c.gradeLevelId == _level).toList()
-        : allClasses;
+    final sectionsForLevel = <String, String>{};
+    if (_level != null) {
+      for (final c in allClasses) {
+        if (c.gradeLevelId == _level && c.sectionId != null && c.sectionName != null) {
+          sectionsForLevel[c.sectionId!] = c.sectionName!;
+        }
+      }
+    }
+    final hasSections = sectionsForLevel.isNotEmpty;
+    final filteredClasses = allClasses.where((c) {
+      if (_level != null && c.gradeLevelId != _level) return false;
+      if (hasSections && _section != null && c.sectionId != _section) return false;
+      return true;
+    }).toList();
 
     return Material(
       elevation: 16,
@@ -2992,10 +3005,31 @@ class _FilterDrawerContentState extends State<_FilterDrawerContent> {
                       ],
                       onChanged: (v) => setState(() {
                         _level = v;
+                        _section = null;
                         _class = null;
                       }),
                     ),
                     const SizedBox(height: 20),
+                    // FILIÈRE (if exists)
+                    if (hasSections) ...[
+                      _buildDrawerLabel('FILIÈRE'),
+                      const SizedBox(height: 6),
+                      _buildDrawerDropdown<String?>(
+                        value: _section,
+                        hint: 'Toutes les filières',
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Toutes les filières')),
+                          ...sectionsForLevel.entries.map(
+                            (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() {
+                          _section = v;
+                          _class = null;
+                        }),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     // CLASSE
                     _buildDrawerLabel('CLASSE'),
                     const SizedBox(height: 6),
@@ -3235,7 +3269,7 @@ class _FilterDrawerContentState extends State<_FilterDrawerContent> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                value != null ? DateFormat('dd/MM/yyyy').format(value) : label,
+                value != null ? DateFormat('d MMM yyyy', 'fr_FR').format(value) : label,
                 style: TextStyle(
                   fontSize: 13,
                   color: value != null ? AppColors.textPrimary : AppColors.textTertiary,

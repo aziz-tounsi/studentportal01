@@ -108,7 +108,16 @@ final router = GoRouter(
     ),
     GoRoute(path: '/results', pageBuilder: (_, _) => const NoTransitionPage(child: ResultsScreen())),
     GoRoute(path: '/suggestions', pageBuilder: (_, _) => const NoTransitionPage(child: SuggestionsScreen())),
-    GoRoute(path: '/payments', pageBuilder: (_, _) => const NoTransitionPage(child: PaymentsScreen())),
+    GoRoute(
+      path: '/payments',
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final studentId = extra?['studentId'] as String? ??
+            extra?['preSelectedStudentId'] as String? ??
+            state.uri.queryParameters['studentId'];
+        return NoTransitionPage(child: PaymentsScreen(initialStudentId: studentId));
+      },
+    ),
     GoRoute(path: '/documents', pageBuilder: (_, _) => const NoTransitionPage(child: DocumentsScreen())),
     GoRoute(
       path: '/structure',

@@ -493,10 +493,24 @@ class _RealtimeNotificationWrapperState
         },
       );
 
-      _globalRealtimeChannel?.subscribe((status, error) {
+      _globalRealtimeChannel?.subscribe((status, error) async {
         debugPrint(
           'Realtime Shell subscription status: $status, error: $error',
         );
+        if (status == RealtimeSubscribeStatus.channelError && error != null) {
+          final errStr = error.toString().toLowerCase();
+          if (errStr.contains('jwt') || errStr.contains('expired') || errStr.contains('token')) {
+            debugPrint('Realtime Shell: Token expired, refreshing session...');
+            try {
+              final response = await Supabase.instance.client.auth.refreshSession();
+              if (response.session != null && mounted) {
+                debugPrint('Realtime Shell: Session refreshed successfully');
+              }
+            } catch (e) {
+              debugPrint('Realtime Shell: Failed to refresh session: $e');
+            }
+          }
+        }
       });
     } catch (e) {
       debugPrint('Realtime shell setup error: $e');

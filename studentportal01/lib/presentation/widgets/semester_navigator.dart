@@ -8,7 +8,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/l10n/app_localizations.dart';
 
 import '../../data/services/core_data_service.dart';
 import '../providers/student_context_provider.dart';
@@ -202,7 +201,14 @@ class _DynamicSemesterNavState extends ConsumerState<DynamicSemesterNav>
                     children: semesters.asMap().entries.map((entry) {
                       final index = entry.key;
                       final semester = entry.value;
-                      final localizedName = semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester);
+                      final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+                      final localizedName = isArabic
+                          ? (count == 3
+                              ? 'الثلاثي ${semester.number}'
+                              : (count == 2
+                                  ? 'الفصل ${semester.number}'
+                                  : 'الفترة ${semester.number}'))
+                          : semester.name;
                       final isSelected = index == currentIndex;
                       final isLocked = isSemesterLocked(semester.number, semesters);
                       return Expanded(
@@ -415,7 +421,13 @@ class SemesterTabBar extends ConsumerWidget {
                           const SizedBox(width: 3),
                         ],
                         Text(
-                          semester.name.replaceAll('Semestre', AppLocalizations.of(context).semester),
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? (semesters.length == 3
+                                  ? 'الثلاثي ${semester.number}'
+                                  : (semesters.length == 2
+                                      ? 'الفصل ${semester.number}'
+                                      : 'الفترة ${semester.number}'))
+                              : semester.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Localizations.localeOf(context).languageCode == 'ar'

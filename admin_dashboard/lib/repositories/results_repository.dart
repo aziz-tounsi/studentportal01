@@ -127,6 +127,9 @@ class ResultsRepository {
             photo_url,
             student_code,
             date_of_birth,
+            gender,
+            nationality,
+            created_at,
             address
           ),
           classes!inner (

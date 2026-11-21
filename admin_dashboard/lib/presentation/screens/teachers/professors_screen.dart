@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
@@ -257,7 +258,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     _buildStatusFilterBar(context, professorsAsync),
                     Expanded(
                       child: professorsAsync.when(
-                        loading: () => const TableSkeletonLoader(),
+                        loading: () => const ProfessorsSkeletonLoader(),
                         error: (e, _) => Center(
                           child: Container(
                             padding: const EdgeInsets.all(36),
@@ -511,6 +512,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   // ── Status Filter Bar (Tous / Actifs / Archivés) ────────────────────────
   Widget _buildStatusFilterBar(BuildContext context, AsyncValue<List<Map<String, dynamic>>> professorsAsync) {
     final allProfs = professorsAsync.whenOrNull(data: (p) => p) ?? [];
+    final isLoading = professorsAsync.isLoading;
     final totalCount = allProfs.length;
     final activeCount = allProfs.where((p) => p['is_active'] == true).length;
     final archivedCount = allProfs.where((p) => p['is_active'] != true).length;
@@ -531,9 +533,9 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             ),
             child: Row(
               children: [
-                _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; })),
-                _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; })),
-                _buildStatusChip('Archivés', archivedCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; })),
+                _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; }), isLoading: isLoading),
+                _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; }), isLoading: isLoading),
+                _buildStatusChip('Archivés', archivedCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; }), isLoading: isLoading),
               ],
             ),
           ),
@@ -542,37 +544,43 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     );
   }
 
-  Widget _buildStatusChip(String label, int count, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] : null,
-        ),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+  Widget _buildStatusChip(String label, int count, bool isActive, VoidCallback onTap, {bool isLoading = false}) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] : null,
+          ),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                  color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: isActive ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.6),
-              ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              if (isLoading)
+                const SkeletonBox(width: 14, height: 12, borderRadius: 3)
+              else
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: isActive ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.6),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1409,31 +1417,21 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           ),
                           onTap: id.isNotEmpty ? () => context.push('/teachers/$id') : null,
                         ),
-                        // Speciality (matching users page niveau pill)
+                        // Speciality (normal black text)
                         DataCell(
                           SizedBox(
                             width: specialityW,
                             child: speciality != null
                                 ? Center(
-                                    child: () {
-                                      final specColor = _specialityColor(speciality);
-                                      return Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: specColor.withOpacity(0.10),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          speciality,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: specColor,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      );
-                                    }(),
+                                    child: Text(
+                                      speciality,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   )
                                 : const Center(child: Text('—', style: TextStyle(fontSize: 12, color: AppColors.textTertiary))),
                           ),
@@ -1518,7 +1516,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           SizedBox(
                             width: dateJoinedW,
                             child: Text(
-                              createdAt != null ? '${createdAt.day}/${createdAt.month}/${createdAt.year}' : '—',
+                              createdAt != null ? DateFormat('d MMM yyyy', 'fr_FR').format(createdAt) : '—',
                               style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
                             ),
                           ),
@@ -1647,7 +1645,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   void _showAddProfessorDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController(text: '+216 ');
+    final phoneCtrl = TextEditingController();
     String? selectedSubjectId;
     final formKey = GlobalKey<FormState>();
     bool isCreating = false;
@@ -1771,17 +1769,16 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         style: const TextStyle(fontSize: 13),
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
-                          LengthLimitingTextInputFormatter(14),
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(12),
                         ],
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return null; // optional
                           final trimmed = v.trim();
-                          final digits = trimmed.replaceAll(RegExp(r'[^\d]'), '');
-                          if (digits.length < 8) return 'Numéro trop court (min 8 chiffres)';
+                          if (trimmed.length < 8) return 'Numéro trop court (min 8 chiffres)';
                           return null;
                         },
-                        decoration: _dialogInputDeco(hint: '+216 XX XXX XXX', icon: Icons.phone_outlined),
+                        decoration: _dialogInputDeco(hint: 'XX XXX XXX', icon: Icons.phone_outlined),
                       ),
                       const SizedBox(height: 14),
                       const SizedBox(height: 12),
@@ -1866,7 +1863,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                               final autoEmail = emailCtrl.text.trim();
                               final autoPass = 'Teacher@${DateTime.now().millisecondsSinceEpoch}';
                               final phoneVal = phoneCtrl.text.trim();
-                              final phoneToStore = (phoneVal.isEmpty || phoneVal == '+216') ? null : phoneVal;
+                              final phoneToStore = phoneVal.isEmpty ? null : phoneVal;
 
                               // Create teacher securely through Edge Function
                               final createResult = await UserManagementService.createUser(

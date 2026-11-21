@@ -36,6 +36,7 @@ class _SubjectsManagementScreenState
 
   // Selection state for bulk operations
   final Set<String> _selectedAssignmentIds = {};
+  final Set<String> _selectedSubjectIds = {};
 
   // Accordion expansion maps – use backing nullable fields so that
   // web hot-reload can't leave them as JS-undefined (= Dart null).
@@ -133,9 +134,7 @@ class _SubjectsManagementScreenState
     if (_filterNiveauIds.isNotEmpty) {
       final subjectIdsForNiveaux = state.assignments
           .where(
-            (a) =>
-                a.gradeLevelId != null &&
-                _filterNiveauIds.contains(a.gradeLevelId),
+            (a) => _filterNiveauIds.contains(a.gradeLevelId),
           )
           .map((a) => a.subjectId)
           .toSet();
@@ -161,6 +160,7 @@ class _SubjectsManagementScreenState
     return result;
   }
 
+  // ignore: unused_element
   void _toggleSelection(String id) {
     setState(() {
       if (_selectedAssignmentIds.contains(id)) {
@@ -177,6 +177,7 @@ class _SubjectsManagementScreenState
     });
   }
 
+  // ignore: unused_element
   void _selectAll(List<SubjectAssignmentModel> assignments) {
     setState(() {
       _selectedAssignmentIds.addAll(assignments.map((a) => a.id));
@@ -245,7 +246,203 @@ class _SubjectsManagementScreenState
               ),
             ),
           ],
+          // Floating selection bar for subjects
+          if (_selectedSubjectIds.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildFloatingSubjectSelectionBar(context, stateAsync),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingSubjectSelectionBar(
+    BuildContext context,
+    AsyncValue<SubjectsManagementState> stateAsync,
+  ) {
+    final count = _selectedSubjectIds.length;
+    final allSubjects = stateAsync.value?.subjects ?? [];
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: Colors.white.withOpacity(0.15)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Sélectionnées',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Actions
+            _buildSelectionAction(
+              Icons.ios_share_rounded,
+              'Exporter',
+              Colors.white70,
+              () async {
+                final sel = allSubjects
+                    .where((s) => _selectedSubjectIds.contains(s.id))
+                    .toList();
+                final rows = <List<String>>[
+                  [
+                    'Nom',
+                    'Code',
+                    'Catégorie',
+                    'Coefficient par défaut',
+                    'Statut',
+                  ],
+                  ...sel.map((s) => [
+                        s.name,
+                        s.code ?? '',
+                        s.category ?? '',
+                        (s.defaultCoefficient ?? 1.0).toString(),
+                        s.isActive ? 'Actif' : 'Inactif',
+                      ]),
+                ];
+                final csv = rows
+                    .map((r) => r.map((c) => '"$c"').join(','))
+                    .join('\n');
+                await FilePicker.platform.saveFile(
+                  dialogTitle: 'Exporter les matières',
+                  fileName: 'matieres_selectionnees.csv',
+                  type: FileType.custom,
+                  allowedExtensions: ['csv'],
+                  bytes: Uint8List.fromList(csv.codeUnits),
+                );
+              },
+            ),
+            _buildSelectionAction(
+              Icons.delete_outline,
+              'Supprimer',
+              const Color(0xFFFCA5A5),
+              () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (dCtx) => AlertDialog(
+                    title: const Text('Confirmer la suppression'),
+                    content: Text(
+                      'Voulez-vous vraiment supprimer $count matière(s) sélectionnée(s) ?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, false),
+                        child: const Text('Annuler'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                        ),
+                        onPressed: () => Navigator.pop(dCtx, true),
+                        child: const Text(
+                          'Supprimer',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  final ids = _selectedSubjectIds.toList();
+                  for (final id in ids) {
+                    await ref
+                        .read(subjectsManagementProvider.notifier)
+                        .deleteSubject(id);
+                  }
+                  setState(() => _selectedSubjectIds.clear());
+                }
+              },
+            ),
+            // Close button
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: Colors.white.withOpacity(0.15)),
+                ),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: () => setState(() => _selectedSubjectIds.clear()),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionAction(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1101,6 +1298,47 @@ class _SubjectsManagementScreenState
                 ),
               ),
               const Spacer(),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: Checkbox(
+                      value: subjects.isNotEmpty &&
+                          subjects.every((s) => _selectedSubjectIds.contains(s.id)),
+                      activeColor: const Color(0xFF655DD5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      side: BorderSide(
+                        color: Colors.grey.shade400,
+                        width: 1.5,
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (val) {
+                        setState(() {
+                          if (val == true) {
+                            _selectedSubjectIds.addAll(subjects.map((s) => s.id));
+                          } else {
+                            _selectedSubjectIds.clear();
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Tout sélectionner',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
               Container(
                 height: 32,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1119,12 +1357,6 @@ class _SubjectsManagementScreenState
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.grid_view_rounded,
-                size: 19,
-                color: Color(0xFF8B90A0),
               ),
             ],
           ),
@@ -1221,25 +1453,56 @@ class _SubjectsManagementScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Code badge ──
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(
-                    subject.code ?? subject.name.substring(0, 2).toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: color,
-                      letterSpacing: 0.3,
+              // ── Code badge & Checkbox ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: Text(
+                        subject.code ??
+                            subject.name.substring(0, 2).toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: color,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: Checkbox(
+                      value: _selectedSubjectIds.contains(subject.id),
+                      activeColor: const Color(0xFF655DD5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      side: BorderSide(
+                        color: Colors.grey.shade300,
+                        width: 1.5,
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) {
+                        setState(() {
+                          if (v == true) {
+                            _selectedSubjectIds.add(subject.id);
+                          } else {
+                            _selectedSubjectIds.remove(subject.id);
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               // ── Subject name ──
@@ -2572,6 +2835,10 @@ class _SubjectsManagementScreenState
         );
       },
       pageBuilder: (ctx, _, __) {
+        final Set<String> selectedDetailIds = {};
+        int detailCurrentPage = 1;
+        int detailItemsPerPage = 10;
+        final detailPerPageOptions = [5, 10, 20, 50, -1];
         return StatefulBuilder(
           builder: (ctx, setDetailState) {
             final _ft = filterController.text.toLowerCase();
@@ -2586,6 +2853,14 @@ class _SubjectsManagementScreenState
                             (a.sectionName ?? '').toLowerCase().contains(_ft),
                       )
                       .toList();
+            final totalFilteredItems = filtered.length;
+            final totalPages = detailItemsPerPage == -1
+                ? 1
+                : (totalFilteredItems / detailItemsPerPage).ceil().clamp(1, 99999);
+            if (detailCurrentPage > totalPages) detailCurrentPage = totalPages;
+            final pagedAssignments = detailItemsPerPage == -1
+                ? filtered
+                : filtered.skip((detailCurrentPage - 1) * detailItemsPerPage).take(detailItemsPerPage).toList();
             return Center(
               child: Material(
                 color: Colors.transparent,
@@ -2613,8 +2888,10 @@ class _SubjectsManagementScreenState
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: Column(
+                    child: Stack(
                       children: [
+                        Column(
+                          children: [
                         // ══════════════════════════════════════
                         // HEADER — matches pic 1 exactly
                         // ══════════════════════════════════════
@@ -2659,52 +2936,46 @@ class _SubjectsManagementScreenState
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            subject.name,
-                                            style: const TextStyle(
-                                              fontSize: 21,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF111827),
-                                              height: 1.2,
-                                            ),
-                                          ),
+                                    Text(
+                                      subject.name,
+                                      style: const TextStyle(
+                                        fontSize: 21,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF111827),
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 9,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: subject.isActive
+                                            ? const Color(0xFFDCFCE7)
+                                            : const Color(0xFFFEE2E2),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
                                         ),
-                                        const SizedBox(width: 10),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 9,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: subject.isActive
-                                                ? const Color(0xFFDCFCE7)
-                                                : const Color(0xFFFEE2E2),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            subject.isActive
-                                                ? 'ACTIF'
-                                                : 'INACTIF',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: subject.isActive
-                                                  ? const Color(0xFF166534)
-                                                  : const Color(0xFF991B1B),
-                                              letterSpacing: 0.4,
-                                            ),
-                                          ),
+                                      ),
+                                      child: Text(
+                                        subject.isActive
+                                            ? 'ACTIF'
+                                            : 'INACTIF',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: subject.isActive
+                                              ? const Color(0xFF166534)
+                                              : const Color(0xFF991B1B),
+                                          letterSpacing: 0.4,
                                         ),
-                                      ],
+                                      ),
                                     ),
                                     if (subject.description != null &&
                                         subject.description!.isNotEmpty) ...[
-                                      const SizedBox(height: 5),
+                                      const SizedBox(height: 6),
                                       Text(
                                         subject.description!,
                                         style: const TextStyle(
@@ -2720,84 +2991,10 @@ class _SubjectsManagementScreenState
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              // Actions: Exporter (secondary) + Modifier (primary) + X
+                              // Actions: Modifier (primary) + X
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Exporter secondary button
-                                  InkWell(
-                                    onTap: () async {
-                                      final rows = <List<String>>[
-                                        [
-                                          'Niveau',
-                                          'Filière / Section',
-                                          'Coefficient',
-                                          'Heures / Semaine',
-                                        ],
-                                        ...assignments.map(
-                                          (a) => [
-                                            a.gradeLevelName ?? '—',
-                                            a.sectionName ?? 'Tronc Commun',
-                                            a.coefficient.toStringAsFixed(0),
-                                            a.weeklyHours > 0
-                                                ? '${a.weeklyHours.toStringAsFixed(0)}h / sem'
-                                                : '—',
-                                          ],
-                                        ),
-                                      ];
-                                      final csv = rows
-                                          .map(
-                                            (r) =>
-                                                r.map((c) => '"$c"').join(','),
-                                          )
-                                          .join('\n');
-                                      final bytes = Uint8List.fromList(
-                                        csv.codeUnits,
-                                      );
-                                      await FilePicker.platform.saveFile(
-                                        dialogTitle: 'Exporter ${subject.name}',
-                                        fileName:
-                                            '${subject.code ?? subject.name}_affectations.csv',
-                                        type: FileType.custom,
-                                        allowedExtensions: ['csv'],
-                                        bytes: bytes,
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 9,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: const Color(0xFFE5E7EB),
-                                        ),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.file_upload_outlined,
-                                            size: 15,
-                                            color: Color(0xFF6B7280),
-                                          ),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            'Exporter',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              color: Color(0xFF374151),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
                                   // Modifier primary button
                                   InkWell(
                                     onTap: () {
@@ -2957,11 +3154,6 @@ class _SubjectsManagementScreenState
                                                         BorderRadius.circular(
                                                           999,
                                                         ),
-                                                    border: Border.all(
-                                                      color: const Color(
-                                                        0xFFDDD6FE,
-                                                      ),
-                                                    ),
                                                   ),
                                                   child: Text(
                                                     '${et.name} (${et.code})',
@@ -3200,259 +3392,256 @@ class _SubjectsManagementScreenState
                                         )
                                       else
                                         Container(
+                                          width: double.infinity,
                                           decoration: BoxDecoration(
                                             color: Colors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
-                                            border: Border.all(
-                                              color: const Color(0xFFE5E7EB),
-                                            ),
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(color: const Color(0xFFE5E7EB)),
                                           ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
-                                            child: Column(
-                                              children: [
-                                                // ── Table header ──
-                                                Container(
-                                                  color: const Color(
-                                                    0xFFF9FAFB,
-                                                  ),
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 20,
-                                                        vertical: 11,
-                                                      ),
-                                                  child: const Row(
-                                                    children: [
-                                                      SizedBox(
-                                                        width: 70,
-                                                        child: Text(
-                                                          'NIVEAU',
-                                                          style: TextStyle(
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: Color(
-                                                              0xFFB0B5C0,
-                                                            ),
-                                                            letterSpacing: 0.4,
-                                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: Column(
+                                            children: [
+                                              LayoutBuilder(
+                                                builder: (context, constraints) {
+                                                  final availableW = constraints.maxWidth;
+                                                  final sectionW = (availableW - 394).clamp(180.0, 9999.0);
+                                                  final totalW = 44.0 + 110.0 + sectionW + 110.0 + 130.0;
+                                                  return SingleChildScrollView(
+                                                    scrollDirection: Axis.horizontal,
+                                                    child: SizedBox(
+                                                      width: totalW,
+                                                      child: DataTable(
+                                                        columnSpacing: 0,
+                                                        horizontalMargin: 0,
+                                                        dataRowMinHeight: 52,
+                                                        dataRowMaxHeight: 56,
+                                                        headingRowHeight: 44,
+                                                        headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                                                        headingTextStyle: const TextStyle(
+                                                          fontWeight: FontWeight.w600,
+                                                          color: Color(0xFF94A3B8),
+                                                          fontSize: 11,
+                                                          letterSpacing: 0.5,
                                                         ),
-                                                      ),
-                                                      Expanded(
-                                                        flex: 3,
-                                                        child: Text(
-                                                          'FILIÈRE / SECTION',
-                                                          style: TextStyle(
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: Color(
-                                                              0xFFB0B5C0,
-                                                            ),
-                                                            letterSpacing: 0.4,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      SizedBox(
-                                                        width: 100,
-                                                        child: Text(
-                                                          'COEFFICIENT',
-                                                          style: TextStyle(
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: Color(
-                                                              0xFFB0B5C0,
-                                                            ),
-                                                            letterSpacing: 0.4,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      SizedBox(
-                                                        width: 90,
-                                                        child: Text(
-                                                          'HEURES',
-                                                          style: TextStyle(
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: Color(
-                                                              0xFFB0B5C0,
-                                                            ),
-                                                            letterSpacing: 0.4,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                Container(
-                                                  height: 1,
-                                                  color: const Color(
-                                                    0xFFF0F0F5,
-                                                  ),
-                                                ),
-                                                // ── Table rows ──
-                                                ...filtered.asMap().entries.map((
-                                                  entry,
-                                                ) {
-                                                  final idx = entry.key;
-                                                  final a = entry.value;
-                                                  return Container(
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white,
-                                                      border:
-                                                          idx <
-                                                              filtered.length -
-                                                                  1
-                                                          ? const Border(
-                                                              bottom: BorderSide(
-                                                                color: Color(
-                                                                  0xFFF5F5FA,
-                                                                ),
-                                                              ),
-                                                            )
-                                                          : null,
-                                                    ),
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 20,
-                                                          vertical: 13,
-                                                        ),
-                                                    child: Row(
-                                                      children: [
-                                                        // NIVEAU — pill badge
-                                                        SizedBox(
-                                                          width: 70,
-                                                          child: Container(
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      10,
-                                                                  vertical: 4,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color:
-                                                                  const Color(
-                                                                    0xFFF0F0F5,
+                                                        showCheckboxColumn: false,
+                                                        columns: [
+                                                          DataColumn(
+                                                            label: SizedBox(
+                                                              width: 44,
+                                                              child: Center(
+                                                                child: SizedBox(
+                                                                  width: 16,
+                                                                  height: 16,
+                                                                  child: Checkbox(
+                                                                    value: pagedAssignments.isNotEmpty && pagedAssignments.every((a) => selectedDetailIds.contains(a.id)),
+                                                                    activeColor: const Color(0xFF655DD5),
+                                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                                                    side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
+                                                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                                    onChanged: (v) {
+                                                                      setDetailState(() {
+                                                                        final allSel = pagedAssignments.isNotEmpty && pagedAssignments.every((a) => selectedDetailIds.contains(a.id));
+                                                                        if (allSel) {
+                                                                          for (final a in pagedAssignments) selectedDetailIds.remove(a.id);
+                                                                        } else {
+                                                                          for (final a in pagedAssignments) selectedDetailIds.add(a.id);
+                                                                        }
+                                                                      });
+                                                                    },
                                                                   ),
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    8,
-                                                                  ),
-                                                            ),
-                                                            child: Text(
-                                                              _shortNiveau(
-                                                                a.gradeLevelName ??
-                                                                    '—',
-                                                              ),
-                                                              textAlign:
-                                                                  TextAlign
-                                                                      .center,
-                                                              style: const TextStyle(
-                                                                fontSize: 11,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                                color: Color(
-                                                                  0xFF374151,
                                                                 ),
                                                               ),
                                                             ),
                                                           ),
-                                                        ),
-                                                        // SECTION
-                                                        Expanded(
-                                                          flex: 3,
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets.only(
-                                                                  left: 8,
-                                                                ),
-                                                            child: Text(
-                                                              a.sectionName ??
-                                                                  'Tronc Commun',
-                                                              style: TextStyle(
-                                                                fontSize: 12.5,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w400,
-                                                                color:
-                                                                    a.sectionName !=
-                                                                        null
-                                                                    ? const Color(
-                                                                        0xFF374151,
-                                                                      )
-                                                                    : const Color(
-                                                                        0xFF9CA3AF,
+                                                          const DataColumn(label: SizedBox(width: 110, child: Text('NIVEAU', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), fontSize: 11, letterSpacing: 0.5)))),
+                                                          DataColumn(label: SizedBox(width: sectionW, child: const Text('FILIÈRE / SECTION', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), fontSize: 11, letterSpacing: 0.5)))),
+                                                          const DataColumn(label: SizedBox(width: 110, child: Text('COEFFICIENT', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), fontSize: 11, letterSpacing: 0.5)))),
+                                                          const DataColumn(label: SizedBox(width: 130, child: Text('HEURES / SEMAINE', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), fontSize: 11, letterSpacing: 0.5)))),
+                                                        ],
+                                                        rows: pagedAssignments.map((a) {
+                                                          final isSelected = selectedDetailIds.contains(a.id);
+                                                          return DataRow(
+                                                            color: WidgetStateProperty.resolveWith<Color?>((states) {
+                                                              if (isSelected) return const Color(0xFFF5F3FF).withOpacity(0.5);
+                                                              if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                                                              return null;
+                                                            }),
+                                                            cells: [
+                                                              DataCell(
+                                                                SizedBox(
+                                                                  width: 44,
+                                                                  child: Center(
+                                                                    child: SizedBox(
+                                                                      width: 16,
+                                                                      height: 16,
+                                                                      child: Checkbox(
+                                                                        value: isSelected,
+                                                                        activeColor: const Color(0xFF655DD5),
+                                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                                                        side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
+                                                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                                        onChanged: (v) {
+                                                                          setDetailState(() {
+                                                                            if (v == true) {
+                                                                              selectedDetailIds.add(a.id);
+                                                                            } else {
+                                                                              selectedDetailIds.remove(a.id);
+                                                                            }
+                                                                          });
+                                                                        },
                                                                       ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        // COEFFICIENT — circle badge
-                                                        SizedBox(
-                                                          width: 100,
-                                                          child: Row(
-                                                            children: [
-                                                              Container(
-                                                                width: 28,
-                                                                height: 28,
-                                                                decoration: BoxDecoration(
-                                                                  shape: BoxShape
-                                                                      .circle,
-                                                                  color: _brand
-                                                                      .withOpacity(
-                                                                        0.10,
-                                                                      ),
-                                                                ),
-                                                                child: Center(
-                                                                  child: Text(
-                                                                    a.coefficient
-                                                                        .toStringAsFixed(
-                                                                          0,
-                                                                        ),
-                                                                    style: const TextStyle(
-                                                                      fontSize:
-                                                                          12,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w700,
-                                                                      color:
-                                                                          _brand,
                                                                     ),
                                                                   ),
                                                                 ),
                                                               ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        // HEURES
-                                                        SizedBox(
-                                                          width: 90,
-                                                          child: Text(
-                                                            a.weeklyHours > 0
-                                                                ? '${a.weeklyHours.toStringAsFixed(0)}h / sem'
-                                                                : '—',
-                                                            style:
-                                                                const TextStyle(
-                                                                  fontSize: 12,
-                                                                  color: Color(
-                                                                    0xFF6B7280,
+                                                              DataCell(
+                                                                SizedBox(
+                                                                  width: 110,
+                                                                  child: Align(
+                                                                    alignment: Alignment.centerLeft,
+                                                                    child: Container(
+                                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                                      decoration: BoxDecoration(
+                                                                        color: const Color(0xFFF0F0F5),
+                                                                        borderRadius: BorderRadius.circular(8),
+                                                                      ),
+                                                                      child: Text(
+                                                                        _shortNiveau(a.gradeLevelName ?? '—'),
+                                                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                                                                      ),
+                                                                    ),
                                                                   ),
                                                                 ),
-                                                          ),
-                                                        ),
-                                                      ],
+                                                              ),
+                                                              DataCell(
+                                                                SizedBox(
+                                                                  width: sectionW,
+                                                                  child: Text(
+                                                                    a.sectionName ?? 'Tronc Commun',
+                                                                    style: TextStyle(
+                                                                      fontSize: 12.5,
+                                                                      fontWeight: FontWeight.w400,
+                                                                      color: a.sectionName != null ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
+                                                                    ),
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                SizedBox(
+                                                                  width: 110,
+                                                                  child: Row(
+                                                                    children: [
+                                                                      Container(
+                                                                        width: 26,
+                                                                        height: 26,
+                                                                        decoration: BoxDecoration(
+                                                                          shape: BoxShape.circle,
+                                                                          color: _brand.withOpacity(0.10),
+                                                                        ),
+                                                                        child: Center(
+                                                                          child: Text(
+                                                                            a.coefficient.toStringAsFixed(0),
+                                                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _brand),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                SizedBox(
+                                                                  width: 130,
+                                                                  child: Text(
+                                                                    a.weeklyHours > 0 ? '${a.weeklyHours}h / sem' : '—',
+                                                                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          );
+                                                        }).toList(),
+                                                      ),
                                                     ),
                                                   );
-                                                }),
-                                              ],
-                                            ),
+                                                },
+                                              ),
+                                              // ── Users table style bottom pagination footer ──
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFFFAFAFB),
+                                                  border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    const Text('Afficher par ', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white,
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                                                      ),
+                                                      child: DropdownButtonHideUnderline(
+                                                        child: DropdownButton<int>(
+                                                          value: detailItemsPerPage,
+                                                          isDense: true,
+                                                          borderRadius: BorderRadius.circular(10),
+                                                          dropdownColor: Colors.white,
+                                                          elevation: 4,
+                                                          menuMaxHeight: 200,
+                                                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: Color(0xFF6B7280)),
+                                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                                                          items: detailPerPageOptions.map((v) => DropdownMenuItem(
+                                                            value: v,
+                                                            child: Text(v == -1 ? 'Tous' : '$v', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                                                          )).toList(),
+                                                          onChanged: (v) => setDetailState(() {
+                                                            detailItemsPerPage = v!;
+                                                            detailCurrentPage = 1;
+                                                         }),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const Spacer(),
+                                                    Text(
+                                                      'Page $detailCurrentPage sur ${totalPages == 0 ? 1 : totalPages}',
+                                                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Container(
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(6),
+                                                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          InkWell(
+                                                            onTap: detailCurrentPage > 1 ? () => setDetailState(() => detailCurrentPage--) : null,
+                                                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                                                            child: Padding(
+                                                              padding: const EdgeInsets.all(4),
+                                                              child: Icon(Icons.chevron_left, size: 18, color: detailCurrentPage > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF)),
+                                                            ),
+                                                          ),
+                                                          Container(width: 1, height: 24, color: const Color(0xFFE5E7EB)),
+                                                          InkWell(
+                                                            onTap: detailCurrentPage < totalPages ? () => setDetailState(() => detailCurrentPage++) : null,
+                                                            borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                                                            child: Padding(
+                                                              padding: const EdgeInsets.all(4),
+                                                              child: Icon(Icons.chevron_right, size: 18, color: detailCurrentPage < totalPages ? const Color(0xFF374151) : const Color(0xFF9CA3AF)),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                     ],
@@ -3464,7 +3653,126 @@ class _SubjectsManagementScreenState
                         ),
                       ],
                     ),
-                  ),
+                    // Floating bottom black tool box for detail assignments
+                    if (selectedDetailIds.isNotEmpty)
+                      Positioned(
+                        bottom: 24,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Material(
+                            elevation: 12,
+                            borderRadius: BorderRadius.circular(10),
+                            color: const Color(0xFF111827),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Count badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        right: BorderSide(color: Colors.white.withOpacity(0.15)),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF655DD5),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              '',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Text(
+                                          'Sélectionnées',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Delete Action
+                                  _buildSelectionAction(
+                                    Icons.delete_outline,
+                                    'Supprimer',
+                                    const Color(0xFFFCA5A5),
+                                    () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: ctx,
+                                        builder: (dCtx) => AlertDialog(
+                                          title: const Text('Confirmer la suppression'),
+                                          content: Text(
+                                            'Voulez-vous vraiment supprimer  affectation(s) sélectionnée(s) ?',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(dCtx, false),
+                                              child: const Text('Annuler'),
+                                            ),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: AppColors.error,
+                                              ),
+                                              onPressed: () => Navigator.pop(dCtx, true),
+                                              child: const Text(
+                                                'Supprimer',
+                                                style: TextStyle(color: Colors.white),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        for (final aid in selectedDetailIds.toList()) {
+                                          await ref.read(subjectsManagementProvider.notifier).deleteAssignment(aid);
+                                        }
+                                        setDetailState(() => selectedDetailIds.clear());
+                                      }
+                                    },
+                                  ),
+                                  // Close button
+                                  Container(
+                                    margin: const EdgeInsets.only(left: 4),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        left: BorderSide(color: Colors.white.withOpacity(0.15)),
+                                      ),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                                      onPressed: () => setDetailState(() => selectedDetailIds.clear()),
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
                 ),
               ),
             );
@@ -3493,7 +3801,7 @@ class _SubjectsManagementScreenState
     );
   }
 
-  // ── Overlay helper: stat card (stacked, right-aligned icon) ──
+  // ── Overlay helper: stat card (styled like dashboard header cards) ──
   Widget _overlayStatCard({
     required String label,
     required String value,
@@ -3502,48 +3810,65 @@ class _SubjectsManagementScreenState
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFB),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF0F0F5)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFFADB3BF),
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827),
-                    height: 1.1,
-                  ),
-                ),
-              ],
-            ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(10),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Icon(icon, size: 14, color: iconColor),
+                ),
+              ),
+              const Spacer(),
+              const Icon(
+                Icons.arrow_outward_rounded,
+                size: 12,
+                color: Color(0xFFCBD5E1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
             ),
-            child: Center(child: Icon(icon, size: 18, color: iconColor)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.4,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -4278,13 +4603,23 @@ class _SubjectsManagementScreenState
                                       Widget buildLyceeBox() {
                                         if (lyceeNiveaux.isEmpty)
                                           return const SizedBox.shrink();
+                                        int getLyceeRank(GradeLevelModel l) {
+                                          final s = '${l.code} ${l.name}'.toLowerCase();
+                                          if (s.contains('1') || s.contains('1ère') || s.contains('1ere')) return 1;
+                                          if (s.contains('2') || s.contains('2ème') || s.contains('2eme')) return 2;
+                                          if (s.contains('3') || s.contains('3ème') || s.contains('3eme')) return 3;
+                                          if (s.contains('4') || s.contains('4ème') || s.contains('4eme') || s.contains('bac')) return 4;
+                                          return l.orderIndex > 0 ? l.orderIndex : 99;
+                                        }
                                         // Separate: niveaux without sections vs with sections
                                         final noSectionNiveaux = lyceeNiveaux
                                             .where((l) => !l.hasSections)
-                                            .toList();
+                                            .toList()
+                                          ..sort((a, b) => getLyceeRank(a).compareTo(getLyceeRank(b)));
                                         final withSectionNiveaux = lyceeNiveaux
                                             .where((l) => l.hasSections)
-                                            .toList();
+                                            .toList()
+                                          ..sort((a, b) => getLyceeRank(a).compareTo(getLyceeRank(b)));
 
                                         return Container(
                                           width: double.infinity,
@@ -5042,9 +5377,9 @@ class _SubjectsManagementScreenState
             child: Material(
               color: Colors.transparent,
               child: Container(
-                width: 420,
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+                width: 440,
+                constraints: const BoxConstraints(
+                  maxHeight: 560,
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -5133,11 +5468,15 @@ class _SubjectsManagementScreenState
                       ),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
-                    // List
-                    Flexible(
+                    // List showing 6 items at the same time
+                    SizedBox(
+                      height: filtered.isEmpty
+                          ? 80
+                          : (filtered.length < 6
+                              ? filtered.length * 54.0
+                              : 324.0),
                       child: filtered.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.all(24),
+                          ? Center(
                               child: Text(
                                 'Aucun professeur trouvé',
                                 style: TextStyle(
@@ -5147,8 +5486,8 @@ class _SubjectsManagementScreenState
                               ),
                             )
                           : ListView.builder(
-                              shrinkWrap: true,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              itemExtent: 54.0,
+                              padding: const EdgeInsets.symmetric(vertical: 4),
                               itemCount: filtered.length,
                               itemBuilder: (_, i) {
                                 final t = filtered[i];
@@ -5377,6 +5716,7 @@ class _SubjectsManagementScreenState
     String? gradeId = assignment?.gradeLevelId;
     String? sectionId = assignment?.sectionId;
     double coefficient = assignment?.coefficient ?? 1.0;
+    final coefCtrl = TextEditingController(text: coefficient.toInt().toString());
     double weeklyHours = assignment?.weeklyHours ?? 0;
     bool isMainSubject = assignment?.isMainSubject ?? false;
 
@@ -5479,51 +5819,63 @@ class _SubjectsManagementScreenState
                                 // Matière dropdown
                                 _buildFieldLabel('Matière *'),
                                 const SizedBox(height: 6),
-                                DropdownButtonFormField<String>(
-                                  value: subjectId,
-                                  borderRadius: BorderRadius.circular(12),
-                                  menuMaxHeight: 300,
-                                  dropdownColor: Colors.white,
-                                  decoration: InputDecoration(
-                                    hintText: 'Sélectionner une matière',
-                                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-                                    filled: true,
-                                    fillColor: const Color(0xFFF9FAFB),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
-                                    prefixIcon: const Icon(Icons.book_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                SizedBox(
+                                  height: 44,
+                                  child: DropdownButtonFormField<String>(
+                                    value: subjectId,
+                                    isDense: true,
+                                    borderRadius: BorderRadius.circular(12),
+                                    menuMaxHeight: 300,
+                                    dropdownColor: Colors.white,
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+                                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey.shade400, size: 20),
+                                    decoration: InputDecoration(
+                                      hintText: 'Sélectionner une matière',
+                                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF9FAFB),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
+                                      prefixIcon: const Icon(Icons.book_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                    ),
+                                    items: state.subjects
+                                        .map((s) => DropdownMenuItem(value: s.id, child: Text('${s.name} (${s.code})', style: const TextStyle(fontSize: 13, color: Color(0xFF111827)))))
+                                        .toList(),
+                                    onChanged: (v) => setState(() => subjectId = v),
                                   ),
-                                  items: state.subjects
-                                      .map((s) => DropdownMenuItem(value: s.id, child: Text('${s.name} (${s.code})', style: const TextStyle(fontSize: 13))))
-                                      .toList(),
-                                  onChanged: (v) => setState(() => subjectId = v),
                                 ),
                                 const SizedBox(height: 16),
 
                                 // Niveau dropdown
                                 _buildFieldLabel('Niveau *'),
                                 const SizedBox(height: 6),
-                                DropdownButtonFormField<String>(
-                                  value: gradeId,
-                                  borderRadius: BorderRadius.circular(12),
-                                  dropdownColor: Colors.white,
-                                  decoration: InputDecoration(
-                                    hintText: 'Sélectionner un niveau',
-                                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-                                    filled: true,
-                                    fillColor: const Color(0xFFF9FAFB),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
-                                    prefixIcon: const Icon(Icons.school_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                SizedBox(
+                                  height: 44,
+                                  child: DropdownButtonFormField<String>(
+                                    value: gradeId,
+                                    isDense: true,
+                                    borderRadius: BorderRadius.circular(12),
+                                    dropdownColor: Colors.white,
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+                                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey.shade400, size: 20),
+                                    decoration: InputDecoration(
+                                      hintText: 'Sélectionner un niveau',
+                                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF9FAFB),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
+                                      prefixIcon: const Icon(Icons.school_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                    ),
+                                    items: state.gradeLevels
+                                        .map((g) => DropdownMenuItem(value: g.id, child: Text(g.name, style: const TextStyle(fontSize: 13, color: Color(0xFF111827)))))
+                                        .toList(),
+                                    onChanged: (v) => setState(() { gradeId = v; sectionId = null; }),
                                   ),
-                                  items: state.gradeLevels
-                                      .map((g) => DropdownMenuItem(value: g.id, child: Text(g.name, style: const TextStyle(fontSize: 13))))
-                                      .toList(),
-                                  onChanged: (v) => setState(() { gradeId = v; sectionId = null; }),
                                 ),
 
                                 // Section dropdown (conditional)
@@ -5541,26 +5893,32 @@ class _SubjectsManagementScreenState
                                         children: [
                                           _buildFieldLabel('Filière'),
                                           const SizedBox(height: 6),
-                                          DropdownButtonFormField<String?>(
-                                            value: sectionId,
-                                            borderRadius: BorderRadius.circular(12),
-                                            dropdownColor: Colors.white,
-                                            elevation: 8,
-                                            decoration: InputDecoration(
-                                              hintText: 'Sélectionner une filière',
-                                              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-                                              filled: true,
-                                              fillColor: const Color(0xFFF9FAFB),
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
-                                              prefixIcon: const Icon(Icons.category_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                          SizedBox(
+                                            height: 44,
+                                            child: DropdownButtonFormField<String?>(
+                                              value: sectionId,
+                                              isDense: true,
+                                              borderRadius: BorderRadius.circular(12),
+                                              dropdownColor: Colors.white,
+                                              elevation: 8,
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+                                              icon: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey.shade400, size: 20),
+                                              decoration: InputDecoration(
+                                                hintText: 'Sélectionner une filière',
+                                                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                                filled: true,
+                                                fillColor: const Color(0xFFF9FAFB),
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
+                                                prefixIcon: const Icon(Icons.category_outlined, size: 18, color: Color(0xFF9CA3AF)),
+                                              ),
+                                              items: gradeSections
+                                                  .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name, style: const TextStyle(fontSize: 13, color: Color(0xFF111827)))))
+                                                  .toList(),
+                                              onChanged: (v) => setState(() => sectionId = v),
                                             ),
-                                            items: gradeSections
-                                                .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name, style: const TextStyle(fontSize: 13))))
-                                                .toList(),
-                                            onChanged: (v) => setState(() => sectionId = v),
                                           ),
                                         ],
                                       );
@@ -5587,45 +5945,30 @@ class _SubjectsManagementScreenState
                                         children: [
                                           _buildFieldLabel('Coefficient'),
                                           const SizedBox(height: 6),
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF9FAFB),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: const Color(0xFFE5E7EB)),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                const SizedBox(width: 14),
-                                                const Icon(Icons.trending_up, size: 16, color: Color(0xFF9CA3AF)),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: TextField(
-                                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                    controller: TextEditingController(text: coefficient.toString())
-                                                      ..selection = TextSelection.fromPosition(TextPosition(offset: coefficient.toString().length)),
-                                                    onChanged: (v) => coefficient = double.tryParse(v) ?? 1.0,
-                                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 12)),
-                                                  ),
-                                                ),
-                                                // +/- buttons
-                                                Container(
-                                                  width: 1, height: 28,
-                                                  color: const Color(0xFFE5E7EB),
-                                                ),
-                                                InkWell(
-                                                  onTap: () => setState(() => coefficient = (coefficient - 1).clamp(0.5, 10)),
-                                                  child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.remove, size: 16, color: Color(0xFF6B7280))),
-                                                ),
-                                                Container(
-                                                  width: 1, height: 28,
-                                                  color: const Color(0xFFE5E7EB),
-                                                ),
-                                                InkWell(
-                                                  onTap: () => setState(() => coefficient = (coefficient + 1).clamp(0.5, 10)),
-                                                  child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.add, size: 16, color: Color(0xFF6B7280))),
-                                                ),
-                                              ],
+                                          SizedBox(
+                                            height: 44,
+                                            child: TextField(
+                                              controller: coefCtrl,
+                                              keyboardType: TextInputType.number,
+                                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                              onChanged: (v) {
+                                                final parsed = int.tryParse(v);
+                                                if (parsed != null && parsed > 0) {
+                                                  coefficient = parsed.toDouble();
+                                                }
+                                              },
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                                              decoration: InputDecoration(
+                                                hintText: '1',
+                                                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                                prefixIcon: const Icon(Icons.trending_up, size: 18, color: Color(0xFF9CA3AF)),
+                                                filled: true,
+                                                fillColor: const Color(0xFFF9FAFB),
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brand)),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -5639,136 +5982,191 @@ class _SubjectsManagementScreenState
                                         children: [
                                           _buildFieldLabel('Heures/Semaine'),
                                           const SizedBox(height: 6),
-                                          InkWell(
-                                            borderRadius: BorderRadius.circular(12),
-                                            onTap: () async {
-                                              final hours = weeklyHours.floor();
-                                              final mins = ((weeklyHours - hours) * 60).round();
-                                              int pickedH = hours;
-                                              int pickedM = mins;
-                                              final result = await showDialog<double>(
-                                                context: context,
-                                                builder: (dCtx) => StatefulBuilder(
-                                                  builder: (dCtx, setPickerState) => AlertDialog(
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                                    title: Row(
-                                                      children: [
-                                                        Container(
-                                                          width: 40, height: 40,
-                                                          decoration: BoxDecoration(color: _brandLight, borderRadius: BorderRadius.circular(10)),
-                                                          child: const Icon(Icons.schedule, color: _brand, size: 20),
-                                                        ),
-                                                        const SizedBox(width: 12),
-                                                        const Text('Durée hebdomadaire', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                                                      ],
-                                                    ),
-                                                    content: Column(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        const Text('Choisissez les heures et minutes', style: TextStyle(fontSize: 12.5, color: Color(0xFF9CA3AF))),
-                                                        const SizedBox(height: 20),
-                                                        Row(
-                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          SizedBox(
+                                            height: 44,
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.circular(12),
+                                              onTap: () async {
+                                                final hours = weeklyHours.floor();
+                                                final mins = ((weeklyHours - hours) * 60).round();
+                                                final hoursCtrl = TextEditingController(text: hours > 0 ? hours.toString() : '');
+                                                final minsCtrl = TextEditingController(text: mins > 0 ? mins.toString() : '');
+
+                                                final result = await showDialog<double>(
+                                                  context: context,
+                                                  builder: (dCtx) => StatefulBuilder(
+                                                    builder: (dCtx, setPickerState) => AlertDialog(
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                                      title: Row(
+                                                        children: [
+                                                          Container(
+                                                            width: 40,
+                                                            height: 40,
+                                                            decoration: BoxDecoration(color: _brandLight, borderRadius: BorderRadius.circular(10)),
+                                                            child: const Icon(Icons.schedule, color: _brand, size: 20),
+                                                          ),
+                                                          const SizedBox(width: 12),
+                                                          const Text('Durée hebdomadaire', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                                        ],
+                                                      ),
+                                                      content: SizedBox(
+                                                        width: 320,
+                                                        child: Column(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
                                                           children: [
-                                                            Column(
+                                                            const Text(
+                                                              'Saisissez les heures et minutes de cours par semaine',
+                                                              style: TextStyle(fontSize: 12.5, color: Color(0xFF6B7280)),
+                                                            ),
+                                                            const SizedBox(height: 20),
+                                                            Row(
                                                               children: [
-                                                                const Text('Heures', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _brand)),
-                                                                const SizedBox(height: 6),
-                                                                SizedBox(
-                                                                  width: 80, height: 120,
-                                                                  child: ListWheelScrollView.useDelegate(
-                                                                    itemExtent: 40, diameterRatio: 1.2,
-                                                                    physics: const FixedExtentScrollPhysics(),
-                                                                    controller: FixedExtentScrollController(initialItem: pickedH),
-                                                                    onSelectedItemChanged: (i) => setPickerState(() => pickedH = i),
-                                                                    childDelegate: ListWheelChildBuilderDelegate(
-                                                                      childCount: 13,
-                                                                      builder: (ctx, i) => Container(
-                                                                        alignment: Alignment.center,
-                                                                        decoration: BoxDecoration(color: i == pickedH ? _brandLight : Colors.transparent, borderRadius: BorderRadius.circular(8)),
-                                                                        child: Text('$i h', style: TextStyle(fontSize: 18, fontWeight: i == pickedH ? FontWeight.w700 : FontWeight.w400, color: i == pickedH ? _brand : const Color(0xFF9CA3AF))),
+                                                                // Hours input
+                                                                Expanded(
+                                                                  child: Column(
+                                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                                    children: [
+                                                                      const Text('Heures', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                                                                      const SizedBox(height: 6),
+                                                                      SizedBox(
+                                                                        height: 46,
+                                                                        child: TextField(
+                                                                          controller: hoursCtrl,
+                                                                          keyboardType: TextInputType.number,
+                                                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                                                          textAlign: TextAlign.center,
+                                                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                                                                          decoration: InputDecoration(
+                                                                            hintText: '0',
+                                                                            hintStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFCBD5E1)),
+                                                                            suffixText: 'h',
+                                                                            suffixStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _brand),
+                                                                            filled: true,
+                                                                            fillColor: const Color(0xFFF9FAFB),
+                                                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _brand, width: 1.5)),
+                                                                          ),
+                                                                        ),
                                                                       ),
-                                                                    ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                                const Padding(
+                                                                  padding: EdgeInsets.fromLTRB(10, 22, 10, 0),
+                                                                  child: Text(':', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF9CA3AF))),
+                                                                ),
+                                                                // Minutes input
+                                                                Expanded(
+                                                                  child: Column(
+                                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                                    children: [
+                                                                      const Text('Minutes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                                                                      const SizedBox(height: 6),
+                                                                      SizedBox(
+                                                                        height: 46,
+                                                                        child: TextField(
+                                                                          controller: minsCtrl,
+                                                                          keyboardType: TextInputType.number,
+                                                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                                                          textAlign: TextAlign.center,
+                                                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                                                                          decoration: InputDecoration(
+                                                                            hintText: '0',
+                                                                            hintStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFCBD5E1)),
+                                                                            suffixText: 'min',
+                                                                            suffixStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _brand),
+                                                                            filled: true,
+                                                                            fillColor: const Color(0xFFF9FAFB),
+                                                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                                                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _brand, width: 1.5)),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ],
                                                                   ),
                                                                 ),
                                                               ],
                                                             ),
-                                                            const Padding(
-                                                              padding: EdgeInsets.symmetric(horizontal: 12),
-                                                              child: Text(':', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _brand)),
-                                                            ),
-                                                            Column(
+                                                            const SizedBox(height: 16),
+                                                            // Quick preset pills
+                                                            const Text('Raccourcis rapides', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF))),
+                                                            const SizedBox(height: 8),
+                                                            Wrap(
+                                                              spacing: 8,
+                                                              runSpacing: 6,
                                                               children: [
-                                                                const Text('Minutes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _brand)),
-                                                                const SizedBox(height: 6),
-                                                                SizedBox(
-                                                                  width: 80, height: 120,
-                                                                  child: ListWheelScrollView.useDelegate(
-                                                                    itemExtent: 40, diameterRatio: 1.2,
-                                                                    physics: const FixedExtentScrollPhysics(),
-                                                                    controller: FixedExtentScrollController(initialItem: pickedM ~/ 15),
-                                                                    onSelectedItemChanged: (i) => setPickerState(() => pickedM = i * 15),
-                                                                    childDelegate: ListWheelChildBuilderDelegate(
-                                                                      childCount: 4,
-                                                                      builder: (ctx, i) {
-                                                                        final m = i * 15;
-                                                                        final isSelected = m == pickedM;
-                                                                        return Container(
-                                                                          alignment: Alignment.center,
-                                                                          decoration: BoxDecoration(color: isSelected ? _brandLight : Colors.transparent, borderRadius: BorderRadius.circular(8)),
-                                                                          child: Text('${m.toString().padLeft(2, '0')} min', style: TextStyle(fontSize: 18, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400, color: isSelected ? _brand : const Color(0xFF9CA3AF))),
-                                                                        );
-                                                                      },
-                                                                    ),
+                                                                {'label': '1h', 'h': 1, 'm': 0},
+                                                                {'label': '1h 30', 'h': 1, 'm': 30},
+                                                                {'label': '2h', 'h': 2, 'm': 0},
+                                                                {'label': '3h', 'h': 3, 'm': 0},
+                                                                {'label': '4h', 'h': 4, 'm': 0},
+                                                              ].map((p) => InkWell(
+                                                                onTap: () {
+                                                                  hoursCtrl.text = p['h'].toString();
+                                                                  minsCtrl.text = p['m'].toString();
+                                                                },
+                                                                borderRadius: BorderRadius.circular(8),
+                                                                child: Container(
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                                  decoration: BoxDecoration(
+                                                                    color: const Color(0xFFF3F4F6),
+                                                                    borderRadius: BorderRadius.circular(8),
+                                                                  ),
+                                                                  child: Text(
+                                                                    p['label'] as String,
+                                                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
                                                                   ),
                                                                 ),
-                                                              ],
+                                                              )).toList(),
                                                             ),
                                                           ],
                                                         ),
-                                                        const SizedBox(height: 16),
-                                                        Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                                          decoration: BoxDecoration(
-                                                            color: const Color(0xFFF0FDF4),
-                                                            borderRadius: BorderRadius.circular(10),
-                                                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                                                      ),
+                                                      actions: [
+                                                        TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Annuler')),
+                                                        ElevatedButton(
+                                                          onPressed: () {
+                                                            final h = int.tryParse(hoursCtrl.text) ?? 0;
+                                                            final m = (int.tryParse(minsCtrl.text) ?? 0).clamp(0, 59);
+                                                            Navigator.pop(dCtx, h + m / 60.0);
+                                                          },
+                                                          style: ElevatedButton.styleFrom(
+                                                            backgroundColor: _brand,
+                                                            foregroundColor: Colors.white,
+                                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                                           ),
-                                                          child: Text('${pickedH}h ${pickedM.toString().padLeft(2, '0')}min = ${(pickedH + pickedM / 60.0).toStringAsFixed(2)} heures', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF16A34A))),
+                                                          child: const Text('Confirmer'),
                                                         ),
                                                       ],
                                                     ),
-                                                    actions: [
-                                                      TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Annuler')),
-                                                      ElevatedButton(
-                                                        onPressed: () => Navigator.pop(dCtx, pickedH + pickedM / 60.0),
-                                                        style: ElevatedButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                                        child: const Text('Confirmer'),
-                                                      ),
-                                                    ],
                                                   ),
+                                                );
+                                                if (result != null) setState(() => weeklyHours = result);
+                                              },
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 14),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF9FAFB),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  border: Border.all(color: const Color(0xFFE5E7EB)),
                                                 ),
-                                              );
-                                              if (result != null) setState(() => weeklyHours = result);
-                                            },
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF9FAFB),
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(color: const Color(0xFFE5E7EB)),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  const Icon(Icons.schedule, size: 18, color: _brand),
-                                                  const SizedBox(width: 10),
-                                                  Text(
-                                                    '${weeklyHours.floor()}h ${((weeklyHours - weeklyHours.floor()) * 60).round().toString().padLeft(2, '0')}min',
-                                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
-                                                  ),
-                                                  const Spacer(),
-                                                  Icon(Icons.edit_outlined, size: 16, color: Colors.grey.shade400),
-                                                ],
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.schedule, size: 18, color: _brand),
+                                                    const SizedBox(width: 10),
+                                                    Text(
+                                                      '${weeklyHours.floor()}h ${((weeklyHours - weeklyHours.floor()) * 60).round().toString().padLeft(2, '0')}min',
+                                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+                                                    ),
+                                                    const Spacer(),
+                                                    Icon(Icons.edit_outlined, size: 16, color: Colors.grey.shade400),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -5787,13 +6185,12 @@ class _SubjectsManagementScreenState
                                 _buildSectionTitle('Options'),
                                 const SizedBox(height: 14),
 
-                                // Main subject toggle
+                                // Main subject toggle (borderless)
                                 Container(
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
                                     color: isMainSubject ? _brandLight : const Color(0xFFF9FAFB),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: isMainSubject ? _brand.withOpacity(0.3) : const Color(0xFFE5E7EB)),
                                   ),
                                   child: Row(
                                     children: [
@@ -5930,6 +6327,7 @@ class _SubjectsManagementScreenState
     );
   }
 
+  // ignore: unused_element
   void _confirmDeleteSubject(SubjectModel subject) {
     showDialog(
       context: context,
@@ -6785,7 +7183,7 @@ class _SubjectsManagementScreenState
                             try {
                               final notifier = ref.read(subjectsManagementProvider.notifier);
                               if (editTeacherId != null) {
-                                await notifier.deleteAllTeacherAssignments(editTeacherId!);
+                                await notifier.deleteAllTeacherAssignments(editTeacherId);
                               }
                               await notifier.addTeacherAssignmentsBulk(
                                 teacherId: selectedTeacherId!,
@@ -7004,6 +7402,7 @@ class _SubjectsManagementScreenState
     );
   }
 
+  // ignore: unused_element
   Widget _buildDialogSection(
     String title,
     IconData icon, {
@@ -7154,6 +7553,7 @@ class _SubjectsManagementScreenState
   }
 }
 
+// ignore: unused_element
 class _DashedRectPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;

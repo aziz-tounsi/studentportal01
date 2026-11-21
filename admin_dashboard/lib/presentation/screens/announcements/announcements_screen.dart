@@ -324,9 +324,29 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
   // Filter status
   String _filterStatus = 'all'; // 'all', 'pinned', 'important'
 
+  final Map<String, Map<String, dynamic>> _studentLookupByName = {};
+  final Map<String, Map<String, dynamic>> _studentLookupById = {};
+
+  Future<void> _loadStudentLookup() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('users')
+          .select('id, full_name, phone, student_code, photo_url, gender')
+          .eq('role', 'student');
+      for (final s in res) {
+        final id = s['id']?.toString();
+        final name = (s['full_name']?.toString() ?? '').toLowerCase().trim();
+        if (id != null) _studentLookupById[id] = s;
+        if (name.isNotEmpty) _studentLookupByName[name] = s;
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadStudentLookup();
     _tabController = TabController(length: 4, vsync: this);
 
     // Handle navigation with pre-selected student
@@ -366,6 +386,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         if (_selectedIds.isEmpty) _selectionMode = false;
       } else {
         _selectedIds.add(id);
+        _selectionMode = true;
       }
     });
   }
@@ -377,6 +398,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         _selectionMode = false;
       } else {
         _selectedIds.addAll(list.map((a) => a.id));
+        _selectionMode = true;
       }
     });
   }
@@ -403,9 +425,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                 child: Column(
                   children: [
                     _buildHeader(announcementsAsync),
-                    if (_selectionMode)
-                      _buildSelectionBar(context, announcementsAsync),
-                    if (!_selectionMode) _buildTabBar(announcementsAsync),
+                    _buildTabBar(announcementsAsync),
                     Expanded(
                       child: announcementsAsync.when(
                         loading: () => const AnnouncementsSkeletonLoader(),
@@ -442,6 +462,15 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
             ],
           ),
           if (_showFilters) _buildFilterPanel(),
+          if (_selectedIds.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildFloatingSelectionBar(context, announcementsAsync),
+              ),
+            ),
         ],
       ),
     );
@@ -528,145 +557,32 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                                       letterSpacing: 1.0,
                                       color: AppColors.slate400)),
                               const SizedBox(height: 12),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius:
-                                      BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: _filterType != null
-                                          ? AppColors.primary
-                                          : AppColors.border),
-                                ),
-                                child:
-                                    DropdownButtonFormField<String?>(
-                                  value: _filterType,
-                                  decoration:
-                                      const InputDecoration(
-                                    hintText: 'Tous les types',
-                                    contentPadding:
-                                        EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 14),
-                                    border: InputBorder.none,
-                                  ),
-                                  isExpanded: true,
-                                  borderRadius: BorderRadius.circular(8),
-                                  icon: Icon(
-                                      _filterType == null
-                                          ? Icons.keyboard_arrow_down_rounded
-                                          : Icons.keyboard_arrow_up_rounded,
-                                      color: AppColors.primary),
-                                  dropdownColor: AppColors.surface,
-                                  style: const TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.textPrimary),
-                                  selectedItemBuilder: (context) {
-                                    return [
-                                      null, 'general', 'teacher_absent', 'room_change',
-                                      'exam', 'reminder', 'retenue', 'avertissement',
-                                      'exclusion_classe', 'exclusion_etablissement',
-                                      'convocation_parents', 'conseil_discipline',
-                                      'exclusion_definitive', 'closure', 'trip', 'party', 'payment',
-                                    ].map((type) {
-                                      final label = {
-                                        null: 'Tous les types', 'general': 'Général',
-                                        'teacher_absent': 'Absence prof', 'room_change': 'Changement salle',
-                                        'exam': 'Examen', 'reminder': 'Rappel', 'retenue': 'Retenue',
-                                        'avertissement': 'Avertissement', 'exclusion_classe': 'Exclusion classe',
-                                        'exclusion_etablissement': 'Exclusion établissement',
-                                        'convocation_parents': 'Convocation parents',
-                                        'conseil_discipline': 'Conseil discipline',
-                                        'exclusion_definitive': 'Exclusion définitive',
-                                        'closure': 'Fermeture', 'trip': 'Sortie/Voyage',
-                                        'party': 'Événement', 'payment': 'Paiement',
-                                      }[type] ?? '';
-                                      return Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(label,
-                                            style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w500,
-                                                color: AppColors.textPrimary)),
-                                      );
-                                    }).toList();
-                                  },
-                                  items: const [
-                                    DropdownMenuItem(
-                                        value: null,
-                                        child: Text(
-                                            'Tous les types')),
-                                    DropdownMenuItem(
-                                        value: 'general',
-                                        child: Text('Général')),
-                                    DropdownMenuItem(
-                                        value: 'teacher_absent',
-                                        child: Text(
-                                            'Absence prof')),
-                                    DropdownMenuItem(
-                                        value: 'room_change',
-                                        child: Text(
-                                            'Changement salle')),
-                                    DropdownMenuItem(
-                                        value: 'exam',
-                                        child: Text('Examen')),
-                                    DropdownMenuItem(
-                                        value: 'reminder',
-                                        child: Text('Rappel')),
-                                    DropdownMenuItem(
-                                        value: 'retenue',
-                                        child: Text('Retenue')),
-                                    DropdownMenuItem(
-                                        value: 'avertissement',
-                                        child: Text(
-                                            'Avertissement')),
-                                    DropdownMenuItem(
-                                        value:
-                                            'exclusion_classe',
-                                        child: Text(
-                                            'Exclusion classe')),
-                                    DropdownMenuItem(
-                                        value:
-                                            'exclusion_etablissement',
-                                        child: Text(
-                                            'Exclusion établissement')),
-                                    DropdownMenuItem(
-                                        value:
-                                            'convocation_parents',
-                                        child: Text(
-                                            'Convocation parents')),
-                                    DropdownMenuItem(
-                                        value:
-                                            'conseil_discipline',
-                                        child: Text(
-                                            'Conseil discipline')),
-                                    DropdownMenuItem(
-                                        value:
-                                            'exclusion_definitive',
-                                        child: Text(
-                                            'Exclusion définitive')),
-                                    DropdownMenuItem(
-                                        value: 'closure',
-                                        child:
-                                            Text('Fermeture')),
-                                    DropdownMenuItem(
-                                        value: 'trip',
-                                        child: Text(
-                                            'Sortie/Voyage')),
-                                    DropdownMenuItem(
-                                        value: 'party',
-                                        child:
-                                            Text('Événement')),
-                                    DropdownMenuItem(
-                                        value: 'payment',
-                                        child:
-                                            Text('Paiement')),
-                                  ],
-                                  onChanged: (v) => setState(() {
-                                    _filterType = v;
-                                    _currentPage = 0;
-                                  }),
-                                ),
+                              _buildStyledDropdown<String?>(
+                                value: _filterType,
+                                defaultValue: null,
+                                items: const [
+                                  DropdownMenuItem(value: null, child: Text('Tous les types')),
+                                  DropdownMenuItem(value: 'general', child: Text('Général')),
+                                  DropdownMenuItem(value: 'teacher_absent', child: Text('Absence prof')),
+                                  DropdownMenuItem(value: 'room_change', child: Text('Changement salle')),
+                                  DropdownMenuItem(value: 'exam', child: Text('Examen')),
+                                  DropdownMenuItem(value: 'reminder', child: Text('Rappel')),
+                                  DropdownMenuItem(value: 'retenue', child: Text('Retenue')),
+                                  DropdownMenuItem(value: 'avertissement', child: Text('Avertissement')),
+                                  DropdownMenuItem(value: 'exclusion_classe', child: Text('Exclusion classe')),
+                                  DropdownMenuItem(value: 'exclusion_etablissement', child: Text('Exclusion établissement')),
+                                  DropdownMenuItem(value: 'convocation_parents', child: Text('Convocation parents')),
+                                  DropdownMenuItem(value: 'conseil_discipline', child: Text('Conseil discipline')),
+                                  DropdownMenuItem(value: 'exclusion_definitive', child: Text('Exclusion définitive')),
+                                  DropdownMenuItem(value: 'closure', child: Text('Fermeture')),
+                                  DropdownMenuItem(value: 'trip', child: Text('Sortie/Voyage')),
+                                  DropdownMenuItem(value: 'party', child: Text('Événement')),
+                                  DropdownMenuItem(value: 'payment', child: Text('Paiement')),
+                                ],
+                                onChanged: (v) => setState(() {
+                                  _filterType = v;
+                                  _currentPage = 0;
+                                }),
                               ),
                               const SizedBox(height: 28),
                               // Date range
@@ -738,16 +654,18 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                                       letterSpacing: 1.0,
                                       color: AppColors.slate400)),
                               const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 8,
-                                children: [
-                                  _buildStatusChip(
-                                      'Tous', 'all'),
-                                  _buildStatusChip(
-                                      'Actif', 'pinned'),
-                                  _buildStatusChip(
-                                      'Archivé', 'important'),
+                              _buildStyledDropdown<String>(
+                                value: _filterStatus,
+                                defaultValue: 'all',
+                                items: const [
+                                  DropdownMenuItem(value: 'all', child: Text('Tous les statuts')),
+                                  DropdownMenuItem(value: 'pinned', child: Text('Épinglé')),
+                                  DropdownMenuItem(value: 'important', child: Text('Important')),
                                 ],
+                                onChanged: (v) => setState(() {
+                                  _filterStatus = v ?? 'all';
+                                  _currentPage = 0;
+                                }),
                               ),
                             ],
                           ),
@@ -857,9 +775,38 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     );
   }
 
+  Widget _buildStyledDropdown<T>({
+    required T value,
+    required T defaultValue,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.slate50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          items: items,
+          onChanged: onChanged,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          borderRadius: BorderRadius.circular(8),
+          dropdownColor: Colors.white,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterDateField(
       String label, DateTime? value, ValueChanged<DateTime?> onChanged) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final dateFormat = DateFormat('d MMM yyyy', 'fr_FR');
     return InkWell(
       onTap: () async {
         final picked = await showDatePicker(
@@ -872,11 +819,11 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.slate50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.borderLight),
         ),
         child: Row(
           children: [
@@ -887,12 +834,12 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                   fontSize: 13,
                   color: value != null
                       ? AppColors.textPrimary
-                      : AppColors.slate400,
+                      : AppColors.textTertiary,
                 ),
               ),
             ),
-            Icon(Icons.calendar_today_rounded,
-                size: 14, color: AppColors.slate400),
+            const Icon(Icons.calendar_today_rounded,
+                size: 14, color: AppColors.textTertiary),
           ],
         ),
       ),
@@ -1141,89 +1088,112 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     html.window.print();
   }
 
-  Widget _buildSelectionBar(
+  Widget _buildFloatingSelectionBar(
     BuildContext context,
     AsyncValue<AnnouncementsState> announcementsAsync,
   ) {
     final count = _selectedIds.length;
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        border: Border(bottom: BorderSide(color: AppColors.primary.withOpacity(0.2))),
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Sélectionnés',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Actions
+            _buildSelectionAction(
+              Icons.push_pin_outlined,
+              'Épingler',
+              Colors.white70,
+              () => _bulkPin(true),
+            ),
+            _buildSelectionAction(
+              Icons.priority_high,
+              'Important',
+              Colors.white70,
+              () => _bulkImportant(true),
+            ),
+            _buildSelectionAction(
+              Icons.delete_outline,
+              'Supprimer',
+              const Color(0xFFFCA5A5),
+              _bulkDeleteConfirm,
+            ),
+            // Close button
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: _exitSelectionMode,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: _exitSelectionMode,
-            tooltip: 'Annuler',
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '$count sélectionné(s)',
-            style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 15),
-          ),
-          const Spacer(),
-          OutlinedButton.icon(
-            onPressed: count == 0 ? null : () => _bulkPin(true),
-            icon: const Icon(Icons.push_pin, size: 16),
-            label: const Text('Épingler'),
-            style: OutlinedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: count == 0 ? null : () => _bulkPin(false),
-            icon: const Icon(Icons.push_pin_outlined, size: 16),
-            label: const Text('Désépingler'),
-            style: OutlinedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed:
-                count == 0 ? null : () => _bulkImportant(true),
-            icon: const Icon(Icons.priority_high, size: 16),
-            label: const Text('Important'),
-            style: OutlinedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: count == 0 ? null : _bulkDeleteConfirm,
-            icon: const Icon(Icons.delete, size: 16),
-            label: const Text('Supprimer'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: AppColors.textOnPrimary,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-              elevation: 0,
-            ),
-          ),
-        ],
+    );
+  }
+
+  Widget _buildSelectionAction(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: color)),
+          ],
+        ),
       ),
     );
   }
@@ -1584,7 +1554,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
           borderRadius: BorderRadius.circular(16),
           child: Column(
             children: [
-              if (_selectionMode) _buildSelectAllBar(list),
+              _buildSelectAllBar(list),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -1689,11 +1659,11 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         _selectedIds.length == list.length && list.isNotEmpty;
     return Container(
       padding:
-          const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.slate50,
         border: Border(
-            bottom: BorderSide(color: AppColors.border)),
+            bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
       ),
       child: Row(
         children: [
@@ -1702,21 +1672,29 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
             tristate:
                 _selectedIds.isNotEmpty && !allSelected,
             onChanged: (_) => _selectAll(list),
-            activeColor: AppColors.primary,
+            activeColor: const Color(0xFF655DD5),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4)),
           ),
-          Text(
-            allSelected
-                ? 'Tout désélectionner'
-                : 'Tout sélectionner',
-            style: TextStyle(
-                color: AppColors.slate700, fontSize: 13),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () => _selectAll(list),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Text(
+                allSelected
+                    ? 'Tout désélectionner'
+                    : 'Tout sélectionner',
+                style: const TextStyle(
+                    color: AppColors.slate700, fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ),
           ),
           const Spacer(),
           Text(
             '${list.length} annonce(s)',
-            style: TextStyle(
+            style: const TextStyle(
                 color: AppColors.slate500, fontSize: 12),
           ),
         ],
@@ -1748,13 +1726,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
       final weeks = (diff.inDays / 7).floor();
       return 'Il y a $weeks sem.';
     }
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    return DateFormat('d MMM yyyy', 'fr_FR').format(dt);
   }
 
   Widget _buildAnnouncementCard(AnnouncementModel a) {
     final typeInfo = _getTypeInfo(a.announcementType);
     final isSelected = _selectedIds.contains(a.id);
-    final dateStr = '${a.createdAt.day.toString().padLeft(2, '0')}/${a.createdAt.month.toString().padLeft(2, '0')}/${a.createdAt.year}';
+    final dateStr = DateFormat('d MMM yyyy', 'fr_FR').format(a.createdAt);
     final timeAgoStr = _formatTimeAgo(a.createdAt);
 
     String? studentTarget;
@@ -1776,6 +1754,17 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
       }
     }
     final isStudentMsg = a.scope == 'student' || studentTarget != null || (_tabController.index == 3);
+    final targetStudentId = a.payload['target_student_id']?.toString() ?? a.payload['student_id']?.toString();
+    final studentInfo = (studentTarget != null ? _studentLookupByName[studentTarget.toLowerCase().trim()] : null) ??
+        (targetStudentId != null ? _studentLookupById[targetStudentId] : null);
+    final studentPhotoUrl = studentInfo?['photo_url']?.toString() ??
+        a.payload['student_photo_url']?.toString() ??
+        a.payload['photo_url']?.toString() ??
+        a.payload['student']?['photo_url']?.toString();
+    final studentGender = studentInfo?['gender']?.toString() ??
+        a.payload['student_gender']?.toString() ??
+        a.payload['gender']?.toString() ??
+        a.payload['student']?['gender']?.toString();
 
     final bool hasAttachments = a.hasAttachment ||
         (a.payload['attachments'] is List && (a.payload['attachments'] as List).isNotEmpty) ||
@@ -1787,14 +1776,14 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: isSelected
-            ? AppColors.primarySoft
+            ? const Color(0xFFF5F3FF)
             : AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isSelected
-              ? AppColors.primary
+              ? const Color(0xFFDDD6FE)
               : AppColors.border,
-          width: isSelected ? 1.5 : 1,
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -1818,31 +1807,36 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_selectionMode) ...[
-                Checkbox(
-                  value: isSelected,
-                  onChanged: (_) => _toggleSelection(a.id),
-                  activeColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => _toggleSelection(a.id),
+                    activeColor: const Color(0xFF655DD5),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
+                  ),
                 ),
                 const SizedBox(width: 8),
-              ],
-              // Type icon rounded square
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: typeInfo.color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                // Type icon rounded square
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: typeInfo.color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(typeInfo.icon,
+                        color: typeInfo.color, size: 15),
+                  ),
                 ),
-                child: Icon(typeInfo.icon,
-                    color: typeInfo.color, size: 15),
-              ),
-              const SizedBox(width: 14),
+                const SizedBox(width: 14),
               // Content
               Expanded(
                 child: Column(
@@ -1884,23 +1878,26 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.person_outline, size: 12, color: Color(0xFF475569)),
-                                const SizedBox(width: 4),
+                                UserAvatar(
+                                  name: studentTarget,
+                                  photoUrl: studentPhotoUrl,
+                                  gender: studentGender,
+                                  radius: 9,
+                                ),
+                                const SizedBox(width: 6),
                                 Text(
-                                  a.className != null && a.className!.isNotEmpty
-                                      ? '$studentTarget • ${a.className}'
-                                      : studentTarget,
+                                  studentTarget,
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF334155),
+                                    color: Color(0xFF0F172A),
                                   ),
                                 ),
                               ],
@@ -1922,50 +1919,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF15803D)),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: typeInfo.color.withOpacity(0.08),
-                            borderRadius:
-                                BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            typeInfo.label,
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: typeInfo.color),
-                          ),
-                        ),
-                        if (hasAttachments) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 9, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3E8FF),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.attach_file_rounded,
-                                    size: 12, color: Color(0xFF9333EA)),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Pièce jointe',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF9333EA),
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
                         ],
@@ -2009,6 +1962,37 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                                 color: AppColors.slate500,
                                 height: 1.5),
                           ),
+                    if (hasAttachments) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E8FF),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.attach_file_rounded,
+                                    size: 12, color: Color(0xFF9333EA)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Pièce jointe',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF9333EA),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -2104,6 +2088,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
             ],
           ),
         ),
+          ),
       ),
     );
   }
@@ -2156,7 +2141,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
   }
 
   String _formatDate(DateTime dt) {
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    return DateFormat('d MMM yyyy', 'fr_FR').format(dt);
   }
 
   void _handleAction(String action, AnnouncementModel a) {
@@ -2376,6 +2361,41 @@ class _AnnouncementComposerDialogState
   final List<String> _attachmentsToDelete = []; // IDs to delete on save
   List<Map<String, dynamic>> _classes = [];
   bool _classesLoading = true;
+
+  Map<String, dynamic>? _loadedStudentInfo;
+
+  Future<void> _loadStudentInfo(AnnouncementModel? a) async {
+    if (a == null) return;
+    try {
+      final targetId = a.targetStudentId ??
+          a.payload['target_student_id']?.toString() ??
+          a.payload['student_id']?.toString();
+      if (targetId != null && targetId.isNotEmpty) {
+        final res = await SupabaseConfig.client
+            .from('users')
+            .select('id, full_name, photo_url, gender, student_code, enrollments:enrollments(class_id, classes:classes(name, niveau_id, niveaux:niveaux(name)))')
+            .eq('id', targetId)
+            .maybeSingle();
+        if (res != null && mounted) {
+          setState(() => _loadedStudentInfo = res);
+          return;
+        }
+      }
+      final name = a.payload['student_name']?.toString() ??
+          a.payload['target_student_name']?.toString() ??
+          a.payload['student']?['full_name']?.toString();
+      if (name != null && name.trim().isNotEmpty) {
+        final res = await SupabaseConfig.client
+            .from('users')
+            .select('id, full_name, photo_url, gender, student_code, enrollments:enrollments(class_id, classes:classes(name, niveau_id, niveaux:niveaux(name)))')
+            .ilike('full_name', '%${name.trim()}%')
+            .maybeSingle();
+        if (res != null && mounted) {
+          setState(() => _loadedStudentInfo = res);
+        }
+      }
+    } catch (_) {}
+  }
 
   @override
   void initState() {
@@ -2606,10 +2626,14 @@ class _AnnouncementComposerDialogState
     if (a != null) {
       _scope = a.scope;
       _selectedClassId = a.targetClassId;
+      _selectedStudentId = a.targetStudentId ??
+          a.payload['target_student_id']?.toString() ??
+          a.payload['student_id']?.toString();
       _announcementType = a.announcementType;
       _senderType = a.senderType;
       _isPinned = a.isPinned;
       _isImportant = a.isImportant;
+      _loadStudentInfo(a);
       // Load existing attachments unconditionally
       _loadExistingAttachments(a.id);
     } else {
@@ -3055,8 +3079,7 @@ class _AnnouncementComposerDialogState
       confirmText: 'OK',
     );
     if (picked != null) {
-      ctrl.text =
-          '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+      ctrl.text = DateFormat('d MMM yyyy', 'fr_FR').format(picked);
       setState(() {});
     }
   }
@@ -4016,19 +4039,157 @@ class _AnnouncementComposerDialogState
     );
   }
 
+  String _getFullNiveauName(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return '';
+    final lower = s.toLowerCase();
+    if (lower.startsWith('1ère') || lower.startsWith('1ere') || lower == '1') {
+      return '1ère année secondaire';
+    } else if (lower.startsWith('2ème') || lower.startsWith('2eme') || lower == '2') {
+      return '2ème année secondaire';
+    } else if (lower.startsWith('3ème') || lower.startsWith('3eme') || lower == '3') {
+      return '3ème année secondaire';
+    } else if (lower.startsWith('4ème') || lower.startsWith('4eme') || lower.contains('bac') || lower == '4') {
+      return 'Baccalauréat';
+    } else if (lower.startsWith('7')) {
+      return '7ème année de base';
+    } else if (lower.startsWith('8')) {
+      return '8ème année de base';
+    } else if (lower.startsWith('9')) {
+      return '9ème année de base';
+    }
+    return s;
+  }
+
   Widget _buildScopeBadge() {
+    if (_scope == 'student') {
+      final a = widget.announcement;
+      String studentName = 'Élève';
+      final payloadName = a?.payload['student_name']?.toString() ??
+          a?.payload['target_student_name']?.toString() ??
+          a?.payload['student']?['full_name']?.toString() ??
+          a?.payload['student']?['name']?.toString();
+      if (payloadName != null && payloadName.trim().isNotEmpty) {
+        studentName = payloadName.trim();
+      } else if (a != null) {
+        final match = RegExp(r'\*\*@([^*]+)\*\*').firstMatch(a.content);
+        if (match != null && match.group(1)?.trim().isNotEmpty == true) {
+          studentName = match.group(1)!.trim();
+        } else {
+          final match2 = RegExp(r'@([A-Za-zÀ-ÿ\s\-]+)').firstMatch(a.content);
+          if (match2 != null && match2.group(1)?.trim().isNotEmpty == true) {
+            studentName = match2.group(1)!.trim();
+          }
+        }
+      }
+
+      final studentPhoto = _loadedStudentInfo?['photo_url']?.toString() ??
+          a?.payload['student_photo_url']?.toString() ??
+          a?.payload['photo_url']?.toString() ??
+          a?.payload['student']?['photo_url']?.toString();
+      final studentGender = _loadedStudentInfo?['gender']?.toString() ??
+          a?.payload['student_gender']?.toString() ??
+          a?.payload['gender']?.toString() ??
+          a?.payload['student']?['gender']?.toString();
+
+      String? className = a?.className;
+      String? rawLevel = a?.payload['student_level']?.toString() ??
+          a?.payload['level']?.toString() ??
+          a?.payload['niveau']?.toString();
+
+      final enrollments = _loadedStudentInfo?['enrollments'] as List?;
+      if (enrollments != null && enrollments.isNotEmpty) {
+        final classInfo = enrollments.first['classes'] as Map<String, dynamic>?;
+        if (classInfo != null) {
+          if (className == null || className.isEmpty) {
+            className = classInfo['name']?.toString();
+          }
+          final nivInfo = classInfo['niveaux'] as Map<String, dynamic>?;
+          if (nivInfo != null && nivInfo['name'] != null) {
+            rawLevel = nivInfo['name'].toString();
+          }
+        }
+      }
+
+      if ((rawLevel == null || rawLevel.isEmpty) && className != null && className.isNotEmpty) {
+        final matchedClass = _classes.firstWhere(
+          (c) => c['name']?.toString() == className,
+          orElse: () => {},
+        );
+        if (matchedClass.isNotEmpty) {
+          final niv = matchedClass['niveaux'] as Map<String, dynamic>?;
+          if (niv != null && niv['name'] != null) {
+            rawLevel = niv['name'].toString();
+          } else if (matchedClass['niveau_name'] != null) {
+            rawLevel = matchedClass['niveau_name'].toString();
+          }
+        }
+      }
+
+      if ((rawLevel == null || rawLevel.isEmpty) && className != null && className.isNotEmpty) {
+        rawLevel = className;
+      }
+
+      final niveauName = (rawLevel != null && rawLevel.isNotEmpty) ? _getFullNiveauName(rawLevel) : '';
+
+      final classAndNiveau = [
+        if (className != null && className.isNotEmpty) className,
+        if (niveauName.isNotEmpty) niveauName,
+      ].join(' • ');
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            UserAvatar(
+              name: studentName,
+              photoUrl: studentPhoto,
+              gender: studentGender,
+              radius: 18,
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  studentName,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (classAndNiveau.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    classAndNiveau,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     final Color color;
     final IconData icon;
     final String label;
     final String? extra;
 
     switch (_scope) {
-      case 'student':
-        color = const Color(0xFF655DD5);
-        icon = Icons.person_outline_rounded;
-        label = 'Message élève';
-        extra = widget.announcement?.className;
-        break;
       case 'class':
         color = const Color(0xFF0EA5E9);
         icon = Icons.groups_outlined;
@@ -4394,7 +4555,7 @@ class _AnnouncementComposerDialogState
         return FutureBuilder<List<Map<String, dynamic>>>(
           future: SupabaseConfig.client
               .from('users')
-              .select('id, full_name, phone, student_code, photo_url, gender')
+              .select('id, full_name, phone, student_code, photo_url, gender, enrollments:enrollments(class_id, classes:classes(name, niveau_id, niveaux:niveaux(name)))')
               .eq('role', 'student')
               .order('full_name'),
           builder: (context, snapshot) {
@@ -4512,19 +4673,15 @@ class _AnnouncementComposerDialogState
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _formFieldLabel('ÉLÈVE DESTINATAIRE *'),
-                    const SizedBox(height: 2),
-
                     // Selected student card
                     if (selectedStudent != null) ...[
                       Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [AppColors.secondary.withOpacity(0.08), AppColors.secondary.withOpacity(0.03)],
-                          ),
-                          borderRadius: BorderRadius.circular(14),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                         ),
                         child: Row(
                           children: [
@@ -4532,42 +4689,59 @@ class _AnnouncementComposerDialogState
                               name: selectedStudent['full_name'] ?? '?',
                               photoUrl: selectedStudent['photo_url'] as String?,
                               gender: selectedStudent['gender'] as String?,
-                              radius: 21,
+                              radius: 18,
                             ),
-                            const SizedBox(width: 14),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     selectedStudent['full_name'] ?? 'Élève sélectionné',
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.w700,
-                                      color: AppColors.secondary,
+                                      color: Color(0xFF111827),
                                       fontSize: 14,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      if ((selectedStudent['student_code'] ?? '').toString().isNotEmpty) ...[
-                                        Icon(Icons.badge_outlined, size: 12, color: AppColors.secondary.withOpacity(0.6)),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          selectedStudent['student_code'] ?? '',
-                                          style: TextStyle(fontSize: 11, color: AppColors.secondary.withOpacity(0.7)),
+                                  Builder(
+                                    builder: (_) {
+                                      final enrollments = selectedStudent?['enrollments'] as List?;
+                                      String? sClassName;
+                                      String? sNiveauName;
+                                      if (enrollments != null && enrollments.isNotEmpty) {
+                                        final classInfo = enrollments.first['classes'] as Map<String, dynamic>?;
+                                        sClassName = classInfo?['name'] as String?;
+                                        final nivInfo = classInfo?['niveaux'] as Map<String, dynamic>?;
+                                        sNiveauName = nivInfo?['name'] as String?;
+                                      }
+                                      if ((sNiveauName == null || sNiveauName.isEmpty) && sClassName != null && sClassName.isNotEmpty) {
+                                        sNiveauName = _getFullNiveauName(sClassName);
+                                      } else if (sNiveauName != null && sNiveauName.isNotEmpty) {
+                                        sNiveauName = _getFullNiveauName(sNiveauName);
+                                      }
+                                      final parts = [
+                                        if (sClassName != null && sClassName.isNotEmpty) sClassName,
+                                        if (sNiveauName != null && sNiveauName.isNotEmpty) sNiveauName,
+                                      ];
+                                      final subtext = parts.isNotEmpty
+                                          ? parts.join(' • ')
+                                          : (selectedStudent?['student_code'] ?? '').toString();
+
+                                      if (subtext.isEmpty) return const SizedBox.shrink();
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          subtext,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF64748B),
+                                          ),
                                         ),
-                                        const SizedBox(width: 10),
-                                      ],
-                                      if ((selectedStudent['phone'] ?? '').toString().isNotEmpty) ...[
-                                        Icon(Icons.phone_outlined, size: 12, color: AppColors.secondary.withOpacity(0.6)),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          selectedStudent['phone'] ?? '',
-                                          style: TextStyle(fontSize: 11, color: AppColors.secondary.withOpacity(0.7)),
-                                        ),
-                                      ],
-                                    ],
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
@@ -4576,13 +4750,13 @@ class _AnnouncementComposerDialogState
                               mouseCursor: SystemMouseCursors.click,
                               onTap: () => setState(() => _selectedStudentId = null),
                               borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.secondary.withOpacity(0.1),
-                                  shape: BoxShape.circle,
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: Color(0xFF64748B),
                                 ),
-                                child: Icon(Icons.close, size: 16, color: AppColors.secondary),
                               ),
                             ),
                           ],

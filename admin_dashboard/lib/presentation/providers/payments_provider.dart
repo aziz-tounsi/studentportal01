@@ -540,7 +540,7 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
 
         // Build student summaries — keep only the latest plan per enrollment per category
         // Sort by createdAt desc so the newest plan comes first
-        final sortedPlans = List<PaymentPlan>.from(filteredPlans)
+        final sortedPlans = List<PaymentPlan>.from(paymentPlans)
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
         final latestPlanByKey = <String, PaymentPlan>{};

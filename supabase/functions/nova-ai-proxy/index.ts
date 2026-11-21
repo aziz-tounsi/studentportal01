@@ -7,15 +7,15 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
 };
 
-// Priority candidate models for educational queries
+// Priority candidate models for educational queries (verified active free tier on OpenRouter)
 const CANDIDATE_MODELS = [
   'openrouter/free',
-  'google/gemma-2-9b-it:free',
-  'meta-llama/llama-3.2-3b-instruct:free',
-  'meta-llama/llama-3.1-8b-instruct:free',
-  'mistralai/mistral-7b-instruct:free',
-  'qwen/qwen-2.5-7b-instruct:free',
-  'deepseek/deepseek-chat',
+  'google/gemma-4-31b-it:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'liquid/lfm-3-1.7b:free',
+  'particle-ai/particle-1:free',
 ];
 
 const CORE_ASSISTANT_DIRECTIVES = `
@@ -87,6 +87,7 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY') ?? '';
+    const groqApiKey = Deno.env.get('GROQ_API_KEY') ?? '';
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
       return new Response(
@@ -95,9 +96,9 @@ serve(async (req) => {
       );
     }
 
-    if (!openRouterApiKey) {
+    if (!openRouterApiKey && !groqApiKey) {
       return new Response(
-        JSON.stringify({ error: 'Clé API OpenRouter non configurée sur le serveur.' }),
+        JSON.stringify({ error: 'Clé API IA non configurée sur le serveur (OPENROUTER_API_KEY ou GROQ_API_KEY manquante).' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -126,46 +127,76 @@ serve(async (req) => {
     const studentId = callerUser.id;
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // 2. Fetch student profile & school
+    // 2. Fetch student profile & school (with resilient fallbacks)
     const { data: userProfile, error: profileErr } = await adminClient
       .from('users')
       .select('id, school_id, full_name, role, student_code, schools:schools(name)')
       .eq('id', studentId)
-      .single();
+      .maybeSingle();
 
-    if (profileErr || !userProfile || !userProfile.school_id) {
-      return new Response(
-        JSON.stringify({ error: 'Profil étudiant introuvable.' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    let schoolId = userProfile?.school_id;
+    let studentName = userProfile?.full_name || callerUser.user_metadata?.full_name || callerUser.email?.split('@')[0] || 'Élève';
+    let schoolName = (userProfile?.schools as any)?.name;
+
+    // Resilient fallback 1: Check enrollment if school_id missing on user record
+    if (!schoolId) {
+      const { data: enrollment } = await adminClient
+        .from('enrollments')
+        .select('school_id, schools:schools(name)')
+        .eq('user_id', studentId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (enrollment?.school_id) {
+        schoolId = enrollment.school_id;
+        schoolName = enrollment.schools?.name ?? schoolName;
+      }
     }
 
-    const schoolId = userProfile.school_id;
-    const studentName = userProfile.full_name;
-    const schoolName = (userProfile.schools as any)?.name ?? 'Établissement';
+    // Resilient fallback 2: Default to first active school
+    if (!schoolId) {
+      const { data: defaultSchool } = await adminClient
+        .from('schools')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
-    // 3. Enforce AI Quota & Limits
-    const { data: limitCheck, error: limitErr } = await adminClient.rpc('check_student_daily_ai_limit', {
-      p_student_id: studentId,
-      p_school_id: schoolId,
-    });
-
-    if (limitErr || !limitCheck?.allowed) {
-      const reason = limitCheck?.reason ?? 'limit_exceeded';
-      let message = "L'accès à l'assistant IA est temporairement indisponible.";
-
-      if (reason === 'daily_limit_reached') {
-        message = `Tu as atteint ta limite quotidienne de ${limitCheck?.daily_limit ?? 30} messages IA. Rendez-vous demain ! ⏳`;
-      } else if (reason === 'school_quota_exceeded' || reason === 'school_kill_switch') {
-        message = "Le quota IA de votre établissement est épuisé pour ce mois. Veuillez contacter l'administration.";
-      } else if (reason === 'global_kill_switch') {
-        message = "Le service IA NOVA est temporairement en maintenance. Merci de réessayer plus tard.";
+      if (defaultSchool) {
+        schoolId = defaultSchool.id;
+        schoolName = defaultSchool.name;
       }
+    }
 
-      return new Response(
-        JSON.stringify({ error: message, reason }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    schoolName = schoolName ?? 'Établissement';
+
+    // 3. Enforce AI Quota & Limits (fail-open if RPC has an issue, only block if explicitly disallowed)
+    try {
+      const { data: limitCheck, error: limitErr } = await adminClient.rpc('check_student_daily_ai_limit', {
+        p_student_id: studentId,
+        p_school_id: schoolId,
+      });
+
+      if (!limitErr && limitCheck && limitCheck.allowed === false) {
+        const reason = limitCheck.reason ?? 'limit_exceeded';
+        let message = "L'accès à l'assistant IA est temporairement indisponible.";
+
+        if (reason === 'daily_limit_reached') {
+          message = `Tu as atteint ta limite quotidienne de ${limitCheck.daily_limit ?? 30} messages IA. Rendez-vous demain ! ⏳`;
+        } else if (reason === 'school_quota_exceeded' || reason === 'school_kill_switch') {
+          message = "Le quota IA de votre établissement est épuisé pour ce mois. Veuillez contacter l'administration.";
+        } else if (reason === 'global_kill_switch') {
+          message = "Le service IA NOVA est temporairement en maintenance. Merci de réessayer plus tard.";
+        }
+
+        return new Response(
+          JSON.stringify({ error: message, reason }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (quotaRpcErr) {
+      console.warn('check_student_daily_ai_limit check failed to execute, failing open:', quotaRpcErr);
     }
 
     // 4. Parse request payload
@@ -215,7 +246,7 @@ serve(async (req) => {
         .join('\n');
 
       contextStr = `
-- Élève : ${studentName} (Matricule : ${userProfile.student_code ?? 'N/A'})
+- Élève : ${studentName} (Matricule : ${userProfile?.student_code ?? 'N/A'})
 - Établissement : ${schoolName}
 - Classe : ${className}
 - Notes récentes :
@@ -267,45 +298,86 @@ ${contextStr}
     let totalTokens = 0;
     let openRouterError: string | null = null;
 
-    for (const candidate of modelsToTry) {
-      try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openRouterApiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://pythagore.tn',
-            'X-Title': 'Nova Educational AI Proxy',
-          },
-          body: JSON.stringify({
-            model: candidate,
-            messages,
-            temperature: 0.5,
-            max_tokens: 1200,
-            reasoning: { effort: 'none' },
-            include_reasoning: false,
-          }),
-        });
+    // 7a. Try OpenRouter candidate models
+    if (openRouterApiKey) {
+      for (const candidate of modelsToTry) {
+        try {
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openRouterApiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://pythagore.tn',
+              'X-Title': 'Nova Educational AI Proxy',
+            },
+            body: JSON.stringify({
+              model: candidate,
+              messages,
+              temperature: 0.5,
+              max_tokens: 1000,
+            }),
+          });
 
-        const data = await response.json();
+          const data = await response.json();
+          const firstChoice = data?.choices?.[0];
+          const rawContent = firstChoice?.message?.content ?? firstChoice?.message?.reasoning;
 
-        if (response.ok && data?.choices?.[0]?.message?.content) {
-          completionReply = data.choices[0].message.content;
-          usedModel = candidate;
-          promptTokens = data.usage?.prompt_tokens ?? Math.ceil(systemPrompt.length / 4);
-          completionTokens = data.usage?.completion_tokens ?? Math.ceil(completionReply.length / 4);
-          totalTokens = data.usage?.total_tokens ?? (promptTokens + completionTokens);
-          break;
-        } else {
-          openRouterError = data?.error?.message ?? JSON.stringify(data?.error ?? 'Model error');
+          if (response.ok && rawContent && rawContent.trim().length > 0) {
+            completionReply = rawContent.trim();
+            usedModel = candidate;
+            promptTokens = data.usage?.prompt_tokens ?? Math.ceil(systemPrompt.length / 4);
+            completionTokens = data.usage?.completion_tokens ?? Math.ceil(completionReply.length / 4);
+            totalTokens = data.usage?.total_tokens ?? (promptTokens + completionTokens);
+            break;
+          } else {
+            openRouterError = data?.error?.message ?? JSON.stringify(data?.error ?? 'Model error');
+          }
+        } catch (err) {
+          openRouterError = String(err);
+          continue;
         }
-      } catch (err) {
-        openRouterError = String(err);
-        continue;
+      }
+    }
+
+    // 7b. Resilient Provider Fallback: Try Groq if OpenRouter failed or no OpenRouter key
+    if (!completionReply && groqApiKey) {
+      const groqCandidates = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+      for (const candidate of groqCandidates) {
+        try {
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${groqApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: candidate,
+              messages,
+              temperature: 0.5,
+              max_tokens: 1200,
+            }),
+          });
+
+          const data = await response.json();
+          if (response.ok && data?.choices?.[0]?.message?.content) {
+            completionReply = data.choices[0].message.content;
+            usedModel = `groq/${candidate}`;
+            promptTokens = data.usage?.prompt_tokens ?? Math.ceil(systemPrompt.length / 4);
+            completionTokens = data.usage?.completion_tokens ?? Math.ceil(completionReply.length / 4);
+            totalTokens = data.usage?.total_tokens ?? (promptTokens + completionTokens);
+            break;
+          }
+        } catch (gErr) {
+          console.warn('Groq model failed:', candidate, gErr);
+        }
       }
     }
 
     if (!completionReply) {
+      const lowerErr = (openRouterError || '').toLowerCase();
+      if (lowerErr.includes('user not found') || lowerErr.includes('unauthorized') || lowerErr.includes('invalid api key')) {
+        throw new Error("Clé API OpenRouter invalide ou révoquée (User not found). Veuillez mettre à jour la clé OPENROUTER_API_KEY dans les secrets Supabase.");
+      }
       throw new Error(openRouterError || 'Tous les modèles IA sont momentanément indisponibles.');
     }
 

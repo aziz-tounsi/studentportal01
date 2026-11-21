@@ -62,6 +62,26 @@ class GradeLevelsState {
     return result..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
   }
 
+  List<SectionModel> get filteredSections {
+    if (searchQuery.isEmpty) return sections;
+    final q = searchQuery.toLowerCase();
+    return sections.where((s) =>
+      s.name.toLowerCase().contains(q) ||
+      s.code.toLowerCase().contains(q) ||
+      (s.description?.toLowerCase().contains(q) ?? false)
+    ).toList();
+  }
+
+  List<ExamTypeModel> get filteredExamTypes {
+    if (searchQuery.isEmpty) return examTypes;
+    final q = searchQuery.toLowerCase();
+    return examTypes.where((e) =>
+      e.name.toLowerCase().contains(q) ||
+      (e.code?.toLowerCase().contains(q) ?? false) ||
+      (e.description?.toLowerCase().contains(q) ?? false)
+    ).toList();
+  }
+
   GradeLevelsState copyWith({
     List<GradeLevelModel>? gradeLevels,
     List<SectionModel>? sections,

@@ -343,7 +343,7 @@ class UserDetailScreen extends ConsumerWidget {
                     if (user['date_of_birth'] != null)
                       _InfoChip(
                         icon: Icons.cake,
-                        label: DateFormat('dd/MM/yyyy').format(DateTime.parse(user['date_of_birth'])),
+                        label: DateFormat('d MMM yyyy', 'fr_FR').format(DateTime.parse(user['date_of_birth'])),
                       ),
                   ],
                 ),
@@ -364,7 +364,7 @@ class UserDetailScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'Créé le ${DateFormat('dd/MM/yyyy').format(DateTime.parse(user['created_at']))}',
+                'Créé le ${DateFormat('d MMM yyyy', 'fr_FR').format(DateTime.parse(user['created_at']))}',
                 style: TextStyle(color: AppColors.slate500, fontSize: 12),
               ),
               const SizedBox(height: 4),
@@ -837,7 +837,7 @@ class _SuggestionListItem extends StatelessWidget {
                 Text(suggestion['subject'] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w500)),
                 if (createdAt != null)
                   Text(
-                    DateFormat('dd/MM/yyyy HH:mm').format(createdAt),
+                    DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR').format(createdAt),
                     style: TextStyle(color: AppColors.slate500, fontSize: 11),
                   ),
               ],

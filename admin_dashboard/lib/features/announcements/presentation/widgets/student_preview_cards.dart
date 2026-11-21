@@ -39,7 +39,7 @@ class StudentNoteInfoPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
+    final dateFormat = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
     final theme = Theme.of(context);
 
     return Container(
@@ -400,7 +400,7 @@ class StudentMessagePreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
+    final dateFormat = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
     final theme = Theme.of(context);
     final displaySender = senderLabel ?? 'Administration';
     final avatarText = senderAvatarText ?? (displaySender.isNotEmpty ? displaySender[0].toUpperCase() : 'A');

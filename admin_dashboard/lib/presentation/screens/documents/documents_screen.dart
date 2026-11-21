@@ -14,9 +14,11 @@ import '../../../core/config/supabase_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/class_model.dart';
+import '../../../data/models/academic_models.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/classes_provider.dart';
 import '../../providers/documents_provider.dart';
+import '../../providers/grade_levels_provider.dart';
 import '../../providers/semesters_provider.dart';
 import '../../providers/users_provider.dart';
 import '../../widgets/admin_sidebar.dart';
@@ -59,8 +61,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   // Advanced Filters
   String? _filterType;
   String? _filterCategory;
-  int? _filterSemester;
+  String? _filterNiveauId;
+  String? _filterSectionId;
   String? _filterClassId;
+  int? _filterSemester;
   String? _filterFileType;
   DateTime? _filterDateFrom;
   DateTime? _filterDateTo;
@@ -94,8 +98,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   bool get _hasActiveFilters =>
       _filterType != null ||
       _filterCategory != null ||
-      _filterSemester != null ||
+      _filterNiveauId != null ||
+      _filterSectionId != null ||
       _filterClassId != null ||
+      _filterSemester != null ||
       _filterFileType != null ||
       _filterDateFrom != null ||
       _filterDateTo != null;
@@ -104,8 +110,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     setState(() {
       _filterType = null;
       _filterCategory = null;
-      _filterSemester = null;
+      _filterNiveauId = null;
+      _filterSectionId = null;
       _filterClassId = null;
+      _filterSemester = null;
       _filterFileType = null;
       _filterDateFrom = null;
       _filterDateTo = null;
@@ -175,7 +183,17 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         }
       }
       if (_filterSemester != null && d.semester != _filterSemester) return false;
-      if (_filterClassId != null && d.classId != _filterClassId) return false;
+      if (_filterClassId != null) {
+        if (d.classId != _filterClassId) return false;
+      } else if (_filterSectionId != null) {
+        final classes = ref.read(classesProvider).value?.classes ?? <ClassModel>[];
+        final sectionClassIds = classes.where((c) => c.sectionId == _filterSectionId).map((c) => c.id).toSet();
+        if (d.classId == null || !sectionClassIds.contains(d.classId)) return false;
+      } else if (_filterNiveauId != null) {
+        final classes = ref.read(classesProvider).value?.classes ?? <ClassModel>[];
+        final gradeClassIds = classes.where((c) => c.gradeLevelId == _filterNiveauId).map((c) => c.id).toSet();
+        if (d.classId == null || !gradeClassIds.contains(d.classId)) return false;
+      }
       if (_filterFileType != null) {
         final ext = (d.fileType ?? '').toUpperCase();
         if (_filterFileType == 'PDF' && !ext.contains('PDF')) return false;
@@ -230,7 +248,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       'Date de création',
       'Lien fichier',
     ]);
-    final df = DateFormat('dd/MM/yyyy HH:mm');
+    final df = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
     for (final d in docs) {
       rows.add([
         d.id,
@@ -1441,6 +1459,42 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         }),
       ));
     }
+    if (_filterNiveauId != null) {
+      final gradeLevels = ref.read(gradeLevelsProvider).value?.gradeLevels ?? <GradeLevelModel>[];
+      final gName = gradeLevels
+              .where((g) => g.id == _filterNiveauId)
+              .map((g) => g.name)
+              .firstOrNull ??
+          'Niveau';
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Niveau: $gName',
+        onRemove: () => setState(() {
+          _filterNiveauId = null;
+          _filterSectionId = null;
+          _filterClassId = null;
+          _currentPage = 1;
+        }),
+      ));
+    }
+    if (_filterSectionId != null) {
+      final gradeLevels = ref.read(gradeLevelsProvider).value?.gradeLevels ?? <GradeLevelModel>[];
+      final currentGrade = gradeLevels.where((g) => g.id == _filterNiveauId).firstOrNull;
+      final classes = ref.read(classesProvider).value?.classes ?? <ClassModel>[];
+      final sFromClass = classes.where((c) => c.sectionId == _filterSectionId).map((c) => c.sectionName).firstOrNull;
+      final sName = sFromClass ?? currentGrade?.sections
+              .where((s) => s.id == _filterSectionId)
+              .map((s) => s.name)
+              .firstOrNull ??
+          'Filière';
+      activeFilterChips.add(_buildActiveFilterChip(
+        label: 'Filière: $sName',
+        onRemove: () => setState(() {
+          _filterSectionId = null;
+          _filterClassId = null;
+          _currentPage = 1;
+        }),
+      ));
+    }
     if (_filterClassId != null) {
       final classes = ref.read(classesProvider).value?.classes ?? <ClassModel>[];
       final clsName = classes
@@ -1467,7 +1521,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     }
     if (_filterDateFrom != null) {
       activeFilterChips.add(_buildActiveFilterChip(
-        label: 'Du ${DateFormat('dd/MM').format(_filterDateFrom!)}',
+        label: 'Du ${DateFormat('d MMM', 'fr_FR').format(_filterDateFrom!)}',
         onRemove: () => setState(() {
           _filterDateFrom = null;
           _currentPage = 1;
@@ -1477,7 +1531,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     }
     if (_filterDateTo != null) {
       activeFilterChips.add(_buildActiveFilterChip(
-        label: 'Au ${DateFormat('dd/MM').format(_filterDateTo!)}',
+        label: 'Au ${DateFormat('d MMM', 'fr_FR').format(_filterDateTo!)}',
         onRemove: () => setState(() {
           _filterDateTo = null;
           _currentPage = 1;
@@ -1751,7 +1805,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   // TABLE ROW
   // ─────────────────────────────────────────────────────────────
   Widget _buildDocumentRow(Document d, bool isSelected) {
-    final df = DateFormat('dd/MM/yyyy HH:mm');
+    final df = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
     final formattedDate = df.format(d.createdAt);
     final ext = (d.fileType ?? 'PDF').toUpperCase();
 
@@ -2311,6 +2365,36 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   Widget _buildRightFilterDrawer(List<SemesterModel> semesters) {
     final classesState = ref.watch(classesProvider);
     final List<ClassModel> classes = classesState.value?.classes ?? <ClassModel>[];
+    final gradeLevelsState = ref.watch(gradeLevelsProvider);
+    final gradeLevels = gradeLevelsState.value?.gradeLevels ?? <GradeLevelModel>[];
+
+    final currentGrade = gradeLevels.where((g) => g.id == _filterNiveauId).firstOrNull;
+    final Map<String, String> sectionsForNiveau = {};
+    if (currentGrade != null) {
+      for (final c in classes) {
+        final matchesNiveau = c.gradeLevelId == currentGrade.id ||
+            c.gradeLevelName?.toLowerCase() == currentGrade.name.toLowerCase();
+        if (matchesNiveau && c.sectionId != null && c.sectionName != null) {
+          sectionsForNiveau[c.sectionId!] = c.sectionName!;
+        }
+      }
+      for (final s in currentGrade.sections) {
+        sectionsForNiveau[s.id] = s.name;
+      }
+    }
+    final hasSections = currentGrade != null && (currentGrade.hasSections || sectionsForNiveau.isNotEmpty);
+
+    List<ClassModel> filteredClasses;
+    if (_filterSectionId != null) {
+      filteredClasses = classes.where((c) {
+        if (_filterNiveauId != null && c.gradeLevelId != _filterNiveauId) return false;
+        return c.sectionId == _filterSectionId || c.sectionName == sectionsForNiveau[_filterSectionId];
+      }).toList();
+    } else if (_filterNiveauId != null) {
+      filteredClasses = classes.where((c) => c.gradeLevelId == _filterNiveauId).toList();
+    } else {
+      filteredClasses = classes;
+    }
 
     return Positioned.fill(
       child: Stack(
@@ -2460,6 +2544,61 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                           ),
                           const SizedBox(height: 20),
 
+                          // Niveau
+                          _buildFilterLabel('NIVEAU'),
+                          const SizedBox(height: 8),
+                          _buildFilterDropdown<String?>(
+                            value: _filterNiveauId,
+                            hint: 'Tous les niveaux',
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('Tous les niveaux'),
+                              ),
+                              ...gradeLevels.map(
+                                (g) => DropdownMenuItem(
+                                  value: g.id,
+                                  child: Text(g.name),
+                                ),
+                              ),
+                            ],
+                            onChanged: (v) => setState(() {
+                              _filterNiveauId = v;
+                              _filterSectionId = null;
+                              _filterClassId = null;
+                              _currentPage = 1;
+                            }),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Filière (conditional if niveau has sections)
+                          if (hasSections && sectionsForNiveau.isNotEmpty) ...[
+                            _buildFilterLabel('FILIÈRE'),
+                            const SizedBox(height: 8),
+                            _buildFilterDropdown<String?>(
+                              value: _filterSectionId,
+                              hint: 'Toutes les filières',
+                              items: [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('Toutes les filières'),
+                                ),
+                                ...sectionsForNiveau.entries.map(
+                                  (s) => DropdownMenuItem(
+                                    value: s.key,
+                                    child: Text(s.value),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) => setState(() {
+                                _filterSectionId = v;
+                                _filterClassId = null;
+                                _currentPage = 1;
+                              }),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+
                           // Classe concernée
                           _buildFilterLabel('CLASSE CONCERNÉE'),
                           const SizedBox(height: 8),
@@ -2471,7 +2610,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                                 value: null,
                                 child: Text('Toutes les classes'),
                               ),
-                              ...classes.map(
+                              ...filteredClasses.map(
                                 (c) => DropdownMenuItem(
                                   value: c.id,
                                   child: Text(c.name),
@@ -2723,7 +2862,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             Expanded(
               child: Text(
                 value != null
-                    ? DateFormat('dd/MM/yyyy').format(value)
+                    ? DateFormat('d MMM yyyy', 'fr_FR').format(value)
                     : hint,
                 style: TextStyle(
                   fontSize: 13,

@@ -41,38 +41,6 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
 
   bool get isEditing => widget.user != null;
 
-  // Password strength calculation
-  int get _passwordStrength {
-    final pwd = _passwordController.text;
-    if (pwd.isEmpty) return 0;
-    int score = 0;
-    if (pwd.length >= 8) score++;
-    if (pwd.length >= 12) score++;
-    if (RegExp(r'[A-Z]').hasMatch(pwd) && RegExp(r'[a-z]').hasMatch(pwd)) score++;
-    if (RegExp(r'[0-9]').hasMatch(pwd)) score++;
-    if (RegExp(r'[!@#\$%&*]').hasMatch(pwd)) score++;
-    return score.clamp(0, 4);
-  }
-
-  String get _passwordStrengthLabel {
-    switch (_passwordStrength) {
-      case 0: return 'Très faible';
-      case 1: return 'Faible';
-      case 2: return 'Moyen';
-      case 3: return 'Fort';
-      default: return 'Très fort';
-    }
-  }
-
-  Color get _passwordStrengthColor {
-    switch (_passwordStrength) {
-      case 0: return AppColors.error;
-      case 1: return AppColors.warning;
-      case 2: return AppColors.warning;
-      case 3: return AppColors.primary;
-      default: return AppColors.success;
-    }
-  }
 
   @override
   void initState() {
@@ -256,19 +224,7 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                       // ── SECTION: SCOLARITÉ ──
                       _buildSectionHeader(Icons.school_outlined, 'Scolarité'),
                       const SizedBox(height: 20),
-                      _buildPremiumDropdown<String>(
-                        label: 'Rôle',
-                        value: _selectedRole,
-                        items: const [
-                          DropdownMenuItem(value: 'student', child: Text('Étudiant')),
-                          DropdownMenuItem(value: 'staff', child: Text('Manager')),
-                        ],
-                        onChanged: isEditing ? null : (v) {
-                          if (v != null) setState(() => _selectedRole = v);
-                        },
-                      ),
                       if (_selectedRole == 'student') ...[
-                        const SizedBox(height: 16),
                         _buildPremiumDropdown<String?>(
                           label: 'Niveau',
                           value: _selectedNiveauCode,
@@ -290,19 +246,7 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                               const DropdownMenuItem(value: null, child: Text('Sélectionner une section')),
                               ...sectionsList.map((s) => DropdownMenuItem(
                                     value: s['code'] as String,
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 10, height: 10,
-                                          margin: const EdgeInsets.only(right: 8),
-                                          decoration: BoxDecoration(
-                                            color: _parseColor(s['color'] as String?),
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        Text(s['name'] as String),
-                                      ],
-                                    ),
+                                    child: Text(s['name'] as String),
                                   )),
                             ],
                             onChanged: (v) => setState(() => _selectedSectionCode = v),
@@ -335,27 +279,24 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                             );
                           },
                         ),
-                        const SizedBox(height: 16),
-                        _buildPremiumTextField(
-                          controller: _studentCodeController,
-                          label: 'Immatriculation',
-                          placeholder: 'STU-2026-0001 (auto si vide)',
-                        ),
                       ],
                       const SizedBox(height: 16),
-                      _buildPremiumTextField(
-                        controller: _nationalityController,
-                        label: 'Nationalité',
-                        placeholder: 'Tunisienne',
-                      ),
-                      const SizedBox(height: 16),
-                      _buildPremiumTextField(
-                        controller: _phoneController,
-                        label: 'Téléphone',
-                        placeholder: '+216 XX XXX XXX',
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _buildNationalityAutocomplete()),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildPremiumTextField(
+                              controller: _phoneController,
+                              label: 'Téléphone',
+                              placeholder: 'XX XXX XXX',
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 32),
@@ -418,7 +359,6 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                 ),
               ),
             ),
-            _buildSummaryStrip(),
             _buildFooter(),
           ],
         ),
@@ -545,7 +485,7 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
               children: [
                 Expanded(
                   child: Text(
-                    value != null ? DateFormat('dd/MM/yyyy').format(value) : 'JJ/MM/AAAA',
+                    value != null ? DateFormat('d MMM yyyy', 'fr_FR').format(value) : 'Sélectionner une date',
                     style: TextStyle(fontSize: 14, color: value != null ? AppColors.textPrimary : AppColors.textTertiary),
                   ),
                 ),
@@ -569,18 +509,21 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
   Widget _genderPill(String value, String label) {
     final isActive = _selectedGender == value;
     return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedGender = value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isActive ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))] : null,
-          ),
-          child: Center(
-            child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isActive ? AppColors.primary : AppColors.textTertiary)),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => setState(() => _selectedGender = value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: isActive ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))] : null,
+            ),
+            child: Center(
+              child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isActive ? AppColors.primary : AppColors.textTertiary)),
+            ),
           ),
         ),
       ),
@@ -692,75 +635,107 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        _buildPasswordStrengthMeter(),
       ],
     );
   }
 
-  Widget _buildPasswordStrengthMeter() {
-    final strength = _passwordStrength;
+  static const List<String> _commonNationalities = [
+    'Tunisienne',
+    'Algérienne',
+    'Marocaine',
+    'Française',
+    'Libyenne',
+    'Égyptienne',
+    'Canadienne',
+    'Italienne',
+    'Espagnole',
+    'Allemande',
+    'Belge',
+    'Suisse',
+    'Sénégalaise',
+    'Ivoirienne',
+    'Camerounaise',
+    'Malienne',
+    'Mauritanienne',
+    'Américaine',
+    'Britannique',
+    'Turque',
+  ];
+
+  Widget _buildNationalityAutocomplete() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: List.generate(4, (i) {
-            return Expanded(
-              child: Container(
-                height: 4,
-                margin: EdgeInsets.only(right: i < 3 ? 6 : 0),
-                decoration: BoxDecoration(
-                  color: i < strength ? _passwordStrengthColor : AppColors.slate200,
-                  borderRadius: BorderRadius.circular(99),
+        _buildFieldLabel('Nationalité'),
+        const SizedBox(height: 8),
+        Autocomplete<String>(
+          initialValue: TextEditingValue(text: _nationalityController.text),
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            if (textEditingValue.text.isEmpty) {
+              return _commonNationalities;
+            }
+            return _commonNationalities.where((String option) {
+              return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+            });
+          },
+          onSelected: (String selection) {
+            _nationalityController.text = selection;
+          },
+          fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+            textEditingController.addListener(() {
+              if (_nationalityController.text != textEditingController.text) {
+                _nationalityController.text = textEditingController.text;
+              }
+            });
+            return TextFormField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              style: const TextStyle(fontSize: 13, color: AppColors.slate800, fontWeight: FontWeight.w500),
+              decoration: InputDecoration(
+                hintText: 'Tunisienne',
+                hintStyle: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                filled: true,
+                fillColor: AppColors.slate50,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                suffixIcon: const Icon(Icons.arrow_drop_down, color: AppColors.textTertiary),
+              ),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(10),
+                color: Colors.white,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final option = options.elementAt(index);
+                      return InkWell(
+                        onTap: () => onSelected(option),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          child: Text(
+                            option,
+                            style: const TextStyle(fontSize: 13, color: AppColors.slate800),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             );
-          }),
+          },
         ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'FORCE: ${_passwordStrengthLabel.toUpperCase()}',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: _passwordStrengthColor),
-            ),
-            const Text(
-              'Recommandé: 12+ caractères',
-              style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: AppColors.textTertiary),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSummaryStrip() {
-    final roleLabel = _selectedRole == 'student' ? 'Étudiant' : 'Manager';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.slate50,
-        border: Border(top: BorderSide(color: AppColors.slate100)),
-      ),
-      child: Row(
-        children: [
-          _summaryChip(AppColors.primary, 'TYPE: ${roleLabel.toUpperCase()}'),
-          const SizedBox(width: 24),
-          _summaryChip(AppColors.slate300, 'CODE: AUTO-GÉNÉRÉ'),
-          const SizedBox(width: 24),
-          _summaryChip(AppColors.success, 'STATUT: ACTIF'),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryChip(Color dotColor, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 7, height: 7, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textTertiary)),
       ],
     );
   }
@@ -810,18 +785,6 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
     );
   }
 
-  Color _getRoleColor(String role) {
-    switch (role) {
-      case 'admin':
-        return AppColors.secondary;
-      case 'staff':
-        return AppColors.primary;
-      case 'teacher':
-        return AppColors.success;
-      default:
-        return AppColors.warning;
-    }
-  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -1115,12 +1078,4 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
     );
   }
 
-  Color _parseColor(String? hex) {
-    if (hex == null || hex.isEmpty) return AppColors.slate300;
-    hex = hex.replaceFirst('#', '');
-    if (hex.length == 6) {
-      return Color(int.parse('FF$hex', radix: 16));
-    }
-    return AppColors.slate300;
-  }
 }

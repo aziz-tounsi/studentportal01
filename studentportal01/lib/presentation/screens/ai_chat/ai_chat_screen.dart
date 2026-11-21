@@ -791,6 +791,10 @@ I have **complete** access to your academic data — grades, timetable, absences
           errStr.contains('quota') ||
           errStr.contains('limite');
       final isMaintenance = errStr.contains('maintenance');
+      final isConfigError = errStr.contains('clé api') ||
+          errStr.contains('api key') ||
+          errStr.contains('user not found') ||
+          errStr.contains('non configurée');
 
       String errorMessage;
       if (isOffline) {
@@ -811,6 +815,12 @@ I have **complete** access to your academic data — grades, timetable, absences
             : (effectiveLang == 'fr'
                 ? '🛠️ Le service IA NOVA est temporairement en maintenance. Merci de réessayer plus tard.'
                 : '🛠️ AI service is temporarily undergoing maintenance. Please try again later.');
+      } else if (isConfigError) {
+        errorMessage = effectiveLang == 'ar'
+            ? '⚠️ مفتاح خدمة الذكاء الاصطناعي منتهي أو غير صالح. يرجى إعلام الإدارة لتحديثه.'
+            : (effectiveLang == 'fr'
+                ? '⚠️ La clé du service IA OpenRouter est expirée ou invalide. Veuillez mettre à jour la clé OPENROUTER_API_KEY dans Supabase.'
+                : '⚠️ AI service API key is expired or invalid. Please update OPENROUTER_API_KEY in Supabase secrets.');
       } else {
         errorMessage = effectiveLang == 'ar'
             ? '⚠️ تعذر على المساعد الذكي الإجابة حالياً. يرجى إعادة المحاولة في لحظات.'

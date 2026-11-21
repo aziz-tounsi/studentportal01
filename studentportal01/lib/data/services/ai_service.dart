@@ -451,11 +451,12 @@ Map<String, dynamic> formatMessageForAPI({
 /// Candidate free models to try on OpenRouter in order of priority (tested and verified)
 const List<String> _freeModels = [
   'openrouter/free',
-  'google/gemma-2-9b-it:free',
-  'meta-llama/llama-3.2-3b-instruct:free',
-  'meta-llama/llama-3.1-8b-instruct:free',
-  'mistralai/mistral-7b-instruct:free',
-  'qwen/qwen-2.5-7b-instruct:free',
+  'google/gemma-4-31b-it:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'liquid/lfm-3-1.7b:free',
+  'particle-ai/particle-1:free',
 ];
 
 /// Call OpenRouter API with multi-model fallback.

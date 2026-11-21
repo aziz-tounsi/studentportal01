@@ -421,7 +421,7 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
       child: Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 12,
         shadowColor: Colors.black.withOpacity(0.15),
         child: Container(
@@ -429,7 +429,7 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
           constraints: const BoxConstraints(maxHeight: 760),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -437,24 +437,14 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
             children: [
               // ── Header ──
               Container(
-                padding: const EdgeInsets.fromLTRB(32, 28, 24, 20),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
                 decoration: const BoxDecoration(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  border: Border(bottom: BorderSide(color: AppColors.slate100)),
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.tune, color: Color(0xFF4B5563), size: 18),
-                    ),
-                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,9 +452,9 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
                           const Text(
                             'Configuration des types d\'examen',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Color(0xFF111827),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -472,23 +462,26 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
                             'Configurez les pourcentages pour ${widget.subjectName}.',
                             style: const TextStyle(
                               fontSize: 13,
-                              color: Color(0xFF6B7280),
+                              color: AppColors.textTertiary,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close, color: Color(0xFF4B5563), size: 18),
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.slate50,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ),
                   ],
@@ -511,30 +504,33 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
             ),
 
             // ── Footer ──
-            const Divider(height: 1, color: Color(0xFFE9EAF2)),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
               decoration: const BoxDecoration(
-                color: Color(0xFFFCFDFD),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                border: Border(top: BorderSide(color: AppColors.slate100)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF4B5563),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    child: const Text(
-                      'Annuler',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  SizedBox(
+                    height: 40,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      child: const Text(
+                        'Annuler',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   SizedBox(
-                    height: 44,
+                    height: 40,
                     child: ElevatedButton.icon(
                       onPressed: _isSaving || !_isValid ? null : _save,
                       icon: _isSaving
@@ -543,8 +539,8 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
                             )
                           : const Icon(Icons.check, size: 18),
                       label: Text(
-                        _isSaving ? 'Création...' : 'Enregistrer la config.',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        _isSaving ? 'Enregistrement...' : 'Enregistrer la config.',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF6D4CF6),
@@ -552,8 +548,8 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
                         elevation: 0,
                         disabledBackgroundColor: const Color(0xFFE5E7EB),
                         disabledForegroundColor: const Color(0xFF9CA3AF),
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                   ),
@@ -758,7 +754,10 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
         })
         .map((e) => DropdownMenuItem<String>(
               value: e['id'] as String,
-              child: Text(e['name'] as String, style: const TextStyle(fontSize: 13)),
+              child: Text(
+                e['name'] as String,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+              ),
             ))
         .toList();
 
@@ -769,46 +768,44 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
           // Exam type dropdown
           Expanded(
             flex: 3,
-            child: SizedBox(
-              height: 44,
-              child: DropdownButtonFormField<String>(
-                value: dropdownValue,
-                dropdownColor: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF6B7280)),
-                decoration: InputDecoration(
-                  hintText: 'Sélectionner un type',
-                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                  filled: true,
-                  fillColor: const Color(0xFFF9FAFB),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
+            child: Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.slate50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButtonFormField<String>(
+                  value: dropdownValue,
+                  dropdownColor: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  elevation: 8,
+                  icon: const Icon(Icons.arrow_drop_down, color: AppColors.textTertiary),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                  decoration: const InputDecoration(
+                    hintText: 'Sélectionner un type',
+                    hintStyle: TextStyle(fontSize: 12.5, color: AppColors.textTertiary),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  items: dropdownItems,
+                  onChanged: (examTypeId) {
+                    if (examTypeId != null) {
+                      final selectedExamType = _availableExamTypes.firstWhere(
+                        (e) => e['id'] == examTypeId,
+                        orElse: () => {'name': ''},
+                      );
+                      final displayName = selectedExamType['name'] as String? ?? '';
+                      setState(() {
+                        _nameControllers[index]!.text = displayName;
+                        _components[index] = component.copyWith(examTypeId: examTypeId, displayName: displayName);
+                      });
+                    }
+                  },
                 ),
-                items: dropdownItems,
-                onChanged: (examTypeId) {
-                  if (examTypeId != null) {
-                    final selectedExamType = _availableExamTypes.firstWhere(
-                      (e) => e['id'] == examTypeId,
-                      orElse: () => {'name': ''},
-                    );
-                    final displayName = selectedExamType['name'] as String? ?? '';
-                    setState(() {
-                      _nameControllers[index]!.text = displayName;
-                      _components[index] = component.copyWith(examTypeId: examTypeId, displayName: displayName);
-                    });
-                  }
-                },
               ),
             ),
           ),
@@ -816,30 +813,24 @@ class _SubjectExamConfigDialogState extends State<SubjectExamConfigDialog> {
           // Weight
           Expanded(
             flex: 2,
-            child: SizedBox(
-              height: 44,
+            child: Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.slate50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.borderLight),
+              ),
               child: TextField(
                 controller: weightController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
-                decoration: InputDecoration(
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                decoration: const InputDecoration(
                   suffixText: '%',
-                  suffixStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                  filled: true,
-                  fillColor: const Color(0xFFF9FAFB),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  suffixStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textTertiary),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
                 onChanged: (value) {
                   // Rejeter les caractères non numériques

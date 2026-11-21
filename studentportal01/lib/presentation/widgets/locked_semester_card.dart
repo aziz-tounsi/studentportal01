@@ -1,6 +1,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/theme/arabic_typography.dart';
@@ -34,7 +35,7 @@ bool isSemesterLocked(int semesterNumber, List<SemesterInfo> semesters) {
 
 /// A premium iOS 26 glass card displaying a locked/upcoming semester state.
 /// Matches the design of the empty timetable card.
-class LockedSemesterCard extends StatelessWidget {
+class LockedSemesterCard extends ConsumerWidget {
   final DateTime? startDate;
   final LockedModuleType moduleType;
   final String? customTitle;
@@ -49,10 +50,15 @@ class LockedSemesterCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final lang = Localizations.localeOf(context).languageCode;
     final isArabic = lang == 'ar';
+
+    final semesters = ref.watch(semestersProvider).value ?? [];
+    final count = semesters.length;
+    final periodUnit = SemesterInfo.getPeriodUnitName(count);
+    final periodUnitLower = periodUnit.toLowerCase();
 
     final formattedDate = startDate != null
         ? (isArabic
@@ -62,8 +68,12 @@ class LockedSemesterCard extends StatelessWidget {
             : DateFormat('d MMMM yyyy', lang).format(startDate!))
         : null;
 
-    final String title = customTitle ?? l10n.upcomingSemester;
-    final String subtitle = customSubtitle ?? _getSubtitle(lang, formattedDate, l10n);
+    final String title = customTitle ?? (lang == 'fr'
+        ? '$periodUnit à venir'
+        : (isArabic
+            ? (count == 3 ? 'الثلاثي القادم' : (count == 2 ? 'الفصل القادم' : 'الفترة القادمة'))
+            : l10n.upcomingSemester));
+    final String subtitle = customSubtitle ?? _getSubtitle(lang, formattedDate, l10n, periodUnitLower, count);
 
     final gradientColors = _getGradientColors();
 
@@ -162,7 +172,14 @@ class LockedSemesterCard extends StatelessWidget {
     }
   }
 
-  String _getSubtitle(String lang, String? date, AppLocalizations l10n) {
+  String _getSubtitle(
+    String lang,
+    String? date,
+    AppLocalizations l10n,
+    String periodUnitLower,
+    int count,
+  ) {
+    final arUnit = count == 3 ? 'الثلاثي' : (count == 2 ? 'الفصل الدراسي' : 'الفترة');
     if (lang == 'ar') {
       if (date != null) {
         switch (moduleType) {
@@ -173,22 +190,22 @@ class LockedSemesterCard extends StatelessWidget {
           case LockedModuleType.grades:
             return 'ستكون النتائج والدرجات متاحة ابتداءً من $date.';
           case LockedModuleType.documents:
-            return 'ستكون مستندات هذا الفصل متاحة ابتداءً من $date.';
+            return 'ستكون مستندات هذا $arUnit متاحة ابتداءً من $date.';
           case LockedModuleType.general:
-            return 'هذا الفصل الدراسي لم يبدأ بعد. ستكون البيانات متاحة ابتداءً من $date.';
+            return 'هذا $arUnit لم يبدأ بعد. ستكون البيانات متاحة ابتداءً من $date.';
         }
       } else {
         switch (moduleType) {
           case LockedModuleType.timetable:
-            return 'سيكون جدول الأوقات متاحاً مع بداية الفصل الدراسي.';
+            return 'سيكون جدول الأوقات متاحاً مع بداية $arUnit.';
           case LockedModuleType.absences:
-            return 'سيكون تتبع الغيابات متاحاً مع بداية الفصل الدراسي.';
+            return 'سيكون تتبع الغيابات متاحاً مع بداية $arUnit.';
           case LockedModuleType.grades:
-            return 'ستكون النتائج والدرجات متاحة مع بداية الفصل الدراسي.';
+            return 'ستكون النتائج والدرجات متاحة مع بداية $arUnit.';
           case LockedModuleType.documents:
-            return 'ستُنشر المستندات مع بداية الفصل الدراسي.';
+            return 'ستُنشر المستندات مع بداية $arUnit.';
           case LockedModuleType.general:
-            return 'هذا الفصل الدراسي لم يبدأ بعد. ستكون البيانات متاحة قريباً.';
+            return 'هذا $arUnit لم يبدأ بعد. ستكون البيانات متاحة قريباً.';
         }
       }
     } else if (lang == 'fr') {
@@ -201,25 +218,26 @@ class LockedSemesterCard extends StatelessWidget {
           case LockedModuleType.grades:
             return "Les résultats et notes seront disponibles à partir du $date.";
           case LockedModuleType.documents:
-            return "Les documents de ce semestre seront disponibles à partir du $date.";
+            return "Les documents de ce $periodUnitLower seront disponibles à partir du $date.";
           case LockedModuleType.general:
-            return "Ce semestre n'a pas encore commencé. Les données seront disponibles à partir du $date.";
+            return "Ce $periodUnitLower n'a pas encore commencé. Les données seront disponibles à partir du $date.";
         }
       } else {
         switch (moduleType) {
           case LockedModuleType.timetable:
-            return "L'emploi du temps sera disponible dès le début du semestre.";
+            return "L'emploi du temps sera disponible dès le début du $periodUnitLower.";
           case LockedModuleType.absences:
-            return "Le suivi des absences sera disponible dès le début du semestre.";
+            return "Le suivi des absences sera disponible dès le début du $periodUnitLower.";
           case LockedModuleType.grades:
-            return "Les résultats et notes seront disponibles dès le début du semestre.";
+            return "Les résultats et notes seront disponibles dès le début du $periodUnitLower.";
           case LockedModuleType.documents:
-            return "Les documents seront publiés dès le début du semestre.";
+            return "Les documents seront publiés dès le début du $periodUnitLower.";
           case LockedModuleType.general:
-            return "Ce semestre n'a pas encore commencé. Les informations seront disponibles prochainement.";
+            return "Ce $periodUnitLower n'a pas encore commencé. Les informations seront disponibles prochainement.";
         }
       }
     } else {
+      final enUnit = count == 3 ? 'trimester' : (count == 2 ? 'semester' : (count == 4 ? 'quarter' : 'period'));
       if (date != null) {
         switch (moduleType) {
           case LockedModuleType.timetable:
@@ -229,22 +247,22 @@ class LockedSemesterCard extends StatelessWidget {
           case LockedModuleType.grades:
             return 'Grades and results will be available starting from $date.';
           case LockedModuleType.documents:
-            return 'Documents for this semester will be available starting from $date.';
+            return 'Documents for this $enUnit will be available starting from $date.';
           case LockedModuleType.general:
-            return 'This semester has not started yet. Data will be available starting from $date.';
+            return 'This $enUnit has not started yet. Data will be available starting from $date.';
         }
       } else {
         switch (moduleType) {
           case LockedModuleType.timetable:
-            return 'Timetable will be available at the start of the semester.';
+            return 'Timetable will be available at the start of the $enUnit.';
           case LockedModuleType.absences:
-            return 'Absence tracking will be available at the start of the semester.';
+            return 'Absence tracking will be available at the start of the $enUnit.';
           case LockedModuleType.grades:
-            return 'Grades and results will be available at the start of the semester.';
+            return 'Grades and results will be available at the start of the $enUnit.';
           case LockedModuleType.documents:
-            return 'Documents will be published at the start of the semester.';
+            return 'Documents will be published at the start of the $enUnit.';
           case LockedModuleType.general:
-            return 'This semester has not started yet. Data will be available soon.';
+            return 'This $enUnit has not started yet. Data will be available soon.';
         }
       }
     }

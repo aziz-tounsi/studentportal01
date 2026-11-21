@@ -1214,14 +1214,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               ],
             ),
           ),
-          Container(
-            width: 8, height: 8,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: dotColor.withValues(alpha: 0.6), blurRadius: 8)],
-            ),
-          ),
         ],
       ),
     );

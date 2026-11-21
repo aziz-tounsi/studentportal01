@@ -169,25 +169,33 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
     try {
       final paymentsResp = await _supabase
-          .from('vw_payments_summary')
-          .select('amount_total, amount_paid')
-          .eq('school_id', schoolId);
-      for (final p in paymentsResp) {
-        totalDue += (p['amount_total'] ?? 0).toDouble();
-        totalPaid += (p['amount_paid'] ?? 0).toDouble();
-      }
-    } catch (_) {}
+          .from('payments')
+          .select('amount, status, school_id')
+          .or('school_id.eq.$schoolId,school_id.is.null');
 
-    // If database totals are 0, use realistic defaults matching user prompt
-    final collected = totalPaid > 0 ? totalPaid : 124500.0;
-    final due = totalDue > 0 ? totalDue : 151829.0;
-    final recovery = (due > 0) ? (collected / due * 100).clamp(0.0, 100.0) : 82.0;
+      for (final p in paymentsResp as List) {
+        final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
+        final status = (p['status'] ?? '').toString().toLowerCase();
+        if (status != 'cancelled') {
+          totalDue += amt;
+        }
+        if (status == 'paid') {
+          totalPaid += amt;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading payments for KPIs: $e');
+    }
+
+    final collected = totalPaid;
+    final due = totalDue > 0 ? totalDue : totalPaid;
+    final recovery = (due > 0) ? (collected / due * 100).clamp(0.0, 100.0) : 0.0;
 
     return DashboardKpis(
-      totalStudents: totalStudents > 0 ? totalStudents : 196,
-      totalTeachers: totalTeachers > 0 ? totalTeachers : 5,
-      totalStaff: totalStaff > 0 ? totalStaff : 3,
-      totalClasses: totalClasses > 0 ? totalClasses : 12,
+      totalStudents: totalStudents,
+      totalTeachers: totalTeachers,
+      totalStaff: totalStaff,
+      totalClasses: totalClasses,
       totalPaymentsDue: due,
       totalPaymentsCollected: collected,
       revenueGrowth: 3.5,
@@ -203,7 +211,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       teacherStaffGrowth: 2.5,
       teacherStaffGrowthLabel: "vs semestre préc.",
       teacherStaffGrowthUp: true,
-      recoveryRate: recovery > 0 ? recovery : 82.0,
+      recoveryRate: recovery,
       recoveryRateDiff: -2.3,
       recoveryRateLabel: "vs l'an dernier",
       recoveryRateUp: false,
@@ -211,85 +219,247 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
   }
 
   Future<Map<String, CashflowIntervalData>> _loadCashflows(String schoolId) async {
-    // 1. Weekly Points (Dim, Lun, Mar, Mer, Jeu, Ven, Sam)
-    final weeklyPoints = [
-      CashflowPoint(x: 0, y: 5.2, amount: 5200, label: 'Dim', fullDate: 'Dimanche'),
-      CashflowPoint(x: 1, y: 6.2, amount: 6200, label: 'Lun', fullDate: 'Lundi'),
-      CashflowPoint(x: 2, y: 6.8, amount: 6800, label: 'Mar', fullDate: 'Mardi'),
-      CashflowPoint(x: 3, y: 7.1, amount: 7100, label: 'Mer', fullDate: 'Mercredi'),
-      CashflowPoint(x: 4, y: 7.5, amount: 7500, label: 'Jeu', fullDate: 'Jeudi'),
-      CashflowPoint(x: 5, y: 7.4, amount: 7400, label: 'Ven', fullDate: 'Vendredi'),
-      CashflowPoint(x: 6, y: 8.2, amount: 8200, label: 'Sam', fullDate: 'Samedi'),
-    ];
+    final now = DateTime.now();
 
-    // 2. Monthly Points (Jan - Dec)
-    final monthlyPoints = [
-      CashflowPoint(x: 0, y: 12.4, amount: 12400, label: 'Jan', fullDate: 'Janvier 2024'),
-      CashflowPoint(x: 1, y: 14.8, amount: 14800, label: 'Fév', fullDate: 'Février 2024'),
-      CashflowPoint(x: 2, y: 18.2, amount: 18200, label: 'Mar', fullDate: 'Mars 2024'),
-      CashflowPoint(x: 3, y: 16.5, amount: 16500, label: 'Avr', fullDate: 'Avril 2024'),
-      CashflowPoint(x: 4, y: 22.1, amount: 22100, label: 'Mai', fullDate: 'Mai 2024'),
-      CashflowPoint(x: 5, y: 26.8, amount: 26800, label: 'Juin', fullDate: '15 Juin 2024'),
-      CashflowPoint(x: 6, y: 24.5, amount: 24500, label: 'Juil', fullDate: 'Juillet 2024'),
-      CashflowPoint(x: 7, y: 28.3, amount: 28300, label: 'Aoû', fullDate: 'Août 2024'),
-      CashflowPoint(x: 8, y: 34.0, amount: 34000, label: 'Sep', fullDate: 'Septembre 2024'),
-      CashflowPoint(x: 9, y: 31.5, amount: 31500, label: 'Oct', fullDate: 'Octobre 2024'),
-      CashflowPoint(x: 10, y: 36.2, amount: 36200, label: 'Nov', fullDate: 'Novembre 2024'),
-      CashflowPoint(x: 11, y: 39.8, amount: 39800, label: 'Déc', fullDate: 'Décembre 2024'),
-    ];
-
-    // 3. Annual Points (2020 - 2024)
-    final annualPoints = [
-      CashflowPoint(x: 0, y: 78.0, amount: 78000, label: '2020', fullDate: 'Année 2020'),
-      CashflowPoint(x: 1, y: 92.5, amount: 92500, label: '2021', fullDate: 'Année 2021'),
-      CashflowPoint(x: 2, y: 105.0, amount: 105000, label: '2022', fullDate: 'Année 2022'),
-      CashflowPoint(x: 3, y: 118.2, amount: 118200, label: '2023', fullDate: 'Année 2023'),
-      CashflowPoint(x: 4, y: 124.5, amount: 124500, label: '2024', fullDate: 'Année 2024'),
-    ];
-
+    List<Map<String, dynamic>> payments = [];
     try {
-      // Attempt to load real payment dates from Supabase
-      final realPayments = await _supabase
+      final resp = await _supabase
           .from('payments')
-          .select('amount, paid_at, status')
-          .eq('status', 'paid')
-          .order('paid_at', ascending: true);
+          .select('id, amount, status, paid_at, due_date, created_at, school_id')
+          .or('school_id.eq.$schoolId,school_id.is.null');
+      payments = List<Map<String, dynamic>>.from(resp as List);
+    } catch (e) {
+      debugPrint('Error loading payments in _loadCashflows: $e');
+    }
 
-      if ((realPayments as List).isNotEmpty) {
-        // We can aggregate real payments by day of week or month if enough exist
+    DateTime? getPaymentDate(Map<String, dynamic> p) {
+      if (p['paid_at'] != null) {
+        final d = DateTime.tryParse(p['paid_at'].toString());
+        if (d != null) return d.toLocal();
       }
-    } catch (_) {}
+      if (p['created_at'] != null) {
+        final d = DateTime.tryParse(p['created_at'].toString());
+        if (d != null) return d.toLocal();
+      }
+      if (p['due_date'] != null) {
+        final d = DateTime.tryParse(p['due_date'].toString());
+        if (d != null) return d.toLocal();
+      }
+      return null;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // 1. WEEKLY CASHFLOW (Current week: Sunday -> Saturday)
+    // ─────────────────────────────────────────────────────────────────
+    final sunday = now.weekday == DateTime.sunday
+        ? DateTime(now.year, now.month, now.day)
+        : DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday));
+
+    const dayShortLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    const dayFullNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    const monthShortNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+    final weeklyPoints = <CashflowPoint>[];
+    double weeklyTotalCollected = 0;
+    double weeklyReimbursed = 0;
+    double weeklyPeakAmount = 0;
+    String weeklyPeakDate = '';
+    double weeklyPeakX = 0;
+
+    for (int i = 0; i < 7; i++) {
+      final currentDay = sunday.add(Duration(days: i));
+      double dayCollected = 0;
+
+      for (final p in payments) {
+        final status = (p['status'] ?? '').toString().toLowerCase();
+        final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
+        final date = getPaymentDate(p);
+
+        if (date != null &&
+            date.year == currentDay.year &&
+            date.month == currentDay.month &&
+            date.day == currentDay.day) {
+          if (status == 'paid') {
+            dayCollected += amt;
+          } else if (status == 'cancelled' || status == 'refunded') {
+            weeklyReimbursed += amt;
+          }
+        }
+      }
+
+      weeklyTotalCollected += dayCollected;
+      if (dayCollected > weeklyPeakAmount) {
+        weeklyPeakAmount = dayCollected;
+        weeklyPeakDate = '${dayFullNames[i]} ${currentDay.day} ${monthShortNames[currentDay.month - 1]} ${currentDay.year}';
+        weeklyPeakX = i.toDouble();
+      }
+
+      weeklyPoints.add(
+        CashflowPoint(
+          x: i.toDouble(),
+          y: dayCollected,
+          amount: dayCollected,
+          label: dayShortLabels[i],
+          fullDate: '${dayFullNames[i]} ${currentDay.day} ${monthShortNames[currentDay.month - 1]} ${currentDay.year}',
+        ),
+      );
+    }
+
+    if (weeklyPeakDate.isEmpty) {
+      weeklyPeakDate = '${dayFullNames[now.weekday % 7]} ${now.day} ${monthShortNames[now.month - 1]} ${now.year}';
+      weeklyPeakX = (now.weekday % 7).toDouble();
+    }
+
+    final weeklyMaxY = weeklyPeakAmount > 0
+        ? (weeklyPeakAmount * 1.25).ceilToDouble()
+        : 1000.0;
+
+    // ─────────────────────────────────────────────────────────────────
+    // 2. MONTHLY CASHFLOW (12 Months of current year)
+    // ─────────────────────────────────────────────────────────────────
+    const monthFullNames = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+
+    final monthlyPoints = <CashflowPoint>[];
+    double monthlyTotalCollected = 0;
+    double monthlyReimbursed = 0;
+    double monthlyPeakAmount = 0;
+    String monthlyPeakDate = '';
+    double monthlyPeakX = 0;
+
+    for (int m = 1; m <= 12; m++) {
+      double monthCollected = 0;
+
+      for (final p in payments) {
+        final status = (p['status'] ?? '').toString().toLowerCase();
+        final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
+        final date = getPaymentDate(p);
+
+        if (date != null && date.year == now.year && date.month == m) {
+          if (status == 'paid') {
+            monthCollected += amt;
+          } else if (status == 'cancelled' || status == 'refunded') {
+            monthlyReimbursed += amt;
+          }
+        }
+      }
+
+      monthlyTotalCollected += monthCollected;
+      final idx = m - 1;
+      if (monthCollected > monthlyPeakAmount) {
+        monthlyPeakAmount = monthCollected;
+        monthlyPeakDate = '${monthFullNames[idx]} ${now.year}';
+        monthlyPeakX = idx.toDouble();
+      }
+
+      monthlyPoints.add(
+        CashflowPoint(
+          x: idx.toDouble(),
+          y: monthCollected,
+          amount: monthCollected,
+          label: monthShortNames[idx],
+          fullDate: '${monthFullNames[idx]} ${now.year}',
+        ),
+      );
+    }
+
+    if (monthlyPeakDate.isEmpty) {
+      monthlyPeakDate = '${monthFullNames[now.month - 1]} ${now.year}';
+      monthlyPeakX = (now.month - 1).toDouble();
+    }
+
+    final monthlyMaxY = monthlyPeakAmount > 0
+        ? (monthlyPeakAmount * 1.25).ceilToDouble()
+        : 1000.0;
+
+    // ─────────────────────────────────────────────────────────────────
+    // 3. ANNUAL CASHFLOW (Recent 5 years up to current year)
+    // ─────────────────────────────────────────────────────────────────
+    final startYear = now.year - 4;
+    final annualPoints = <CashflowPoint>[];
+    double annualTotalCollected = 0;
+    double annualReimbursed = 0;
+    double annualPeakAmount = 0;
+    String annualPeakDate = '';
+    double annualPeakX = 0;
+
+    for (int y = startYear; y <= now.year; y++) {
+      double yearCollected = 0;
+
+      for (final p in payments) {
+        final status = (p['status'] ?? '').toString().toLowerCase();
+        final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
+        final date = getPaymentDate(p);
+
+        if (date != null && date.year == y) {
+          if (status == 'paid') {
+            yearCollected += amt;
+          } else if (status == 'cancelled' || status == 'refunded') {
+            annualReimbursed += amt;
+          }
+        }
+      }
+
+      annualTotalCollected += yearCollected;
+      final idx = y - startYear;
+      if (yearCollected > annualPeakAmount) {
+        annualPeakAmount = yearCollected;
+        annualPeakDate = 'Année $y';
+        annualPeakX = idx.toDouble();
+      }
+
+      annualPoints.add(
+        CashflowPoint(
+          x: idx.toDouble(),
+          y: yearCollected,
+          amount: yearCollected,
+          label: '$y',
+          fullDate: 'Année $y',
+        ),
+      );
+    }
+
+    if (annualPeakDate.isEmpty) {
+      annualPeakDate = 'Année ${now.year}';
+      annualPeakX = (annualPoints.length - 1).toDouble();
+    }
+
+    final annualMaxY = annualPeakAmount > 0
+        ? (annualPeakAmount * 1.25).ceilToDouble()
+        : 5000.0;
 
     return {
       'weekly': CashflowIntervalData(
         points: weeklyPoints,
         minY: 0,
-        maxY: 10,
-        reimbursedAmount: 5133,
-        totalCollected: 48400,
-        peakAmount: 8200,
-        peakDate: 'Samedi',
-        peakX: 6,
+        maxY: weeklyMaxY,
+        reimbursedAmount: weeklyReimbursed,
+        totalCollected: weeklyTotalCollected,
+        peakAmount: weeklyPeakAmount,
+        peakDate: weeklyPeakDate,
+        peakX: weeklyPeakX,
       ),
       'monthly': CashflowIntervalData(
         points: monthlyPoints,
         minY: 0,
-        maxY: 45,
-        reimbursedAmount: 18450,
-        totalCollected: 124500,
-        peakAmount: 26800,
-        peakDate: '15 Juin 2024',
-        peakX: 5,
+        maxY: monthlyMaxY,
+        reimbursedAmount: monthlyReimbursed,
+        totalCollected: monthlyTotalCollected,
+        peakAmount: monthlyPeakAmount,
+        peakDate: monthlyPeakDate,
+        peakX: monthlyPeakX,
       ),
       'annual': CashflowIntervalData(
         points: annualPoints,
         minY: 0,
-        maxY: 150,
-        reimbursedAmount: 42000,
-        totalCollected: 518200,
-        peakAmount: 124500,
-        peakDate: 'Exercice 2024',
-        peakX: 4,
+        maxY: annualMaxY,
+        reimbursedAmount: annualReimbursed,
+        totalCollected: annualTotalCollected,
+        peakAmount: annualPeakAmount,
+        peakDate: annualPeakDate,
+        peakX: annualPeakX,
       ),
     };
   }
@@ -298,71 +468,63 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     try {
       final plans = await _supabase
           .from('payment_plans')
-          .select('plan_type, amount_total');
+          .select('category, description, amount_total, school_id')
+          .or('school_id.eq.$schoolId,school_id.is.null');
 
       if ((plans as List).isNotEmpty) {
-        double tuition = 0;
-        double registration = 0;
-        double activities = 0;
+        final categoryTotals = <String, double>{};
+        double grandTotal = 0;
 
         for (final p in plans) {
-          final type = (p['plan_type'] ?? '').toString().toLowerCase();
-          final amt = (p['amount_total'] ?? 0).toDouble();
-          if (type.contains('tuition') || type.contains('scolar') || type.contains('month') || type.contains('trimester')) {
-            tuition += amt;
-          } else if (type.contains('registration') || type.contains('inscript')) {
-            registration += amt;
-          } else {
-            activities += amt;
-          }
+          final cat = (p['category'] ?? p['description'] ?? 'scolarite').toString().toLowerCase();
+          final amt = (p['amount_total'] as num?)?.toDouble() ?? 0.0;
+          categoryTotals[cat] = (categoryTotals[cat] ?? 0.0) + amt;
+          grandTotal += amt;
         }
 
-        final sum = tuition + registration + activities;
-        if (sum > 0) {
-          return [
-            CategoryBreakdownItem(
-              label: 'Frais de Scolarité',
-              amount: tuition > 0 ? tuition : 42000,
-              percentage: (tuition / sum * 100).roundToDouble(),
-              colorValue: 0xFF6D4CF6,
-            ),
-            CategoryBreakdownItem(
-              label: 'Mensualités & Inscription',
-              amount: registration > 0 ? registration : 28000,
-              percentage: (registration / sum * 100).roundToDouble(),
-              colorValue: 0xFF8B5CF6,
-            ),
-            CategoryBreakdownItem(
-              label: 'Activités & Cantine',
-              amount: activities > 0 ? activities : 18000,
-              percentage: (activities / sum * 100).roundToDouble(),
-              colorValue: 0xFFC4B5FD,
-            ),
-          ];
+        if (grandTotal > 0) {
+          const colors = [0xFF6D4CF6, 0xFF8B5CF6, 0xFFC4B5FD, 0xFF10B981, 0xFFF59E0B];
+          int cIdx = 0;
+          return categoryTotals.entries.map((e) {
+            final col = colors[cIdx % colors.length];
+            cIdx++;
+            String label;
+            switch (e.key) {
+              case 'scolarite':
+                label = 'Frais de Scolarité';
+                break;
+              case 'cantine':
+                label = 'Cantine';
+                break;
+              case 'transport':
+                label = 'Transport';
+                break;
+              case 'inscription':
+                label = 'Inscription';
+                break;
+              case 'uniforme':
+                label = 'Uniforme';
+                break;
+              case 'activites':
+                label = 'Activités';
+                break;
+              default:
+                label = e.key.isNotEmpty ? e.key[0].toUpperCase() + e.key.substring(1) : 'Autres';
+            }
+            return CategoryBreakdownItem(
+              label: label,
+              amount: e.value,
+              percentage: ((e.value / grandTotal) * 100).roundToDouble(),
+              colorValue: col,
+            );
+          }).toList();
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error loading category breakdown: $e');
+    }
 
-    return [
-      CategoryBreakdownItem(
-        label: 'Frais de Scolarité',
-        amount: 42000,
-        percentage: 55,
-        colorValue: 0xFF6D4CF6,
-      ),
-      CategoryBreakdownItem(
-        label: 'Mensualités & Inscription',
-        amount: 28000,
-        percentage: 30,
-        colorValue: 0xFF8B5CF6,
-      ),
-      CategoryBreakdownItem(
-        label: 'Activités & Cantine',
-        amount: 18000,
-        percentage: 15,
-        colorValue: 0xFFC4B5FD,
-      ),
-    ];
+    return [];
   }
 
   Future<List<FiliereDistributionItem>> _loadFiliereDistribution(String schoolId) async {
@@ -608,79 +770,46 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
   DashboardState _buildFallbackState({String? error}) {
     return DashboardState(
       kpis: DashboardKpis(
-        totalStudents: 196,
-        totalTeachers: 5,
-        totalStaff: 3,
-        totalClasses: 12,
-        totalPaymentsCollected: 124500,
-        totalPaymentsDue: 151829,
-        recoveryRate: 82.0,
+        totalStudents: 0,
+        totalTeachers: 0,
+        totalStaff: 0,
+        totalClasses: 0,
+        totalPaymentsCollected: 0,
+        totalPaymentsDue: 0,
+        recoveryRate: 0.0,
       ),
       weeklyCashflow: CashflowIntervalData(
-        points: [
-          CashflowPoint(x: 0, y: 5.2, amount: 5200, label: 'Dim', fullDate: 'Dimanche'),
-          CashflowPoint(x: 1, y: 6.2, amount: 6200, label: 'Lun', fullDate: 'Lundi'),
-          CashflowPoint(x: 2, y: 6.8, amount: 6800, label: 'Mar', fullDate: 'Mardi'),
-          CashflowPoint(x: 3, y: 7.1, amount: 7100, label: 'Mer', fullDate: 'Mercredi'),
-          CashflowPoint(x: 4, y: 7.5, amount: 7500, label: 'Jeu', fullDate: 'Jeudi'),
-          CashflowPoint(x: 5, y: 7.4, amount: 7400, label: 'Ven', fullDate: 'Vendredi'),
-          CashflowPoint(x: 6, y: 8.2, amount: 8200, label: 'Sam', fullDate: 'Samedi'),
-        ],
-        maxY: 10,
-        reimbursedAmount: 5133,
-        totalCollected: 48400,
-        peakAmount: 8200,
-        peakDate: 'Samedi',
-        peakX: 6,
+        points: const [],
+        minY: 0,
+        maxY: 1000,
+        reimbursedAmount: 0,
+        totalCollected: 0,
+        peakAmount: 0,
+        peakDate: '',
+        peakX: 0,
       ),
       monthlyCashflow: CashflowIntervalData(
-        points: [
-          CashflowPoint(x: 0, y: 12.4, amount: 12400, label: 'Jan', fullDate: 'Janvier 2024'),
-          CashflowPoint(x: 1, y: 14.8, amount: 14800, label: 'Fév', fullDate: 'Février 2024'),
-          CashflowPoint(x: 2, y: 18.2, amount: 18200, label: 'Mar', fullDate: 'Mars 2024'),
-          CashflowPoint(x: 3, y: 16.5, amount: 16500, label: 'Avr', fullDate: 'Avril 2024'),
-          CashflowPoint(x: 4, y: 22.1, amount: 22100, label: 'Mai', fullDate: 'Mai 2024'),
-          CashflowPoint(x: 5, y: 26.8, amount: 26800, label: 'Juin', fullDate: '15 Juin 2024'),
-          CashflowPoint(x: 6, y: 24.5, amount: 24500, label: 'Juil', fullDate: 'Juillet 2024'),
-          CashflowPoint(x: 7, y: 28.3, amount: 28300, label: 'Aoû', fullDate: 'Août 2024'),
-          CashflowPoint(x: 8, y: 34.0, amount: 34000, label: 'Sep', fullDate: 'Septembre 2024'),
-          CashflowPoint(x: 9, y: 31.5, amount: 31500, label: 'Oct', fullDate: 'Octobre 2024'),
-          CashflowPoint(x: 10, y: 36.2, amount: 36200, label: 'Nov', fullDate: 'Novembre 2024'),
-          CashflowPoint(x: 11, y: 39.8, amount: 39800, label: 'Déc', fullDate: 'Décembre 2024'),
-        ],
-        maxY: 45,
-        reimbursedAmount: 18450,
-        totalCollected: 124500,
-        peakAmount: 26800,
-        peakDate: '15 Juin 2024',
-        peakX: 5,
+        points: const [],
+        minY: 0,
+        maxY: 1000,
+        reimbursedAmount: 0,
+        totalCollected: 0,
+        peakAmount: 0,
+        peakDate: '',
+        peakX: 0,
       ),
       annualCashflow: CashflowIntervalData(
-        points: [
-          CashflowPoint(x: 0, y: 78.0, amount: 78000, label: '2020', fullDate: 'Année 2020'),
-          CashflowPoint(x: 1, y: 92.5, amount: 92500, label: '2021', fullDate: 'Année 2021'),
-          CashflowPoint(x: 2, y: 105.0, amount: 105000, label: '2022', fullDate: 'Année 2022'),
-          CashflowPoint(x: 3, y: 118.2, amount: 118200, label: '2023', fullDate: 'Année 2023'),
-          CashflowPoint(x: 4, y: 124.5, amount: 124500, label: '2024', fullDate: 'Année 2024'),
-        ],
-        maxY: 150,
-        reimbursedAmount: 42000,
-        totalCollected: 518200,
-        peakAmount: 124500,
-        peakDate: 'Exercice 2024',
-        peakX: 4,
+        points: const [],
+        minY: 0,
+        maxY: 1000,
+        reimbursedAmount: 0,
+        totalCollected: 0,
+        peakAmount: 0,
+        peakDate: '',
+        peakX: 0,
       ),
-      categories: [
-        CategoryBreakdownItem(label: 'Frais de Scolarité', amount: 42000, percentage: 55, colorValue: 0xFF6D4CF6),
-        CategoryBreakdownItem(label: 'Mensualités & Inscription', amount: 28000, percentage: 30, colorValue: 0xFF8B5CF6),
-        CategoryBreakdownItem(label: 'Activités & Cantine', amount: 18000, percentage: 15, colorValue: 0xFFC4B5FD),
-      ],
-      filieres: [
-        FiliereDistributionItem(label: 'Scientifique', count: 88, percentage: 45, colorValue: 0xFF6D4CF6),
-        FiliereDistributionItem(label: 'Mathématiques', count: 49, percentage: 25, colorValue: 0xFF8B5CF6),
-        FiliereDistributionItem(label: 'Éco & Info', count: 39, percentage: 20, colorValue: 0xFFA78BFA),
-        FiliereDistributionItem(label: 'Autres', count: 20, percentage: 10, colorValue: 0xFFDDD6FE),
-      ],
+      categories: const [],
+      filieres: const [],
       events: [
         DashboardCalendarEvent(
           id: '1',

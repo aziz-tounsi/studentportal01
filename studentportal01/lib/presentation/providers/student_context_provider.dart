@@ -98,7 +98,16 @@ List<SemesterInfo> normalizeSemesterList(List<SemesterInfo> raw) {
   }
   final result = byNumber.values.toList()
     ..sort((a, b) => a.number.compareTo(b.number));
-  return result;
+  final totalCount = result.length;
+  return result
+      .map((s) => s.copyWith(
+            name: SemesterInfo.formatDynamicPeriodName(
+              s.name,
+              totalCount,
+              s.number,
+            ),
+          ))
+      .toList();
 }
 
 /// Resolve the active semester number matching admin_dashboard semantics:

@@ -519,14 +519,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _outlineButton(
-                icon: Icons.refresh_rounded,
-                label: 'Actualiser',
-                onTap: () {
-                  setState(() => _loading = true);
-                  _loadData();
-                },
-              ),
               SizedBox(
                 height: 40,
                 child: ElevatedButton.icon(
@@ -625,14 +617,22 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   //  BODY – 2-column layout
   // ══════════════════════════════════════════════════════════════
   Widget _buildBody() {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── LEFT: Profile card (exact match to Student Profile 360px) ──
-        SizedBox(width: 360, child: _buildProfileCard()),
-        const SizedBox(width: 32),
-        // ── RIGHT: Specialty, Classes, Timetable ──
-        Expanded(child: _buildRightColumn()),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── LEFT: Profile card (exact match to Student Profile 360px) ──
+            SizedBox(width: 360, child: _buildProfileCard()),
+            const SizedBox(width: 32),
+            // ── RIGHT: Specialty & Classes ──
+            Expanded(child: _buildRightColumn()),
+          ],
+        ),
+        const SizedBox(height: 24),
+        // ── FULL WIDTH: Emploi du temps ──
+        _buildTimetableSection(),
       ],
     );
   }
@@ -910,8 +910,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       _buildSpecialitySection(),
       const SizedBox(height: 24),
       _buildClassesSection(),
-      const SizedBox(height: 24),
-      _buildTimetableSection(),
     ]);
   }
 
@@ -1030,8 +1028,19 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(12)),
-          child: Text('Total: ${_classDetails.length}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade500)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Text('Total: ${_classDetails.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ),
       ]),
       const SizedBox(height: 16),
@@ -1214,30 +1223,22 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Timeline: Today (Gantt timeline chart with duration pills and day timeline) vs Week (vertical hours bar chart)
+          // Timeline: Today (Full width) vs Week
           if (!_showWeeklySchedule)
             _buildTodayTimelineGantt(nowMin)
-          else
+          else ...[
             _buildWorkingHoursChart(now.weekday),
-          const SizedBox(height: 14),
-
-          // Shorter, internally scrollable schedule list
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 220),
-            child: SingleChildScrollView(
-              child: !_showWeeklySchedule
-                  ? (_timetableToday.isEmpty
-                      ? _buildEmptyScheduleState('Aucune séance aujourd\'hui')
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: _buildTimetableSlots(nowMin),
-                        ))
-                  : (_timetableAllSlots.isEmpty
-                      ? _buildEmptyScheduleState(
-                          'Aucune séance planifiée cette semaine')
-                      : _buildWeeklyScheduleView(now.weekday)),
+            const SizedBox(height: 14),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 260),
+              child: SingleChildScrollView(
+                child: _timetableAllSlots.isEmpty
+                    ? _buildEmptyScheduleState(
+                        'Aucune séance planifiée cette semaine')
+                    : _buildWeeklyScheduleView(now.weekday),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1385,12 +1386,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     final totalDayMinutes = totalHours * 60;
     final endMinutes = endHour * 60;
 
-    final totalTeachingMin = _timetableToday.fold<int>(
-      0,
-      (sum, s) => sum + (s['durationMin'] as int? ?? 0),
-    );
-    final freeMin = (totalDayMinutes - totalTeachingMin).clamp(0, totalDayMinutes);
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -1419,22 +1414,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.8,
                   color: AppColors.textTertiary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _brandLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${_formatHoursMinutes(totalTeachingMin)} d\'enseignement',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _brand,
-                  ),
                 ),
               ),
               const Spacer(),
@@ -1576,13 +1555,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                                         decoration: BoxDecoration(
                                           color: palette['bg'],
                                           borderRadius: BorderRadius.circular(999),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: palette['bg']!.withValues(alpha: 0.35),
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
                                         ),
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1706,58 +1678,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                             }),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Legend summary
-                      Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: _brand,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Séances de cours (${_formatHoursMinutes(totalTeachingMin)})',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE2E8F0),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Pauses & Libre (${_formatHoursMinutes(freeMin)})',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.touch_app_rounded, size: 13, color: Color(0xFF94A3B8)),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Cliquer sur une séance pour voir les détails',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -2668,7 +2588,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                 _fieldLabel('Téléphone'),
                                 const SizedBox(height: 6),
-                                _textField(phoneCtrl, 'Numéro de téléphone', Icons.phone_outlined),
+                                _textField(phoneCtrl, 'Numéro de téléphone', Icons.phone_outlined, inputFormatters: [FilteringTextInputFormatter.digitsOnly], keyboardType: TextInputType.phone),
                               ])),
                             ]),
 
@@ -3175,9 +3095,17 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     );
   }
 
-  Widget _textField(TextEditingController ctrl, String hint, IconData icon) {
+  Widget _textField(
+    TextEditingController ctrl,
+    String hint,
+    IconData icon, {
+    List<TextInputFormatter>? inputFormatters,
+    TextInputType? keyboardType,
+  }) {
     return TextField(
       controller: ctrl,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: hint,

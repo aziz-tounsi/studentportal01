@@ -305,6 +305,7 @@ class AdminSidebar extends ConsumerWidget {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
+                          mouseCursor: SystemMouseCursors.click,
                           borderRadius: BorderRadius.circular(14),
                           onTap: () => context.go('/login'),
                           child: Padding(
@@ -424,6 +425,7 @@ class _NavItemState extends State<_NavItem>
         (widget.route == '/dashboard' && widget.currentRoute == '/');
 
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
@@ -555,6 +557,7 @@ class _NavItemWithBadgeState extends State<_NavItemWithBadge> {
     final isActive = widget.currentRoute == widget.route;
 
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(

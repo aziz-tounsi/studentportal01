@@ -221,7 +221,7 @@ class _PasswordResetRequestsScreenState
       'Traité par',
     ]);
 
-    final df = DateFormat('dd/MM/yyyy HH:mm');
+    final df = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
     for (final r in requests) {
       DateTime? reqDate;
       DateTime? procDate;
@@ -814,7 +814,7 @@ class _PasswordResetRequestsScreenState
                     if (_filterDateFrom != null || _filterDateTo != null)
                       _buildActiveFilterChip(
                         label:
-                            'Date : ${_filterDateFrom != null ? DateFormat('dd/MM/yyyy').format(_filterDateFrom!) : '...'} → ${_filterDateTo != null ? DateFormat('dd/MM/yyyy').format(_filterDateTo!) : '...'}',
+                            'Date : ${_filterDateFrom != null ? DateFormat('d MMM yyyy', 'fr_FR').format(_filterDateFrom!) : '...'} → ${_filterDateTo != null ? DateFormat('d MMM yyyy', 'fr_FR').format(_filterDateTo!) : '...'}',
                         onRemove: () => setState(() {
                           _filterDateFrom = null;
                           _filterDateTo = null;
@@ -1401,7 +1401,9 @@ class _PasswordResetRequestsScreenState
           children: [
             Expanded(
               child: Text(
-                value != null ? DateFormat('dd/MM/yyyy').format(value) : hint,
+                value != null
+                    ? DateFormat('d MMM yyyy', 'fr_FR').format(value)
+                    : hint,
                 style: TextStyle(
                   fontSize: 13,
                   color: value != null
@@ -1605,7 +1607,7 @@ class _PasswordResetRequestsScreenState
       }
     } catch (_) {}
 
-    final df = DateFormat('dd/MM/yyyy HH:mm');
+    final df = DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR');
 
     return InkWell(
       onTap: () {

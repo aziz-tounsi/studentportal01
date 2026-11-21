@@ -144,6 +144,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
       return a.studentName.toLowerCase().contains(q) ||
           (a.subjectName?.toLowerCase().contains(q) ?? false) ||
           (a.reason?.toLowerCase().contains(q) ?? false) ||
+          DateFormat('d MMM yyyy', 'fr_FR').format(a.date).toLowerCase().contains(q) ||
           DateFormat('dd/MM/yyyy').format(a.date).contains(q);
     }).toList();
 
@@ -169,21 +170,19 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(fullName, className),
-              const SizedBox(height: 32),
-              _buildStudentInfoCard(context, data),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               SizedBox(
-                height: 495,
+                height: 440,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(child: _buildPresenceCalendar(data)),
-                    const SizedBox(width: 32),
+                    const SizedBox(width: 24),
                     Expanded(child: _buildAbsenceStatsCard(data)),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               _buildAbsenceListSection(filteredAbsences),
             ],
           ),
@@ -243,18 +242,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _outlineButton(
-                icon: Icons.person_outline,
-                label: 'Voir le profil',
-                onTap: () => context.push('/users/${widget.studentId}'),
-              ),
-            ],
-          ),
+const SizedBox.shrink(),
         ],
       ),
     );
@@ -490,7 +478,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
 
     return Container(
       decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -531,18 +519,25 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          Expanded(child: _buildCalendarGrid(data, targetDate)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: _buildCalendarGrid(data, targetDate),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _legendDot(AppColors.error, 'Absent'),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               _legendDot(AppColors.warning, 'Justifié'),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               _legendDot(AppColors.success, 'Présent'),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               _legendDot(AppColors.slate200, 'Pas de cours'),
             ],
           ),
@@ -568,6 +563,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
     const dayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           children: dayLabels
@@ -587,14 +583,14 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
               )
               .toList(),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         GridView.count(
           crossAxisCount: 7,
           shrinkWrap: true,
-          childAspectRatio: 1.5,
+          childAspectRatio: 1.32,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 4,
-          crossAxisSpacing: 4,
+          mainAxisSpacing: 5,
+          crossAxisSpacing: 5,
           children: [
             for (int i = 1; i < firstWeekday; i++) const SizedBox(),
             for (int day = 1; day <= daysInMonth; day++)
@@ -626,29 +622,29 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
       bgColor = AppColors.success;
       textColor = Colors.white;
     } else if (isWeekend) {
-      bgColor = AppColors.slate100;
-      textColor = AppColors.slate400;
+      bgColor = const Color(0xFFF1F5F9);
+      textColor = const Color(0xFF94A3B8);
     } else if (date.isAfter(DateTime.now())) {
-      bgColor = AppColors.slate50;
-      textColor = AppColors.slate300;
+      bgColor = const Color(0xFFF8FAFC);
+      textColor = const Color(0xFFCBD5E1);
     } else {
-      bgColor = AppColors.success.withOpacity(0.15);
-      textColor = AppColors.success;
+      bgColor = AppColors.success.withValues(alpha: 0.12);
+      textColor = const Color(0xFF15803D);
     }
 
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: isToday
-            ? Border.all(color: AppColors.primary, width: 2)
+            ? Border.all(color: AppColors.primary, width: 1.5)
             : null,
       ),
       child: Center(
         child: Text(
           '$day',
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: FontWeight.w600,
             color: textColor,
           ),
@@ -662,14 +658,14 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.circular(2.5),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 5),
         Text(
           label,
           style: const TextStyle(color: AppColors.slate500, fontSize: 11),
@@ -697,7 +693,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
 
     return Container(
       decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -722,9 +718,9 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           Center(child: _buildDonutChart(justifiedPct, justifiedColor)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -733,8 +729,8 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
                   'Total absences',
                   '$total',
                   Icons.event_busy_outlined,
-                  AppColors.error,
-                  AppColors.errorSoft,
+                  AppColors.primary,
+                  AppColors.primarySoft,
                   labelIcon: Icons.list_alt_rounded,
                 ),
                 const SizedBox(height: 6),
@@ -742,8 +738,8 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
                   'Justifiées',
                   '$justified',
                   Icons.verified_outlined,
-                  AppColors.success,
-                  AppColors.successSoft,
+                  AppColors.primary,
+                  AppColors.primarySoft,
                   labelIcon: Icons.check_circle_outline,
                 ),
                 const SizedBox(height: 6),
@@ -751,8 +747,8 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
                   'Non justifiées',
                   '$unjustified',
                   Icons.cancel_outlined,
-                  AppColors.warning,
-                  AppColors.warningSoft,
+                  AppColors.primary,
+                  AppColors.primarySoft,
                   labelIcon: Icons.highlight_off_rounded,
                 ),
                 const SizedBox(height: 6),
@@ -774,17 +770,17 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
 
   Widget _buildDonutChart(double percentage, Color color) {
     return SizedBox(
-      width: 200,
-      height: 200,
+      width: 130,
+      height: 130,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 200,
-            height: 200,
+            width: 130,
+            height: 130,
             child: CircularProgressIndicator(
               value: percentage / 100,
-              strokeWidth: 12,
+              strokeWidth: 10,
               backgroundColor: AppColors.slate100,
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
@@ -826,17 +822,24 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
   }) {
     final displayIcon = labelIcon ?? icon;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(
         children: [
-          Icon(displayIcon, size: 14, color: color),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(displayIcon, size: 14, color: color),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
               style: const TextStyle(
                 color: AppColors.slate500,
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
               overflow: TextOverflow.ellipsis,
@@ -846,8 +849,8 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
           Text(
             value,
             style: const TextStyle(
-              color: AppColors.slate700,
-              fontSize: 12,
+              color: AppColors.slate800,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1129,8 +1132,16 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
+                    flex: 2,
+                    child: _headerLabel('DATE'),
+                  ),
+                  Expanded(
                     flex: 3,
-                    child: _headerLabel('DATE / MATIÈRE'),
+                    child: _headerLabel('MATIÈRE'),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: _headerLabel('ENSEIGNANT'),
                   ),
                   SizedBox(
                     width: 130,
@@ -1382,7 +1393,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
   // ==================== ABSENCE ROW (LISTE-DES-ETUDIANTS STYLE) ====================
   Widget _buildAbsenceRow(AbsenceModel absence) {
     final isSelected = _selectedAbsences.contains(absence.id);
-    final dateStr = DateFormat('dd/MM/yyyy').format(absence.date);
+    final dateStr = DateFormat('d MMM yyyy', 'fr_FR').format(absence.date);
     final isJustified = absence.justified;
 
     return InkWell(
@@ -1419,69 +1430,108 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
               ),
             ),
             const SizedBox(width: 8),
+            // ── DATE COLUMN ──
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.slate100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.calendar_today_rounded,
+                      color: AppColors.slate600,
+                      size: 15,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      dateStr,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ── MATIÈRE COLUMN ──
             Expanded(
               flex: 3,
               child: Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.menu_book_rounded,
                       color: AppColors.primary,
-                      size: 18,
+                      size: 15,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          dateStr,
+                          absence.subjectName ?? 'Matière non spécifiée',
                           style: const TextStyle(
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             fontSize: 13,
                             color: AppColors.textPrimary,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          absence.subjectName ?? 'Matière non spécifiée',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textTertiary,
+                        if (absence.hoursAbsent > 0) ...[
+                          const SizedBox(height: 1),
+                          Text(
+                            '${absence.hoursAbsent}h d\'absence',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textTertiary,
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            UserAvatar(
-                              name: absence.teacherName ?? '?',
-                              photoUrl: absence.teacherPhotoUrl,
-                              radius: 10,
-                            ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                absence.teacherName ?? 'Non assigné',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.slate500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                        ],
                       ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ── ENSEIGNANT COLUMN ──
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  UserAvatar(
+                    name: absence.teacherName ?? '?',
+                    photoUrl: absence.teacherPhotoUrl,
+                    radius: 13,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      absence.teacherName ?? 'Non assigné',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.slate700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

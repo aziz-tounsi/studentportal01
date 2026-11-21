@@ -229,11 +229,54 @@ class SemestersState {
     return false;
   }
 
+  /// Helper to get singular unit name based on number of periods
+  static String getUnitNameForCount(int count) {
+    switch (count) {
+      case 2:
+        return 'Semestre';
+      case 3:
+        return 'Trimestre';
+      case 4:
+        return 'Quadrimestre';
+      case 6:
+        return 'Bimestre';
+      default:
+        return 'Période';
+    }
+  }
+
+  /// Helper to get plural unit name based on number of periods
+  static String getUnitNamePluralForCount(int count) {
+    switch (count) {
+      case 2:
+        return 'Semestres';
+      case 3:
+        return 'Trimestres';
+      case 4:
+        return 'Quadrimestres';
+      case 6:
+        return 'Bimestres';
+      default:
+        return 'Périodes';
+    }
+  }
+
   /// Period type based on number of periods in the selected academic year.
-  /// 2 periods → 'semestre' (6 months each), 3+ → 'trimestre' (3 months each).
+  /// 2 -> semestre, 3 -> trimestre, 4 -> quadrimestre, 6 -> bimestre, else periode.
   String get periodType {
     final count = filteredSemesters.length;
-    return count >= 3 ? 'trimestre' : 'semestre';
+    switch (count) {
+      case 2:
+        return 'semestre';
+      case 3:
+        return 'trimestre';
+      case 4:
+        return 'quadrimestre';
+      case 6:
+        return 'bimestre';
+      default:
+        return count > 0 ? 'periode' : 'semestre';
+    }
   }
 
   /// Locked period type once periods exist. Null when DB is empty (admin can choose).
@@ -243,12 +286,49 @@ class SemestersState {
   }
 
   /// Duration in days for the current period type.
-  int get periodTypeDuration => periodType == 'trimestre' ? 92 : 183;
+  int get periodTypeDuration {
+    final count = filteredSemesters.length;
+    switch (count) {
+      case 2:
+        return 183;
+      case 3:
+        return 92;
+      case 4:
+        return 91;
+      case 6:
+        return 61;
+      default:
+        return 90;
+    }
+  }
 
-  String get periodLabel =>
-      periodType == 'trimestre' ? 'Trimestre' : 'Semestre';
-  String get periodLabelPlural =>
-      periodType == 'trimestre' ? 'Trimestres' : 'Semestres';
+  String get periodLabel => getUnitNameForCount(filteredSemesters.length);
+  String get periodLabelPlural => getUnitNamePluralForCount(filteredSemesters.length);
+
+  /// Dynamically format a semester's display name based on current total periods count.
+  /// E.g. If DB has "Semestre 1" but there are 3 periods, returns "Trimestre 1".
+  String formatPeriodDisplayName(SemesterModel s) {
+    final count = filteredSemesters.length;
+    final unit = getUnitNameForCount(count);
+    final regex = RegExp(
+      r'^(Semestre|Trimestre|Quadrimestre|Bimestre|P[eé]riode|Sem\.|Trim\.)\s*(\d*)',
+      caseSensitive: false,
+    );
+    final trimmed = s.name.trim();
+    if (regex.hasMatch(trimmed)) {
+      return trimmed.replaceFirstMapped(regex, (m) {
+        final numPart = m.group(2);
+        if (numPart != null && numPart.isNotEmpty) {
+          return '$unit $numPart';
+        }
+        return '$unit ${s.number}';
+      });
+    }
+    if (trimmed.isEmpty) {
+      return '$unit ${s.number}';
+    }
+    return s.name;
+  }
 
   /// Get the next semester number for the selected academic year
   int get nextSemesterNumber {
@@ -287,12 +367,12 @@ class SemestersState {
 
       // Exact duplicate check
       if (sStart == existStart && sEnd == existEnd) {
-        return 'Une période existe déjà avec ces dates exactes : "${s.name}" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
+        return 'Une période existe déjà avec ces dates exactes : "${s.name}" (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)})';
       }
 
       // Overlap check
       if (!sStart.isAfter(existEnd) && !sEnd.isBefore(existStart)) {
-        return 'Chevauche avec "${s.name}" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
+        return 'Chevauche avec "${s.name}" (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)})';
       }
     }
     return null;
@@ -591,7 +671,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
           throw Exception('La date de début doit être strictement antérieure à la date de fin pour la période ${i + 1}.');
         }
         if (rStart.isBefore(yearStart) || rEnd.isAfter(yearEnd)) {
-          throw Exception('La période ${i + 1} doit être comprise dans l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yearStart)} au ${DateFormat('dd/MM/yyyy').format(yearEnd)}).');
+          throw Exception('La période ${i + 1} doit être comprise dans l\'année scolaire (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(yearStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(yearEnd)}).');
         }
       }
 
@@ -629,11 +709,11 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
           final existName = existing['name'] ?? 'Période';
 
           if (rStart == existStart && rEnd == existEnd) {
-            throw Exception('Impossible de créer la période : une période existe déjà avec ces dates exactes ("$existName" du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+            throw Exception('Impossible de créer la période : une période existe déjà avec ces dates exactes ("$existName" du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)}).');
           }
 
           if (!rStart.isAfter(existEnd) && !rEnd.isBefore(existStart)) {
-            throw Exception('Impossible de créer la période : elle chevauche avec "$existName" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+            throw Exception('Impossible de créer la période : elle chevauche avec "$existName" (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)}).');
           }
         }
       }
@@ -645,7 +725,8 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
               .map((s) => (s['number'] as num?)?.toInt() ?? 0)
               .reduce((a, b) => a > b ? a : b);
 
-      final label = type == 'trimestre' ? 'Trimestre' : type == 'single' ? 'Période' : 'Semestre';
+      final totalCount = ranges.length + existingList.length;
+      final label = SemestersState.getUnitNameForCount(totalCount);
 
       final rows = <Map<String, dynamic>>[];
       final existingNames = existingList.map((s) => (s['name'] as String? ?? '').trim().toLowerCase()).toSet();
@@ -653,9 +734,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       for (var i = 0; i < ranges.length; i++) {
         final range = ranges[i];
         final num = maxNumber + i + 1;
-        String name = type == 'single'
-            ? 'Semestre $num'
-            : (ranges.length == 1 && maxNumber == 0 ? label : '$label $num');
+        String name = '$label $num';
 
         // Ensure unique name
         int nameSuffix = 1;
@@ -721,6 +800,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       await _rebuildAutoGapVacations(schoolId, currentYear.id);
 
       await _refreshCurrentSemester(schoolId);
+      state = const AsyncLoading();
       ref.invalidateSelf();
     } finally {
       _isMutating = false;
@@ -849,7 +929,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       final yEnd = SemestersState.stripTime(DateTime.parse(yearRes['end_date']));
 
       if (sStart.isBefore(yStart) || sEnd.isAfter(yEnd)) {
-        throw Exception('La période doit être comprise dans les limites de l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yStart)} au ${DateFormat('dd/MM/yyyy').format(yEnd)}).');
+        throw Exception('La période doit être comprise dans les limites de l\'année scolaire (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(yStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(yEnd)}).');
       }
 
       // Live DB check
@@ -869,7 +949,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
         }
 
         if (!sStart.isAfter(existEnd) && !sEnd.isBefore(existStart)) {
-          throw Exception('La période chevauche avec la période existante "$existName" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+          throw Exception('La période chevauche avec la période existante "$existName" (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)}).');
         }
 
         if ((existName as String).trim().toLowerCase() == name.trim().toLowerCase()) {
@@ -889,6 +969,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
 
       await _rebuildAutoGapVacations(schoolId, academicYearId);
       await _refreshCurrentSemester(schoolId);
+      state = const AsyncLoading();
       ref.invalidateSelf();
     } finally {
       _isMutating = false;
@@ -936,7 +1017,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       final yEnd = SemestersState.stripTime(DateTime.parse(yearRes['end_date']));
 
       if (sStart.isBefore(yStart) || sEnd.isAfter(yEnd)) {
-        throw Exception('La période doit être comprise dans les limites de l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yStart)} au ${DateFormat('dd/MM/yyyy').format(yEnd)}).');
+        throw Exception('La période doit être comprise dans les limites de l\'année scolaire (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(yStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(yEnd)}).');
       }
 
       // Check live database against other semesters
@@ -957,7 +1038,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
         }
 
         if (!sStart.isAfter(existEnd) && !sEnd.isBefore(existStart)) {
-          throw Exception('La période chevauche avec la période existante "$existName" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)}).');
+          throw Exception('La période chevauche avec la période existante "$existName" (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)}).');
         }
 
         if ((existName as String).trim().toLowerCase() == name.trim().toLowerCase()) {
@@ -977,6 +1058,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
 
       await _rebuildAutoGapVacations(schoolId, yearId);
       await _refreshCurrentSemester(schoolId);
+      state = const AsyncLoading();
       ref.invalidateSelf();
     } finally {
       _isMutating = false;
@@ -1003,18 +1085,21 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       await _refreshCurrentSemester(schoolId);
     }
 
+    state = const AsyncLoading();
     ref.invalidateSelf();
   }
 
   Future<void> deleteVacation(String id) async {
     final admin = SupabaseConfig.adminClient;
     await admin.from('vacation_periods').delete().eq('id', id);
+    state = const AsyncLoading();
     ref.invalidateSelf();
   }
 
   Future<void> deleteExam(String id) async {
     final admin = SupabaseConfig.adminClient;
     await admin.from('exam_periods').delete().eq('id', id);
+    state = const AsyncLoading();
     ref.invalidateSelf();
   }
 
@@ -1045,6 +1130,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       'end_date': endDate.toIso8601String().split('T')[0],
       'type': 'manual',
     });
+    state = const AsyncLoading();
     ref.invalidateSelf();
   }
 
@@ -1074,6 +1160,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       'start_date': startDate.toIso8601String().split('T')[0],
       'end_date': endDate.toIso8601String().split('T')[0],
     });
+    state = const AsyncLoading();
     ref.invalidateSelf();
   }
 }

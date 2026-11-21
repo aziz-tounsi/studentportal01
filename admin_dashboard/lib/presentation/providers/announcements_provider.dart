@@ -26,6 +26,10 @@ class AnnouncementModel {
   final String? className;
   final Map<String, dynamic> payload;
 
+  String? get targetStudentId =>
+      payload['target_student_id']?.toString() ??
+      payload['student_id']?.toString();
+
   AnnouncementModel({
     required this.id,
     required this.title,

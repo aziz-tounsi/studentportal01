@@ -27,6 +27,10 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   bool _isSelectionMode = false;
   String _sortKey = 'date_desc';
 
+  // Filter drawer cascade state
+  String? _filterNiveauId;
+  String? _filterSectionId;
+
   // Pagination state
   int _currentPage = 1;
   int _itemsPerPage = 20;
@@ -430,6 +434,33 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
     final state = absencesAsync.asData?.value;
     if (state == null) return const SizedBox.shrink();
 
+    final allClasses = state.classes;
+    // Map of unique gradeLevelId -> gradeLevelName
+    final Map<String, String> niveaux = {};
+    for (final c in allClasses) {
+      if (c.gradeLevelId != null && c.gradeLevelName != null) {
+        niveaux[c.gradeLevelId!] = c.gradeLevelName!;
+      }
+    }
+
+    // Sections (filières) for selected niveau
+    final Map<String, String> sectionsForNiveau = {};
+    if (_filterNiveauId != null) {
+      for (final c in allClasses) {
+        if (c.gradeLevelId == _filterNiveauId && c.sectionId != null && c.sectionName != null) {
+          sectionsForNiveau[c.sectionId!] = c.sectionName!;
+        }
+      }
+    }
+    final hasSections = sectionsForNiveau.isNotEmpty;
+
+    // Filtered classes according to niveau and section
+    final availableClasses = allClasses.where((c) {
+      if (_filterNiveauId != null && c.gradeLevelId != _filterNiveauId) return false;
+      if (hasSections && _filterSectionId != null && c.sectionId != _filterSectionId) return false;
+      return true;
+    }).toList();
+
     return Material(
       elevation: 16,
       color: Colors.white,
@@ -463,15 +494,59 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Niveau
+                    _buildFilterLabel('NIVEAU'),
+                    const SizedBox(height: 8),
+                    _buildFilterDropdown<String?>(
+                      value: _filterNiveauId,
+                      hint: 'Tous les niveaux',
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Tous les niveaux')),
+                        ...niveaux.entries.map(
+                          (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() {
+                        _filterNiveauId = v;
+                        _filterSectionId = null;
+                        ref.read(absencesProvider.notifier).setClassFilter(null);
+                      }),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Filière (if exists)
+                    if (hasSections) ...[
+                      _buildFilterLabel('FILIÈRE'),
+                      const SizedBox(height: 8),
+                      _buildFilterDropdown<String?>(
+                        value: _filterSectionId,
+                        hint: 'Toutes les filières',
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Toutes les filières')),
+                          ...sectionsForNiveau.entries.map(
+                            (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() {
+                          _filterSectionId = v;
+                          ref.read(absencesProvider.notifier).setClassFilter(null);
+                        }),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     // Classe
                     _buildFilterLabel('CLASSE'),
                     const SizedBox(height: 8),
                     _buildFilterDropdown<String?>(
                       value: state.classFilter,
-                      hint: 'Toutes les classes',
+                      hint: _filterNiveauId != null ? 'Classes (${availableClasses.length})' : 'Toutes les classes',
                       items: [
-                        const DropdownMenuItem(value: null, child: Text('Toutes les classes')),
-                        ...state.classes.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                        DropdownMenuItem(
+                          value: null,
+                          child: Text(_filterNiveauId != null ? 'Toutes (${availableClasses.length})' : 'Toutes les classes'),
+                        ),
+                        ...availableClasses.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                       ],
                       onChanged: (v) => ref.read(absencesProvider.notifier).setClassFilter(v),
                     ),
@@ -585,6 +660,10 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                       height: 48,
                       child: OutlinedButton(
                         onPressed: () {
+                          setState(() {
+                            _filterNiveauId = null;
+                            _filterSectionId = null;
+                          });
                           ref.read(absencesProvider.notifier).clearFilters();
                         },
                         style: OutlinedButton.styleFrom(
@@ -695,7 +774,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
           children: [
             Expanded(
               child: Text(
-                value != null ? DateFormat('dd/MM/yyyy').format(value) : hint,
+                value != null ? DateFormat('d MMM yyyy', 'fr_FR').format(value) : hint,
                 style: TextStyle(
                   fontSize: 13,
                   color: value != null ? AppColors.textPrimary : AppColors.textTertiary,
@@ -939,7 +1018,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
         absences.sort((a, b) => b.date.compareTo(a.date));
         break;
     }
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final dateFormat = DateFormat('d MMM yyyy', 'fr_FR');
 
     final totalPages = _itemsPerPage == -1 ? 1 : (absences.length / _itemsPerPage).ceil();
     if (_currentPage > totalPages && totalPages > 0) _currentPage = totalPages;
@@ -1401,7 +1480,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                               children: [
                                 const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.textTertiary),
                                 const SizedBox(width: 8),
-                                Text('${DateFormat('dd/MM/yyyy').format(absence.date)} · ${absence.subjectName ?? "—"}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                                Text('${DateFormat('d MMM yyyy', 'fr_FR').format(absence.date)} · ${absence.subjectName ?? "—"}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                               ],
                             ),
                           ),
@@ -1582,7 +1661,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                   children: [
                     const Icon(Icons.info_outline, size: 16, color: AppColors.textTertiary),
                     const SizedBox(width: 8),
-                    Expanded(child: Text('Date: ${DateFormat('dd/MM/yyyy').format(absence.date)}', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary, fontFamily: 'monospace'))),
+                    Expanded(child: Text('Date: ${DateFormat('d MMM yyyy', 'fr_FR').format(absence.date)}', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary, fontFamily: 'monospace'))),
                   ],
                 ),
               ),
@@ -2347,7 +2426,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                           children: [
                                             const Icon(Icons.calendar_month, size: 18, color: AppColors.textTertiary),
                                             const SizedBox(width: 10),
-                                            Text(DateFormat('EEE dd/MM/yyyy', 'fr_FR').format(_selectedDate), style: const TextStyle(fontSize: 14)),
+                                            Text(DateFormat('EEE d MMM yyyy', 'fr_FR').format(_selectedDate), style: const TextStyle(fontSize: 14)),
                                           ],
                                         ),
                                       ),
@@ -2379,7 +2458,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                                               const SizedBox(width: 10),
                                               Text(
                                               _endDate != null
-                                                ? DateFormat('EEE dd/MM/yyyy', 'fr_FR').format(_endDate!)
+                                                ? DateFormat('EEE d MMM yyyy', 'fr_FR').format(_endDate!)
                                                 : 'Sélectionner...',
                                               style: const TextStyle(fontSize: 14),
                                             ),
@@ -2395,102 +2474,6 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Student selection (for single mode) - searchable list (only if no student selected yet)
-                          if (!_isBulkMode && _selectedClassId != null && _selectedStudentEnrollmentId == null) ...[
-                            if (_isLoading)
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: IosLoader(),
-                                ),
-                              )
-                            else ...[
-                              // Show filtered students based on search
-                              Text(
-                                'Sélectionner un étudiant (${_classStudents.length} élèves)',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.slate700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                height: 180,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.slate300),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: _classStudents.isEmpty
-                                    ? const Center(
-                                        child: Text(
-                                          'Aucun étudiant dans cette classe',
-                                        ),
-                                      )
-                                    : ListView.builder(
-                                        itemCount: _studentSearchQuery.isEmpty
-                                            ? _classStudents.length
-                                            : _classStudents.where((s) {
-                                                final query = _studentSearchQuery
-                                                    .toLowerCase();
-                                                return s.fullName
-                                                    .toLowerCase()
-                                                    .contains(query);
-                                              }).length,
-                                        itemBuilder: (ctx, i) {
-                                          final students = _studentSearchQuery.isEmpty
-                                              ? _classStudents
-                                              : _classStudents.where((s) {
-                                                  final query = _studentSearchQuery
-                                                      .toLowerCase();
-                                                  return s.fullName
-                                                      .toLowerCase()
-                                                      .contains(query);
-                                                }).toList();
-                                          if (i >= students.length)
-                                            return const SizedBox.shrink();
-                                          final student = students[i];
-                                          final isSelected =
-                                              _selectedStudentEnrollmentId ==
-                                              student.enrollmentId;
-                                          return ListTile(
-                                            selected: isSelected,
-                                            selectedTileColor: AppColors.primarySoft,
-                                            leading: UserAvatar(
-                                              name: student.fullName,
-                                              photoUrl: student.photoUrl,
-                                              radius: 20,
-                                            ),
-                                            title: Text(
-                                              student.fullName,
-                                              style: TextStyle(
-                                                fontWeight: isSelected
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                            subtitle: student.className != null
-                                                ? Text(student.className!)
-                                                : null,
-                                            trailing: isSelected
-                                                ? const Icon(
-                                                    Icons.check_circle,
-                                                    color: AppColors.primary,
-                                                  )
-                                                : null,
-                                            onTap: student.enrollmentId == null
-                                                ? null
-                                                : () => setState(
-                                                    () =>
-                                                        _selectedStudentEnrollmentId =
-                                                            student.enrollmentId,
-                                                  ),
-                                          );
-                                        },
-                                      ),
-                              ),
-                            ],
-                            const SizedBox(height: 16),
-                          ],
 
                           // Student selector row (for bulk mode) - placed BEFORE timetable
                           if (_isBulkMode && _selectedClassId != null && !_isLoading) ...[
@@ -2876,7 +2859,7 @@ class _AddAbsenceDialogState extends State<_AddAbsenceDialog> {
             const Icon(Icons.schedule, color: AppColors.slate600, size: 18),
             const SizedBox(width: 8),
             Text(
-              'Emploi du temps - ${DateFormat('EEEE dd/MM', 'fr_FR').format(_selectedDate)}',
+              'Emploi du temps - ${DateFormat('EEEE d MMMM', 'fr_FR').format(_selectedDate)}',
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate800),
             ),
             const Spacer(),
@@ -3493,13 +3476,8 @@ class _StudentSelectionModalState extends State<_StudentSelectionModal> {
                     ),
                     const SizedBox(height: 10),
                     // Table Header / Select All bar
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.slate50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.slate100),
-                      ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                       child: Row(
                         children: [
                           Checkbox(
@@ -3635,18 +3613,6 @@ class _StudentSelectionModalState extends State<_StudentSelectionModal> {
                                       ],
                                     ),
                                   ),
-                                  if (isSelected)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF6D4CF6).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Text(
-                                        'Sélectionné',
-                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF6D4CF6)),
-                                      ),
-                                    ),
                                 ],
                               ),
                             ),

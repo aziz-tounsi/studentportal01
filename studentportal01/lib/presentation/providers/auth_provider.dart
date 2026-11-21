@@ -203,8 +203,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
               }
             },
           )
-          .subscribe((status, error) {
+          .subscribe((status, error) async {
             debugPrint('AuthNotifier: Realtime subscription status: $status, error: $error');
+            if (status == RealtimeSubscribeStatus.channelError && error != null) {
+              final errStr = error.toString().toLowerCase();
+              if (errStr.contains('jwt') || errStr.contains('expired') || errStr.contains('token')) {
+                debugPrint('AuthNotifier: Realtime token expired, refreshing session...');
+                try {
+                  final response = await _supabase.auth.refreshSession();
+                  if (response.session != null) {
+                    debugPrint('AuthNotifier: Session refreshed successfully');
+                  }
+                } catch (e) {
+                  debugPrint('AuthNotifier: Failed to refresh session: $e');
+                }
+              }
+            }
           });
     } catch (e) {
       debugPrint('AuthNotifier: Error setting up realtime subscription: $e');

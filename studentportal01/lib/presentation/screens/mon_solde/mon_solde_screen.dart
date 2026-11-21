@@ -101,8 +101,10 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
     }
   }
 
-  // Always return all 7 categories
-  return PaymentCategory.values.map((cat) {
+  // Only return categories that have an active plan or a configured price (> 0)
+  return PaymentCategory.values
+      .where((cat) => (amounts[cat] ?? 0) > 0 || (paid[cat] ?? 0) > 0)
+      .map((cat) {
     return PaymentCategoryData(
       category: cat,
       amount: amounts[cat] ?? 0,
@@ -223,7 +225,7 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
 
     // Direct fallback from payment_pricing table if available
     try {
-      var query = supabase.from('payment_pricing').select('category, amount');
+      var query = supabase.from('payment_pricing').select('category, amount, section_id');
       if (context.schoolId.isNotEmpty) {
         query = query.eq('school_id', context.schoolId);
       }
@@ -234,8 +236,13 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
       for (final row in pricingResp as List) {
         final cat = row['category']?.toString();
         final amount = (row['amount'] as num?)?.toDouble();
+        final secId = row['section_id']?.toString();
         if (cat != null && amount != null && amount > 0) {
-          pricing.putIfAbsent(cat, () => amount);
+          if (context.sectionId != null && secId == context.sectionId) {
+            pricing[cat] = amount;
+          } else if (secId == null && !pricing.containsKey(cat)) {
+            pricing[cat] = amount;
+          }
         }
       }
     } catch (_) {}
@@ -567,9 +574,11 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
       allPayments,
     );
 
-    // Categories excluding scolarite
+    // Categories excluding scolarite that have a configured price or active payments
     final nonScolariteCategories = categories
-        .where((c) => c.category != PaymentCategory.scolarite)
+        .where((c) =>
+            c.category != PaymentCategory.scolarite &&
+            (c.amount > 0 || c.paid > 0))
         .toList();
 
     final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -595,40 +604,42 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             currentSemester,
           ),
 
-          // Categories Section Title
-          Text(
-            l10n.translate('repartition_categorie'),
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade800,
+          // Categories Section (only displayed if categories have configured prices or payments)
+          if (nonScolariteCategories.isNotEmpty) ...[
+            Text(
+              l10n.translate('repartition_categorie'),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade800,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Categories excluding scolarite
-          ...nonScolariteCategories.mapIndexed(
-            (index, cat) {
-              const palette = [
-                Color(0xFF8B5CF6), // Purple - Mon Solde icon
-                Color(0xFF6366F1), // Indigo
-                Color(0xFF3B82F6), // Royal Blue
-                Color(0xFF06B6D4), // Cyan
-                Color(0xFF10B981), // Emerald Green
-                Color(0xFFF59E0B), // Amber
-                Color(0xFFEC4899), // Pink
-              ];
-              final cardColor = palette[index % palette.length];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _GlassyCategoryCard(
-                  category: cat,
-                  currency: l10n.translate('currency_tnd'),
-                  cardColor: cardColor,
-                ),
-              );
-            },
-          ),
+            // Categories excluding scolarite
+            ...nonScolariteCategories.mapIndexed(
+              (index, cat) {
+                const palette = [
+                  Color(0xFF8B5CF6), // Purple - Mon Solde icon
+                  Color(0xFF6366F1), // Indigo
+                  Color(0xFF3B82F6), // Royal Blue
+                  Color(0xFF06B6D4), // Cyan
+                  Color(0xFF10B981), // Emerald Green
+                  Color(0xFFF59E0B), // Amber
+                  Color(0xFFEC4899), // Pink
+                ];
+                final cardColor = palette[index % palette.length];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _GlassyCategoryCard(
+                    category: cat,
+                    currency: l10n.translate('currency_tnd'),
+                    cardColor: cardColor,
+                  ),
+                );
+              },
+            ),
+          ],
         ]),
       ),
     );

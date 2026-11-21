@@ -165,12 +165,12 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
 
   // ==================== BUILDING CRUD ====================
   Future<void> addBuilding(BuildingModel building) async {
-    await SupabaseConfig.client.from('buildings').insert(building.toJson());
+    await SupabaseConfig.adminClient.from('buildings').insert(building.toJson());
     ref.invalidateSelf();
   }
 
   Future<void> updateBuilding(String id, BuildingModel building) async {
-    await SupabaseConfig.client
+    await SupabaseConfig.adminClient
         .from('buildings')
         .update(building.toJson())
         .eq('id', id);
@@ -178,21 +178,51 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
   }
 
   Future<void> deleteBuilding(String id) async {
-    await SupabaseConfig.client
-        .from('buildings')
-        .update({'is_active': false})
-        .eq('id', id);
+    final client = SupabaseConfig.adminClient;
+    final fallbackClient = SupabaseConfig.client;
+    try {
+      final floors = await client.from('floors').select('id').eq('building_id', id);
+      final floorIds = (floors as List).map((f) => f['id'].toString()).toList();
+      if (floorIds.isNotEmpty) {
+        await client.from('rooms').update({'is_active': false}).filter('floor_id', 'in', floorIds);
+        await client.from('floors').update({'is_active': false}).eq('building_id', id);
+      }
+    } catch (_) {
+      try {
+        final floors = await fallbackClient.from('floors').select('id').eq('building_id', id);
+        final floorIds = (floors as List).map((f) => f['id'].toString()).toList();
+        if (floorIds.isNotEmpty) {
+          await fallbackClient.from('rooms').update({'is_active': false}).filter('floor_id', 'in', floorIds);
+          await fallbackClient.from('floors').update({'is_active': false}).eq('building_id', id);
+        }
+      } catch (_) {}
+    }
+    try {
+      await client.from('buildings').update({'is_active': false}).eq('id', id);
+    } catch (_) {
+      try { await fallbackClient.from('buildings').update({'is_active': false}).eq('id', id); } catch (_) {}
+    }
+    try {
+      await client.from('buildings').delete().eq('id', id);
+    } catch (_) {}
+
+    final cur = state.asData?.value;
+    if (cur != null) {
+      state = AsyncData(cur.copyWith(
+        buildings: cur.buildings.where((b) => b.id != id).toList(),
+      ));
+    }
     ref.invalidateSelf();
   }
 
   // ==================== FLOOR CRUD ====================
   Future<void> addFloor(FloorModel floor) async {
-    await SupabaseConfig.client.from('floors').insert(floor.toJson());
+    await SupabaseConfig.adminClient.from('floors').insert(floor.toJson());
     ref.invalidateSelf();
   }
 
   Future<void> updateFloor(String id, FloorModel floor) async {
-    await SupabaseConfig.client
+    await SupabaseConfig.adminClient
         .from('floors')
         .update(floor.toJson())
         .eq('id', id);
@@ -200,21 +230,44 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
   }
 
   Future<void> deleteFloor(String id) async {
-    await SupabaseConfig.client
-        .from('floors')
-        .update({'is_active': false})
-        .eq('id', id);
+    final client = SupabaseConfig.adminClient;
+    final fallbackClient = SupabaseConfig.client;
+    try {
+      await client.from('rooms').update({'is_active': false}).eq('floor_id', id);
+    } catch (_) {
+      try { await fallbackClient.from('rooms').update({'is_active': false}).eq('floor_id', id); } catch (_) {}
+    }
+    try {
+      await client.from('rooms').delete().eq('floor_id', id);
+    } catch (_) {}
+    try {
+      await client.from('floors').update({'is_active': false}).eq('id', id);
+    } catch (_) {
+      try { await fallbackClient.from('floors').update({'is_active': false}).eq('id', id); } catch (_) {}
+    }
+    try {
+      await client.from('floors').delete().eq('id', id);
+    } catch (_) {}
+
+    final cur = state.asData?.value;
+    if (cur != null) {
+      final updatedBuildings = cur.buildings.map((b) {
+        final remainingFloors = b.floors.where((f) => f.id != id).toList();
+        return b.copyWith(floors: remainingFloors);
+      }).toList();
+      state = AsyncData(cur.copyWith(buildings: updatedBuildings));
+    }
     ref.invalidateSelf();
   }
 
   // ==================== ROOM CRUD ====================
   Future<void> addRoom(RoomModel room) async {
-    await SupabaseConfig.client.from('rooms').insert(room.toJson());
+    await SupabaseConfig.adminClient.from('rooms').insert(room.toJson());
     ref.invalidateSelf();
   }
 
   Future<void> updateRoom(String id, RoomModel room) async {
-    await SupabaseConfig.client
+    await SupabaseConfig.adminClient
         .from('rooms')
         .update(room.toJson())
         .eq('id', id);
@@ -222,10 +275,39 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
   }
 
   Future<void> deleteRoom(String id) async {
-    await SupabaseConfig.client
-        .from('rooms')
-        .update({'is_active': false})
-        .eq('id', id);
+    final client = SupabaseConfig.adminClient;
+    final fallbackClient = SupabaseConfig.client;
+    try {
+      await client.from('rooms').update({'is_active': false}).eq('id', id);
+    } catch (_) {
+      try { await fallbackClient.from('rooms').update({'is_active': false}).eq('id', id); } catch (_) {}
+    }
+    try {
+      await client.from('rooms').delete().eq('id', id);
+    } catch (_) {}
+
+    final cur = state.asData?.value;
+    if (cur != null) {
+      final updatedBuildings = cur.buildings.map((b) {
+        final updatedFloors = b.floors.map((f) {
+          final remainingRooms = f.rooms.where((r) => r.id != id).toList();
+          return FloorModel(
+            id: f.id,
+            buildingId: f.buildingId,
+            name: f.name,
+            floorNumber: f.floorNumber,
+            isActive: f.isActive,
+            createdAt: f.createdAt,
+            rooms: remainingRooms,
+          );
+        }).toList();
+        return b.copyWith(floors: updatedFloors);
+      }).toList();
+      state = AsyncData(cur.copyWith(
+        buildings: updatedBuildings,
+        allRooms: cur.allRooms.where((r) => r.id != id).toList(),
+      ));
+    }
     ref.invalidateSelf();
   }
 }

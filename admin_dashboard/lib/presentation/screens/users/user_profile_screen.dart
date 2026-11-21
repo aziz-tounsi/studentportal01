@@ -87,11 +87,14 @@ final userProfileDataProvider =
     String? groupName;
     String? niveauCodeFromEnrollment;
 
+    String? niveauNameFromEnrollment;
+    String? sectionNameFromEnrollment;
+
     try {
       enrollment = await supabase
           .from('enrollments')
           .select(
-            '*, classes(id, name, niveau_id, niveaux(code, name)), groups(name)',
+            '*, classes(id, name, niveau_id, section_id, sections(id, name), niveaux(code, name)), groups(name)',
           )
           .eq('user_id', userId)
           .maybeSingle();
@@ -102,6 +105,9 @@ final userProfileDataProvider =
         className = classInfo?['name'];
         final niveauInfo = classInfo?['niveaux'] as Map<String, dynamic>?;
         niveauCodeFromEnrollment = niveauInfo?['code'];
+        niveauNameFromEnrollment = niveauInfo?['name'];
+        final sectionInfo = classInfo?['sections'] as Map<String, dynamic>?;
+        sectionNameFromEnrollment = sectionInfo?['name'];
         groupName = enrollment['groups']?['name'];
         debugPrint(
           'Profile: className=$className, niveau=$niveauCodeFromEnrollment, groupName=$groupName',
@@ -115,6 +121,12 @@ final userProfileDataProvider =
     final userData = Map<String, dynamic>.from(userResponse);
     if (userData['niveau_code'] == null && niveauCodeFromEnrollment != null) {
       userData['niveau_code'] = niveauCodeFromEnrollment;
+    }
+    if (niveauNameFromEnrollment != null) {
+      userData['niveau_name'] = niveauNameFromEnrollment;
+    }
+    if (sectionNameFromEnrollment != null) {
+      userData['section_name'] = sectionNameFromEnrollment;
     }
 
     // Calculate years at school
@@ -143,7 +155,6 @@ final userProfileDataProvider =
 
     // Get all absences (for calendar display across months)
     final now = DateTime.now();
-    final startOfMonth = DateTime(now.year, now.month, 1);
     List<Map<String, dynamic>> monthlyAbsences = [];
     int totalAbsences = 0;
     int justifiedAbsences = 0;
@@ -351,6 +362,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   bool _isUploadingPhoto = false;
   bool _showPassword = false;
   bool _isResettingPassword = false;
+  bool _isTogglingAccountStatus = false;
   int _selectedMonthOffset = 0;
   int _activityPage = 1;
   int _activityPerPage = 10;
@@ -553,7 +565,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     _buildStatsGrid(data),
                     const SizedBox(height: 32),
                     SizedBox(
-                      height: 440,
+                      height: 490,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -613,18 +625,35 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _outlineButton(
-                icon: Icons.refresh_rounded,
-                label: 'Actualiser',
-                onTap: () => ref.invalidate(userProfileDataProvider(widget.userId)),
+              if (isStudent)
+                _brandOutlineButton(
+                  label: 'Envoyer message élève',
+                  icon: Icons.mail_outline_rounded,
+                  onTap: () => _sendMessageToStudent(user),
+                ),
+              _brandOutlineButton(
+                label: 'Réinitialiser mot de passe',
+                icon: Icons.lock_reset_rounded,
+                onTap: _isResettingPassword ? null : () => _resetPassword(user),
+                isLoading: _isResettingPassword,
               ),
-              _outlineButton(icon: Icons.edit_outlined, label: 'Modifier', onTap: () => _showEditDialog(user)),
-              _brandOutlineButton(label: 'Réinitialiser mot de passe', onTap: _isResettingPassword ? null : () => _resetPassword(user), isLoading: _isResettingPassword),
-              if (isStudent) ...[
-                _buildAccountStatusButton(user),
-                _brandOutlineButton(label: 'Envoyer message élève', onTap: () => _sendMessageToStudent(user)),
-                _successButton(icon: Icons.login_rounded, label: 'Se connecter en tant que', onTap: () => _loginAsStudent(user)),
-              ],
+              if (isStudent) _buildAccountStatusButton(user),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showEditDialog(user),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Modifier', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6D4CF6),
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+                  ),
+                ),
+              ),
             ],
           ),
         ],
@@ -638,59 +667,83 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: isPaused ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isPaused
-              ? const Color(0xFFFCA5A5)
-              : const Color(0xFF86EFAC),
-        ),
+        border: Border.all(color: AppColors.border.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
-          onTap: () async {
-            final nextStatus = isPaused ? 'active' : 'paused_unpaid';
-            final ok = await UserManagementService.setAccountStatus(
-              userId: widget.userId,
-              accountStatus: nextStatus,
-            );
-            if (!mounted) return;
-            if (ok) {
-              ref.invalidate(userProfileDataProvider(widget.userId));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    nextStatus == 'paused_unpaid'
-                        ? 'Accès élève suspendu pour impayé.'
-                        : 'Accès élève réactivé.',
-                  ),
-                  backgroundColor: nextStatus == 'paused_unpaid'
-                      ? AppColors.warning
-                      : AppColors.success,
-                ),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Impossible de modifier le statut d\'accès.'),
-                  backgroundColor: AppColors.error,
-                ),
-              );
-            }
-          },
+          onTap: _isTogglingAccountStatus
+              ? null
+              : () async {
+                  setState(() => _isTogglingAccountStatus = true);
+                  try {
+                    final nextStatus = isPaused ? 'active' : 'paused_unpaid';
+                    final ok = await UserManagementService.setAccountStatus(
+                      userId: widget.userId,
+                      accountStatus: nextStatus,
+                    );
+                    if (!mounted) return;
+                    if (ok) {
+                      ref.invalidate(userProfileDataProvider(widget.userId));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            nextStatus == 'paused_unpaid'
+                                ? 'Accès élève suspendu pour impayé.'
+                                : 'Accès élève réactivé.',
+                          ),
+                          backgroundColor: nextStatus == 'paused_unpaid'
+                              ? AppColors.warning
+                              : AppColors.success,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Impossible de modifier le statut d\'accès.'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
+                  } finally {
+                    if (mounted) setState(() => _isTogglingAccountStatus = false);
+                  }
+                },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  isPaused ? Icons.lock_outline_rounded : Icons.verified_user_outlined,
-                  size: 16,
-                  color: isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
-                ),
-                const SizedBox(width: 7),
+                if (_isTogglingAccountStatus) ...[
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ] else ...[
+                  Icon(
+                    isPaused ? Icons.lock_outline_rounded : Icons.verified_user_outlined,
+                    size: 16,
+                    color: isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                  ),
+                  const SizedBox(width: 7),
+                ],
                 Text(
                   isPaused ? 'Suspendu (Impayé) — Réactiver' : 'Accès actif',
                   style: TextStyle(
@@ -894,400 +947,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     }
   }
 
-  Future<void> _setPasswordManually(Map<String, dynamic> user) async {
-    final passwordController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool obscurePassword = true;
 
-    final result = await showDialog<String>(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.08),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Définir le mot de passe'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Entrez le mot de passe actuel de ${user['full_name']} pour le sauvegarder.',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Mot de passe',
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscurePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
-                      onPressed: () => setDialogState(
-                        () => obscurePassword = !obscurePassword,
-                      ),
-                    ),
-                  ),
-                  validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    final generated = _generateRandomPassword();
-                    passwordController.text = generated;
-                  },
-                  icon: const Icon(Icons.auto_fix_high, size: 18),
-                  label: const Text('Générer automatiquement'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.pop(ctx, passwordController.text);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6D4CF6),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('Sauvegarder'),
-            ),
-          ],
-        ),
-      ),
-      ),
-    );
 
-    if (result == null || result.isEmpty) return;
 
-    try {
-      // Update password securely via Edge Function
-      await UserManagementService.resetPassword(widget.userId, newPassword: result);
-
-      // Refresh the profile
-      ref.invalidate(userProfileDataProvider(widget.userId));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Mot de passe sauvegardé avec succès'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
-        );
-      }
-    }
-  }
-
-  String _generateRandomPassword() {
-    const chars =
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = DateTime.now().millisecondsSinceEpoch;
-    return List.generate(
-      10,
-      (i) => chars[(random + i * 7) % chars.length],
-    ).join();
-  }
-
-  Future<void> _loginAsStudent(Map<String, dynamic> user) async {
-    final email = user['email'] as String?;
-    final initialPassword = user['initial_password'] as String?;
-    final fullName = user['full_name'] as String? ?? 'cet étudiant';
-
-    if (email == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cet utilisateur n\'a pas d\'email'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    // If we have the password saved, show credentials directly
-    if (initialPassword != null) {
-      _showLoginCredentialsDialog(email, initialPassword, fullName);
-      return;
-    }
-
-    // Otherwise, ask if they want to reset the password
-    final confirm = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.08),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.lock_reset, color: Color(0xFFD97706), size: 18),
-              ),
-              const SizedBox(width: 12),
-              const Text('Mot de passe non enregistré', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Le mot de passe de $fullName n\'est pas enregistré.'),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.slate50,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 16, color: AppColors.textTertiary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Voulez-vous réinitialiser son mot de passe pour pouvoir vous connecter ?',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          actions: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  icon: const Icon(Icons.vpn_key, size: 16),
-                  label: const Text('Réinitialiser et connecter', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm != true) return;
-
-    // Reset password
-    setState(() => _isResettingPassword = true);
-    try {
-      final newPassword = await ref
-          .read(usersProvider.notifier)
-          .resetUserPassword(widget.userId);
-
-      if (newPassword != null && mounted) {
-        ref.invalidate(userProfileDataProvider(widget.userId));
-        _showLoginCredentialsDialog(email, newPassword, fullName);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isResettingPassword = false);
-    }
-  }
-
-  void _showLoginCredentialsDialog(
-    String email,
-    String password,
-    String fullName,
-  ) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.08),
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.login, color: AppColors.success),
-            const SizedBox(width: 12),
-            const Text('Connexion en tant qu\'étudiant'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Utilisez ces identifiants pour vous connecter à l\'application étudiant en tant que $fullName :',
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            _buildCredentialRow('Email', email),
-            const SizedBox(height: 8),
-            _buildCredentialRow('Mot de passe', password),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEEF2FF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: const Color(0xFF6D4CF6),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Ouvrez l\'application mobile PythaOne et connectez-vous avec ces identifiants.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: const Color(0xFF6D4CF6),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              SizedBox(
-                height: 40,
-                child: TextButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(
-                      ClipboardData(text: 'Email: $email\nMot de passe: $password'),
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Identifiants copiés !'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                  ),
-                  icon: const Icon(Icons.copy_all, size: 16),
-                  label: const Text('Copier tout', style: TextStyle(fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                height: 40,
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.check_rounded, size: 16),
-                  label: const Text('Fermer', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6D4CF6),
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      ),
-    );
-  }
-
-  Widget _buildCredentialRow(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.slate100,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: AppColors.slate700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: SelectableText(
-              value,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.copy, size: 18),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$label copié !'),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
 
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
@@ -1310,19 +972,23 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     final niveauCode = user['niveau_code'] as String?;
     final sectionCode = user['section_code'] as String?;
     final legacyNiveau = user['niveau'] as String?;
+    final niveauName = user['niveau_name'] as String?;
+    final sectionName = user['section_name'] as String?;
     final gender = user['gender'] as String?;
     final nationality = user['nationality'] as String?;
     final dateOfBirth = user['date_of_birth'] as String?;
 
-    int? age;
+    String? dobFormatted;
     if (dateOfBirth != null) {
       final dob = DateTime.tryParse(dateOfBirth);
       if (dob != null) {
-        age = DateTime.now().difference(dob).inDays ~/ 365;
+        dobFormatted = DateFormat('d MMMM yyyy', 'fr_FR').format(dob);
       }
     }
 
-    final niveauDisplay = niveauCode ?? legacyNiveau ?? '-';
+    final fullNiveau = (niveauName != null && niveauName.isNotEmpty) ? niveauName : (niveauCode ?? legacyNiveau);
+    final fullSection = (sectionName != null && sectionName.isNotEmpty) ? sectionName : sectionCode;
+    final niveauDisplay = (fullNiveau != null && fullNiveau.isNotEmpty) ? fullNiveau : '-';
     final classeDisplay = (data.className != null && data.className!.isNotEmpty) ? data.className! : (sectionCode ?? '-');
 
     return Container(
@@ -1369,21 +1035,21 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             child: Text(fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate800), textAlign: TextAlign.center),
           ),
           const SizedBox(height: 6),
-          // Role badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getRoleColor(role).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _getRoleColor(role).withOpacity(0.3)),
+          // Role badge (hidden for students per design)
+          if (!isStudent)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getRoleColor(role).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(_getRoleLabel(role), style: TextStyle(color: _getRoleColor(role), fontSize: 12, fontWeight: FontWeight.w600)),
             ),
-            child: Text(_getRoleLabel(role), style: TextStyle(color: _getRoleColor(role), fontSize: 12, fontWeight: FontWeight.w600)),
-          ),
           if (studentCode != null) ...[
             const SizedBox(height: 6),
             GestureDetector(
               onTap: () {
-                Clipboard.setData(ClipboardData(text: studentCode!));
+                Clipboard.setData(ClipboardData(text: studentCode));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('ID copié!'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
                 );
@@ -1395,10 +1061,27 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           // Info Rows
           if (isStudent) ...[
             _profileInfoRow('Niveau', niveauDisplay),
+            if (fullSection != null && fullSection.isNotEmpty)
+              _profileInfoRow('Filière', fullSection),
             _profileInfoRow('Classe', classeDisplay),
             if (data.groupName != null && data.groupName!.isNotEmpty) _profileInfoRow('Groupe', data.groupName!),
-            _profileInfoRow('Genre', gender ?? '-'),
-            if (age != null) _profileInfoRow('Âge', '$age ans'),
+            Builder(
+              builder: (context) {
+                String genderDisplay = '-';
+                if (gender != null && gender.isNotEmpty) {
+                  final g = gender.trim().toUpperCase();
+                  if (g == 'M' || g == 'MASCULIN' || g == 'HOMME') {
+                    genderDisplay = 'Masculin';
+                  } else if (g == 'F' || g == 'FEMININ' || g == 'FÉMININ' || g == 'FEMME') {
+                    genderDisplay = 'Féminin';
+                  } else {
+                    genderDisplay = gender;
+                  }
+                }
+                return _profileInfoRow('Genre', genderDisplay);
+              },
+            ),
+            if (dobFormatted != null) _profileInfoRow('Date de naissance', dobFormatted),
             _profileInfoRow('Nationalité', nationality ?? '-'),
           ] else ...[
             _profileInfoRow('Rôle', _getRoleLabel(role)),
@@ -1432,9 +1115,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 125,
             child: Text(label, style: TextStyle(color: AppColors.slate400, fontSize: 13, fontWeight: FontWeight.w500)),
           ),
           Expanded(
@@ -1513,9 +1197,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: AppColors.slate50,
+              color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: [
@@ -1551,44 +1234,168 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     );
   }
 
-  // ==================== STATS GRID ====================
+  // ==================== STATS GRID (EXACT TABLEAU DE BORD GOLDEN METRIC STYLE) ====================
   Widget _buildStatsGrid(UserProfileData data) {
+    final cards = [
+      _buildGoldenMetricCard(
+        icon: Icons.event_busy_outlined,
+        iconColor: const Color(0xFFEF4444),
+        iconBgColor: const Color(0xFFFEF2F2),
+        title: 'Absences ce mois',
+        value: '${data.monthlyAbsences.length}',
+        trend: '${data.totalAbsences} au total',
+        trendLabel: 'sur l\'année',
+        trendUp: data.monthlyAbsences.isEmpty,
+        onTap: () => context.push('/student-absences/${widget.userId}'),
+      ),
+      _buildGoldenMetricCard(
+        icon: Icons.verified_outlined,
+        iconColor: const Color(0xFF10B981),
+        iconBgColor: const Color(0xFFECFDF5),
+        title: 'Justifiées',
+        value: '${data.justifiedAbsences}',
+        trend: data.totalAbsences > 0
+            ? '${((data.justifiedAbsences / data.totalAbsences) * 100).toStringAsFixed(0)}%'
+            : '100%',
+        trendLabel: 'taux de justification',
+        trendUp: true,
+        onTap: () => context.push('/student-absences/${widget.userId}'),
+      ),
+      _buildGoldenMetricCard(
+        icon: Icons.lightbulb_outline_rounded,
+        iconColor: const Color(0xFFF59E0B),
+        iconBgColor: const Color(0xFFFFFBEB),
+        title: 'Suggestions',
+        value: '${data.suggestions.length}',
+        trend: data.suggestions.any((s) => s['status'] == 'pending') ? 'En attente' : 'Traité',
+        trendLabel: 'statut récent',
+        trendUp: true,
+        onTap: () => context.go('/suggestions'),
+      ),
+      _buildGoldenMetricCard(
+        icon: Icons.grade_outlined,
+        iconColor: const Color(0xFF6D4CF6),
+        iconBgColor: const Color(0xFFF5F3FF),
+        title: 'Notes récentes',
+        value: '${data.grades.length}',
+        trend: data.grades.isNotEmpty ? 'Enregistrées' : 'Aucune',
+        trendLabel: 'évaluations',
+        trendUp: true,
+        onTap: () => context.go('/grades'),
+      ),
+    ];
+
     return Row(
       children: [
-        Expanded(child: _statCard('Absences ce mois', '${data.monthlyAbsences.length}', Icons.event_busy_outlined, AppColors.error, AppColors.errorSoft)),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard('Justifiées', '${data.justifiedAbsences}', Icons.verified_outlined, AppColors.success, AppColors.successSoft)),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard('Suggestions', '${data.suggestions.length}', Icons.lightbulb_outline, AppColors.warning, AppColors.warningSoft)),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard('Notes récentes', '${data.grades.length}', Icons.grade_outlined, AppColors.primary, AppColors.primarySoft)),
+        for (int i = 0; i < cards.length; i++) ...[
+          if (i > 0) const SizedBox(width: 16),
+          Expanded(child: cards[i]),
+        ],
       ],
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon, Color color, Color bgColor) {
-    return Container(
-      decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildGoldenMetricCard({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required String title,
+    required String value,
+    required String trend,
+    required String trendLabel,
+    required bool trendUp,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.015),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.slate800)),
-                const SizedBox(height: 2),
-                Text(label, style: TextStyle(color: AppColors.slate400, fontSize: 12, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: iconBgColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, size: 20, color: iconColor),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.arrow_outward_rounded,
+                  size: 14,
+                  color: Color(0xFFCBD5E1),
+                ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+                letterSpacing: -0.6,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  trend,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    trendLabel,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: Color(0xFF94A3B8),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1603,8 +1410,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
     return Container(
       decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(24),
-        child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header: title + Voir tout (same style as payment card)
@@ -1621,7 +1428,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 38),
           // Month switcher on its own row
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1633,7 +1440,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               _miniIconBtn(icon: Icons.chevron_right_rounded, onTap: _selectedMonthOffset < 0 ? () => setState(() => _selectedMonthOffset++) : null),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
           Expanded(child: _buildCalendarGrid(data, targetDate)),
           const SizedBox(height: 12),
           // Legend
@@ -1683,14 +1490,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           )).toList(),
         ),
         const SizedBox(height: 8),
-        // Calendar cells
         GridView.count(
           crossAxisCount: 7,
           shrinkWrap: true,
-          childAspectRatio: 1.5,
+          childAspectRatio: 1.18,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 4,
-          crossAxisSpacing: 4,
+          mainAxisSpacing: 5,
+          crossAxisSpacing: 5,
           children: [
             // Empty cells before first day
             for (int i = 1; i < firstWeekday; i++)
@@ -1722,25 +1528,25 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       bgColor = AppColors.success;
       textColor = Colors.white;
     } else if (isWeekend) {
-      bgColor = AppColors.slate100;
-      textColor = AppColors.slate400;
+      bgColor = const Color(0xFFF1F5F9);
+      textColor = const Color(0xFF94A3B8);
     } else if (date.isAfter(DateTime.now())) {
-      bgColor = AppColors.slate50;
-      textColor = AppColors.slate300;
+      bgColor = const Color(0xFFF8FAFC);
+      textColor = const Color(0xFFCBD5E1);
     } else {
       // Past day with no record = present (was at school)
-      bgColor = AppColors.success.withOpacity(0.15);
-      textColor = AppColors.success;
+      bgColor = AppColors.success.withValues(alpha: 0.12);
+      textColor = const Color(0xFF15803D);
     }
 
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-        border: isToday ? Border.all(color: AppColors.primary, width: 2) : null,
+        borderRadius: BorderRadius.circular(6),
+        border: isToday ? Border.all(color: AppColors.primary, width: 1.5) : null,
       ),
       child: Center(
-        child: Text('$day', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
+        child: Text('$day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textColor)),
       ),
     );
   }
@@ -1749,9 +1555,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-        const SizedBox(width: 6),
-        Text(label, style: TextStyle(color: AppColors.slate500, fontSize: 11)),
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2.5))),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(color: AppColors.slate500, fontSize: 11)),
       ],
     );
   }
@@ -1763,62 +1569,69 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     final totalAmount = totalPaid + totalDue;
     final pct = totalAmount > 0 ? (totalPaid / totalAmount * 100).clamp(0.0, 100.0) : 0.0;
 
-    return Container(
-      decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => context.push('/payments', extra: {'studentId': widget.userId}),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          decoration: _cardDecoration(),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Paiements', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
-              const Spacer(),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-onTap: () => _showStudentPaymentsSheet(data),
-                  child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                ),
+              Row(
+                children: [
+                  const Text('Paiements', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.slate800)),
+                  const Spacer(),
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => context.push('/payments', extra: {'studentId': widget.userId}),
+                      child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Donut chart
-          Center(
-            child: SizedBox(
-              width: 160,
-              height: 160,
-              child: CustomPaint(
-                painter: _DonutPainter(percentage: pct, color: pct >= 75 ? AppColors.success : (pct >= 50 ? AppColors.warning : AppColors.error)),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.slate800)),
-                      Text('Payé', style: TextStyle(color: AppColors.slate400, fontSize: 12)),
-                    ],
+              const SizedBox(height: 16),
+              // Donut chart
+              Center(
+                child: SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: CustomPaint(
+                    painter: _DonutPainter(percentage: pct, color: pct >= 75 ? AppColors.success : (pct >= 50 ? AppColors.warning : AppColors.error)),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.slate800)),
+                          Text('Payé', style: TextStyle(color: AppColors.slate400, fontSize: 12)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              const SizedBox(height: 24),
+              _paymentItem('Total dû', '${totalDue.toStringAsFixed(0)} TND'),
+              const SizedBox(height: 8),
+              _paymentItem('Total payé', '${totalPaid.toStringAsFixed(0)} TND'),
+              const SizedBox(height: 8),
+              _paymentItem('Reste', '${(totalDue - totalPaid).clamp(0.0, double.infinity).toStringAsFixed(0)} TND'),
+              const SizedBox(height: 8),
+              _paymentItem('À temps', '${data.onTimePayments}'),
+              const SizedBox(height: 8),
+              _paymentItem('En retard', '${data.latePayments}'),
+            ],
           ),
-          const SizedBox(height: 24),
-          _paymentItem('Total dû', '${totalDue.toStringAsFixed(0)} DH', AppColors.slate500),
-          const SizedBox(height: 8),
-          _paymentItem('Total payé', '${totalPaid.toStringAsFixed(0)} DH', AppColors.success),
-          const SizedBox(height: 8),
-          _paymentItem('Reste', '${(totalDue - totalPaid).clamp(0.0, double.infinity).toStringAsFixed(0)} DH', AppColors.error),
-          const SizedBox(height: 8),
-          _paymentItem('À temps', '${data.onTimePayments}', AppColors.primary),
-          const SizedBox(height: 8),
-          _paymentItem('En retard', '${data.latePayments}', AppColors.warning),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _paymentItem(String label, String value, Color color) {
+  Widget _paymentItem(String label, String value) {
     IconData icon;
     switch (label) {
       case 'Total dû':
@@ -1841,11 +1654,18 @@ onTap: () => _showStudentPaymentsSheet(data),
     }
     return Row(
       children: [
-        Icon(icon, size: 18, color: color),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: AppColors.primary),
+        ),
         const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: AppColors.slate500, fontSize: 13)),
+        Text(label, style: const TextStyle(color: AppColors.slate500, fontSize: 13)),
         const Spacer(),
-        Text(value, style: TextStyle(color: AppColors.slate700, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(value, style: const TextStyle(color: AppColors.slate700, fontSize: 13, fontWeight: FontWeight.w600)),
       ],
     );
   }
@@ -1929,7 +1749,7 @@ onTap: () => _showStudentPaymentsSheet(data),
                 height: 44,
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 decoration: const BoxDecoration(
-                  color: Color(0xFFF9FAFB),
+                  color: Colors.white,
                   border: Border(
                     top: BorderSide(color: Color(0xFFE2E8F0)),
                     bottom: BorderSide(color: Color(0xFFE2E8F0)),
@@ -2195,7 +2015,7 @@ onTap: () => _showStudentPaymentsSheet(data),
     if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes}m';
     if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
     if (diff.inDays < 7) return 'Il y a ${diff.inDays}j';
-    return DateFormat('dd/MM/yyyy').format(date);
+    return DateFormat('d MMM yyyy', 'fr_FR').format(date);
   }
 
   // ==================== REUSABLE HELPERS ====================
@@ -2229,40 +2049,26 @@ onTap: () => _showStudentPaymentsSheet(data),
     );
   }
 
-  Widget _outlineButton({required IconData icon, required String label, required VoidCallback onTap}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 16, color: AppColors.slate500),
-                const SizedBox(width: 8),
-                Text(label, style: const TextStyle(color: AppColors.slate500, fontWeight: FontWeight.w500, fontSize: 13)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _brandOutlineButton({required String label, VoidCallback? onTap, bool isLoading = false}) {
+
+  Widget _brandOutlineButton({
+    required String label,
+    IconData? icon,
+    VoidCallback? onTap,
+    bool isLoading = false,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))],
+        border: Border.all(color: AppColors.border.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -2276,32 +2082,21 @@ onTap: () => _showStudentPaymentsSheet(data),
               children: [
                 if (isLoading)
                   const IosLoader.small(color: AppColors.slate500)
-                else
-                  const Icon(Icons.lock_reset_rounded, size: 16, color: AppColors.slate500),
-                const SizedBox(width: 8),
-                Text(label, style: const TextStyle(color: AppColors.slate500, fontWeight: FontWeight.w500, fontSize: 13)),
+                else if (icon != null) ...[
+                  Icon(icon, size: 16, color: AppColors.slate500),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.slate500,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _successButton({required IconData icon, required String label, required VoidCallback onTap}) {
-    return SizedBox(
-      height: 40,
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16),
-        label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF6D4CF6),
-          foregroundColor: Colors.white,
-          elevation: 2,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
         ),
       ),
     );
@@ -2378,17 +2173,6 @@ onTap: () => _showStudentPaymentsSheet(data),
     }
   }
 
-  LinearGradient _getRoleGradient(String role) {
-    switch (role) {
-      case 'admin':
-        return AppColors.errorGradient;
-      case 'staff':
-        return AppColors.warningGradient;
-      default:
-        return AppColors.primaryGradient;
-    }
-  }
-
   String _getRoleLabel(String role) {
     switch (role) {
       case 'admin':
@@ -2400,19 +2184,12 @@ onTap: () => _showStudentPaymentsSheet(data),
     }
   }
 
-  String _getInitials(String name) {
-    final parts = name.split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
 
   String _formatDate(String? dateStr) {
     if (dateStr == null) return '-';
     final date = DateTime.tryParse(dateStr);
     if (date == null) return dateStr;
-    return DateFormat('dd/MM/yyyy').format(date);
+    return DateFormat('d MMM yyyy', 'fr_FR').format(date);
   }
 
   // ==================== STUDENT PAYMENTS DIALOG ====================
@@ -3014,11 +2791,6 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
   String _monthName(int month) =>
       month >= 1 && month <= 12 ? _monthNames[month] : '';
 
-  String _monthNameCapital(int month) {
-    final n = _monthName(month);
-    if (n.isEmpty) return '';
-    return n[0].toUpperCase() + n.substring(1);
-  }
 
   Widget _buildMonthlyTimelineView() {
     final filteredPayments = _selectedCategory == 'all'
@@ -3065,11 +2837,13 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
 
   Widget _buildCategoryFilter() {
     final categories = [
-      ('scolarite', 'Scolarité', Icons.school),
-      ('transport', 'Transport', Icons.directions_bus),
-      ('cantine', 'Cantine', Icons.restaurant),
-      ('activites', 'Activités', Icons.sports_soccer),
-      ('autres', 'Autres', Icons.more_horiz),
+      ('scolarite', 'Scolarité', Icons.school_rounded),
+      ('transport', 'Transport', Icons.directions_bus_rounded),
+      ('cantine', 'Cantine', Icons.restaurant_rounded),
+      ('inscription', 'Inscription', Icons.assignment_rounded),
+      ('uniforme', 'Uniforme', Icons.checkroom_rounded),
+      ('activites', 'Activités', Icons.sports_soccer_rounded),
+      ('autres', 'Autres', Icons.more_horiz_rounded),
     ];
 
     final visiblePayments = _payments
@@ -3161,7 +2935,7 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
         ? DateTime.tryParse(payment['paid_at'])
         : null;
     final plan = payment['payment_plans'] as Map<String, dynamic>?;
-    final category = plan?['category'] ?? 'scolarite';
+    final category = payment['category'] ?? plan?['category'] ?? 'scolarite';
 
     final isOverdue = status == 'pending' &&
         dueDate != null &&
@@ -3422,31 +3196,60 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
     }
   }
 
+  String _normalizeCategory(String? category) {
+    if (category == null || category.trim().isEmpty) return 'autres';
+    final c = category.toLowerCase().trim().replaceAll('é', 'e').replaceAll('è', 'e');
+    if (c.contains('scolar') || c.contains('tuition')) return 'scolarite';
+    if (c.contains('transp') || c.contains('bus')) return 'transport';
+    if (c.contains('cantin') || c.contains('restau') || c.contains('repas')) return 'cantine';
+    if (c.contains('inscript') || c.contains('regist') || c.contains('frais')) return 'inscription';
+    if (c.contains('uniform') || c.contains('tenue') || c.contains('vetement') || c.contains('vêtement')) return 'uniforme';
+    if (c.contains('activit') || c.contains('sport') || c.contains('club') || c.contains('culture')) return 'activites';
+    return 'autres';
+  }
+
   Color _getCategoryColor(String category) {
-    return const Color(0xFF64748B);
+    switch (_normalizeCategory(category)) {
+      case 'scolarite':
+        return const Color(0xFF3B82F6);
+      case 'transport':
+        return const Color(0xFF10B981);
+      case 'cantine':
+        return const Color(0xFFF59E0B);
+      case 'inscription':
+        return const Color(0xFF8B5CF6);
+      case 'uniforme':
+        return const Color(0xFFEC4899);
+      case 'activites':
+        return const Color(0xFF14B8A6);
+      case 'autres':
+      default:
+        return const Color(0xFF6B7280);
+    }
   }
 
   IconData _getCategoryIcon(String category) {
-    switch (category) {
+    switch (_normalizeCategory(category)) {
       case 'scolarite':
-        return Icons.school;
+        return Icons.school_rounded;
       case 'transport':
-        return Icons.directions_bus;
+        return Icons.directions_bus_rounded;
       case 'cantine':
-        return Icons.restaurant;
+        return Icons.restaurant_rounded;
       case 'inscription':
-        return Icons.assignment;
+        return Icons.assignment_rounded;
       case 'uniforme':
-        return Icons.checkroom;
+        return Icons.checkroom_rounded;
       case 'activites':
-        return Icons.sports_soccer;
+        return Icons.sports_soccer_rounded;
+      case 'autres':
       default:
-        return Icons.more_horiz;
+        return Icons.more_horiz_rounded;
     }
   }
 
   String _getCategoryName(String category) {
-    switch (category) {
+    switch (_normalizeCategory(category)) {
       case 'scolarite':
         return 'Scolarité';
       case 'transport':
@@ -3459,6 +3262,7 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
         return 'Uniforme';
       case 'activites':
         return 'Activités';
+      case 'autres':
       default:
         return 'Autres';
     }

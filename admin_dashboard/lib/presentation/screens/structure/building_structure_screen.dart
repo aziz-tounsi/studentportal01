@@ -496,7 +496,7 @@ class _BuildingStructureScreenState
                       width: double.infinity,
                       height: 44,
                       child: OutlinedButton.icon(
-                        onPressed: () => _showFloorDialog(buildingId: building.id),
+                        onPressed: () => _addFloorAutomatically(building.id),
                         icon: const Icon(Icons.add_rounded, size: 18),
                         label: const Text('Ajouter un étage', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                         style: OutlinedButton.styleFrom(
@@ -782,13 +782,87 @@ class _BuildingStructureScreenState
   }
 
   // ==================== DIALOGS ====================
+  Future<void> _addFloorAutomatically(String buildingId) async {
+    final buildingState = ref.read(buildingProvider).value;
+    final building = buildingState?.buildings.firstWhere(
+      (b) => b.id == buildingId,
+      orElse: () => BuildingModel(id: '', schoolId: '', name: ''),
+    );
+    if (building == null || building.id.isEmpty) return;
+
+    final existingFloors = building.floors;
+    int nextNumber = 0;
+    if (existingFloors.isNotEmpty) {
+      int maxNum = 0;
+      for (final f in existingFloors) {
+        if (f.floorNumber > maxNum) maxNum = f.floorNumber;
+      }
+      nextNumber = maxNum + 1;
+    }
+
+    String floorName;
+    if (nextNumber == 0) {
+      floorName = 'Rez-de-chaussée';
+    } else if (nextNumber == 1) {
+      floorName = '1er étage';
+    } else {
+      floorName = '${nextNumber}ème étage';
+    }
+
+    if (existingFloors.any((f) => f.name == floorName)) {
+      int suffix = 2;
+      while (existingFloors.any((f) => f.name == '$floorName ($suffix)')) {
+        suffix++;
+      }
+      floorName = '$floorName ($suffix)';
+    }
+
+    try {
+      await ref.read(buildingProvider.notifier).addFloor(
+        FloorModel(
+          id: '',
+          buildingId: buildingId,
+          name: floorName,
+          floorNumber: nextNumber,
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Étage "$floorName" ajouté avec succès'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(UserFriendlyError.format(e)),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+
   void _showAddDialog(String type) {
     switch (type) {
       case 'building':
         _showBuildingDialog();
         break;
       case 'floor':
-        _showFloorDialog();
+        final buildingState = ref.read(buildingProvider).value;
+        if (buildingState != null && buildingState.buildings.isNotEmpty) {
+          _addFloorAutomatically(buildingState.buildings.first.id);
+        } else {
+          _showBuildingDialog();
+        }
         break;
       case 'room':
         _showRoomDialog();
@@ -798,7 +872,6 @@ class _BuildingStructureScreenState
 
   void _showBuildingDialog({BuildingModel? building}) {
     final nameController = TextEditingController(text: building?.name ?? '');
-    final codeController = TextEditingController(text: building?.code ?? '');
     final isNew = building == null;
 
     showDialog(
@@ -873,22 +946,7 @@ class _BuildingStructureScreenState
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        const Text('Code (optionnel)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: codeController,
-                          decoration: InputDecoration(
-                            hintText: 'Ex: BAT-A',
-                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
-                            filled: true,
-                            fillColor: AppColors.slate50,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
-                          ),
-                        ),
+
                       ],
                     ),
                   ),
@@ -919,13 +977,16 @@ class _BuildingStructureScreenState
                           child: ElevatedButton.icon(
                             onPressed: () async {
                               if (nameController.text.isEmpty) return;
+                              final autoCode = (building?.code != null && building!.code!.isNotEmpty)
+                                  ? building.code
+                                  : nameController.text.trim().replaceAll(' ', '-').toUpperCase();
                               if (isNew) {
                                 await ref.read(buildingProvider.notifier).addBuilding(
-                                  BuildingModel(id: '', schoolId: '', name: nameController.text, code: codeController.text.isEmpty ? null : codeController.text),
+                                  BuildingModel(id: '', schoolId: '', name: nameController.text, code: autoCode),
                                 );
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bâtiment ajouté avec succès'), backgroundColor: AppColors.success));
                               } else {
-                                await ref.read(buildingProvider.notifier).updateBuilding(building.id, building.copyWith(name: nameController.text, code: codeController.text));
+                                await ref.read(buildingProvider.notifier).updateBuilding(building.id, building.copyWith(name: nameController.text, code: autoCode));
                               }
                               Navigator.pop(ctx);
                             },
@@ -956,15 +1017,27 @@ class _BuildingStructureScreenState
     final isNew = floor == null;
     int floorNumber = floor?.floorNumber ?? 0;
 
+    final buildingState = ref.read(buildingProvider).value;
+    final buildings = buildingState?.buildings ?? [];
+
+    BuildingModel? selectedBuilding;
+    if (buildingId != null && buildingState != null) {
+      selectedBuilding = buildings.where((b) => b.id == buildingId).firstOrNull;
+    } else if (floor != null && buildingState != null) {
+      selectedBuilding = buildings.where((b) => b.id == floor.buildingId).firstOrNull;
+    } else if (buildings.isNotEmpty) {
+      selectedBuilding = buildings.first;
+    }
+
     // Auto-generate floor name based on number
     String _generateFloorName(int number, String? currentBuildingId) {
       if (currentBuildingId == null) return '';
 
-      final buildingState = ref.read(buildingProvider).value;
-      if (buildingState == null) return '';
+      final bState = ref.read(buildingProvider).value;
+      if (bState == null) return '';
 
       // Find the building
-      final building = buildingState.buildings.firstWhere(
+      final building = bState.buildings.firstWhere(
         (b) => b.id == currentBuildingId,
         orElse: () => BuildingModel(id: '', schoolId: '', name: ''),
       );
@@ -1011,8 +1084,8 @@ class _BuildingStructureScreenState
       return baseName;
     }
 
-    String autoName = isNew && buildingId != null
-        ? _generateFloorName(floorNumber, buildingId)
+    String autoName = isNew && selectedBuilding != null
+        ? _generateFloorName(floorNumber, selectedBuilding!.id)
         : floor?.name ?? '';
 
     final nameController = TextEditingController(text: autoName);
@@ -1077,29 +1150,61 @@ class _BuildingStructureScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Cascading select: Bloc
+                        const Text('Bâtiment / Bloc *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<BuildingModel>(
+                          value: selectedBuilding,
+                          isExpanded: true,
+                          borderRadius: BorderRadius.circular(8),
+                          dropdownColor: Colors.white,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          decoration: InputDecoration(
+                            hintText: 'Sélectionner un bloc',
+                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                            filled: true,
+                            fillColor: AppColors.slate50,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                          ),
+                          items: buildings.map((b) => DropdownMenuItem(value: b, child: Text(b.name, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)))).toList(),
+                          onChanged: (b) {
+                            setDialogState(() {
+                              selectedBuilding = b;
+                              if (isNew && selectedBuilding != null) {
+                                nameController.text = _generateFloorName(floorNumber, selectedBuilding!.id);
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
                         const Text('Numéro d\'étage *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
                         const SizedBox(height: 8),
                         TextField(
                           controller: numberController,
                           keyboardType: TextInputType.number,
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                           onChanged: (value) {
                             final num = int.tryParse(value) ?? 0;
                             setDialogState(() {
                               floorNumber = num;
-                              if (isNew && buildingId != null) {
-                                nameController.text = _generateFloorName(num, buildingId);
+                              if (isNew && selectedBuilding != null) {
+                                nameController.text = _generateFloorName(num, selectedBuilding!.id);
                               }
                             });
                           },
                           decoration: InputDecoration(
                             hintText: '0 = RDC, 1 = 1er, -1 = Sous-sol',
-                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                             filled: true,
                             fillColor: AppColors.slate50,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -1107,15 +1212,16 @@ class _BuildingStructureScreenState
                         const SizedBox(height: 8),
                         TextField(
                           controller: nameController,
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                           decoration: InputDecoration(
                             hintText: isNew ? 'Nom auto-généré, modifiable' : 'Nom de l\'étage',
-                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                             filled: true,
                             fillColor: AppColors.slate50,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                           ),
                         ),
                       ],
@@ -1147,19 +1253,33 @@ class _BuildingStructureScreenState
                           height: 40,
                           child: ElevatedButton.icon(
                             onPressed: () async {
-                              if (nameController.text.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Le nom est requis'), backgroundColor: AppColors.error)); return; }
-                              final buildingState = ref.read(buildingProvider).value;
-                              if (buildingState != null && buildingId != null) {
-                                final building = buildingState.buildings.firstWhere((b) => b.id == buildingId, orElse: () => BuildingModel(id: '', schoolId: '', name: ''));
-                                final duplicateName = building.floors.where((f) => f.id != floor?.id).any((f) => f.name == nameController.text);
-                                if (duplicateName) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Un étage avec ce nom existe déjà'), backgroundColor: AppColors.error)); return; }
+                              if (selectedBuilding == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez sélectionner un bâtiment'), backgroundColor: AppColors.error));
+                                return;
                               }
-                              if (isNew && buildingId != null) {
-                                await ref.read(buildingProvider.notifier).addFloor(FloorModel(id: '', buildingId: buildingId, name: nameController.text, floorNumber: int.tryParse(numberController.text) ?? 0));
-                              } else if (!isNew) {
-                                await ref.read(buildingProvider.notifier).updateFloor(floor!.id, FloorModel(id: floor!.id, buildingId: floor.buildingId, name: nameController.text, floorNumber: int.tryParse(numberController.text) ?? 0));
+                              if (nameController.text.trim().isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Le nom est requis'), backgroundColor: AppColors.error));
+                                return;
                               }
-                              Navigator.pop(ctx);
+                              try {
+                                final bState = ref.read(buildingProvider).value;
+                                if (bState != null) {
+                                  final bldg = bState.buildings.firstWhere((b) => b.id == selectedBuilding!.id, orElse: () => BuildingModel(id: '', schoolId: '', name: ''));
+                                  final duplicateName = bldg.floors.where((f) => f.id != floor?.id).any((f) => f.name.trim().toLowerCase() == nameController.text.trim().toLowerCase());
+                                  if (duplicateName) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Un étage avec ce nom existe déjà'), backgroundColor: AppColors.error));
+                                    return;
+                                  }
+                                }
+                                if (isNew) {
+                                  await ref.read(buildingProvider.notifier).addFloor(FloorModel(id: '', buildingId: selectedBuilding!.id, name: nameController.text.trim(), floorNumber: int.tryParse(numberController.text) ?? 0));
+                                } else {
+                                  await ref.read(buildingProvider.notifier).updateFloor(floor!.id, FloorModel(id: floor.id, buildingId: selectedBuilding!.id, name: nameController.text.trim(), floorNumber: int.tryParse(numberController.text) ?? 0));
+                                }
+                                Navigator.pop(ctx);
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error));
+                              }
                             },
                             icon: const Icon(Icons.check_rounded, size: 18),
                             label: Text(isNew ? 'Créer l\'étage' : 'Enregistrer', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -1187,6 +1307,26 @@ class _BuildingStructureScreenState
   void _showRoomDialog({RoomModel? room, String? floorId}) {
     final isNew = room == null;
     String roomType = room?.roomType ?? 'classroom';
+
+    final buildingState = ref.read(buildingProvider).value;
+    final buildings = buildingState?.buildings ?? [];
+
+    BuildingModel? selectedBuilding;
+    FloorModel? selectedFloor;
+
+    if (floorId != null && buildingState != null) {
+      for (final b in buildings) {
+        final f = b.floors.where((f) => f.id == floorId).firstOrNull;
+        if (f != null) {
+          selectedBuilding = b;
+          selectedFloor = f;
+          break;
+        }
+      }
+    } else if (buildings.isNotEmpty) {
+      selectedBuilding = buildings.first;
+      selectedFloor = selectedBuilding.floors.firstOrNull;
+    }
 
     // Auto-generate name for new rooms based on room type and floor
     String _generateRoomName(
@@ -1315,23 +1455,8 @@ class _BuildingStructureScreenState
     }
 
     String autoGeneratedName = '';
-    FloorModel? targetFloor;
-
-    if (isNew && floorId != null) {
-      final buildingState = ref.read(buildingProvider).value;
-      if (buildingState != null) {
-        // Find the floor
-        for (final building in buildingState.buildings) {
-          final floor = building.floors
-              .where((f) => f.id == floorId)
-              .firstOrNull;
-          if (floor != null) {
-            targetFloor = floor;
-            autoGeneratedName = _generateRoomName(roomType, floor, floor.rooms);
-            break;
-          }
-        }
-      }
+    if (isNew && selectedFloor != null) {
+      autoGeneratedName = _generateRoomName(roomType, selectedFloor, selectedFloor.rooms);
     }
 
     final nameController = TextEditingController(
@@ -1398,19 +1523,83 @@ class _BuildingStructureScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Cascading select: Bloc
+                        const Text('Bâtiment / Bloc *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<BuildingModel>(
+                          value: selectedBuilding,
+                          isExpanded: true,
+                          borderRadius: BorderRadius.circular(8),
+                          dropdownColor: Colors.white,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          decoration: InputDecoration(
+                            hintText: 'Sélectionner un bloc',
+                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                            filled: true,
+                            fillColor: AppColors.slate50,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                          ),
+                          items: buildings.map((b) => DropdownMenuItem(value: b, child: Text(b.name, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)))).toList(),
+                          onChanged: (b) {
+                            setDialogState(() {
+                              selectedBuilding = b;
+                              selectedFloor = b?.floors.firstOrNull;
+                              if (isNew && selectedFloor != null) {
+                                nameController.text = _generateRoomName(roomType, selectedFloor!, selectedFloor!.rooms);
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        // Cascading select: Étage
+                        const Text('Étage *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<FloorModel>(
+                          value: selectedFloor,
+                          isExpanded: true,
+                          borderRadius: BorderRadius.circular(8),
+                          dropdownColor: Colors.white,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          decoration: InputDecoration(
+                            hintText: selectedBuilding == null ? 'Sélectionnez un bloc d\'abord' : 'Sélectionner un étage',
+                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                            filled: true,
+                            fillColor: AppColors.slate50,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                          ),
+                          items: (selectedBuilding?.floors ?? []).map((f) => DropdownMenuItem(value: f, child: Text(f.name, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)))).toList(),
+                          onChanged: (f) {
+                            setDialogState(() {
+                              selectedFloor = f;
+                              if (isNew && selectedFloor != null) {
+                                nameController.text = _generateRoomName(roomType, selectedFloor!, selectedFloor!.rooms);
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
                         const Text('Nom de la salle *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
                         const SizedBox(height: 8),
                         TextField(
                           controller: nameController,
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                           decoration: InputDecoration(
                             hintText: isNew ? 'Nom auto-généré, modifiable' : 'Nom de la salle',
-                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                             filled: true,
                             fillColor: AppColors.slate50,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -1418,24 +1607,26 @@ class _BuildingStructureScreenState
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String>(
                           value: roomType,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                           dropdownColor: Colors.white,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textTertiary),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: AppColors.slate50,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                           ),
                           items: RoomModel.roomTypes
-                              .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$2)))
+                              .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$2, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary))))
                               .toList(),
                           onChanged: (v) {
                             setDialogState(() {
                               roomType = v!;
-                              if (isNew && targetFloor != null) {
-                                nameController.text = _generateRoomName(roomType, targetFloor!, targetFloor!.rooms);
+                              if (isNew && selectedFloor != null) {
+                                nameController.text = _generateRoomName(roomType, selectedFloor!, selectedFloor!.rooms);
                               }
                             });
                           },
@@ -1446,15 +1637,16 @@ class _BuildingStructureScreenState
                         TextField(
                           controller: capacityController,
                           keyboardType: TextInputType.number,
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                           decoration: InputDecoration(
                             hintText: 'Ex: 30',
-                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                             filled: true,
                             fillColor: AppColors.slate50,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.borderLight)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderLight)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF6D4CF6), width: 1.5)),
                           ),
                         ),
                       ],
@@ -1486,11 +1678,19 @@ class _BuildingStructureScreenState
                           height: 40,
                           child: ElevatedButton.icon(
                             onPressed: () async {
-                              if (nameController.text.isEmpty) return;
-                              if (isNew && floorId != null) {
-                                await ref.read(buildingProvider.notifier).addRoom(RoomModel(id: '', floorId: floorId, name: nameController.text, roomType: roomType, capacity: int.tryParse(capacityController.text) ?? 30));
+                              final targetFloorId = selectedFloor?.id ?? floorId;
+                              if (targetFloorId == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez sélectionner un étage'), backgroundColor: AppColors.error));
+                                return;
+                              }
+                              final roomName = nameController.text.trim().isEmpty && selectedFloor != null
+                                  ? _generateRoomName(roomType, selectedFloor!, selectedFloor!.rooms)
+                                  : nameController.text.trim();
+                              if (roomName.isEmpty) return;
+                              if (isNew) {
+                                await ref.read(buildingProvider.notifier).addRoom(RoomModel(id: '', floorId: targetFloorId, name: roomName, roomType: roomType, capacity: int.tryParse(capacityController.text) ?? 30));
                               } else if (!isNew) {
-                                await ref.read(buildingProvider.notifier).updateRoom(room!.id, RoomModel(id: room.id, floorId: room.floorId, name: nameController.text, roomType: roomType, capacity: int.tryParse(capacityController.text) ?? 30));
+                                await ref.read(buildingProvider.notifier).updateRoom(room!.id, RoomModel(id: room.id, floorId: targetFloorId, name: roomName, roomType: roomType, capacity: int.tryParse(capacityController.text) ?? 30));
                               }
                               Navigator.pop(ctx);
                             },
@@ -1559,7 +1759,7 @@ class _BuildingStructureScreenState
                           children: [
                             const Text('Confirmer la suppression', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                             const SizedBox(height: 4),
-                            const Text('Cette action est irréversible', style: TextStyle(fontSize: 13, color: AppColors.error)),
+                            const Text('Cette action est irréversible', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                           ],
                         ),
                       ),
@@ -1577,27 +1777,18 @@ class _BuildingStructureScreenState
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFECACA)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Voulez-vous vraiment supprimer le $typeLabel "$name" ?',
-                            style: const TextStyle(fontSize: 14, color: Color(0xFF991B1B), fontWeight: FontWeight.w500),
-                          ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Voulez-vous vraiment supprimer le $typeLabel "$name" ?',
+                          style: const TextStyle(fontSize: 14, color: Color(0xFF1F2937), fontWeight: FontWeight.w500),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 Container(
@@ -1626,13 +1817,22 @@ class _BuildingStructureScreenState
                         height: 40,
                         child: ElevatedButton.icon(
                           onPressed: () async {
-                            switch (type) {
-                              case 'building': await ref.read(buildingProvider.notifier).deleteBuilding(id); break;
-                              case 'floor': await ref.read(buildingProvider.notifier).deleteFloor(id); break;
-                              case 'room': await ref.read(buildingProvider.notifier).deleteRoom(id); break;
+                            try {
+                              switch (type) {
+                                case 'building': await ref.read(buildingProvider.notifier).deleteBuilding(id); break;
+                                case 'floor': await ref.read(buildingProvider.notifier).deleteFloor(id); break;
+                                case 'room': await ref.read(buildingProvider.notifier).deleteRoom(id); break;
+                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$typeLabel supprimé'), backgroundColor: AppColors.success));
+                              }
+                            } catch (e) {
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error));
+                              }
                             }
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$typeLabel supprimé'), backgroundColor: AppColors.success));
                           },
                           icon: const Icon(Icons.delete_outline_rounded, size: 18),
                           label: const Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),

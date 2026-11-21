@@ -30,6 +30,7 @@ class BuildingModel {
     if (json['floors'] != null) {
       floors = (json['floors'] as List)
           .map((f) => FloorModel.fromJson(f))
+          .where((f) => f.isActive)
           .toList()
         ..sort((a, b) => a.floorNumber.compareTo(b.floorNumber));
     }
@@ -105,6 +106,7 @@ class FloorModel {
     if (json['rooms'] != null) {
       rooms = (json['rooms'] as List)
           .map((r) => RoomModel.fromJson(r))
+          .where((r) => r.isActive)
           .toList();
     }
 

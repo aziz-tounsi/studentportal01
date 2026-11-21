@@ -811,7 +811,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                       if (dob == null) return const SizedBox.shrink();
                                       return _InfoChipLight(
                                         icon: Icons.calendar_today,
-                                        label: DateFormat('dd/MM/yyyy').format(dob),
+                                        label: DateFormat('d MMM yyyy', 'fr_FR').format(dob),
                                       );
                                     },
                                   ),
@@ -1200,10 +1200,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.payment, color: Color(0xFF10B981)),
+                child: const Icon(Icons.payment, color: AppColors.primary),
               ),
               const SizedBox(width: 12),
               const Text(
@@ -1628,7 +1628,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                     m['published_at']?.toString() ?? '',
                                   );
                                   if (parsed == null) return '';
-                                  return DateFormat('dd/MM/yyyy').format(parsed);
+                                  return DateFormat('d MMM yyyy', 'fr_FR').format(parsed);
                                 }()
                               : '',
                           style: TextStyle(
@@ -1938,7 +1938,7 @@ class _SuggestionItem extends StatelessWidget {
                 ),
                 if (createdAt != null)
                   Text(
-                    DateFormat('dd/MM/yyyy HH:mm').format(createdAt),
+                    DateFormat("d MMM yyyy 'à' HH:mm", 'fr_FR').format(createdAt),
                     style: TextStyle(color: AppColors.slate500, fontSize: 11),
                   ),
               ],

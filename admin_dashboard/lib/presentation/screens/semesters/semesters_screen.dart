@@ -48,6 +48,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                     _buildHeader(context, semestersAsync),
                     Expanded(
                       child: semestersAsync.when(
+                        skipLoadingOnReload: false,
                         loading: () =>
                             const SemestersSkeletonLoader(),
                         error: (e, _) => Center(
@@ -290,7 +291,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                       Row(
                         children: [
                           Text(
-                            s.name,
+                            state.formatPeriodDisplayName(s),
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                           ),
                           if (s.isCurrent) ...[
@@ -318,18 +319,15 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                   ),
                 ),
                 // Actions
-                _actionBtn(
-                  Icons.edit_rounded,
-                  _brand,
-                  _brandLight,
-                  onTap: () => _showSemesterDialog(context, semester: s),
+                _gradeActionButton(
+                  Icons.edit,
+                  () => _showSemesterDialog(context, semester: s),
                 ),
-                const SizedBox(width: 8),
-                _actionBtn(
-                  Icons.delete_rounded,
-                  const Color(0xFFDC2626),
-                  const Color(0xFFFEF2F2),
-                  onTap: () => _confirmDelete(context, s),
+                const SizedBox(width: 4),
+                _gradeActionButton(
+                  Icons.delete_outline,
+                  () => _confirmDelete(context, s),
+                  isDelete: true,
                 ),
               ],
             ),
@@ -545,23 +543,17 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     );
   }
 
-  Widget _actionBtn(
-    IconData icon,
-    Color iconColor,
-    Color bgColor, {
-    required VoidCallback onTap,
-  }) {
+  Widget _gradeActionButton(IconData icon, VoidCallback onTap, {bool isDelete = false}) {
+    final color = isDelete ? AppColors.error : AppColors.slate500;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
+      hoverColor: color.withOpacity(0.1),
       child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, size: 18, color: iconColor),
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }
@@ -727,7 +719,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                 final yStart = SemestersState.stripTime(year.startDate);
                 final yEnd = SemestersState.stripTime(year.endDate);
                 if (sStart.isBefore(yStart) || sEnd.isAfter(yEnd)) {
-                  errorMessage = 'La période doit être comprise dans l\'année scolaire (du ${DateFormat('dd/MM/yyyy').format(yStart)} au ${DateFormat('dd/MM/yyyy').format(yEnd)})';
+                  errorMessage = 'La période doit être comprise dans l\'année scolaire (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(yStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(yEnd)})';
                 }
               }
             }
@@ -1004,7 +996,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Le ${state.periodLabel.toLowerCase()} précédent se termine le ${DateFormat('dd/MM/yyyy').format(minStartDate.subtract(const Duration(days: 1)))}',
+                                  'Le ${state.periodLabel.toLowerCase()} précédent se termine le ${DateFormat('d MMMM yyyy', 'fr_FR').format(minStartDate.subtract(const Duration(days: 1)))}',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: _brand,
@@ -1463,13 +1455,13 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
 
               if (rStart.isBefore(SemestersState.stripTime(year.startDate))) {
                 errorMessage =
-                    '$numLabel ne peut pas commencer avant le début de l\'année scolaire (${DateFormat('dd/MM/yyyy').format(year.startDate)})';
+                    '$numLabel ne peut pas commencer avant le début de l\'année scolaire (${DateFormat('d MMMM yyyy', 'fr_FR').format(year.startDate)})';
                 return;
               }
 
               if (rEnd.isAfter(SemestersState.stripTime(year.endDate))) {
                 errorMessage =
-                    '$numLabel ne peut pas se terminer après la fin de l\'année scolaire (${DateFormat('dd/MM/yyyy').format(year.endDate)})';
+                    '$numLabel ne peut pas se terminer après la fin de l\'année scolaire (${DateFormat('d MMMM yyyy', 'fr_FR').format(year.endDate)})';
                 return;
               }
             }
@@ -1501,13 +1493,13 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
 
                 if (rStart == existStart && rEnd == existEnd) {
                   errorMessage =
-                      'Une période avec exactement les mêmes dates existe déjà ("${existing.name}" du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
+                      'Une période avec exactement les mêmes dates existe déjà ("${existing.name}" du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)})';
                   return;
                 }
 
                 if (!rStart.isAfter(existEnd) && !rEnd.isBefore(existStart)) {
                   errorMessage =
-                      '$numLabel chevauche avec "${existing.name}" (du ${DateFormat('dd/MM/yyyy').format(existStart)} au ${DateFormat('dd/MM/yyyy').format(existEnd)})';
+                      '$numLabel chevauche avec "${existing.name}" (du ${DateFormat('d MMMM yyyy', 'fr_FR').format(existStart)} au ${DateFormat('d MMMM yyyy', 'fr_FR').format(existEnd)})';
                   return;
                 }
               }
@@ -2138,8 +2130,12 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
   }
 
   void _confirmDelete(BuildContext context, SemesterModel s) {
-    final periodLabel =
-        ref.read(semestersProvider).value?.periodLabel ?? 'Semestre';
+    final periodState = ref.read(semestersProvider).value;
+    final periodLabel = periodState?.periodLabel ?? 'Semestre';
+    final displayName = periodState != null
+        ? periodState.formatPeriodDisplayName(s)
+        : s.name;
+
     showDialog(
       context: context,
       barrierColor: Colors.transparent,
@@ -2151,137 +2147,109 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
               child: Container(color: Colors.black.withOpacity(0.28)),
             ),
           ),
-          Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.errorSoft,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text('Supprimer le ${periodLabel.toLowerCase()} ?', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              ],
             ),
-            child: Container(
-              width: 380,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Voulez-vous vraiment supprimer "$displayName" ? Cette action est irréversible.'),
+              ],
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEE2E2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Color(0xFFDC2626),
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Supprimer le ${periodLabel.toLowerCase()} ?',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Voulez-vous supprimer "${s.name}" ? Cette action est irréversible.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 40,
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.grey.shade600,
-                              side: BorderSide(color: Colors.grey.shade300),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                            ),
-                            child: const Text(
-                              'Annuler',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                            ),
-                          ),
-                        ),
+                  SizedBox(
+                    height: 40,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SizedBox(
-                          height: 40,
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              try {
-                                await ref.read(semestersProvider.notifier).delete(s.id);
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Row(
-                                        children: [
-                                          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                                          SizedBox(width: 8),
-                                          Text('Période supprimée avec succès'),
-                                        ],
-                                      ),
-                                      backgroundColor: Color(0xFF10B981),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Row(
-                                        children: [
-                                          const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              UserFriendlyError.format(
-                                                e,
-                                                fallback: 'Unable to delete this academic period right now. Please try again.',
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      backgroundColor: const Color(0xFFEF4444),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFDC2626),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                      child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    height: 40,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        try {
+                          await ref.read(semestersProvider.notifier).delete(s.id);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Période supprimée avec succès'),
+                                  ],
+                                ),
+                                backgroundColor: Color(0xFF10B981),
+                                behavior: SnackBarBehavior.floating,
                               ),
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              elevation: 2,
-                            ),
-                            child: const Text(
-                              'Supprimer',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                            ),
-                          ),
-                        ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        UserFriendlyError.format(
+                                          e,
+                                          fallback: 'Impossible de supprimer cette période scolaire.',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: const Color(0xFFEF4444),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         ],
       ),

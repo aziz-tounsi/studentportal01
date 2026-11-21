@@ -230,269 +230,493 @@ class TableSkeletonLoader extends StatelessWidget {
   }
 }
 
-/// Minimalist Instagram-style Skeleton Loader for Classes Screen (3-Column Layout)
+/// Skeleton loader specifically matching the modern Professors table layout
+class ProfessorsSkeletonLoader extends StatelessWidget {
+  final int rowCount;
+
+  const ProfessorsSkeletonLoader({
+    super.key,
+    this.rowCount = 8,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: ShimmerLoading(
+            child: Column(
+              children: [
+                // Header row skeleton matching exact columns
+                Container(
+                  height: 44,
+                  color: const Color(0xFFF9FAFB),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: const Row(
+                    children: [
+                      SizedBox(
+                        width: 40,
+                        child: Center(
+                          child: SkeletonBox(width: 16, height: 16, borderRadius: 3),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: SkeletonBox(width: 130, height: 12, borderRadius: 4),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 140,
+                        child: Center(
+                          child: SkeletonBox(width: 80, height: 12, borderRadius: 4),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: SkeletonBox(width: 60, height: 12, borderRadius: 4),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 110,
+                        child: Center(
+                          child: SkeletonBox(width: 60, height: 12, borderRadius: 4),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 140,
+                        child: Center(
+                          child: SkeletonBox(width: 70, height: 12, borderRadius: 4),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 70,
+                        child: Center(
+                          child: SkeletonBox(width: 45, height: 12, borderRadius: 4),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 90,
+                        child: Center(
+                          child: SkeletonBox(width: 50, height: 12, borderRadius: 4),
+                        ),
+                      ),
+                      SizedBox(width: 40),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                // Body rows matching exact columns
+                Expanded(
+                  child: ListView.separated(
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: rowCount,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    itemBuilder: (context, index) {
+                      return Container(
+                        height: 64,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: const Row(
+                          children: [
+                            SizedBox(
+                              width: 40,
+                              child: Center(
+                                child: SkeletonBox(width: 16, height: 16, borderRadius: 3),
+                              ),
+                            ),
+                            // Avatar + Name/Email
+                            Expanded(
+                              flex: 3,
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 8),
+                                child: Row(
+                                  children: [
+                                    SkeletonBox(width: 36, height: 36, borderRadius: 18),
+                                    SizedBox(width: 12),
+                                    Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        SkeletonBox(width: 120, height: 13, borderRadius: 4),
+                                        SizedBox(height: 6),
+                                        SkeletonBox(width: 160, height: 10, borderRadius: 3),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // Spécialité pill
+                            SizedBox(
+                              width: 140,
+                              child: Center(
+                                child: SkeletonBox(width: 85, height: 26, borderRadius: 12),
+                              ),
+                            ),
+                            // Niveaux pill
+                            SizedBox(
+                              width: 100,
+                              child: Center(
+                                child: SkeletonBox(width: 65, height: 24, borderRadius: 12),
+                              ),
+                            ),
+                            // Classes pill
+                            SizedBox(
+                              width: 110,
+                              child: Center(
+                                child: SkeletonBox(width: 65, height: 24, borderRadius: 12),
+                              ),
+                            ),
+                            // Téléphone
+                            SizedBox(
+                              width: 140,
+                              child: Center(
+                                child: SkeletonBox(width: 90, height: 12, borderRadius: 4),
+                              ),
+                            ),
+                            // Statut pill
+                            SizedBox(
+                              width: 70,
+                              child: Center(
+                                child: SkeletonBox(width: 50, height: 22, borderRadius: 10),
+                              ),
+                            ),
+                            // Créé le
+                            SizedBox(
+                              width: 90,
+                              child: Center(
+                                child: SkeletonBox(width: 65, height: 12, borderRadius: 4),
+                              ),
+                            ),
+                            // Actions
+                            SizedBox(
+                              width: 40,
+                              child: Center(
+                                child: SkeletonBox(width: 18, height: 18, borderRadius: 4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Footer pagination skeleton
+                Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  color: const Color(0xFFFAFAFB),
+                  child: const Row(
+                    children: [
+                      SkeletonBox(width: 140, height: 16, borderRadius: 4),
+                      Spacer(),
+                      SkeletonBox(width: 90, height: 14, borderRadius: 4),
+                      SizedBox(width: 16),
+                      SkeletonBox(width: 60, height: 28, borderRadius: 6),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Skeleton loader precisely matching the Classes screen (2-Column Layout mirroring PaymentsSkeletonLoader)
 class ClassesSkeletonLoader extends StatelessWidget {
   const ClassesSkeletonLoader({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF8FAFC),
+      color: const Color(0xFFF6F6F8),
       child: ShimmerLoading(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── LEFT PANEL (280px) ──
+            // ── LEFT PANEL: NIVEAUX NAVIGATION (300px) ──
             Container(
-              width: 280,
-              decoration: const BoxDecoration(
+              width: 300,
+              decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border(right: BorderSide(color: Color(0xFFF1F5F9))),
+                border: Border(
+                  right: BorderSide(color: const Color(0xFFE5E7EB).withOpacity(0.5)),
+                ),
               ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                physics: const NeverScrollableScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top Total Summary Card
-                    Container(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // TOTAL ÉTUDIANTS Card
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFF1F5F9)),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
+                        ],
                       ),
-                      child: const Column(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              SkeletonBox(width: 38, height: 38, borderRadius: 10),
-                              SizedBox(width: 12),
-                              SkeletonBox(width: 110, height: 13, borderRadius: 4),
+                              Container(
+                                width: 40, height: 40,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF655DD5),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.school_rounded, color: Colors.white, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'TOTAL ÉTUDIANTS',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textSecondary.withOpacity(0.7),
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
                             ],
                           ),
-                          SizedBox(height: 16),
-                          SkeletonBox(width: 70, height: 26, borderRadius: 6),
-                          SizedBox(height: 14),
-                          SkeletonBox(width: double.infinity, height: 6, borderRadius: 3),
+                          const SizedBox(height: 16),
+                          const SkeletonBox(width: 70, height: 28, borderRadius: 6),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    // Section title placeholder
-                    const SkeletonBox(width: 80, height: 14, borderRadius: 4),
-                    const SizedBox(height: 12),
-                    // List of level items
-                    ...List.generate(5, (_) => Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFF1F5F9)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Expanded(child: SkeletonBox(width: 120, height: 13, borderRadius: 4)),
-                          SizedBox(width: 12),
-                          SkeletonCircle(size: 24),
-                        ],
-                      ),
-                    )),
-                  ],
-                ),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFE5E7EB)),
+
+                  // Niveaux List Items
+                  Expanded(
+                    child: ListView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      itemCount: 6,
+                      itemBuilder: (context, i) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: const [
+                              Expanded(
+                                child: SkeletonBox(width: 110, height: 15, borderRadius: 4),
+                              ),
+                              SkeletonBox(width: 26, height: 26, borderRadius: 13),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            // ── CENTER PANEL (Expanded) ──
+            // ── RIGHT AREA: CLASSES GRID ──
             Expanded(
               child: Column(
                 children: [
-                  // Top Header Bar
+                  // Top bar
                   Container(
-                    height: 72,
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
                     decoration: const BoxDecoration(
                       color: Colors.white,
-                      border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                      border: Border(bottom: BorderSide(color: Color(0xFFE9EAF2))),
                     ),
-                    child: const Row(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SkeletonBox(width: 160, height: 18, borderRadius: 5),
-                            SizedBox(height: 6),
-                            SkeletonBox(width: 90, height: 11, borderRadius: 4),
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text(
+                              'Toutes les classes',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            SkeletonBox(width: 80, height: 13, borderRadius: 4),
                           ],
                         ),
-                        Spacer(),
-                        SkeletonBox(width: 240, height: 38, borderRadius: 10),
-                        SizedBox(width: 14),
-                        SkeletonBox(width: 130, height: 38, borderRadius: 10),
+                        const Spacer(),
+                        // Search bar (static)
+                        Container(
+                          width: 320,
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.search, size: 18, color: AppColors.textTertiary),
+                              const SizedBox(width: 8),
+                              Text('Rechercher...', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.slate50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Text('⌘K', style: TextStyle(fontSize: 10, color: AppColors.textTertiary, fontFamily: 'monospace')),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // + Nouvelle classe button (static)
+                        Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF655DD5),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text(
+                                'Nouvelle classe',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
 
-                  // Cards Grid & Right Panel
+                  // Cards Grid
                   Expanded(
-                    child: Row(
-                      children: [
-                        // Center Cards
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(24),
-                            physics: const NeverScrollableScrollPhysics(),
-                            child: Wrap(
-                              spacing: 16,
-                              runSpacing: 16,
-                              children: List.generate(6, (_) => Container(
-                                width: 275,
-                                padding: const EdgeInsets.all(18),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: const Color(0xFFF1F5F9)),
+                    child: SingleChildScrollView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(28),
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 350,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          mainAxisExtent: 200,
+                        ),
+                        itemCount: 8,
+                        itemBuilder: (context, index) {
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
                                 ),
-                                child: const Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        SkeletonBox(width: 38, height: 38, borderRadius: 10),
-                                        SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              SkeletonBox(width: 100, height: 13, borderRadius: 4),
-                                              SizedBox(height: 5),
-                                              SkeletonBox(width: 65, height: 10, borderRadius: 3),
-                                            ],
-                                          ),
-                                        ),
-                                        SkeletonBox(width: 16, height: 16, borderRadius: 4),
-                                      ],
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: const [
+                                    SkeletonBox(width: 38, height: 38, borderRadius: 10),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          SkeletonBox(width: 100, height: 15, borderRadius: 4),
+                                          SizedBox(height: 5),
+                                          SkeletonBox(width: 60, height: 12, borderRadius: 3),
+                                        ],
+                                      ),
                                     ),
-                                    SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        SkeletonBox(width: 14, height: 14, borderRadius: 3),
-                                        SizedBox(width: 8),
-                                        SkeletonBox(width: 70, height: 11, borderRadius: 3),
-                                        Spacer(),
-                                        SkeletonBox(width: 50, height: 20, borderRadius: 6),
-                                      ],
+                                    SkeletonBox(width: 24, height: 24, borderRadius: 6),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: const [
+                                    Expanded(
+                                      child: SkeletonBox(height: 6, borderRadius: 4),
                                     ),
-                                    SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        Expanded(child: SkeletonBox(width: double.infinity, height: 5, borderRadius: 3)),
-                                        SizedBox(width: 10),
-                                        SkeletonBox(width: 35, height: 10, borderRadius: 3),
-                                      ],
-                                    ),
-                                    SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        SkeletonCircle(size: 26),
-                                        SizedBox(width: 10),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            SkeletonBox(width: 85, height: 11, borderRadius: 3),
-                                            SizedBox(height: 4),
-                                            SkeletonBox(width: 55, height: 9, borderRadius: 3),
-                                          ],
-                                        ),
-                                      ],
+                                    SizedBox(width: 10),
+                                    SkeletonBox(width: 45, height: 12, borderRadius: 3),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: const [
+                                    SkeletonCircle(size: 28),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          SkeletonBox(width: 90, height: 12, borderRadius: 3),
+                                          SizedBox(height: 4),
+                                          SkeletonBox(width: 60, height: 10, borderRadius: 2),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
-                              )),
-                            ),
-                          ),
-                        ),
-
-                        // ── RIGHT PANEL (290px) ──
-                        Container(
-                          width: 290,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            border: Border(left: BorderSide(color: Color(0xFFF1F5F9))),
-                          ),
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(20),
-                            physics: const NeverScrollableScrollPhysics(),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(18),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: const Color(0xFFF1F5F9)),
-                                  ),
-                                  child: const Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      SkeletonBox(width: 70, height: 10, borderRadius: 3),
-                                      SizedBox(height: 10),
-                                      SkeletonBox(width: 120, height: 18, borderRadius: 5),
-                                      SizedBox(height: 6),
-                                      SkeletonBox(width: 90, height: 11, borderRadius: 3),
-                                      SizedBox(height: 16),
-                                      Row(
-                                        children: [
-                                          SkeletonBox(width: 50, height: 11, borderRadius: 3),
-                                          Spacer(),
-                                          SkeletonBox(width: 40, height: 11, borderRadius: 3),
-                                        ],
-                                      ),
-                                      SizedBox(height: 10),
-                                      Row(
-                                        children: [
-                                          SkeletonCircle(size: 24),
-                                          SizedBox(width: 6),
-                                          SkeletonCircle(size: 24),
-                                          SizedBox(width: 6),
-                                          SkeletonCircle(size: 24),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                const SkeletonBox(width: 110, height: 13, borderRadius: 4),
-                                const SizedBox(height: 12),
-                                ...List.generate(3, (_) => Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: const Color(0xFFF1F5F9)),
-                                  ),
-                                  child: const Row(
-                                    children: [
-                                      SkeletonBox(width: 14, height: 14, borderRadius: 3),
-                                      SizedBox(width: 10),
-                                      SkeletonBox(width: 85, height: 11, borderRadius: 3),
-                                      Spacer(),
-                                      SkeletonBox(width: 45, height: 11, borderRadius: 3),
-                                    ],
-                                  ),
-                                )),
                               ],
                             ),
-                          ),
-                        ),
-                      ],
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ],
@@ -552,28 +776,20 @@ class ClassTimetableSkeletonLoader extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFEEEFF2)),
                     ),
-                    child: const Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SkeletonBox(width: 100, height: 13, borderRadius: 4),
-                              SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  SkeletonCircle(size: 16),
-                                  SizedBox(width: 6),
-                                  SkeletonBox(width: 65, height: 10, borderRadius: 3),
-                                  SizedBox(width: 10),
-                                  SkeletonBox(width: 45, height: 10, borderRadius: 3),
-                                ],
-                              ),
-                            ],
-                          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        SkeletonBox(width: 90, height: 13, borderRadius: 4),
+                        SizedBox(height: 5),
+                        SkeletonBox(width: 110, height: 10, borderRadius: 3),
+                        SizedBox(height: 5),
+                        Row(
+                          children: [
+                            SkeletonCircle(size: 14),
+                            SizedBox(width: 6),
+                            SkeletonBox(width: 65, height: 10, borderRadius: 3),
+                          ],
                         ),
-                        SizedBox(width: 8),
-                        SkeletonBox(width: 38, height: 12, borderRadius: 3),
                       ],
                     ),
                   ),
@@ -598,41 +814,43 @@ class ClassDetailSkeletonLoader extends StatelessWidget {
       child: ShimmerLoading(
         child: Column(
           children: [
-            // Top Bar
+            // ── TOP BAR (Matching _buildHeader in class_detail_screen.dart) ──
             Container(
-              height: 68,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: const BoxDecoration(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  SkeletonBox(width: 36, height: 36, borderRadius: 10),
-                  SizedBox(width: 14),
-                  SkeletonBox(width: 40, height: 40, borderRadius: 10),
-                  SizedBox(width: 12),
-                  SkeletonBox(width: 80, height: 18, borderRadius: 5),
-                  SizedBox(width: 10),
-                  SkeletonBox(width: 110, height: 24, borderRadius: 6),
-                  SizedBox(width: 12),
-                  SkeletonBox(width: 75, height: 26, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 75, height: 26, borderRadius: 8),
-                  SizedBox(width: 8),
-                  SkeletonBox(width: 65, height: 26, borderRadius: 8),
-                  Spacer(),
-                  SkeletonBox(width: 220, height: 36, borderRadius: 8),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.slate50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border.withOpacity(0.5)),
+                    ),
+                    child: const Icon(Icons.arrow_back_rounded, size: 20, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(width: 14),
+                  const SkeletonBox(width: 110, height: 20, borderRadius: 6),
+                  const SizedBox(width: 10),
+                  const SkeletonBox(width: 80, height: 24, borderRadius: 9999),
+                  const SizedBox(width: 10),
+                  const SkeletonBox(width: 70, height: 24, borderRadius: 9999),
+                  const Spacer(),
+                  const SkeletonBox(width: 220, height: 36, borderRadius: 8),
                 ],
               ),
             ),
 
-            // Main Content: Left Tables + Right Sidebar
+            // ── MAIN CONTENT: LEFT (STUDENTS + TEACHERS) & RIGHT (AGENDA) ──
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Left Column: Student Table + Teachers
+                  // ── LEFT COLUMN: Student Table + Teachers Section ──
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(24),
@@ -640,32 +858,37 @@ class ClassDetailSkeletonLoader extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Student Table Card
+                          // 1. Student Table Card
                           Container(
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border.withOpacity(0.3)),
+                              boxShadow: [
+                                BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: const Offset(0, 2)),
+                              ],
                             ),
                             child: Column(
                               children: [
-                                // Header
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                // Table Header Bar
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                  decoration: const BoxDecoration(
+                                    border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                                  ),
                                   child: Row(
-                                    children: [
+                                    children: const [
                                       SkeletonBox(width: 32, height: 32, borderRadius: 8),
                                       SizedBox(width: 12),
                                       SkeletonBox(width: 140, height: 16, borderRadius: 5),
                                       SizedBox(width: 10),
-                                      SkeletonBox(width: 30, height: 20, borderRadius: 10),
+                                      SkeletonBox(width: 90, height: 22, borderRadius: 999),
                                       Spacer(),
-                                      SkeletonBox(width: 140, height: 34, borderRadius: 8),
+                                      SkeletonBox(width: 110, height: 32, borderRadius: 8),
                                     ],
                                   ),
                                 ),
-                                const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                                // Table Header Row
+                                // Table Column Headers
                                 Container(
                                   height: 42,
                                   color: const Color(0xFFF8FAFC),
@@ -676,18 +899,20 @@ class ClassDetailSkeletonLoader extends StatelessWidget {
                                       SizedBox(width: 20),
                                       SkeletonBox(width: 130, height: 12, borderRadius: 4),
                                       Spacer(),
-                                      SkeletonBox(width: 90, height: 12, borderRadius: 4),
+                                      SkeletonBox(width: 70, height: 12, borderRadius: 4),
                                       SizedBox(width: 40),
-                                      SkeletonBox(width: 80, height: 12, borderRadius: 4),
+                                      SkeletonBox(width: 60, height: 12, borderRadius: 4),
+                                      SizedBox(width: 40),
+                                      SkeletonBox(width: 65, height: 12, borderRadius: 4),
                                       SizedBox(width: 30),
-                                      SkeletonBox(width: 16, height: 16, borderRadius: 4),
+                                      SkeletonBox(width: 20, height: 20, borderRadius: 4),
                                     ],
                                   ),
                                 ),
                                 const Divider(height: 1, color: Color(0xFFF1F5F9)),
                                 // Student Rows
                                 ...List.generate(6, (i) => Container(
-                                  height: 58,
+                                  height: 56,
                                   padding: const EdgeInsets.symmetric(horizontal: 20),
                                   decoration: BoxDecoration(
                                     border: i < 5 ? const Border(bottom: BorderSide(color: Color(0xFFF8FAFC))) : null,
@@ -696,48 +921,71 @@ class ClassDetailSkeletonLoader extends StatelessWidget {
                                     children: [
                                       SkeletonBox(width: 16, height: 16, borderRadius: 4),
                                       SizedBox(width: 20),
-                                      SkeletonCircle(size: 34),
+                                      SkeletonCircle(size: 32),
                                       SizedBox(width: 12),
                                       Column(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           SkeletonBox(width: 120, height: 13, borderRadius: 4),
-                                          SizedBox(height: 5),
-                                          SkeletonBox(width: 150, height: 10, borderRadius: 3),
+                                          SizedBox(height: 4),
+                                          SkeletonBox(width: 140, height: 10, borderRadius: 3),
                                         ],
                                       ),
                                       Spacer(),
-                                      SkeletonBox(width: 70, height: 12, borderRadius: 4),
+                                      SkeletonBox(width: 60, height: 12, borderRadius: 4),
                                       SizedBox(width: 40),
-                                      SkeletonBox(width: 85, height: 12, borderRadius: 4),
+                                      SkeletonBox(width: 50, height: 12, borderRadius: 4),
+                                      SizedBox(width: 40),
+                                      SkeletonBox(width: 65, height: 22, borderRadius: 11),
                                       SizedBox(width: 30),
-                                      SkeletonBox(width: 18, height: 18, borderRadius: 4),
+                                      SkeletonBox(width: 20, height: 20, borderRadius: 6),
                                     ],
                                   ),
                                 )),
+                                // Pagination bar
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  decoration: const BoxDecoration(
+                                    border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                                  ),
+                                  child: Row(
+                                    children: const [
+                                      SkeletonBox(width: 100, height: 13, borderRadius: 4),
+                                      Spacer(),
+                                      SkeletonBox(width: 28, height: 28, borderRadius: 6),
+                                      SizedBox(width: 8),
+                                      SkeletonBox(width: 28, height: 28, borderRadius: 6),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
 
                           const SizedBox(height: 24),
 
-                          // Teachers Section Card
+                          // 2. Teachers Section Card
                           Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border.withOpacity(0.3)),
+                              boxShadow: [
+                                BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: const Offset(0, 2)),
+                              ],
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Row(
-                                  children: [
+                                Row(
+                                  children: const [
                                     SkeletonBox(width: 32, height: 32, borderRadius: 8),
                                     SizedBox(width: 12),
-                                    SkeletonBox(width: 130, height: 16, borderRadius: 5),
+                                    SkeletonBox(width: 160, height: 16, borderRadius: 5),
+                                    Spacer(),
+                                    SkeletonBox(width: 90, height: 32, borderRadius: 8),
                                   ],
                                 ),
                                 const SizedBox(height: 18),
@@ -747,6 +995,7 @@ class ClassDetailSkeletonLoader extends StatelessWidget {
                                       margin: const EdgeInsets.symmetric(horizontal: 6),
                                       padding: const EdgeInsets.all(14),
                                       decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(color: const Color(0xFFF1F5F9)),
                                       ),
@@ -777,75 +1026,63 @@ class ClassDetailSkeletonLoader extends StatelessWidget {
                     ),
                   ),
 
-                  // Right Sidebar (320px)
+                  // ── RIGHT SIDEBAR: AGENDA DE LA CLASSE (320px) ──
                   Container(
                     width: 320,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border(left: BorderSide(color: Color(0xFFF1F5F9))),
+                      border: Border(left: BorderSide(color: AppColors.border.withOpacity(0.5))),
                     ),
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(22),
+                      padding: const EdgeInsets.all(20),
                       physics: const NeverScrollableScrollPhysics(),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SkeletonBox(width: 130, height: 16, borderRadius: 5),
+                          // Header: Agenda de la classe
+                          Row(
+                            children: const [
+                              SkeletonBox(width: 32, height: 32, borderRadius: 8),
+                              SizedBox(width: 10),
+                              SkeletonBox(width: 150, height: 16, borderRadius: 4),
+                            ],
+                          ),
                           const SizedBox(height: 6),
-                          const SkeletonBox(width: 90, height: 11, borderRadius: 4),
-                          const SizedBox(height: 22),
-                          // Main Teacher Card
-                          Container(
-                            padding: const EdgeInsets.all(16),
+                          const SkeletonBox(width: 120, height: 11, borderRadius: 4),
+                          const SizedBox(height: 20),
+
+                          // Timeline slots
+                          ...List.generate(4, (i) => Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFF1F5F9)),
                             ),
-                            child: const Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SkeletonCircle(size: 44),
-                                SizedBox(width: 14),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SkeletonBox(width: 110, height: 14, borderRadius: 4),
-                                    SizedBox(height: 6),
-                                    SkeletonBox(width: 75, height: 10, borderRadius: 3),
+                                Row(
+                                  children: const [
+                                    SkeletonBox(width: 70, height: 18, borderRadius: 6),
+                                    Spacer(),
+                                    SkeletonBox(width: 50, height: 16, borderRadius: 4),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                const SkeletonBox(width: 130, height: 14, borderRadius: 4),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: const [
+                                    SkeletonCircle(size: 16),
+                                    SizedBox(width: 6),
+                                    SkeletonBox(width: 90, height: 11, borderRadius: 3),
                                   ],
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(height: 24),
-                          // Info rows
-                          ...List.generate(4, (_) => const Padding(
-                            padding: EdgeInsets.only(bottom: 14),
-                            child: Row(
-                              children: [
-                                SkeletonBox(width: 70, height: 12, borderRadius: 4),
-                                Spacer(),
-                                SkeletonBox(width: 90, height: 12, borderRadius: 4),
-                              ],
-                            ),
                           )),
-                          const SizedBox(height: 20),
-                          // Schedule placeholder
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFF1F5F9)),
-                            ),
-                            child: const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SkeletonBox(width: 110, height: 13, borderRadius: 4),
-                                SizedBox(height: 14),
-                                SkeletonBox(width: double.infinity, height: 44, borderRadius: 8),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1647,6 +1884,241 @@ class ResultsStudentListSkeletonLoader extends StatelessWidget {
   }
 }
 
+/// Skeleton loader precisely matching the Single Student Grade Entry / Saisie des notes table layout
+class SingleStudentGradeEntrySkeletonLoader extends StatelessWidget {
+  final int rowCount;
+  const SingleStudentGradeEntrySkeletonLoader({super.key, this.rowCount = 8});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final availableWidth = constraints.maxWidth;
+            const checkboxW = 44.0;
+            const actionsW = 44.0;
+            const codeW = 90.0;
+            const coefW = 90.0;
+            const evalW = 290.0;
+            const noteW = 120.0;
+            const statutW = 110.0;
+
+            final fixedW = checkboxW + codeW + coefW + evalW + noteW + statutW + actionsW;
+            final nameW = (availableWidth - fixedW).clamp(140.0, 280.0);
+            final totalTableW = fixedW + nameW > availableWidth ? fixedW + nameW : availableWidth;
+
+            return ShimmerLoading(
+              child: Column(
+                children: [
+                  // Table content with horizontal scroll if needed
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: totalTableW,
+                        child: Column(
+                          children: [
+                            // Header row
+                            Container(
+                              height: 44,
+                              color: const Color(0xFFF9FAFB),
+                              child: Row(
+                                children: [
+                                  const SizedBox(
+                                    width: checkboxW,
+                                    child: Center(
+                                      child: SkeletonBox(width: 16, height: 16, borderRadius: 3),
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    width: codeW,
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: SkeletonBox(width: 48, height: 11, borderRadius: 3),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: nameW,
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: SkeletonBox(width: 100, height: 11, borderRadius: 3),
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    width: coefW,
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: SkeletonBox(width: 65, height: 11, borderRadius: 3),
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    width: evalW,
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: SkeletonBox(width: 95, height: 11, borderRadius: 3),
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    width: noteW,
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: SkeletonBox(width: 85, height: 11, borderRadius: 3),
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    width: statutW,
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: SkeletonBox(width: 55, height: 11, borderRadius: 3),
+                                    ),
+                                  ),
+                                  const SizedBox(width: actionsW),
+                                ],
+                              ),
+                            ),
+                            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                            // Body rows
+                            Expanded(
+                              child: ListView.separated(
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: rowCount,
+                                separatorBuilder: (_, _) =>
+                                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                itemBuilder: (context, index) {
+                                  return SizedBox(
+                                    height: 58,
+                                    child: Row(
+                                      children: [
+                                        const SizedBox(
+                                          width: checkboxW,
+                                          child: Center(
+                                            child: SkeletonBox(width: 16, height: 16, borderRadius: 3),
+                                          ),
+                                        ),
+                                        // CODE pill
+                                        const SizedBox(
+                                          width: codeW,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8),
+                                            child: SkeletonBox(width: 52, height: 24, borderRadius: 9999),
+                                          ),
+                                        ),
+                                        // MATIÈRE (Icon + Name)
+                                        SizedBox(
+                                          width: nameW,
+                                          child: const Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8),
+                                            child: Row(
+                                              children: [
+                                                SkeletonBox(width: 28, height: 28, borderRadius: 6),
+                                                SizedBox(width: 10),
+                                                Expanded(
+                                                  child: SkeletonBox(height: 13, borderRadius: 4),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        // COEFFICIENT pill
+                                        const SizedBox(
+                                          width: coefW,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8),
+                                            child: SkeletonBox(width: 56, height: 24, borderRadius: 9999),
+                                          ),
+                                        ),
+                                        // ÉVALUATIONS pills
+                                        const SizedBox(
+                                          width: evalW,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8),
+                                            child: Row(
+                                              children: [
+                                                SkeletonBox(width: 60, height: 24, borderRadius: 9999),
+                                                SizedBox(width: 6),
+                                                SkeletonBox(width: 68, height: 24, borderRadius: 9999),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        // NOTE / MOYENNE
+                                        const SizedBox(
+                                          width: noteW,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8),
+                                            child: SkeletonBox(width: 65, height: 14, borderRadius: 4),
+                                          ),
+                                        ),
+                                        // STATUT pill
+                                        const SizedBox(
+                                          width: statutW,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8),
+                                            child: SkeletonBox(width: 72, height: 24, borderRadius: 9999),
+                                          ),
+                                        ),
+                                        // Actions menu
+                                        const SizedBox(
+                                          width: actionsW,
+                                          child: Center(
+                                            child: SkeletonBox(width: 16, height: 16, borderRadius: 4),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Footer pagination
+                  Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFAFAFB),
+                      border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                    ),
+                    child: const Row(
+                      children: [
+                        SkeletonBox(width: 130, height: 26, borderRadius: 8),
+                        Spacer(),
+                        SkeletonBox(width: 85, height: 14, borderRadius: 4),
+                        SizedBox(width: 12),
+                        SkeletonBox(width: 60, height: 28, borderRadius: 6),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 /// Skeleton loader precisely matching the Historique d'absences screen (Image 3)
 class StudentAbsencesSkeletonLoader extends StatelessWidget {
   const StudentAbsencesSkeletonLoader({super.key});
@@ -1975,28 +2447,24 @@ class StudentProfileSkeletonLoader extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _buildHeaderOutlineButton(
-                          Icons.refresh_rounded,
-                          'Actualiser',
-                        ),
-                        _buildHeaderOutlineButton(
-                          Icons.edit_outlined,
-                          'Modifier',
+                          Icons.mail_outline_rounded,
+                          'Envoyer message élève',
                         ),
                         _buildHeaderOutlineButton(
                           Icons.lock_reset_rounded,
                           'Réinitialiser mot de passe',
                         ),
                         _buildHeaderOutlineButton(
-                          Icons.lock_reset_rounded,
-                          'Envoyer message élève',
+                          Icons.verified_user_outlined,
+                          'Accès actif',
                         ),
                         SizedBox(
                           height: 40,
                           child: ElevatedButton.icon(
                             onPressed: () {},
-                            icon: const Icon(Icons.login_rounded, size: 16),
+                            icon: const Icon(Icons.edit_outlined, size: 16),
                             label: const Text(
-                              'Se connecter en tant que',
+                              'Modifier',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -3129,29 +3597,43 @@ class SubjectsSkeletonLoader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFF6F7FB),
-      child: ShimmerLoading(
-        child: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Search & filter controls bar
-              const Row(
-                children: [
-                  SkeletonBox(width: 240, height: 36, borderRadius: 10),
-                  SizedBox(width: 12),
-                  SkeletonBox(width: 90, height: 36, borderRadius: 10),
-                  Spacer(),
-                  SkeletonBox(width: 80, height: 26, borderRadius: 12),
-                  SizedBox(width: 10),
-                  SkeletonBox(width: 32, height: 32, borderRadius: 8),
-                ],
-              ),
-              const SizedBox(height: 20),
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Static Title Header (never skeleton loaded)
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF655DD5),
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Liste des Matières',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const Spacer(),
+                const ShimmerLoading(
+                  child: SkeletonBox(width: 100, height: 32, borderRadius: 9999),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
 
-              // 4-Column Grid of Subject Cards
-              GridView.builder(
+            // 4-Column Grid of Subject Cards
+            ShimmerLoading(
+              child: GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -3243,8 +3725,8 @@ class SubjectsSkeletonLoader extends StatelessWidget {
                   );
                 },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

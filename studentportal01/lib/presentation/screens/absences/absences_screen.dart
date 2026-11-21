@@ -198,12 +198,39 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
         .eq('class_id', classId)
         .eq('is_active', true);
     
-    final subjectOfferings = List<Map<String, dynamic>>.from(subjectOfferingsResponse);
+    final rawOfferings = List<Map<String, dynamic>>.from(subjectOfferingsResponse);
     
-    if (subjectOfferings.isEmpty) {
+    if (rawOfferings.isEmpty) {
       debugPrint('absencesProvider: No subject offerings found');
       return [];
     }
+
+    // Deduplicate subject offerings by subject_id to prevent duplicate database entries from inflating total semester hours
+    final Map<String, Map<String, dynamic>> dedupedMap = {};
+    final Map<String, String> offeringIdToCanonicalId = {};
+    for (final so in rawOfferings) {
+      final sId = so['subject_id']?.toString() ?? so['id']?.toString() ?? '';
+      final soId = so['id']?.toString() ?? '';
+      if (!dedupedMap.containsKey(sId)) {
+        dedupedMap[sId] = so;
+        offeringIdToCanonicalId[soId] = soId;
+      } else {
+        final existingHours = (dedupedMap[sId]!['total_hours'] as num?)?.toDouble() ?? 0;
+        final currentHours = (so['total_hours'] as num?)?.toDouble() ?? 0;
+        if (currentHours > existingHours) {
+          final oldCanonicalId = dedupedMap[sId]!['id']?.toString() ?? '';
+          dedupedMap[sId] = so;
+          offeringIdToCanonicalId[soId] = soId;
+          if (oldCanonicalId.isNotEmpty) {
+            offeringIdToCanonicalId[oldCanonicalId] = soId;
+          }
+        } else {
+          final canonicalId = dedupedMap[sId]!['id']?.toString() ?? soId;
+          offeringIdToCanonicalId[soId] = canonicalId;
+        }
+      }
+    }
+    final subjectOfferings = dedupedMap.values.toList();
     
     // Fetch teacher assignments for this class
     final Map<String, Map<String, String>> teacherMap = {};
@@ -291,8 +318,9 @@ final absencesProvider = FutureProvider.family<List<SubjectAbsenceSummary>, int>
       final soId = record['subject_offering_id'] as String?;
       final hours = (record['hours_absent'] as num?)?.toDouble() ?? 0;
       if (soId != null) {
-        if (subjectOfferings.any((so) => so['id'] == soId)) {
-          absencesBySubject[soId] = (absencesBySubject[soId] ?? 0) + hours;
+        final canonicalId = offeringIdToCanonicalId[soId] ?? soId;
+        if (subjectOfferings.any((so) => so['id'] == canonicalId)) {
+          absencesBySubject[canonicalId] = (absencesBySubject[canonicalId] ?? 0) + hours;
         } else {
           // Check if subject_id matches an offering for this class/semester
           final relSubjectId = (record['subject_offerings'] as Map<String, dynamic>?)?['subject_id'] as String?;

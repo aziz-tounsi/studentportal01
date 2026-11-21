@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../providers/classes_provider.dart';
@@ -206,6 +207,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
   int _currentPage = 0;
   int _perPage = 10;
   final Set<String> _selectedStudentIds = {};
+  final Set<String> _selectedTeacherIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -232,6 +234,17 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                     child: Center(
                       child: dataAsync.whenOrNull(
                         data: (data) => _buildFloatingSelectionBar(context, data),
+                      ) ?? const SizedBox.shrink(),
+                    ),
+                  ),
+                if (_selectedTeacherIds.isNotEmpty)
+                  Positioned(
+                    bottom: 24,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: dataAsync.whenOrNull(
+                        data: (data) => _buildFloatingTeacherSelectionBar(context, data),
                       ) ?? const SizedBox.shrink(),
                     ),
                   ),
@@ -386,12 +399,6 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
             ),
           ),
           const SizedBox(width: 14),
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: _brandLight, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.class_rounded, color: _brand, size: 20),
-          ),
-          const SizedBox(width: 12),
           Text(data.className, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
           if (data.niveauName != null) ...[
             const SizedBox(width: 8),
@@ -406,10 +413,6 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           ],
           const SizedBox(width: 12),
           // Inline stat pills
-          _inlineStat(Icons.people_rounded, '$count${cap > 0 ? '/$cap' : ''}', const Color(0xFF3B82F6)),
-          const SizedBox(width: 8),
-          _inlineStat(Icons.pie_chart_rounded, '$fill%', const Color(0xFF10B981)),
-          const SizedBox(width: 8),
           _inlineStat(Icons.meeting_room_rounded, currentRoom, AppColors.slate500),
           const Spacer(),
           SizedBox(
@@ -480,9 +483,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
             const Text('Liste des étudiants', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
             const SizedBox(width: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: _brandLight, borderRadius: BorderRadius.circular(8)),
-              child: Text('${all.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _brand)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDE9FE),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${all.length}${data.capacity != null && data.capacity! > 0 ? ' / ${data.capacity}' : ''} étudiants',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF6D28D9)),
+              ),
             ),
             const Spacer(),
             AdminSortDropdown<String>(
@@ -548,7 +557,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                 dataRowMinHeight: 56,
                 dataRowMaxHeight: 60,
                 headingRowHeight: 42,
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                headingRowColor: WidgetStateProperty.all(Colors.white),
                 headingTextStyle: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: AppColors.textTertiary,
@@ -1377,6 +1386,67 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
     );
   }
 
+  Widget _buildFloatingTeacherSelectionBar(BuildContext context, ClassDetailData data) {
+    final count = _selectedTeacherIds.length;
+    final teachersAsync = ref.watch(classAllTeachersProvider(data.classId));
+    final allTeachers = teachersAsync.value ?? [];
+    final selectedTeachers = allTeachers.where((t) => _selectedTeacherIds.contains(t.id)).toList();
+
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(10),
+      color: const Color(0xFF111827),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22, height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF655DD5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text('$count', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Sélectionnés', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white)),
+                ],
+              ),
+            ),
+            // Actions
+            _buildSelectionAction(Icons.ios_share_rounded, 'Exporter', Colors.white70, () => _bulkExportTeachers(selectedTeachers, data)),
+            _buildSelectionAction(Icons.delete_outline, 'Retirer de la classe', const Color(0xFFFCA5A5), () => _bulkRemoveTeachers(context, selectedTeachers, data)),
+            // Close button
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: Colors.white.withOpacity(0.15))),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                onPressed: () => setState(() => _selectedTeacherIds.clear()),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSelectionAction(IconData icon, String label, Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -1666,6 +1736,126 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _bulkExportTeachers(List<ClassTeacherWithSubject> selected, ClassDetailData data) async {
+    if (selected.isEmpty) return;
+
+    final excel = Excel.createExcel();
+    final sheet = excel['Enseignants'];
+
+    sheet.cell(CellIndex.indexByString('A1')).value = TextCellValue('ID');
+    sheet.cell(CellIndex.indexByString('B1')).value = TextCellValue('Nom complet');
+    sheet.cell(CellIndex.indexByString('C1')).value = TextCellValue('Email');
+    sheet.cell(CellIndex.indexByString('D1')).value = TextCellValue('Téléphone');
+    sheet.cell(CellIndex.indexByString('E1')).value = TextCellValue('Matière / Spécialité');
+    sheet.cell(CellIndex.indexByString('F1')).value = TextCellValue('Classe');
+    sheet.cell(CellIndex.indexByString('G1')).value = TextCellValue('Statut');
+
+    for (var i = 0; i < selected.length; i++) {
+      final t = selected[i];
+      final row = i + 2;
+      sheet.cell(CellIndex.indexByString('A$row')).value = TextCellValue(t.id);
+      sheet.cell(CellIndex.indexByString('B$row')).value = TextCellValue(t.fullName);
+      sheet.cell(CellIndex.indexByString('C$row')).value = TextCellValue(t.email ?? '');
+      sheet.cell(CellIndex.indexByString('D$row')).value = TextCellValue(t.phone ?? '');
+      sheet.cell(CellIndex.indexByString('E$row')).value = TextCellValue(t.subjectName ?? t.subjectCode ?? '');
+      sheet.cell(CellIndex.indexByString('F$row')).value = TextCellValue(data.className);
+      sheet.cell(CellIndex.indexByString('G$row')).value = TextCellValue(t.isActive ? 'Actif' : 'Inactif');
+    }
+
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+
+    final bytes = excel.encode();
+    if (bytes != null && mounted) {
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Exporter les enseignants',
+        fileName: 'enseignants_${data.className}_${DateTime.now().millisecondsSinceEpoch}.xlsx',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        bytes: Uint8List.fromList(bytes),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${selected.length} enseignant(s) exporté(s)'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _bulkRemoveTeachers(BuildContext context, List<ClassTeacherWithSubject> teachers, ClassDetailData data) {
+    final count = teachers.length;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            count == 1 ? 'Retirer l\'enseignant ?' : 'Retirer $count enseignants ?',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          content: Text(
+            count == 1
+                ? 'Voulez-vous retirer cet enseignant de la classe ${data.className} ?'
+                : 'Voulez-vous retirer ces $count enseignants de la classe ${data.className} ?',
+            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler', style: TextStyle(color: AppColors.textTertiary)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  for (final t in teachers) {
+                    await SupabaseConfig.adminClient
+                        .from('teacher_assignments')
+                        .update({'is_active': false})
+                        .eq('teacher_id', t.id)
+                        .eq('class_id', data.classId);
+                  }
+                  ref.invalidate(classAllTeachersProvider(data.classId));
+                  setState(() => _selectedTeacherIds.clear());
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('$count enseignant(s) retiré(s) de la classe'),
+                        backgroundColor: AppColors.success,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Erreur: $e'),
+                        backgroundColor: AppColors.error,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Retirer'),
             ),
           ],
         ),
@@ -2737,12 +2927,14 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final w = constraints.maxWidth;
+                  const checkboxW = 48.0;
                   const actionsW = 48.0;
                   const subjectW = 150.0;
                   const phoneW = 150.0;
                   const statusW = 100.0;
                   const dateW = 110.0;
-                  final nameW = (w - subjectW - phoneW - statusW - dateW - actionsW).clamp(200.0, double.infinity);
+                  final nameW = (w - checkboxW - subjectW - phoneW - statusW - dateW - actionsW).clamp(200.0, double.infinity);
+                  final allTeachersSelected = sortedTeachers.isNotEmpty && sortedTeachers.every((t) => _selectedTeacherIds.contains(t.id));
 
                   return DataTable(
                     columnSpacing: 0,
@@ -2750,7 +2942,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                     dataRowMinHeight: 56,
                     dataRowMaxHeight: 60,
                     headingRowHeight: 42,
-                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                    headingRowColor: WidgetStateProperty.all(Colors.white),
                     headingTextStyle: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: AppColors.textTertiary,
@@ -2761,8 +2953,24 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                     columns: [
                       DataColumn(
                         label: SizedBox(
+                          width: checkboxW,
+                          child: Center(
+                            child: _buildCheckbox(allTeachersSelected, (v) {
+                              setState(() {
+                                if (allTeachersSelected) {
+                                  for (final t in sortedTeachers) _selectedTeacherIds.remove(t.id);
+                                } else {
+                                  for (final t in sortedTeachers) _selectedTeacherIds.add(t.id);
+                                }
+                              });
+                            }),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
                           width: nameW,
-                          child: _headerLeft('NOM COMPLET / EMAIL', padding: const EdgeInsets.only(left: 64, right: 16)),
+                          child: _headerLeft('NOM COMPLET / EMAIL'),
                         ),
                       ),
                       DataColumn(
@@ -2798,13 +3006,36 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                     ],
                     rows: sortedTeachers.map((t) {
                       final subColor = _subjectColor(t.subjectName ?? t.subjectCode);
+                      final isSelected = _selectedTeacherIds.contains(t.id);
                       return DataRow(
+                        selected: isSelected,
+                        color: WidgetStateProperty.resolveWith<Color?>((states) {
+                          if (isSelected) return const Color(0xFFF5F3FF);
+                          if (states.contains(WidgetState.hovered)) return const Color(0xFFF9FAFB);
+                          return null;
+                        }),
                         cells: [
+                          DataCell(
+                            SizedBox(
+                              width: checkboxW,
+                              child: Center(
+                                child: _buildCheckbox(isSelected, (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _selectedTeacherIds.add(t.id);
+                                    } else {
+                                      _selectedTeacherIds.remove(t.id);
+                                    }
+                                  });
+                                }),
+                              ),
+                            ),
+                          ),
                           DataCell(
                             SizedBox(
                               width: nameW,
                               child: Padding(
-                                padding: const EdgeInsets.only(left: 64, right: 16),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
                                 child: Row(
                                   children: [
                                     UserAvatar(name: t.fullName, photoUrl: t.photoUrl, radius: 17),
@@ -2847,24 +3078,17 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                             SizedBox(
                               width: subjectW,
                               child: Center(
-                                child: t.subjectName != null
-                                    ? Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: subColor.withOpacity(0.12),
-                                          borderRadius: BorderRadius.circular(9999),
-                                        ),
-                                        child: Text(
-                                          t.subjectName!,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: subColor,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      )
-                                    : const Text('—', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                                child: Text(
+                                  t.subjectName != null && t.subjectName!.isNotEmpty
+                                      ? t.subjectName!
+                                      : '—',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF4B5563),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
                           ),
@@ -2910,7 +3134,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                               child: Center(
                                 child: Text(
                                   t.createdAt != null
-                                      ? '${t.createdAt!.day}/${t.createdAt!.month}/${t.createdAt!.year}'
+                                      ? DateFormat('d MMM yyyy', 'fr_FR').format(t.createdAt!)
                                       : '—',
                                   style: const TextStyle(
                                     fontSize: 12,

@@ -191,10 +191,34 @@ class ResultsProvider extends ChangeNotifier {
     }
   }
 
+  int _getNiveauSortOrder(String? str) {
+    if (str == null || str.trim().isEmpty) return 999;
+    final s = str.toLowerCase().trim();
+
+    if (s.contains('7') || s.startsWith('7b') || s.contains('sept')) return 10;
+    if (s.contains('8') || s.startsWith('8b') || s.contains('huit')) return 20;
+    if (s.contains('9') || s.startsWith('9b') || s.contains('neuf')) return 30;
+    if (s.contains('1') || s.startsWith('1s') || s.contains('prem')) return 40;
+    if (s.contains('2') || s.startsWith('2s') || s.contains('deux')) return 50;
+    if (s.contains('3') || s.startsWith('3s') || s.contains('trois')) return 60;
+    if (s.contains('4') || s.startsWith('4s') || s.contains('bac') || s.contains('quatre')) return 70;
+
+    return 999;
+  }
+
   /// Load niveaux (grade levels)
   Future<void> loadNiveaux() async {
     try {
-      _niveaux = await _repository.getNiveaux();
+      final fetched = await _repository.getNiveaux();
+      fetched.sort((a, b) {
+        final nameA = a['name']?.toString() ?? a['code']?.toString();
+        final nameB = b['name']?.toString() ?? b['code']?.toString();
+        final orderA = _getNiveauSortOrder(nameA);
+        final orderB = _getNiveauSortOrder(nameB);
+        if (orderA != orderB) return orderA.compareTo(orderB);
+        return (nameA ?? '').compareTo(nameB ?? '');
+      });
+      _niveaux = fetched;
       notifyListeners();
     } catch (e) {
       _error = UserFriendlyError.format(
@@ -342,7 +366,9 @@ class ResultsProvider extends ChangeNotifier {
   /// Load classes
   Future<void> loadClasses() async {
     try {
-      _classes = await _repository.getClasses();
+      final fetched = await _repository.getClasses();
+      fetched.sort((a, b) => (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? ''));
+      _classes = fetched;
       notifyListeners();
     } catch (e) {
       _error = UserFriendlyError.format(

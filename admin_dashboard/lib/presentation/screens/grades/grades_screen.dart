@@ -60,7 +60,7 @@ class GradesScreen extends ConsumerWidget {
 
   Widget _buildContent(BuildContext context, WidgetRef ref, GradesState state) {
     final list = state.filtered;
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final dateFormat = DateFormat('d MMM yyyy', 'fr_FR');
 
     return Padding(
       padding: const EdgeInsets.all(24),
