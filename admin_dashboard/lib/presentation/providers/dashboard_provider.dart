@@ -135,8 +135,16 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     int totalTeachers = 0;
     int totalStaff = 0;
     int totalClasses = 0;
+    int totalCapacity = 0;
     double totalDue = 0;
     double totalPaid = 0;
+
+    double thisMonthCollected = 0;
+    double lastMonthCollected = 0;
+
+    final now = DateTime.now();
+    final currentMonthStart = DateTime(now.year, now.month, 1);
+    final lastMonthStart = DateTime(now.year, now.month - 1, 1);
 
     try {
       final studentsResp = await _supabase
@@ -157,30 +165,51 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
           .from('users')
           .select('id')
           .eq('school_id', schoolId)
-          .eq('role', 'staff');
+          .or('role.eq.staff,role.eq.admin');
       totalStaff = (staffResp as List).length;
 
       final classesResp = await _supabase
           .from('classes')
-          .select('id')
+          .select('id, capacity')
           .eq('school_id', schoolId);
       totalClasses = (classesResp as List).length;
-    } catch (_) {}
+      for (final c in classesResp) {
+        totalCapacity += (c['capacity'] as num?)?.toInt() ?? 25;
+      }
+    } catch (e) {
+      debugPrint('Error loading user/class counts for KPIs: $e');
+    }
 
     try {
       final paymentsResp = await _supabase
           .from('payments')
-          .select('amount, status, school_id')
+          .select('amount, status, paid_at, created_at, school_id')
           .or('school_id.eq.$schoolId,school_id.is.null');
 
       for (final p in paymentsResp as List) {
         final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
         final status = (p['status'] ?? '').toString().toLowerCase();
+
         if (status != 'cancelled') {
           totalDue += amt;
         }
         if (status == 'paid') {
           totalPaid += amt;
+
+          DateTime? paidDate;
+          if (p['paid_at'] != null) {
+            paidDate = DateTime.tryParse(p['paid_at'].toString())?.toLocal();
+          } else if (p['created_at'] != null) {
+            paidDate = DateTime.tryParse(p['created_at'].toString())?.toLocal();
+          }
+
+          if (paidDate != null) {
+            if (paidDate.isAfter(currentMonthStart) || paidDate.isAtSameMomentAs(currentMonthStart)) {
+              thisMonthCollected += amt;
+            } else if (paidDate.isAfter(lastMonthStart) && paidDate.isBefore(currentMonthStart)) {
+              lastMonthCollected += amt;
+            }
+          }
         }
       }
     } catch (e) {
@@ -191,6 +220,37 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     final due = totalDue > 0 ? totalDue : totalPaid;
     final recovery = (due > 0) ? (collected / due * 100).clamp(0.0, 100.0) : 0.0;
 
+    // Real Revenue Growth (this month vs last month)
+    double revGrowth = 0.0;
+    bool revGrowthUp = true;
+    if (lastMonthCollected > 0) {
+      revGrowth = ((thisMonthCollected - lastMonthCollected) / lastMonthCollected * 100).roundToDouble();
+      revGrowthUp = revGrowth >= 0;
+    } else if (thisMonthCollected > 0) {
+      revGrowth = 100.0;
+      revGrowthUp = true;
+    }
+
+    // Real Monthly Growth (rate of monthly collection vs total or goal)
+    double monthlyGrowth = (due > 0)
+        ? ((thisMonthCollected / due) * 100).roundToDouble()
+        : (collected > 0 ? 100.0 : 0.0);
+    double monthlyTrend = revGrowth;
+    bool monthlyUp = thisMonthCollected > 0;
+
+    // Real School Capacity Fill Rate
+    double fillRate = totalCapacity > 0
+        ? ((totalStudents / totalCapacity) * 100).roundToDouble()
+        : 100.0;
+
+    // Real Student to Teacher Ratio
+    double studentTeacherRatio = totalTeachers > 0
+        ? (totalStudents / totalTeachers).roundToDouble()
+        : totalStudents.toDouble();
+
+    // Real Recovery Rate Difference vs 100% target
+    double recoveryDiff = (recovery - 100.0).roundToDouble();
+
     return DashboardKpis(
       totalStudents: totalStudents,
       totalTeachers: totalTeachers,
@@ -198,23 +258,23 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       totalClasses: totalClasses,
       totalPaymentsDue: due,
       totalPaymentsCollected: collected,
-      revenueGrowth: 3.5,
-      revenueGrowthLabel: "vs l'an dernier",
-      revenueGrowthUp: true,
-      monthlyGrowth: 8.3,
-      monthlyGrowthTrend: 1.2,
-      monthlyGrowthLabel: "vs mois dernier",
-      monthlyGrowthUp: true,
-      studentTargetDiff: -1.7,
-      studentTargetLabel: "vs objectif",
-      studentTargetUp: false,
-      teacherStaffGrowth: 2.5,
-      teacherStaffGrowthLabel: "vs semestre préc.",
+      revenueGrowth: revGrowth,
+      revenueGrowthLabel: "vs mois dernier",
+      revenueGrowthUp: revGrowthUp,
+      monthlyGrowth: monthlyGrowth,
+      monthlyGrowthTrend: monthlyTrend,
+      monthlyGrowthLabel: "ce mois-ci",
+      monthlyGrowthUp: monthlyUp,
+      studentTargetDiff: fillRate,
+      studentTargetLabel: "taux d'occupation",
+      studentTargetUp: true,
+      teacherStaffGrowth: studentTeacherRatio,
+      teacherStaffGrowthLabel: "élèves / prof",
       teacherStaffGrowthUp: true,
       recoveryRate: recovery,
-      recoveryRateDiff: -2.3,
-      recoveryRateLabel: "vs l'an dernier",
-      recoveryRateUp: false,
+      recoveryRateDiff: recoveryDiff,
+      recoveryRateLabel: "vs objectif 100%",
+      recoveryRateUp: recovery >= 100,
     );
   }
 
@@ -466,126 +526,152 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
   Future<List<CategoryBreakdownItem>> _loadCategoryBreakdown(String schoolId) async {
     try {
-      final plans = await _supabase
-          .from('payment_plans')
-          .select('category, description, amount_total, school_id')
+      final paymentsResp = await _supabase
+          .from('payments')
+          .select('amount, status, payment_plans(category, description)')
           .or('school_id.eq.$schoolId,school_id.is.null');
 
-      if ((plans as List).isNotEmpty) {
-        final categoryTotals = <String, double>{};
-        double grandTotal = 0;
+      final categoryTotals = <String, double>{};
+      double grandTotal = 0;
 
-        for (final p in plans) {
-          final cat = (p['category'] ?? p['description'] ?? 'scolarite').toString().toLowerCase();
+      for (final p in (paymentsResp as List)) {
+        final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
+        final plan = p['payment_plans'] as Map<String, dynamic>?;
+        final cat = (plan?['category'] ?? plan?['description'] ?? 'scolarite').toString().toLowerCase();
+
+        categoryTotals[cat] = (categoryTotals[cat] ?? 0.0) + amt;
+        grandTotal += amt;
+      }
+
+      // If no payments found, query payment_plans directly
+      if (grandTotal == 0) {
+        final plans = await _supabase
+            .from('payment_plans')
+            .select('category, description, amount_total')
+            .or('school_id.eq.$schoolId,school_id.is.null');
+
+        for (final p in (plans as List)) {
           final amt = (p['amount_total'] as num?)?.toDouble() ?? 0.0;
+          final cat = (p['category'] ?? p['description'] ?? 'scolarite').toString().toLowerCase();
           categoryTotals[cat] = (categoryTotals[cat] ?? 0.0) + amt;
           grandTotal += amt;
         }
+      }
 
-        if (grandTotal > 0) {
-          const colors = [0xFF6D4CF6, 0xFF8B5CF6, 0xFFC4B5FD, 0xFF10B981, 0xFFF59E0B];
-          int cIdx = 0;
-          return categoryTotals.entries.map((e) {
-            final col = colors[cIdx % colors.length];
-            cIdx++;
-            String label;
-            switch (e.key) {
-              case 'scolarite':
-                label = 'Frais de Scolarité';
-                break;
-              case 'cantine':
-                label = 'Cantine';
-                break;
-              case 'transport':
-                label = 'Transport';
-                break;
-              case 'inscription':
-                label = 'Inscription';
-                break;
-              case 'uniforme':
-                label = 'Uniforme';
-                break;
-              case 'activites':
-                label = 'Activités';
-                break;
-              default:
-                label = e.key.isNotEmpty ? e.key[0].toUpperCase() + e.key.substring(1) : 'Autres';
-            }
-            return CategoryBreakdownItem(
-              label: label,
-              amount: e.value,
-              percentage: ((e.value / grandTotal) * 100).roundToDouble(),
-              colorValue: col,
-            );
-          }).toList();
-        }
+      if (grandTotal > 0) {
+        const colors = [0xFF6D4CF6, 0xFF8B5CF6, 0xFFC4B5FD, 0xFF10B981, 0xFFF59E0B, 0xFF0284C7];
+        int cIdx = 0;
+        return categoryTotals.entries.map((e) {
+          final col = colors[cIdx % colors.length];
+          cIdx++;
+          String label;
+          switch (e.key) {
+            case 'scolarite':
+              label = 'Frais de Scolarité';
+              break;
+            case 'cantine':
+              label = 'Cantine & Restauration';
+              break;
+            case 'transport':
+              label = 'Transport Scolaire';
+              break;
+            case 'inscription':
+              label = 'Frais d\'Inscription';
+              break;
+            case 'uniforme':
+              label = 'Uniforme & Tenues';
+              break;
+            case 'activites':
+              label = 'Activités Extrascolaires';
+              break;
+            default:
+              label = e.key.isNotEmpty ? e.key[0].toUpperCase() + e.key.substring(1) : 'Autres';
+          }
+          return CategoryBreakdownItem(
+            label: label,
+            amount: e.value,
+            percentage: ((e.value / grandTotal) * 100).roundToDouble(),
+            colorValue: col,
+          );
+        }).toList();
       }
     } catch (e) {
-      debugPrint('Error loading category breakdown: $e');
+      debugPrint('Error loading real category breakdown: $e');
     }
 
-    return [];
+    return const [];
   }
 
   Future<List<FiliereDistributionItem>> _loadFiliereDistribution(String schoolId) async {
     try {
-      final classes = await _supabase
+      final classesResp = await _supabase
           .from('classes')
-          .select('id, name, level, section')
+          .select('id, name, capacity, section_id, sections(id, name, code, color, display_order), niveau_id, niveaux(id, name, code, cycle, display_order)')
           .eq('school_id', schoolId);
 
-      if ((classes as List).isNotEmpty) {
-        final Map<String, int> counts = {};
-        for (final c in classes) {
-          final label = (c['section'] ?? c['level'] ?? c['name'] ?? 'Général').toString();
-          counts[label] = (counts[label] ?? 0) + 1;
-        }
+      final enrollmentsResp = await _supabase
+          .from('enrollments')
+          .select('class_id');
 
-        final total = counts.values.fold<int>(0, (a, b) => a + b);
-        if (total > 0 && counts.length >= 2) {
-          final colors = [0xFF6D4CF6, 0xFF8B5CF6, 0xFFA78BFA, 0xFFDDD6FE];
-          int cIdx = 0;
-          return counts.entries.take(4).map((entry) {
-            final pct = (entry.value / total * 100).roundToDouble();
-            final color = colors[cIdx % colors.length];
-            cIdx++;
-            return FiliereDistributionItem(
-              label: entry.key,
-              count: entry.value * 25, // proportional student count
-              percentage: pct,
-              colorValue: color,
-            );
-          }).toList();
+      final Map<String, int> classEnrollmentCounts = {};
+      int totalEnrolled = 0;
+      for (final e in (enrollmentsResp as List)) {
+        final cid = e['class_id']?.toString();
+        if (cid != null) {
+          classEnrollmentCounts[cid] = (classEnrollmentCounts[cid] ?? 0) + 1;
+          totalEnrolled++;
         }
       }
-    } catch (_) {}
 
-    return [
-      FiliereDistributionItem(
-        label: 'Scientifique',
-        count: 88,
-        percentage: 45,
-        colorValue: 0xFF6D4CF6,
-      ),
-      FiliereDistributionItem(
-        label: 'Mathématiques',
-        count: 49,
-        percentage: 25,
-        colorValue: 0xFF8B5CF6,
-      ),
-      FiliereDistributionItem(
-        label: 'Éco & Info',
-        count: 39,
-        percentage: 20,
-        colorValue: 0xFFA78BFA,
-      ),
-      FiliereDistributionItem(
-        label: 'Autres',
-        count: 20,
-        percentage: 10,
-        colorValue: 0xFFDDD6FE,
-      ),
-    ];
+      final Map<String, int> counts = {};
+      final Map<String, int> colorMap = {};
+      const fallbackColors = [
+        0xFF6D4CF6, 0xFF8B5CF6, 0xFF10B981, 0xFF0284C7,
+        0xFFF59E0B, 0xFFEC4899, 0xFF6366F1, 0xFF84CC16
+      ];
+
+      for (final c in (classesResp as List)) {
+        final sec = c['sections'] as Map<String, dynamic>?;
+        final niv = c['niveaux'] as Map<String, dynamic>?;
+
+        final label = sec?['name'] ?? (niv?['cycle'] == 'base' ? 'Cycle de Base' : 'Tronc Commun');
+        final cid = c['id']?.toString() ?? '';
+        final classCount = (totalEnrolled > 0)
+            ? (classEnrollmentCounts[cid] ?? 0)
+            : ((c['capacity'] as num?)?.toInt() ?? 25);
+
+        counts[label] = (counts[label] ?? 0) + classCount;
+
+        if (sec?['color'] != null && !colorMap.containsKey(label)) {
+          final hexStr = sec!['color'].toString().replaceAll('#', '');
+          final hexVal = int.tryParse('FF$hexStr', radix: 16);
+          if (hexVal != null) colorMap[label] = hexVal;
+        }
+      }
+
+      final grandTotal = counts.values.fold<int>(0, (a, b) => a + b);
+      if (grandTotal > 0) {
+        int cIdx = 0;
+        final sorted = counts.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+
+        return sorted.map((entry) {
+          final color = colorMap[entry.key] ?? fallbackColors[cIdx % fallbackColors.length];
+          cIdx++;
+          final pct = (entry.value / grandTotal * 100).roundToDouble();
+          return FiliereDistributionItem(
+            label: entry.key,
+            count: entry.value,
+            percentage: pct,
+            colorValue: color,
+          );
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Error loading real filiere distribution: $e');
+    }
+
+    return const [];
   }
 
   Future<List<DashboardCalendarEvent>> _loadCalendarEvents(String schoolId) async {
@@ -741,23 +827,94 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
   Future<List<AttendanceLevelItem>> _loadAttendanceLevels(String schoolId) async {
     try {
-      final records = await _supabase
-          .from('vw_student_absence_summary')
-          .select('class_name, absence_percent')
-          .limit(50);
+      // 1. Fetch real active niveaux ordered by display_order
+      final niveauxResp = await _supabase
+          .from('niveaux')
+          .select('id, name, code, display_order')
+          .eq('is_active', true)
+          .order('display_order');
 
-      if ((records as List).isNotEmpty) {
-        // Compute average by level if available
+      final niveauxList = List<Map<String, dynamic>>.from(niveauxResp as List);
+      if (niveauxList.isEmpty) return const [];
+
+      // 2. Fetch classes for this school
+      final classesResp = await _supabase
+          .from('classes')
+          .select('id, niveau_id, capacity')
+          .eq('school_id', schoolId);
+
+      // Map classId -> niveauId
+      final Map<String, String> classToNiveau = {};
+      final Map<String, int> niveauStudentCounts = {};
+
+      for (final c in (classesResp as List)) {
+        final cid = c['id']?.toString();
+        final nid = c['niveau_id']?.toString();
+        if (cid != null && nid != null) {
+          classToNiveau[cid] = nid;
+        }
       }
-    } catch (_) {}
 
-    return [
-      AttendanceLevelItem(levelName: '4ème Année (Bac)', rate: 0.94, label: '94%'),
-      AttendanceLevelItem(levelName: '3ème Année Secondaire', rate: 0.88, label: '88%'),
-      AttendanceLevelItem(levelName: '2ème Année Secondaire', rate: 0.82, label: '82%'),
-      AttendanceLevelItem(levelName: '1ère Année Secondaire', rate: 0.79, label: '79%'),
-      AttendanceLevelItem(levelName: 'Cycle de Base (7B - 9B)', rate: 0.96, label: '96%'),
-    ];
+      // 3. Fetch enrollments to get student count per niveau
+      final enrollmentsResp = await _supabase
+          .from('enrollments')
+          .select('id, class_id');
+
+      final Map<String, String> enrollmentToNiveau = {};
+      for (final e in (enrollmentsResp as List)) {
+        final eid = e['id']?.toString();
+        final cid = e['class_id']?.toString();
+        if (eid != null && cid != null && classToNiveau.containsKey(cid)) {
+          final nid = classToNiveau[cid]!;
+          enrollmentToNiveau[eid] = nid;
+          niveauStudentCounts[nid] = (niveauStudentCounts[nid] ?? 0) + 1;
+        }
+      }
+
+      // 4. Fetch absences for the school
+      final absencesResp = await _supabase
+          .from('absence_records')
+          .select('enrollment_id, hours_absent')
+          .or('school_id.eq.$schoolId,school_id.is.null');
+
+      final Map<String, double> absenceHoursByNiveau = {};
+      for (final a in (absencesResp as List)) {
+        final eid = a['enrollment_id']?.toString();
+        final hours = (a['hours_absent'] as num?)?.toDouble() ?? 2.0;
+        if (eid != null && enrollmentToNiveau.containsKey(eid)) {
+          final nid = enrollmentToNiveau[eid]!;
+          absenceHoursByNiveau[nid] = (absenceHoursByNiveau[nid] ?? 0.0) + hours;
+        }
+      }
+
+      // 5. Calculate real attendance rate per niveau
+      final List<AttendanceLevelItem> items = [];
+      for (final n in niveauxList) {
+        final nid = n['id']?.toString();
+        final name = (n['name'] ?? n['code'] ?? 'Niveau').toString();
+        final studentCount = (nid != null && (niveauStudentCounts[nid] ?? 0) > 0)
+            ? niveauStudentCounts[nid]!
+            : 25; // standard base cohort
+        final absenceHours = nid != null ? (absenceHoursByNiveau[nid] ?? 0.0) : 0.0;
+
+        // Nominal monthly class hours = 120 hrs per student
+        final totalExpectedHours = studentCount * 120.0;
+        final rawRate = totalExpectedHours > 0
+            ? ((totalExpectedHours - absenceHours) / totalExpectedHours).clamp(0.0, 1.0)
+            : 1.0;
+
+        items.add(AttendanceLevelItem(
+          levelName: name,
+          rate: rawRate,
+          label: '${(rawRate * 100).toStringAsFixed(0)}%',
+        ));
+      }
+
+      return items;
+    } catch (e) {
+      debugPrint('Error loading real attendance levels: $e');
+    }
+    return const [];
   }
 
   String _getInitials(String name) {
@@ -810,41 +967,8 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       ),
       categories: const [],
       filieres: const [],
-      events: [
-        DashboardCalendarEvent(
-          id: '1',
-          title: 'Conseil Pédagogique - 2S Math',
-          time: '9:00 - 10:30 AM',
-          duration: '90m',
-          room: 'Salle R1',
-          classId: 'demo-c1',
-          className: '2S Mathématiques',
-          teacherName: 'Dr. Ben Salem',
-          teacherInitials: 'BS',
-          isExam: false,
-          dayOfWeek: 1,
-        ),
-        DashboardCalendarEvent(
-          id: '2',
-          title: 'Devoir Synthèse Physique',
-          time: '11:00 - 12:30 PM',
-          duration: '90m',
-          room: 'Labo Sc.',
-          classId: 'demo-c2',
-          className: '3S Sc. Expérimentales',
-          teacherName: 'Mme. Trabelsi',
-          teacherInitials: 'MT',
-          isExam: true,
-          dayOfWeek: 1,
-        ),
-      ],
-      attendanceLevels: [
-        AttendanceLevelItem(levelName: '4ème Année (Bac)', rate: 0.94, label: '94%'),
-        AttendanceLevelItem(levelName: '3ème Année Secondaire', rate: 0.88, label: '88%'),
-        AttendanceLevelItem(levelName: '2ème Année Secondaire', rate: 0.82, label: '82%'),
-        AttendanceLevelItem(levelName: '1ère Année Secondaire', rate: 0.79, label: '79%'),
-        AttendanceLevelItem(levelName: 'Cycle de Base (7B - 9B)', rate: 0.96, label: '96%'),
-      ],
+      events: const [],
+      attendanceLevels: const [],
       isLoading: false,
       error: error,
       lastUpdated: DateTime.now(),
