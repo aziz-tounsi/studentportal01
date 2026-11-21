@@ -28,6 +28,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedCalendarTab = 0; // 0: Séances, 1: Examens
   String _selectedInterval = 'Mensuel'; // 'Hebdomadaire', 'Mensuel', 'Annuel'
   int? _selectedChartIndex;
+  int? _selectedFiliereIndex;
 
   @override
   void initState() {
@@ -249,7 +250,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF5F3FF),
                   title: 'Total Revenus',
                   value: currencyFormat.format(kpis.totalPaymentsCollected),
-                  trend: '+${kpis.revenueGrowth}%',
+                  trend: '${kpis.revenueGrowth >= 0 ? '+' : ''}${kpis.revenueGrowth.toStringAsFixed(0)}%',
                   trendLabel: kpis.revenueGrowthLabel,
                   trendUp: kpis.revenueGrowthUp,
                   onTap: () => context.go('/payments'),
@@ -259,8 +260,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconColor: const Color(0xFF10B981),
                   iconBgColor: const Color(0xFFECFDF5),
                   title: 'Croissance Mensuelle',
-                  value: '+${kpis.monthlyGrowth}%',
-                  trend: '+${kpis.monthlyGrowthTrend}%',
+                  value: '${kpis.monthlyGrowth >= 0 ? '+' : ''}${kpis.monthlyGrowth.toStringAsFixed(0)}%',
+                  trend: '${kpis.monthlyGrowthTrend >= 0 ? '+' : ''}${kpis.monthlyGrowthTrend.toStringAsFixed(0)}%',
                   trendLabel: kpis.monthlyGrowthLabel,
                   trendUp: kpis.monthlyGrowthUp,
                   onTap: () => context.go('/payments'),
@@ -271,7 +272,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF5F3FF),
                   title: 'Total Inscriptions',
                   value: NumberFormat.decimalPattern().format(kpis.totalStudents),
-                  trend: '${kpis.studentTargetDiff}%',
+                  trend: '${kpis.studentTargetDiff.toStringAsFixed(0)}%',
                   trendLabel: kpis.studentTargetLabel,
                   trendUp: kpis.studentTargetUp,
                   onTap: () => context.go('/users'),
@@ -282,7 +283,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF0F9FF),
                   title: 'Enseignants & Staff',
                   value: (kpis.totalTeachers + kpis.totalStaff).toString(),
-                  trend: '+${kpis.teacherStaffGrowth}%',
+                  trend: '${kpis.teacherStaffGrowth.toStringAsFixed(0)}:1',
                   trendLabel: kpis.teacherStaffGrowthLabel,
                   trendUp: kpis.teacherStaffGrowthUp,
                   onTap: () => context.go('/professors'),
@@ -293,7 +294,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF5F3FF),
                   title: 'Taux de Recouvrement',
                   value: '${kpis.recoveryRate.toStringAsFixed(0)}%',
-                  trend: '${kpis.recoveryRateDiff}%',
+                  trend: '${kpis.recoveryRateDiff.toStringAsFixed(0)}%',
                   trendLabel: kpis.recoveryRateLabel,
                   trendUp: kpis.recoveryRateUp,
                   onTap: () => context.go('/payments'),
@@ -993,15 +994,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               const SizedBox(height: 4),
               Row(
-                children: const [
-                  Icon(Icons.arrow_upward_rounded, size: 13, color: Color(0xFF10B981)),
-                  SizedBox(width: 4),
+                children: [
+                  Icon(
+                    state.kpis.recoveryRate >= 50 ? Icons.arrow_upward_rounded : Icons.trending_flat_rounded,
+                    size: 13,
+                    color: state.kpis.recoveryRate >= 50 ? const Color(0xFF10B981) : const Color(0xFF6D4CF6),
+                  ),
+                  const SizedBox(width: 4),
                   Text(
-                    '+15% vs 30 jours',
+                    '${state.kpis.recoveryRate.toStringAsFixed(0)}% recouvré sur le total prévu',
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF10B981),
+                      color: state.kpis.recoveryRate >= 50 ? const Color(0xFF10B981) : const Color(0xFF6D4CF6),
                     ),
                   ),
                 ],
@@ -1016,64 +1021,86 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: SizedBox(
               height: 14,
               child: Row(
-                children: categories.map((cat) {
-                  return Expanded(
-                    flex: (cat.percentage.toInt()).clamp(5, 100),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                      decoration: BoxDecoration(
-                        color: Color(cat.colorValue),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  );
-                }).toList(),
+                children: categories.isEmpty
+                    ? [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                      ]
+                    : categories.map((cat) {
+                        return Expanded(
+                          flex: (cat.percentage.toInt()).clamp(5, 100),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                            decoration: BoxDecoration(
+                              color: Color(cat.colorValue),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        );
+                      }).toList(),
               ),
             ),
           ),
           const SizedBox(height: 20),
 
           // Category Item Rows
-          Column(
-            children: categories.map((cat) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: Color(cat.colorValue),
-                        shape: BoxShape.circle,
+          if (categories.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'Aucune catégorie de paiement enregistrée',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: categories.map((cat) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Color(cat.colorValue),
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        cat.label,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          cat.label,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF475569),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${currencyFormat.format(cat.amount)} (${cat.percentage.toInt()}%)',
                         style: const TextStyle(
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF475569),
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    Text(
-                      '${currencyFormat.format(cat.amount)} (${cat.percentage.toInt()}%)',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
         ],
       ),
     );
@@ -1144,47 +1171,122 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
           // Donut Chart
           SizedBox(
-            height: 140,
+            height: 155,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 PieChart(
                   PieChartData(
+                    pieTouchData: PieTouchData(
+                      touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                        if (!event.isInterestedForInteractions ||
+                            pieTouchResponse == null ||
+                            pieTouchResponse.touchedSection == null) {
+                          return;
+                        }
+                        if (event is FlTapUpEvent) {
+                          final idx = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                          if (idx >= 0 && idx < filieres.length) {
+                            setState(() {
+                              _selectedFiliereIndex = (_selectedFiliereIndex == idx) ? null : idx;
+                            });
+                          }
+                        }
+                      },
+                    ),
                     sectionsSpace: 3,
-                    centerSpaceRadius: 42,
+                    centerSpaceRadius: 40,
                     startDegreeOffset: -90,
-                    sections: filieres.map((f) {
-                      return PieChartSectionData(
-                        value: f.percentage,
-                        color: Color(f.colorValue),
-                        radius: 18,
-                        showTitle: false,
-                      );
-                    }).toList(),
+                    sections: filieres.isEmpty
+                        ? [
+                            PieChartSectionData(
+                              value: 100,
+                              color: const Color(0xFFF1F5F9),
+                              radius: 18,
+                              showTitle: false,
+                            )
+                          ]
+                        : filieres.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final f = entry.value;
+                            final isSelected = _selectedFiliereIndex == idx;
+                            final hasSelection = _selectedFiliereIndex != null;
+
+                            return PieChartSectionData(
+                              value: f.percentage > 0 ? f.percentage : 1,
+                              color: isSelected
+                                  ? Color(f.colorValue)
+                                  : (hasSelection
+                                      ? Color(f.colorValue).withValues(alpha: 0.35)
+                                      : Color(f.colorValue)),
+                              radius: isSelected ? 26 : 18, // Zooms in when clicked!
+                              borderSide: isSelected
+                                  ? const BorderSide(color: Colors.white, width: 2.5)
+                                  : BorderSide.none,
+                              showTitle: false,
+                            );
+                          }).toList(),
                   ),
                 ),
 
-                // Center Text
+                // Center Text (Shows selected partition value & info on click)
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '$totalStudents',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                        letterSpacing: -0.5,
+                    if (_selectedFiliereIndex != null &&
+                        _selectedFiliereIndex! < filieres.length) ...[
+                      Text(
+                        '${filieres[_selectedFiliereIndex!].count}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(filieres[_selectedFiliereIndex!].colorValue),
+                          letterSpacing: -0.5,
+                        ),
                       ),
-                    ),
-                    const Text(
-                      'Total',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF94A3B8),
+                      Text(
+                        '${filieres[_selectedFiliereIndex!].percentage.toInt()}%',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
-                    ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          filieres[_selectedFiliereIndex!].label,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF64748B),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ] else ...[
+                      Text(
+                        filieres.isNotEmpty
+                            ? '${filieres.fold<int>(0, (sum, f) => sum + f.count)}'
+                            : '$totalStudents',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const Text(
+                        'Élèves',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -1193,64 +1295,115 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 16),
 
           // Clean 2x2 List WITHOUT grey pill background
-          Column(
-            children: [
-              for (int i = 0; i < filieres.length; i += 2) ...[
-                Row(
-                  children: [
-                    Expanded(child: _buildCleanFiliereItem(filieres[i])),
-                    if (i + 1 < filieres.length) ...[
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildCleanFiliereItem(filieres[i + 1])),
-                    ],
-                  ],
+          if (filieres.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(
+                  'Aucune classe ou filière configurée',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                 ),
-                if (i + 2 < filieres.length) const SizedBox(height: 8),
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (int i = 0; i < filieres.length; i += 2) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCleanFiliereItem(
+                          filieres[i],
+                          isSelected: _selectedFiliereIndex == i,
+                          onTap: () {
+                            setState(() {
+                              _selectedFiliereIndex =
+                                  (_selectedFiliereIndex == i) ? null : i;
+                            });
+                          },
+                        ),
+                      ),
+                      if (i + 1 < filieres.length) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildCleanFiliereItem(
+                            filieres[i + 1],
+                            isSelected: _selectedFiliereIndex == (i + 1),
+                            onTap: () {
+                              setState(() {
+                                _selectedFiliereIndex =
+                                    (_selectedFiliereIndex == (i + 1)) ? null : (i + 1);
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (i + 2 < filieres.length) const SizedBox(height: 4),
+                ],
               ],
-            ],
-          ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildCleanFiliereItem(FiliereDistributionItem item) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: Color(item.colorValue),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              item.label,
-              style: const TextStyle(
-                fontSize: 11.5,
-                color: Color(0xFF475569),
-                fontWeight: FontWeight.w500,
+  Widget _buildCleanFiliereItem(
+    FiliereDistributionItem item, {
+    bool isSelected = false,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Color(item.colorValue).withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected
+              ? Border.all(color: Color(item.colorValue).withValues(alpha: 0.4), width: 1)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: Color(item.colorValue),
+                shape: BoxShape.circle,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${item.percentage.toInt()}%',
-            style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                item.label,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF475569),
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Text(
+              '${item.percentage.toInt()}%',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                color: isSelected ? Color(item.colorValue) : const Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1652,48 +1805,59 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 16),
 
           // Slim Horizontal Progress Bars List
-          for (int i = 0; i < levels.length; i++) ...[
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        levels[i].levelName,
+          if (levels.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'Aucune donnée d\'absence enregistrée',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
+              ),
+            )
+          else
+            for (int i = 0; i < levels.length; i++) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          levels[i].levelName,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        levels[i].label,
                         style: const TextStyle(
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F172A),
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF6D4CF6),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    Text(
-                      levels[i].label,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF6D4CF6),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: levels[i].rate,
-                    backgroundColor: const Color(0xFFF1F5F9),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6D4CF6)),
-                    minHeight: 6, // Slim elegant height
+                    ],
                   ),
-                ),
-              ],
-            ),
-            if (i < levels.length - 1) const SizedBox(height: 11),
-          ],
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: levels[i].rate,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6D4CF6)),
+                      minHeight: 6, // Slim elegant height
+                    ),
+                  ),
+                ],
+              ),
+              if (i < levels.length - 1) const SizedBox(height: 11),
+            ],
         ],
       ),
     );

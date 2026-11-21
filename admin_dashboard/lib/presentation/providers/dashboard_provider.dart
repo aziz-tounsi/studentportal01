@@ -624,11 +624,6 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       }
 
       final Map<String, int> counts = {};
-      final Map<String, int> colorMap = {};
-      const fallbackColors = [
-        0xFF6D4CF6, 0xFF8B5CF6, 0xFF10B981, 0xFF0284C7,
-        0xFFF59E0B, 0xFFEC4899, 0xFF6366F1, 0xFF84CC16
-      ];
 
       for (final c in (classesResp as List)) {
         final sec = c['sections'] as Map<String, dynamic>?;
@@ -641,22 +636,56 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
             : ((c['capacity'] as num?)?.toInt() ?? 25);
 
         counts[label] = (counts[label] ?? 0) + classCount;
-
-        if (sec?['color'] != null && !colorMap.containsKey(label)) {
-          final hexStr = sec!['color'].toString().replaceAll('#', '');
-          final hexVal = int.tryParse('FF$hexStr', radix: 16);
-          if (hexVal != null) colorMap[label] = hexVal;
-        }
       }
 
       final grandTotal = counts.values.fold<int>(0, (a, b) => a + b);
       if (grandTotal > 0) {
+        int getFiliereColor(String name, int index) {
+          final lower = name.toLowerCase();
+          if (lower.contains('math')) return 0xFF6D4CF6; // Mathématiques: Royal Purple
+          if (lower.contains('expérimentale') || lower.contains('science exp') || lower.contains('svt')) {
+            return 0xFF10B981; // Sciences Expérimentales: Emerald Green
+          }
+          if (lower.contains('informatique') || lower.contains('info')) {
+            return 0xFF0284C7; // Informatique: Sky Blue
+          }
+          if (lower.contains('économie') || lower.contains('gestion') || lower.contains('éco')) {
+            return 0xFFF59E0B; // Éco & Gestion: Amber Orange
+          }
+          if (lower.contains('lettre') || lower.contains('littéraire')) {
+            return 0xFFEC4899; // Lettres: Rose Pink
+          }
+          if (lower.contains('technique') || lower.contains('techno')) {
+            return 0xFF8B5CF6; // Sciences Techniques: Violet
+          }
+          if (lower.contains('base') || lower.contains('collège')) {
+            return 0xFF06B6D4; // Cycle de Base: Cyan / Teal
+          }
+          if (lower.contains('commun') || lower.contains('tronc')) {
+            return 0xFF64748B; // Tronc Commun: Slate Grey
+          }
+
+          const distinctColors = [
+            0xFF6D4CF6, // Purple
+            0xFF10B981, // Emerald Green
+            0xFF0284C7, // Ocean Blue
+            0xFFF59E0B, // Amber Orange
+            0xFFEC4899, // Rose Pink
+            0xFF8B5CF6, // Violet
+            0xFF06B6D4, // Cyan
+            0xFF64748B, // Slate
+            0xFFE11D48, // Crimson
+            0xFF84CC16, // Lime
+          ];
+          return distinctColors[index % distinctColors.length];
+        }
+
         int cIdx = 0;
         final sorted = counts.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
 
         return sorted.map((entry) {
-          final color = colorMap[entry.key] ?? fallbackColors[cIdx % fallbackColors.length];
+          final color = getFiliereColor(entry.key, cIdx);
           cIdx++;
           final pct = (entry.value / grandTotal * 100).roundToDouble();
           return FiliereDistributionItem(
